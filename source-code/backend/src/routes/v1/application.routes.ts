@@ -1,0 +1,1728 @@
+import express, { Router, Request, Response } from 'express';
+import { body, query, param } from 'express-validator';
+import { protect, authorize } from '../../middleware/auth.middleware';
+import { validateRequest } from '../../middleware/validation.middleware';
+import { query as dbQuery, getClient } from '../../config/database';
+import { logger } from '../../utils/logger';
+import { AuthenticatedRequest } from '../../types/auth.types';
+
+const router: Router = express.Router();
+
+// Utility function to wrap AuthenticatedRequest handlers
+const withAuth = (handler: (req: AuthenticatedRequest, res: express.Response) => Promise<any>) => {
+  return handler as any;
+};
+
+// @route   GET /api/v1/applications
+// @desc    Get user's applications (candidates) or company's applications (recruiters)
+// @access  Private
+router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), query('limit').optional().isInt({ min: 1, max: 100 }).toInt(), query('status').optional().isIn(['submitted', 'under_review', 'shortlisted', 'interview', 'offer', 'hired', 'rejected', 'withdrawn']), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const offset = (pageNum - 1) * limitNum;
+
+    let whereConditions = [];
+    let params = [];
+    let paramIndex = 1;
+
+    if (authReq.user!.user_type === 'candidate') {
+      // Candidates see their own applications
+      whereConditions.push(`a.user_id = $${paramIndex}`);
+      params.push(authReq.user!.id);
+      paramIndex++;
+    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
+      // Recruiters see applications for jobs they created or their company
+      let jobIdsQuery;
+      let queryParams;
+
+      if (authReq.user!.user_type === 'company_admin') {
+        // Company admins see all applications for their company
+        jobIdsQuery = `SELECT j.id FROM jobs j JOIN company_team ct ON j.company_id = ct.company_id WHERE ct.user_id = $1`;
+        queryParams = [authReq.user!.id];
+      } else {
+        jobIdsQuery = `SELECT id FROM jobs WHERE created_by = $1 UNION SELECT j.id FROM jobs j JOIN company_team ct ON j.company_id = ct.company_id WHERE ct.user_id = $1`;
+        queryParams = [authReq.user!.id];
+      }
+
+      const jobIdsResult = await dbQuery(jobIdsQuery, queryParams);
+      const jobIds = jobIdsResult.rows.map(row => row.id);
+
+      if (jobIds.length === 0) {
+        return res.json({
+          success: true,
+          data: { applications: [], pagination: { page: 1, limit, total: 0, totalPages: 0, hasNext: false, hasPrev: false } }
+        });
+      }
+
+      whereConditions.push(`a.job_id = ANY($${paramIndex})`);
+      params.push(jobIds);
+      paramIndex++;
+    }
+
+    if (status) {
+      whereConditions.push(`a.status = $${paramIndex}`);
+      params.push(status);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as total FROM applications a ${whereClause}`;
+    const countResult = await dbQuery(countQuery, params);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get applications with job and company info
+    const applicationsQuery = `
+      SELECT
+        a.id, a.applied_at, a.status,
+        a.submitted_data->>'coverLetter' as cover_letter,
+        a.submitted_data->>'expectedSalary' as expected_salary,
+        a.submitted_data->>'noticePeriod' as notice_period,
+        a.submitted_data->>'portfolioUrl' as portfolio_url,
+        a.submitted_data->>'linkedinUrl' as linkedin_url,
+        a.submitted_data->>'githubUrl' as github_url,
+        a.submitted_data->>'availability' as availability,
+        a.match_score, a.application_number, a.updated_at,
+        j.id as job_id, j.title as job_title,
+        COALESCE(
+          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
+          'Remote'
+        ) as job_location,
+        j.job_type, j.experience_level, j.salary_min, j.salary_max, j.salary_currency,
+        c.name as company_name, c.logo_url as company_logo,
+        u.email as candidate_email,
+        cp.first_name, cp.last_name, cp.phone,
+        COALESCE(TRIM(CONCAT_WS(', ', cp.city, cp.country)), 'Not specified') as candidate_location,
+        cp.headline, cp.profile_photo_url
+      FROM applications a
+      JOIN jobs j ON a.job_id = j.id
+      JOIN companies c ON j.company_id = c.id
+      JOIN users u ON a.user_id = u.id
+      LEFT JOIN candidate_profiles cp ON a.user_id = cp.user_id
+      ${whereClause}
+      ORDER BY a.applied_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    params.push(limitNum, offset);
+
+    const applicationsResult = await dbQuery(applicationsQuery, params);
+
+    // Calculate pagination
+    const totalPages = Math.ceil(total / limitNum);
+    const hasNext = pageNum < totalPages;
+    const hasPrev = pageNum > 1;
+
+    return res.json({
+      success: true,
+      data: {
+        applications: applicationsResult.rows,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext,
+          hasPrev
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get applications error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch applications'
+    });
+  }
+});
+
+// @route   GET /api/v1/applications/:id
+// @desc    Get single application details
+// @access  Private (Application owner or job creator/company admin)
+router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id } = req.params;
+
+    // Get application with all related data - REMOVED cp.bio
+    const applicationQuery = `
+      SELECT
+        a.*,
+        j.id as job_id, j.title as job_title,
+        COALESCE(
+          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
+          'Remote'
+        ) as job_location,
+        j.job_type, j.experience_level, j.description as job_description,
+        j.requirements as job_requirements, j.benefits as job_benefits,
+        c.name as company_name, c.logo_url as company_logo, c.website,
+        c.description as company_description,
+        u.email as candidate_email,
+        cp.first_name, cp.last_name, cp.phone,
+        COALESCE(TRIM(CONCAT_WS(', ', cp.city, cp.country)), 'Not specified') as candidate_location,
+        cp.headline, cp.profile_photo_url,
+        cp.portfolio_url as candidate_portfolio, cp.linkedin_url as candidate_linkedin,
+        cp.github_url as candidate_github,
+        cp.current_salary, cp.expected_salary as candidate_expected_salary,
+        cp.languages, cp.availability,
+        cp.summary
+      FROM applications a
+      JOIN jobs j ON a.job_id = j.id
+      JOIN companies c ON j.company_id = c.id
+      JOIN users u ON a.user_id = u.id
+      LEFT JOIN candidate_profiles cp ON a.user_id = cp.user_id
+      WHERE a.id = $1
+    `;
+
+    const applicationResult = await dbQuery(applicationQuery, [id]);
+
+    if (applicationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    const application = applicationResult.rows[0];
+
+    // Check permissions
+    let hasPermission = false;
+
+    if (authReq.user!.user_type === 'candidate') {
+      hasPermission = application.user_id === authReq.user!.id;
+    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
+      // Check if user has access to the job/company
+      const jobAccessQuery = authReq.user!.user_type === 'company_admin'
+        ? `SELECT j.id FROM jobs j JOIN companies c ON j.company_id = c.id WHERE j.id = $1 AND c.created_by = $2`
+        : `SELECT j.id FROM jobs j WHERE j.id = $1 AND j.created_by = $2 UNION SELECT j.id FROM jobs j JOIN company_team ct ON j.company_id = ct.company_id WHERE j.id = $1 AND ct.user_id = $2`;
+
+      const accessResult = await dbQuery(jobAccessQuery, [application.job_id, authReq.user!.id]);
+      hasPermission = accessResult.rows.length > 0;
+    }
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to view this application'
+      });
+    }
+
+    // Get application timeline
+    const timelineQuery = `
+      SELECT
+        id,
+        event_type,
+        event_data->>'description' as event_description,
+        event_data->>'old_status' as old_status,
+        event_data->>'new_status' as new_status,
+        created_at,
+        created_by,
+        metadata
+      FROM application_timeline
+      WHERE application_id = $1
+      ORDER BY created_at DESC
+    `;
+
+    const timelineResult = await dbQuery(timelineQuery, [id]);
+
+    // Parse JSON fields safely
+    if (application.submitted_data && typeof application.submitted_data === 'string') {
+      try { application.submitted_data = JSON.parse(application.submitted_data); } catch { application.submitted_data = {}; }
+    }
+    if (application.screening_answers && typeof application.screening_answers === 'string') {
+      try { application.screening_answers = JSON.parse(application.screening_answers); } catch { application.screening_answers = []; }
+    }
+    if (application.documents && typeof application.documents === 'string') {
+      try { application.documents = JSON.parse(application.documents); } catch { application.documents = []; }
+    }
+    if (application.notes && typeof application.notes === 'string') {
+      try { application.notes = JSON.parse(application.notes); } catch { application.notes = []; }
+    }
+    if (application.internal_notes && typeof application.internal_notes === 'string') {
+      try { application.internal_notes = JSON.parse(application.internal_notes); } catch { application.internal_notes = []; }
+    }
+    if (application.tags && typeof application.tags === 'string') {
+      try { application.tags = JSON.parse(application.tags); } catch { application.tags = []; }
+    }
+    if (application.match_details && typeof application.match_details === 'string') {
+      try { application.match_details = JSON.parse(application.match_details); } catch { application.match_details = {}; }
+    }
+    if (application.metadata && typeof application.metadata === 'string') {
+      try { application.metadata = JSON.parse(application.metadata); } catch { application.metadata = {}; }
+    }
+    if (application.job_requirements && typeof application.job_requirements === 'string') {
+      try { application.job_requirements = JSON.parse(application.job_requirements); } catch { application.job_requirements = []; }
+    }
+    if (application.job_benefits && typeof application.job_benefits === 'string') {
+      try { application.job_benefits = JSON.parse(application.job_benefits); } catch { application.job_benefits = []; }
+    }
+    if (application.languages && typeof application.languages === 'string') {
+      try { application.languages = JSON.parse(application.languages); } catch { application.languages = []; }
+    }
+    if (application.current_salary && typeof application.current_salary === 'string') {
+      try { application.current_salary = JSON.parse(application.current_salary); } catch { application.current_salary = {}; }
+    }
+    if (application.availability && typeof application.availability === 'string') {
+      try { application.availability = JSON.parse(application.availability); } catch { application.availability = {}; }
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        application,
+        timeline: timelineResult.rows
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get application error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch application'
+    });
+  }
+});
+
+// @route   GET /api/v1/applications
+// @desc    Get user's applications (candidates) or company's applications (recruiters)
+// @access  Private
+router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), query('limit').optional().isInt({ min: 1, max: 100 }).toInt(), query('status').optional().isIn(['submitted', 'under_review', 'shortlisted', 'interview', 'offer', 'hired', 'rejected', 'withdrawn']), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const offset = (pageNum - 1) * limitNum;
+
+    let whereConditions = [];
+    let params = [];
+    let paramIndex = 1;
+
+    if (authReq.user!.user_type === 'candidate') {
+      // Candidates see their own applications
+      whereConditions.push(`a.user_id = $${paramIndex}`);
+      params.push(authReq.user!.id);
+      paramIndex++;
+    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
+      // Recruiters see applications for jobs they created or their company
+      let jobIdsQuery;
+      let queryParams;
+
+      if (authReq.user!.user_type === 'company_admin') {
+        // Company admins see all applications for their company
+        jobIdsQuery = `SELECT j.id FROM jobs j JOIN company_team ct ON j.company_id = ct.company_id WHERE ct.user_id = $1`;
+        queryParams = [authReq.user!.id];
+      } else {
+        jobIdsQuery = `SELECT id FROM jobs WHERE created_by = $1 UNION SELECT j.id FROM jobs j JOIN company_team ct ON j.company_id = ct.company_id WHERE ct.user_id = $1`;
+        queryParams = [authReq.user!.id];
+      }
+
+      const jobIdsResult = await dbQuery(jobIdsQuery, queryParams);
+      const jobIds = jobIdsResult.rows.map(row => row.id);
+
+      if (jobIds.length === 0) {
+        return res.json({
+          success: true,
+          data: { applications: [], pagination: { page: 1, limit, total: 0, totalPages: 0, hasNext: false, hasPrev: false } }
+        });
+      }
+
+      whereConditions.push(`a.job_id = ANY($${paramIndex})`);
+      params.push(jobIds);
+      paramIndex++;
+    }
+
+    if (status) {
+      whereConditions.push(`a.status = $${paramIndex}`);
+      params.push(status);
+      paramIndex++;
+    }
+
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as total FROM applications a ${whereClause}`;
+    const countResult = await dbQuery(countQuery, params);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get applications with job and company info - REMOVED cp.bio
+    const applicationsQuery = `
+      SELECT
+        a.id, a.applied_at, a.status,
+        a.submitted_data->>'coverLetter' as cover_letter,
+        a.submitted_data->>'expectedSalary' as expected_salary,
+        a.submitted_data->>'noticePeriod' as notice_period,
+        a.submitted_data->>'portfolioUrl' as portfolio_url,
+        a.submitted_data->>'linkedinUrl' as linkedin_url,
+        a.submitted_data->>'githubUrl' as github_url,
+        a.submitted_data->>'availability' as availability,
+        a.match_score, a.application_number, a.updated_at,
+        j.id as job_id, j.title as job_title,
+        COALESCE(
+          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
+          'Remote'
+        ) as job_location,
+        j.job_type, j.experience_level, j.salary_min, j.salary_max, j.salary_currency,
+        c.name as company_name, c.logo_url as company_logo,
+        u.email as candidate_email,
+        cp.first_name, cp.last_name, cp.phone,
+        COALESCE(TRIM(CONCAT_WS(', ', cp.city, cp.country)), 'Not specified') as candidate_location,
+        cp.headline, cp.profile_photo_url
+      FROM applications a
+      JOIN jobs j ON a.job_id = j.id
+      JOIN companies c ON j.company_id = c.id
+      JOIN users u ON a.user_id = u.id
+      LEFT JOIN candidate_profiles cp ON a.user_id = cp.user_id
+      ${whereClause}
+      ORDER BY a.applied_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    params.push(limitNum, offset);
+
+    const applicationsResult = await dbQuery(applicationsQuery, params);
+
+    // Parse JSON fields for each application
+    const parsedRows = applicationsResult.rows.map(row => {
+      if (row.submitted_data && typeof row.submitted_data === 'string') {
+        try { row.submitted_data = JSON.parse(row.submitted_data); } catch { row.submitted_data = {}; }
+      }
+      return row;
+    });
+
+    // Calculate pagination
+    const totalPages = Math.ceil(total / limitNum);
+    const hasNext = pageNum < totalPages;
+    const hasPrev = pageNum > 1;
+
+    return res.json({
+      success: true,
+      data: {
+        applications: parsedRows,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages,
+          hasNext,
+          hasPrev
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get applications error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch applications'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications
+// @desc    Submit a new job application
+// @access  Private (Candidates only)
+router.post('/', [protect, authorize('candidate'), body('jobId').isUUID(), body('additionalInfo').optional(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    const { jobId, additionalInfo } = req.body;
+
+    // Check if job exists and is active
+    const jobResult = await client.query(
+      'SELECT id, title FROM jobs WHERE id = $1 AND status = $2',
+      [jobId, 'active']
+    );
+
+    if (jobResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found or not accepting applications'
+      });
+    }
+
+    // Check if user already applied
+    const existingApplication = await client.query(
+      'SELECT id, status FROM applications WHERE job_id = $1 AND user_id = $2',
+      [jobId, authReq.user!.id]
+    );
+
+    if (existingApplication.rows.length > 0) {
+      const existingApp = existingApplication.rows[0];
+      if (existingApp.status !== 'withdrawn') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: 'You have already applied for this job'
+        });
+      } else {
+        // Update the withdrawn application
+        const updateResult = await client.query(
+          `UPDATE applications SET
+            status = 'submitted',
+            screening_answers = $1,
+            documents = $2,
+            match_score = $3,
+            submitted_data = $4,
+            updated_at = NOW()
+           WHERE id = $5
+           RETURNING id`,
+          [
+            JSON.stringify(additionalInfo?.screeningAnswers || {}),
+            JSON.stringify(additionalInfo?.documents || []),
+            additionalInfo?.matchScore || null,
+            JSON.stringify(additionalInfo || {}),
+            existingApp.id
+          ]
+        );
+
+        await client.query('COMMIT');
+
+        return res.status(200).json({
+          success: true,
+          message: 'Application submitted successfully',
+          data: {
+            applicationId: updateResult.rows[0].id,
+            status: 'submitted'
+          }
+        });
+      }
+    }
+
+    // Create new application
+    const applicationResult = await client.query(
+      `INSERT INTO applications (
+        job_id, user_id, status, screening_answers, documents, match_score, submitted_data,
+        applied_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+      RETURNING id`,
+      [
+        jobId,
+        authReq.user!.id,
+        'submitted',
+        JSON.stringify(additionalInfo?.screeningAnswers || {}),
+        JSON.stringify(additionalInfo?.documents || []),
+        additionalInfo?.matchScore || null,
+        JSON.stringify(additionalInfo || {})
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        applicationId: applicationResult.rows[0].id
+      },
+      message: 'Application submitted successfully'
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Submit application error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to submit application'
+    });
+  }
+});
+
+// @route   PUT /api/v1/applications/:id
+// @desc    Update application status (recruiters) or withdraw (candidates)
+// @access  Private
+router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isIn(['submitted', 'under_review', 'shortlisted', 'interview', 'offer', 'hired', 'rejected', 'withdrawn']), body('notes').optional().trim(), body('interviewDate').optional().isISO8601(), body('feedback').optional().trim(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    const { id } = req.params;
+    const { status, notes, interviewDate, feedback } = req.body;
+
+    // Get application
+    const applicationCheck = await client.query(
+      'SELECT a.*, j.company_id, j.created_by FROM applications a JOIN jobs j ON a.job_id = j.id WHERE a.id = $1',
+      [id]
+    );
+
+    if (applicationCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    const application = applicationCheck.rows[0];
+    let hasPermission = false;
+    let allowedStatuses: string[] = [];
+
+    if (authReq.user!.user_type === 'candidate') {
+      // Candidates can only withdraw their own applications
+      hasPermission = application.user_id === authReq.user!.id;
+      allowedStatuses = ['withdrawn'];
+    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
+      // Recruiters can update status for applications to their jobs
+      if (authReq.user!.user_type === 'company_admin') {
+        const companyCheck = await client.query(
+          'SELECT id FROM companies WHERE id = $1 AND created_by = $2',
+          [application.company_id, authReq.user!.id]
+        );
+        hasPermission = companyCheck.rows.length > 0;
+      } else {
+        hasPermission = application.created_by === authReq.user!.id ||
+          (await client.query(
+            'SELECT id FROM company_team WHERE company_id = $1 AND user_id = $2',
+            [application.company_id, authReq.user!.id]
+          )).rows.length > 0;
+      }
+
+      if (hasPermission) {
+        allowedStatuses = ['under_review', 'shortlisted', 'interview', 'offer', 'hired', 'rejected'];
+      }
+    }
+
+    if (!hasPermission) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to update this application'
+      });
+    }
+
+    if (status && !allowedStatuses.includes(status)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: `You cannot set status to ${status}`
+      });
+    }
+
+    // Update application
+    const updateFields = ['updated_at = NOW()'];
+    const updateValues = [];
+    let paramIndex = 1;
+
+    if (status) {
+      updateFields.push(`status = $${paramIndex}`);
+      updateValues.push(status);
+      paramIndex++;
+    }
+
+    if (notes) {
+      updateFields.push(`notes = $${paramIndex}`);
+      updateValues.push(notes);
+      paramIndex++;
+    }
+
+    if (interviewDate) {
+      updateFields.push(`interview_date = $${paramIndex}`);
+      updateValues.push(interviewDate);
+      paramIndex++;
+    }
+
+    if (feedback) {
+      updateFields.push(`feedback = $${paramIndex}`);
+      updateValues.push(feedback);
+      paramIndex++;
+    }
+
+    const updateQuery = `UPDATE applications SET ${updateFields.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
+    updateValues.push(id);
+
+    const result = await client.query(updateQuery, updateValues);
+
+    // Create timeline entry
+    if (status && status !== application.status) {
+      await client.query(
+        `INSERT INTO application_timeline (
+          application_id, event_type, event_data, created_by, metadata
+        ) VALUES ($1, $2, $3, $4, $5)`,
+        [
+          id,
+          'status_changed',
+          JSON.stringify({
+            description: `Status changed from ${application.status} to ${status}`,
+            old_status: application.status,
+            new_status: status
+          }),
+          authReq.user!.id,
+          JSON.stringify({ notes, interviewDate, feedback })
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    logger.info(`Application updated: ${id} by user ${authReq.user!.id}`);
+
+    return res.json({
+      success: true,
+      data: result.rows[0],
+      message: 'Application updated successfully'
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Update application error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update application'
+    });
+
+  } finally {
+    client.release();
+  }
+});
+
+// @route   DELETE /api/v1/applications/:id
+// @desc    Delete/withdrawn application
+// @access  Private (Application owner or admins)
+router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    const { id } = req.params;
+
+    // Get application
+    const applicationCheck = await client.query(
+      'SELECT a.*, j.company_id FROM applications a JOIN jobs j ON a.job_id = j.id WHERE a.id = $1',
+      [id]
+    );
+
+    if (applicationCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    const application = applicationCheck.rows[0];
+    let hasPermission = false;
+
+    if (authReq.user!.user_type === 'candidate') {
+      hasPermission = application.user_id === authReq.user!.id;
+    } else if (authReq.user!.user_type === 'system_admin') {
+      hasPermission = true;
+    } else if (authReq.user!.user_type === 'company_admin') {
+      const companyCheck = await client.query(
+        'SELECT id FROM companies WHERE id = $1 AND created_by = $2',
+        [application.company_id, authReq.user!.id]
+      );
+      hasPermission = companyCheck.rows.length > 0;
+    }
+
+    if (!hasPermission) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete this application'
+      });
+    }
+
+    // Soft delete
+    await client.query(
+      'UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2',
+      ['withdrawn', id]
+    );
+
+    // Update job application count
+    await client.query(
+      'UPDATE jobs SET application_count = application_count - 1 WHERE id = $1',
+      [application.job_id]
+    );
+
+    // Create timeline entry
+    await client.query(
+      `INSERT INTO application_timeline (
+        application_id, event_type, event_data, created_by, metadata
+      ) VALUES ($1, $2, $3, $4, $5)`,
+      [
+        id,
+        'application_withdrawn',
+        JSON.stringify({
+          description: 'Application withdrawn',
+          old_status: application.status,
+          new_status: 'withdrawn'
+        }),
+        authReq.user!.id,
+        JSON.stringify({})
+      ]
+    );
+
+    await client.query('COMMIT');
+
+    logger.info(`Application deleted: ${id} by user ${authReq.user!.id}`);
+
+    return res.json({
+      success: true,
+      message: 'Application withdrawn successfully'
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Delete application error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to withdraw application'
+    });
+
+  } finally {
+    client.release();
+  }
+});
+
+// @route   GET /api/v1/applications/requirements/:jobId
+// @desc    See application requirements
+// @access  Private (Candidates)
+router.get('/requirements/:jobId', [protect, authorize('candidate'), param('jobId').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { jobId } = req.params;
+
+    const jobResult = await dbQuery(
+      'SELECT title, description, requirements, screening_questions, application_instructions, documents FROM jobs WHERE id = $1 AND status = $2',
+      [jobId, 'active']
+    );
+
+    if (jobResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found or not accepting applications'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: jobResult.rows[0]
+    });
+
+  } catch (error) {
+    logger.error('Get application requirements error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve application requirements'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/:id/withdraw
+// @desc    Withdraw my application
+// @access  Private (Candidates)
+router.post('/:id/withdraw', [protect, authorize('candidate'), param('id').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id } = req.params;
+
+    const applicationResult = await dbQuery(
+      'SELECT id, status FROM applications WHERE id = $1 AND user_id = $2',
+      [id, authReq.user.id]
+    );
+
+    if (applicationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    const application = applicationResult.rows[0];
+
+    if (!['submitted', 'under_review'].includes(application.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot withdraw application in current status'
+      });
+    }
+
+    await dbQuery(
+      'UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2',
+      ['withdrawn', id]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Application withdrawn successfully'
+    });
+
+  } catch (error) {
+    logger.error('Withdraw application error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to withdraw application'
+    });
+  }
+});
+
+// @route   GET /api/v1/applications/:id/rejection-reason
+// @desc    See why I was rejected
+// @access  Private (Candidates)
+router.get('/:id/rejection-reason', [protect, authorize('candidate'), param('id').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id } = req.params;
+
+    const applicationResult = await dbQuery(
+      'SELECT status, rejection_reason FROM applications WHERE id = $1 AND user_id = $2',
+      [id, authReq.user.id]
+    );
+
+    if (applicationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    const application = applicationResult.rows[0];
+
+    if (application.status !== 'rejected') {
+      return res.status(400).json({
+        success: false,
+        message: 'Application was not rejected'
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        rejection_reason: application.rejection_reason
+      }
+    });
+  } catch (error) {
+    logger.error('Get rejection reason error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve rejection reason'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/apply-with-profile/:jobId
+// @desc    Apply with saved profile data
+// @access  Private (Candidates)
+router.post('/apply-with-profile/:jobId', [protect, authorize('candidate'), param('jobId').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    const { jobId } = req.params;
+
+    // Check if job exists and is active
+    const jobResult = await client.query(
+      'SELECT id, title FROM jobs WHERE id = $1 AND status = $2',
+      [jobId, 'active']
+    );
+
+    if (jobResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        message: 'Job not found or not accepting applications'
+      });
+    }
+
+    // Get user's profile data
+    const profileResult = await client.query(
+      'SELECT * FROM candidate_profiles WHERE user_id = $1',
+      [authReq.user.id]
+    );
+
+    if (profileResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: 'Please complete your profile before applying'
+      });
+    }
+
+    // Check if user already applied
+    const existingApplication = await client.query(
+      'SELECT id, status FROM applications WHERE job_id = $1 AND user_id = $2',
+      [jobId, authReq.user.id]
+    );
+
+    if (existingApplication.rows.length > 0) {
+      const existingApp = existingApplication.rows[0];
+      if (existingApp.status !== 'withdrawn') {
+        await client.query('ROLLBACK');
+        return res.status(400).json({
+          success: false,
+          message: 'You have already applied for this job'
+        });
+      } else {
+        // Update the withdrawn application
+        const updateResult = await client.query(
+          `UPDATE applications SET
+            status = 'submitted',
+            profile_data = $1,
+            updated_at = NOW()
+           WHERE id = $2
+           RETURNING id`,
+          [JSON.stringify(profileResult.rows[0]), existingApp.id]
+        );
+
+        await client.query('COMMIT');
+
+        return res.status(200).json({
+          success: true,
+          message: 'Application submitted successfully',
+          data: {
+            applicationId: updateResult.rows[0].id,
+            status: 'submitted'
+          }
+        });
+      }
+    }
+
+    // Create new application
+    const applicationResult = await client.query(
+      `INSERT INTO applications (job_id, user_id, status, profile_data, applied_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       RETURNING id`,
+      [jobId, authReq.user.id, 'submitted', JSON.stringify(profileResult.rows[0])]
+    );
+
+    await client.query('COMMIT');
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        applicationId: applicationResult.rows[0].id
+      },
+      message: 'Application submitted successfully with profile data'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Apply with profile error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to submit application'
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// @route   POST /api/v1/applications/:id/documents
+// @desc    Upload additional documents
+// @access  Private (Candidates)
+router.post('/:id/documents', [protect, authorize('candidate'), param('id').isUUID(), body('name').isString().trim().isLength({ min: 1, max: 100 }), body('url').isString().trim().isURL(), body('type').isIn(['resume', 'cover_letter', 'portfolio', 'certificate']), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id } = req.params;
+    const { name, url, type } = req.body;
+
+    // Verify application belongs to user
+    const applicationResult = await dbQuery(
+      'SELECT id, documents FROM applications WHERE id = $1 AND user_id = $2',
+      [id, authReq.user.id]
+    );
+
+    if (applicationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    // Get existing documents or initialize empty array
+    let existingDocs = applicationResult.rows[0].documents || [];
+    if (typeof existingDocs === 'string') {
+      existingDocs = JSON.parse(existingDocs);
+    }
+    
+    // Add new document
+    const newDoc = {
+      name,
+      url,
+      type,
+      uploaded_at: new Date().toISOString()
+    };
+    existingDocs.push(newDoc);
+
+    // Update applications.documents JSONB
+    await dbQuery(
+      'UPDATE applications SET documents = $1, updated_at = NOW() WHERE id = $2',
+      [JSON.stringify(existingDocs), id]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Document uploaded successfully'
+    });
+  } catch (error) {
+    logger.error('Upload document error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to upload document'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/:id/questions
+// @desc    Answer job-specific questions
+// @access  Private (Candidates)
+router.post('/:id/questions', [protect, authorize('candidate'), param('id').isUUID(), body('answers').isArray(), body('answers.*.questionId').isInt(), body('answers.*.answer').isString().trim(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id } = req.params;
+    const { answers } = req.body;
+
+    // Verify application belongs to user
+    const applicationResult = await dbQuery(
+      'SELECT id FROM applications WHERE id = $1 AND user_id = $2',
+      [id, authReq.user.id]
+    );
+
+    if (applicationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    // Store answers in application_answers table
+    for (const answer of answers) {
+      await dbQuery(
+        'INSERT INTO application_answers (application_id, question_id, answer, answered_at) VALUES ($1, $2, $3, NOW())',
+        [id, answer.questionId, answer.answer]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: 'Answers submitted successfully'
+    });
+  } catch (error) {
+    logger.error('Submit answers error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to submit answers'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/:id/schedule-simulation
+// @desc    Schedule simulation from application
+// @access  Private (Candidates)
+router.post('/:id/schedule-simulation', [protect, authorize('candidate'), param('id').isUUID(), body('simulationId').isUUID(), body('scheduledAt').isISO8601(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id } = req.params;
+    const { simulationId, scheduledAt } = req.body;
+
+    // Verify application belongs to user
+    const applicationResult = await dbQuery(
+      'SELECT id FROM applications WHERE id = $1 AND user_id = $2',
+      [id, authReq.user.id]
+    );
+
+    if (applicationResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Application not found'
+      });
+    }
+
+    await dbQuery(
+      'INSERT INTO scheduled_simulations (application_id, simulation_id, user_id, scheduled_at, status) VALUES ($1, $2, $3, $4, $5)',
+      [id, simulationId, authReq.user.id, scheduledAt, 'scheduled']
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Simulation scheduled successfully'
+    });
+  } catch (error) {
+    logger.error('Schedule simulation error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to schedule simulation'
+    });
+  }
+});
+
+// @route   GET /api/v1/applications/history
+// @desc    See application history
+// @access  Private (Candidates)
+router.get('/history', [protect, authorize('candidate'), query('page').optional().isInt({ min: 1 }).toInt(), query('limit').optional().isInt({ min: 1, max: 100 }).toInt(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = Number(page);
+    const limitNum = Number(limit);
+    const offset = (pageNum - 1) * limitNum;
+
+    const applicationsResult = await dbQuery(
+      `SELECT a.*, j.title as job_title, c.name as company_name
+       FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       JOIN companies c ON j.company_id = c.id
+       WHERE a.user_id = $1
+       ORDER BY a.applied_at DESC
+       LIMIT $2 OFFSET $3`,
+      [authReq.user.id, limitNum, offset]
+    );
+
+    const totalResult = await dbQuery(
+      'SELECT COUNT(*) as total FROM applications WHERE user_id = $1',
+      [authReq.user.id]
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        applications: applicationsResult.rows,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: parseInt(totalResult.rows[0].total),
+          pages: Math.ceil(parseInt(totalResult.rows[0].total) / limitNum)
+        }
+      }
+    });
+  } catch (error) {
+    logger.error('Get application history error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve application history'
+    });
+  }
+});
+
+// @route   GET /api/v1/applications/recruiter/feed
+// @desc    See new applications in real-time
+// @access  Private (Recruiters, Company Admins)
+router.get('/recruiter/feed', [protect, authorize('recruiter', 'company_admin'), query('since').optional().isISO8601(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { since } = req.query;
+
+    let whereConditions = ['a.applied_at > $1'];
+    let params: any[] = [since || new Date(Date.now() - 24 * 60 * 60 * 1000)];
+    let paramIndex = 2;
+
+    if (authReq.user.user_type === 'company_admin') {
+      whereConditions.push(`j.company_id IN (SELECT id FROM companies WHERE created_by = $${paramIndex})`);
+      params.push(authReq.user.id);
+      paramIndex++;
+    } else {
+      whereConditions.push(`j.created_by = $${paramIndex}`);
+      params.push(authReq.user.id);
+      paramIndex++;
+    }
+
+    const applicationsResult = await dbQuery(
+      `SELECT a.*, j.title as job_title, u.email as candidate_email
+       FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       JOIN users u ON a.user_id = u.id
+       WHERE ${whereConditions.join(' AND ')}
+       ORDER BY a.applied_at DESC`,
+      params
+    );
+
+    return res.json({
+      success: true,
+      data: applicationsResult.rows
+    });
+  } catch (error) {
+    logger.error('Get applications feed error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve applications feed'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/recruiter/bulk
+// @desc    Bulk-process applications
+// @access  Private (Recruiters, Company Admins)
+router.post('/recruiter/bulk', [protect, authorize('recruiter', 'company_admin'), body('applicationIds').isArray(), body('applicationIds.*').isUUID(), body('action').isIn(['shortlist', 'reject', 'move_to_interview']), body('rejectionReason').optional().isString().trim(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    const { applicationIds, action, rejectionReason } = req.body;
+
+    // Verify user has access to these applications
+    for (const appId of applicationIds) {
+      const appResult = await client.query(
+        `SELECT a.id FROM applications a
+         JOIN jobs j ON a.job_id = j.id
+         WHERE a.id = $1 AND (
+           j.created_by = $2 OR
+           j.company_id IN (SELECT id FROM companies WHERE created_by = $2)
+         )`,
+        [appId, authReq.user.id]
+      );
+
+      if (appResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          success: false,
+          message: `No access to application ${appId}`
+        });
+      }
+    }
+
+    let newStatus;
+    switch (action) {
+      case 'shortlist':
+        newStatus = 'shortlisted';
+        break;
+      case 'reject':
+        newStatus = 'rejected';
+        break;
+      case 'move_to_interview':
+        newStatus = 'interview';
+        break;
+    }
+
+    for (const appId of applicationIds) {
+      await client.query(
+        'UPDATE applications SET status = $1, rejection_reason = $2, updated_at = NOW() WHERE id = $3',
+        [newStatus, action === 'reject' ? rejectionReason : null, appId]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    return res.json({
+      success: true,
+      message: `Successfully processed ${applicationIds.length} applications`
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error('Bulk process applications error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to process applications'
+    });
+  } finally {
+    client.release();
+  }
+});
+
+// @route   POST /api/v1/applications/recruiter/auto-reject
+// @desc    Setup auto-reject rules
+// @access  Private (Recruiters, Company Admins)
+router.post('/recruiter/auto-reject', [protect, authorize('recruiter', 'company_admin'), body('jobId').isUUID(), body('rules').isArray(), body('rules.*.condition').isString(), body('rules.*.value').exists(), body('rules.*.rejectionReason').isString().trim(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { jobId, rules } = req.body;
+
+    // Verify user owns the job
+    const jobResult = await dbQuery(
+      `SELECT id FROM jobs WHERE id = $1 AND (
+        created_by = $2 OR
+        company_id IN (SELECT id FROM companies WHERE created_by = $2)
+      )`,
+      [jobId, authReq.user.id]
+    );
+
+    if (jobResult.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'No access to this job'
+      });
+    }
+
+    // Store auto-reject rules
+    await dbQuery('DELETE FROM auto_reject_rules WHERE job_id = $1', [jobId]);
+
+    for (const rule of rules) {
+      await dbQuery(
+        'INSERT INTO auto_reject_rules (job_id, condition, value, rejection_reason) VALUES ($1, $2, $3, $4)',
+        [jobId, rule.condition, rule.value, rule.rejectionReason]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: 'Auto-reject rules configured successfully'
+    });
+  } catch (error) {
+    logger.error('Setup auto-reject rules error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to setup auto-reject rules'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/recruiter/move-stage
+// @desc    Move candidates between hiring stages
+// @access  Private (Recruiters, Company Admins)
+router.post('/recruiter/move-stage', [protect, authorize('recruiter', 'company_admin'), body('applicationId').isUUID(), body('newStatus').isIn(['under_review', 'shortlisted', 'interview', 'offer', 'hired', 'rejected']), body('notes').optional().isString().trim(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { applicationId, newStatus, notes } = req.body;
+
+    // Verify user has access to this application
+    const appResult = await dbQuery(
+      `SELECT a.id FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       WHERE a.id = $1 AND (
+         j.created_by = $2 OR
+         j.company_id IN (SELECT id FROM companies WHERE created_by = $2)
+       )`,
+      [applicationId, authReq.user.id]
+    );
+
+    if (appResult.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'No access to this application'
+      });
+    }
+
+    await dbQuery(
+      'UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2',
+      [newStatus, applicationId]
+    );
+
+    if (notes) {
+      await dbQuery(
+        'INSERT INTO application_notes (application_id, user_id, notes, created_at) VALUES ($1, $2, $3, NOW())',
+        [applicationId, authReq.user.id, notes]
+      );
+    }
+
+    return res.json({
+      success: true,
+      message: 'Application moved to new stage successfully'
+    });
+  } catch (error) {
+    logger.error('Move application stage error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to move application stage'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/recruiter/notes
+// @desc    Add internal notes to applications
+// @access  Private (Recruiters, Company Admins)
+router.post('/recruiter/notes', [protect, authorize('recruiter', 'company_admin'), body('applicationId').isUUID(), body('notes').isString().trim().isLength({ min: 1, max: 1000 }), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { applicationId, notes } = req.body;
+
+    // Verify user has access to this application
+    const appResult = await dbQuery(
+      `SELECT a.id FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       WHERE a.id = $1 AND (
+         j.created_by = $2 OR
+         j.company_id IN (SELECT id FROM companies WHERE created_by = $2)
+       )`,
+      [applicationId, authReq.user.id]
+    );
+
+    if (appResult.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'No access to this application'
+      });
+    }
+
+    await dbQuery(
+      'INSERT INTO application_notes (application_id, user_id, notes, created_at) VALUES ($1, $2, $3, NOW())',
+      [applicationId, authReq.user.id, notes]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Notes added successfully'
+    });
+  } catch (error) {
+    logger.error('Add application notes error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to add notes'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/recruiter/assign
+// @desc    Assign applications to team members
+// @access  Private (Recruiters, Company Admins)
+router.post('/recruiter/assign', [protect, authorize('recruiter', 'company_admin'), body('applicationId').isUUID(), body('assigneeId').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { applicationId, assigneeId } = req.body;
+
+    // Verify user has access to this application and assignee is in same company
+    const accessResult = await dbQuery(
+      `SELECT a.id FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       LEFT JOIN company_team ct ON ct.company_id = j.company_id AND ct.user_id = $3
+       WHERE a.id = $1 AND (
+         j.created_by = $2 OR
+         j.company_id IN (SELECT id FROM companies WHERE created_by = $2)
+       ) AND (ct.user_id IS NOT NULL OR $3 = $2)`,
+      [applicationId, authReq.user.id, assigneeId]
+    );
+
+    if (accessResult.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'No access to assign this application'
+      });
+    }
+
+    await dbQuery(
+      'UPDATE applications SET assigned_to = $1, updated_at = NOW() WHERE id = $2',
+      [assigneeId, applicationId]
+    );
+
+    return res.json({
+      success: true,
+      message: 'Application assigned successfully'
+    });
+  } catch (error) {
+    logger.error('Assign application error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to assign application'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/recruiter/reminders
+// @desc    Set reminders for following up
+// @access  Private (Recruiters, Company Admins)
+router.post('/recruiter/reminders', [protect, authorize('recruiter', 'company_admin'), body('applicationId').isUUID(), body('reminderDate').isISO8601(), body('message').isString().trim().isLength({ min: 1, max: 500 }), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { applicationId, reminderDate, message } = req.body;
+
+    // Verify user has access to this application
+    const appResult = await dbQuery(
+      `SELECT a.id FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       WHERE a.id = $1 AND (
+         j.created_by = $2 OR
+         j.company_id IN (SELECT id FROM companies WHERE created_by = $2)
+       )`,
+      [applicationId, authReq.user.id]
+    );
+
+    if (appResult.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'No access to this application'
+      });
+    }
+
+    await dbQuery(
+      'INSERT INTO application_reminders (application_id, user_id, reminder_time, title, description, reminder_time, created_by) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [applicationId, authReq.user.id, reminderDate, 'Follow-up', message, reminderDate, authReq.user.id]
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Reminder set successfully'
+    });
+  } catch (error) {
+    logger.error('Set reminder error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to set reminder'
+    });
+  }
+});
+
+// @route   GET /api/v1/applications/recruiter/export
+// @desc    Export applications to Excel/CSV
+// @access  Private (Recruiters, Company Admins)
+router.get('/recruiter/export', [protect, authorize('recruiter', 'company_admin'), query('jobId').optional().isUUID(), query('format').isIn(['csv', 'excel']), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { jobId, format } = req.query;
+
+    let whereConditions = [];
+    let params = [];
+    let paramIndex = 1;
+
+    if (jobId) {
+      whereConditions.push(`a.job_id = $${paramIndex}`);
+      params.push(jobId);
+      paramIndex++;
+    }
+
+    if (authReq.user.user_type === 'company_admin') {
+      whereConditions.push(`j.company_id IN (SELECT id FROM companies WHERE created_by = $${paramIndex})`);
+      params.push(authReq.user.id);
+      paramIndex++;
+    } else {
+      whereConditions.push(`j.created_by = $${paramIndex}`);
+      params.push(authReq.user.id);
+      paramIndex++;
+    }
+
+    const applicationsResult = await dbQuery(
+      `SELECT a.*, j.title as job_title, c.name as company_name, u.email as candidate_email
+       FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       JOIN companies c ON j.company_id = c.id
+       JOIN users u ON a.user_id = u.id
+       WHERE ${whereConditions.join(' AND ')}
+       ORDER BY a.applied_at DESC`,
+      params
+    );
+
+    return res.json({
+      success: true,
+      data: applicationsResult.rows,
+      message: `Data ready for ${format} export`
+    });
+  } catch (error) {
+    logger.error('Export applications error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to export applications'
+    });
+  }
+});
+
+// @route   GET /api/v1/applications/recruiter/sources
+// @desc    See application sources
+// @access  Private (Recruiters, Company Admins)
+router.get('/recruiter/sources', [protect, authorize('recruiter', 'company_admin'), query('jobId').optional().isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { jobId } = req.query;
+
+    let whereConditions = ['1=1'];
+    let params = [];
+    let paramIndex = 1;
+
+    if (jobId) {
+      whereConditions.push(`a.job_id = $${paramIndex}`);
+      params.push(jobId);
+      paramIndex++;
+    }
+
+    if (authReq.user.user_type === 'company_admin') {
+      whereConditions.push(`j.company_id IN (SELECT id FROM companies WHERE created_by = $${paramIndex})`);
+      params.push(authReq.user.id);
+      paramIndex++;
+    } else {
+      whereConditions.push(`j.created_by = $${paramIndex}`);
+      params.push(authReq.user.id);
+      paramIndex++;
+    }
+
+    const sourcesResult = await dbQuery(
+      `SELECT a.source, COUNT(*) as count
+       FROM applications a
+       JOIN jobs j ON a.job_id = j.id
+       WHERE ${whereConditions.join(' AND ')}
+       GROUP BY a.source
+       ORDER BY count DESC`,
+      params
+    );
+
+    return res.json({
+      success: true,
+      data: sourcesResult.rows
+    });
+  } catch (error) {
+    logger.error('Get application sources error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve application sources'
+    });
+  }
+});
+
+// @route   POST /api/v1/applications/recruiter/blacklist
+// @desc    Blacklist candidates who misbehave
+// @access  Private (Recruiters, Company Admins)
+router.post('/recruiter/blacklist', [protect, authorize('recruiter', 'company_admin'), body('candidateId').isUUID(), body('reason').isString().trim().isLength({ min: 1, max: 500 }), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { candidateId, reason } = req.body;
+
+    // Get company_id from user's context
+    let companyId = null;
+    if (authReq.user.user_type === 'company_admin') {
+      const companyResult = await dbQuery(
+        'SELECT id FROM companies WHERE created_by = $1 LIMIT 1',
+        [authReq.user.id]
+      );
+      if (companyResult.rows.length > 0) {
+        companyId = companyResult.rows[0].id;
+      }
+    } else if (authReq.user.user_type === 'recruiter') {
+      const companyResult = await dbQuery(
+        'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
+        [authReq.user.id]
+      );
+      if (companyResult.rows.length > 0) {
+        companyId = companyResult.rows[0].company_id;
+      }
+    }
+
+    if (!companyId) {
+      return res.status(403).json({
+        success: false,
+        message: 'No company associated with your account'
+      });
+    }
+
+    // Check if candidate is already blacklisted
+    const existingBlacklist = await dbQuery(
+      'SELECT id FROM blacklisted_candidates WHERE company_id = $1 AND user_id = $2',
+      [companyId, candidateId]
+    );
+
+    if (existingBlacklist.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Candidate is already blacklisted'
+      });
+    }
+
+    await dbQuery(
+      `INSERT INTO blacklisted_candidates (company_id, user_id, reason, blacklisted_by, blacklisted_at, level, reason_category)
+       VALUES ($1, $2, $3, $4, NOW(), $5, $6)`,
+      [companyId, candidateId, reason, authReq.user.id, 'temporary', 'other']
+    );
+
+    return res.status(201).json({
+      success: true,
+      message: 'Candidate blacklisted successfully'
+    });
+  } catch (error) {
+    logger.error('Blacklist candidate error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to blacklist candidate'
+    });
+  }
+});
+
+export default router;

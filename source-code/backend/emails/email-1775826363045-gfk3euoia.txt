@@ -1,0 +1,40 @@
+
+From: notify@healthedu.rw
+To: danieltn889@gmail.com
+Subject: Reset Your Password - Recruitment Platform
+
+HTML Content:
+
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #2563eb; text-align: center;">Reset Your Password</h1>
+            <p>Hi User,</p>
+            <p>We received a request to reset your password. Click the button below to create a new password.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="http://localhost:3000/reset-password?token=5f243dafcce31f1cb8313c4c10a2ae11b1ab3aba2bf09aa7172527da4dee45f2" 
+                 style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                Reset Password
+              </a>
+            </div>
+            <p style="color: #666; font-size: 14px;">Or copy this link:</p>
+            <p style="color: #2563eb; word-break: break-all; font-size: 12px;">http://localhost:3000/reset-password?token=5f243dafcce31f1cb8313c4c10a2ae11b1ab3aba2bf09aa7172527da4dee45f2</p>
+            <p style="color: #666; font-size: 14px; margin-top: 20px;">
+              <strong>⏰ This link expires in 1 hour</strong>
+            </p>
+            <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+              If you didn't request a password reset, please ignore this email or contact support at support@recruitment-platform.com
+            </p>
+          </div>
+        
+
+Text Content:
+Reset Your Password
+        
+Hi User,
+
+Click this link to reset your password:
+http://localhost:3000/reset-password?token=5f243dafcce31f1cb8313c4c10a2ae11b1ab3aba2bf09aa7172527da4dee45f2
+
+This link expires in 1 hour.
+
+If you didn't request this, please ignore this email.
+        

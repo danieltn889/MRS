@@ -1,0 +1,47 @@
+{
+  "name": "v-rec-dashboard",
+  "version": "1.0.0",
+  "description": "High-fidelity Applicant Dashboard for V-REC recruitment platform",
+  "type": "module",
+  "main": "App.jsx",
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "axios": "^1.15.0",
+    "framer-motion": "^10.16.0",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.263.0",
+    "monaco-editor": "^0.55.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "socket.io-client": "^4.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/react-router-dom": "^5.3.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.3.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  },
+  "scripts": {
+    "dev": "npx kill-port 3000 && vite --port 3000",
+    "dev3000": "npx kill-port 3000 && vite --port 3000",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "recruitment",
+    "dashboard",
+    "react",
+    "tailwind",
+    "blockchain",
+    "v-rec"
+  ],
+  "author": "V-REC Team",
+  "license": "MIT"
+}
