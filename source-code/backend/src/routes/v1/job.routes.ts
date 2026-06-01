@@ -1,10 +1,10 @@
 import express, { Router, Request, Response } from 'express';
 import { query, param, body } from 'express-validator';
-import jobController from '../../controllers/job.controller';
-import { protect, authorize } from '../../middleware/auth.middleware';
-import { validateRequest } from '../../middleware/validation.middleware';
-import { withAuth } from '../../utils/auth.utils';
-import { AuthenticatedRequest } from '../../types/auth.types';
+import jobController from '../../controllers/job.controller.js';
+import { protect, authorize } from '../../middleware/auth.middleware.js';
+import { validateRequest } from '../../middleware/validation.middleware.js';
+import { withAuth } from '../../utils/auth.utils.js';
+import { AuthenticatedRequest } from '../../types/auth.types.js';
 
 const router: Router = express.Router();
 

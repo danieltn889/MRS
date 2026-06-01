@@ -1,10 +1,10 @@
 import express, { Router, Request, Response } from 'express';
 import { body, query, param } from 'express-validator';
-import { protect, authorize } from '../../middleware/auth.middleware';
-import { validateRequest } from '../../middleware/validation.middleware';
-import { query as dbQuery, getClient } from '../../config/database';
-import { logger } from '../../utils/logger';
-import { AuthenticatedRequest } from '../../types/auth.types';
+import { protect, authorize } from '../../middleware/auth.middleware.js';
+import { validateRequest } from '../../middleware/validation.middleware.js';
+import { query as dbQuery, getClient } from '../../config/database.js';
+import { logger } from '../../utils/logger.js';
+import { AuthenticatedRequest } from '../../types/auth.types.js';
 
 const router: Router = express.Router();
 

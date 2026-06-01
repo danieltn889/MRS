@@ -1,14 +1,14 @@
 // Export all types and enums
-export * from './types';
+export * from './types.ts';
 
 // Export all models
-export * from './user';
-export * from './candidate';
-export * from './company';
-export * from './job';
-export * from './application';
-export * from './simulation';
-export * from './ai';
-export * from './blockchain';
-export * from './notification';
-export * from './system';
+export * from './user.ts';
+export * from './candidate.ts';
+export * from './company.ts';
+export * from './job.ts';
+export * from './application.ts';
+export * from './simulation.ts';
+export * from './ai.ts';
+export * from './blockchain.ts';
+export * from './notification.ts';
+export * from './system.ts';

@@ -1,9 +1,16 @@
+// src/utils/logger.ts
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Create logs directory if it doesn't exist
 const logsDir = path.join(__dirname, '..', '..', 'logs');
-fs.mkdirSync(logsDir, { recursive: true });
+if (!fs.existsSync(logsDir)) {
+  fs.mkdirSync(logsDir, { recursive: true });
+}
 
 // Simple console logger for now
 const logger = {
@@ -17,3 +24,4 @@ const logger = {
 };
 
 export { logger };
+export default logger;

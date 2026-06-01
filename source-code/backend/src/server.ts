@@ -1,8 +1,8 @@
-require('dotenv').config();
+import 'dotenv/config';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
-import app from './app';
-import { logger } from './utils/logger';
+import app from './app.js';
+import { logger } from './utils/logger.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 

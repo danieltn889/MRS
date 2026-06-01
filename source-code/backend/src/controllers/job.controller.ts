@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
-import BaseController from './base.controller';
-import DatabaseService from '../services/database.service';
-import PaginationService from '../services/pagination.service';
-import ValidationService from '../services/validation.service';
-import { logger } from '../utils/logger';
-import { Job, Application } from '../models';
-import { AuthenticatedRequest, User as AuthUser } from '../types/auth.types';
-import ResponseService from '../services/response.service';  // ✅ ADD THIS IMPORT
+import BaseController from './base.controller.js';  // Use .js, not .ts
+import DatabaseService from '../services/database.service.js';  // Use .js
+import ResponseService from '../services/response.service.js';  // Use .js
+import { logger } from '../utils/logger.js';  // Use .js
+import { AuthenticatedRequest, User as AuthUser} from '../types/auth.types.js';  // Use .js
+import PaginationService from '../services/pagination.service.js';
+import ValidationService from '../services/validation.service.js';
+
 
 interface JobQueryParams {
   page?: string;

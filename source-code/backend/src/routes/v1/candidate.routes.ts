@@ -1,12 +1,12 @@
 import express, { Router, Request, Response } from 'express';
 import { body, query, param } from 'express-validator';
-import { protect, authorize } from '../../middleware/auth.middleware';
-import { validateRequest } from '../../middleware/validation.middleware';
-import { query as dbQuery, getClient } from '../../config/database';
-import { getFullFileUrl } from '../../utils/fileUrl';
-import { logger } from '../../utils/logger';
-import { AuthenticatedRequest } from '../../types/auth.types';
-import { withAuth } from '../../utils/auth.utils';
+import { protect, authorize } from '../../middleware/auth.middleware.js';
+import { validateRequest } from '../../middleware/validation.middleware.js';
+import { query as dbQuery, getClient } from '../../config/database.js';
+import { getFullFileUrl } from '../../utils/fileUrl.js';
+import { logger } from '../../utils/logger.js';
+import { AuthenticatedRequest } from '../../types/auth.types.js';
+import { withAuth } from '../../utils/auth.utils.js';
 import {
   addPortfolioLink,
   addPortfolioLinks,
@@ -36,11 +36,18 @@ import {
   getSkillsList,
   updateProfile,
   setPrimaryResume,
-  getFullCandidateProfileById  // <-- ADD THIS IMPORT
-} from '../../controllers/candidate.controller';
+  getFullCandidateProfileById
+} from '../../controllers/candidate.controller.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+// =====================================================
+// FIX: Create __dirname for ES modules
+// =====================================================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router: Router = express.Router();
 

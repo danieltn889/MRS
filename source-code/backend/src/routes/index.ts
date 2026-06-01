@@ -2,21 +2,21 @@ import express, { Router, Request, Response } from 'express';
 const router: Router = express.Router();
 
 // Import route modules
-import authRoutes from './v1/auth.routes';
-import verifyEmailRoutes from './v1/verify-email.routes';
-import candidateRoutes from './v1/candidate.routes';
-import companyRoutes from './v1/company.routes';
-import jobRoutes from './v1/job.routes';
-import applicationRoutes from './v1/application.routes';
-import simulationRoutes from './v1/simulation.routes';
-import evaluationRoutes from './evaluation.routes';
-import aiRoutes from './v1/ai.routes';
-import blockchainRoutes from './v1/blockchain.routes';
-import analyticsRoutes from './v1/analytics.routes';
-import notificationRoutes from './v1/notification.routes';
-import integrationRoutes from './v1/integration.routes';
-import billingRoutes from './v1/billing.routes';
-import githubRoutes from './v1/github.routes';  // ✅ ADD THIS LINE
+import authRoutes from './v1/auth.routes.js';  // .ts -> .js
+import verifyEmailRoutes from './v1/verify-email.routes.js';  // .ts -> .js
+import candidateRoutes from './v1/candidate.routes.js';  // .ts -> .js
+import companyRoutes from './v1/company.routes.js';  // .ts -> .js
+import jobRoutes from './v1/job.routes.js';  // .ts -> .js
+import applicationRoutes from './v1/application.routes.js';  // .ts -> .js
+import simulationRoutes from './v1/simulation.routes.js';  // .ts -> .js
+import evaluationRoutes from './evaluation.routes.js';  // .ts -> .js
+import aiRoutes from './v1/ai.routes.js';  // .ts -> .js
+import blockchainRoutes from './v1/blockchain.routes.js';  // .ts -> .js
+import analyticsRoutes from './v1/analytics.routes.js';  // .ts -> .js
+import notificationRoutes from './v1/notification.routes.js';  // .ts -> .js
+import integrationRoutes from './v1/integration.routes.js';  // .ts -> .js
+import billingRoutes from './v1/billing.routes.js';  // .ts -> .js
+import githubRoutes from './v1/github.routes.js';  // Already correct  // ✅ ADD THIS LINE
 
 // Mount routes
 router.use('/auth', authRoutes);

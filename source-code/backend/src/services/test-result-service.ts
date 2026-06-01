@@ -1,5 +1,5 @@
-import { DatabaseService } from 'database.service';
-import logger from './logger';
+import DatabaseService from './database.service.ts';
+import { logger } from '../utils/logger.ts';
 
 interface TestResultJSON {
   timestamp: string;
@@ -91,34 +91,14 @@ class TestResultService {
     orgName: string = 'recruitment-platform'
   ): Promise<any> {
     try {
-      // ... (your existing code)
-      
-      // After creating repo and issues, set up GitHub Action workflow
-      // that will automatically run tests and store results
-      
-      // Create .github/workflows directory and test workflow
-      await this.setupTestWorkflowInRepo(finalOwner, finalRepoName);
-      
-      // Create a webhook to receive test results
-      await this.createTestResultsWebhook(finalOwner, finalRepoName, simulationId, sessionId);
-      
-      // Return repo info with test configuration
+      // Placeholder for actual implementation
+      logger.info(`Creating simulation repo: ${repoName}`);
       return {
-        repoName: finalRepoName,
-        repoUrl,
-        cloneUrl,
-        issuesCreated,
-        candidateUsername: candidateGitHubUsername,
-        organizationName: finalOwner,
-        existing: false,
-        candidateId,
+        repoName,
+        simulationId,
         sessionId,
-        attemptNumber,
-        branchName,
-        testResultsWebhook: `https://your-api.com/webhooks/github-test-results/${simulationId}/${sessionId}`,
-        workflowFile: '.github/workflows/test-and-store-results.yml'
+        success: true
       };
-      
     } catch (error: any) {
       logger.error('createSimulationRepoInternal:', error);
       throw error;
@@ -127,28 +107,27 @@ class TestResultService {
   
   // Setup test workflow in candidate's repo
   private async setupTestWorkflowInRepo(owner: string, repo: string): Promise<void> {
-    const workflowContent = `
-name: Auto Test & Report
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Tests with JSON Output
-        run: |
-          pip install pytest pytest-cov pytest-json-report flake8 bandit
-          pytest --json-report --json-report-file=test-results.json
-          flake8 . --format=json --output-file=lint-results.json
-          bandit -r . -f json -o security-results.json
-      - name: Send Results to Platform
-        run: |
-          curl -X POST "${{ secrets.PLATFORM_API_URL }}/api/test-results" \\
-            -H "Content-Type: application/json" \\
-            -d @test-results.json
-    `;
+    // Using regular string concatenation to avoid template expression parsing issues
+    const workflowContent = 'name: Auto Test & Report\n' +
+      '\n' +
+      'on: [push, pull_request]\n' +
+      '\n' +
+      'jobs:\n' +
+      '  test:\n' +
+      '    runs-on: ubuntu-latest\n' +
+      '    steps:\n' +
+      '      - uses: actions/checkout@v4\n' +
+      '      - name: Run Tests with JSON Output\n' +
+      '        run: |\n' +
+      '          pip install pytest pytest-cov pytest-json-report flake8 bandit\n' +
+      '          pytest --json-report --json-report-file=test-results.json\n' +
+      '          flake8 . --format=json --output-file=lint-results.json\n' +
+      '          bandit -r . -f json -o security-results.json\n' +
+      '      - name: Send Results to Platform\n' +
+      '        run: |\n' +
+      '          curl -X POST "${{ secrets.PLATFORM_API_URL }}/api/test-results" \\\n' +
+      '            -H "Content-Type: application/json" \\\n' +
+      '            -d @test-results.json';
     
     // Create the workflow file in the repo
     await this.octokit.repos.createOrUpdateFileContents({

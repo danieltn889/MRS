@@ -1,4 +1,4 @@
-import { BaseEntity, UUID, TIMESTAMP, JSONB, CredentialStatus } from './types';
+import { BaseEntity, UUID, TIMESTAMP, JSONB, CredentialStatus } from './types.ts';
 
 export interface BlockchainCredential extends BaseEntity {
   user_id: UUID;

@@ -1,14 +1,30 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
-import BaseController from './base.controller';
-import DatabaseService from '../services/database.service';
-import PaginationService from '../services/pagination.service';
-import ValidationService from '../services/validation.service';
-import ResponseService from '../services/response.service';
-import { AuthenticatedRequest } from '../types/auth.types';
+import BaseController from './base.controller.js';
+import DatabaseService from '../services/database.service.js';
+import PaginationService from '../services/pagination.service.js';
+import ValidationService from '../services/validation.service.js';
+import ResponseService from '../services/response.service.js';
+import { AuthenticatedRequest } from '../types/auth.types.js';
+import { BlockchainService } from '../services/blockchain.service.js';
+import contractArtifact from '../../../blockchain/artifacts/contracts/LocalSimulation.sol/LocalSimulation.json' with { type: 'json' };
+
 import NodeCache from 'node-cache';
-import githubController from './github.controller'; 
+// Remove circular dependency
+import githubController from './github.controller.js';
+import Groq from 'groq-sdk';
+
+let _groq: Groq | null = null;
+function getGroq(): Groq {
+  if (!_groq) {
+    if (!process.env.GROQ_API_KEY) {
+      throw new Error('GROQ_API_KEY is not set. Add it to your .env file.');
+    }
+    _groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  }
+  return _groq;
+}
 
 
 // ============================================
@@ -161,6 +177,43 @@ interface CreateSimulationRequest extends AuthenticatedRequest {
     compliance?: any[];
     status?: string;
   };
+}
+
+// Add these interfaces at the top of SimulationController.ts (after imports)
+interface GitHubBranch {
+  name: string;
+  commit: {
+    sha: string;
+    url: string;
+  };
+  protected?: boolean;
+}
+
+interface BranchCommitData {
+  totalCommits: number;
+  commitsPerBranch: Record<string, number>;
+}
+
+interface CommitTaskMatchResult {
+  commitSha: string;
+  commitMessage: string;
+  matchedTasks: Array<{
+    taskId: string;
+    taskName: string;
+    confidence: number;
+    whatWasImplemented: string;
+    howItWasImplemented?: string;
+    linesOfCodeImplemented?: number;
+    keyFiles?: string[];
+    implementedFunctions?: string[];
+  }>;
+  unmatchedParts: string[];
+  confidence?: number;
+  // Optional fields for ML matching details
+  matchLevel?: string;
+  tfidfScore?: number;
+  spacyScore?: number;
+  sentimentMatch?: boolean;
 }
 
 class SimulationController extends BaseController {
@@ -1805,426 +1858,1093 @@ async deleteSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       ResponseService.error(res, 'Failed to archive simulation', 500, null, this.formatError(error));
     }
   }
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
+  
+  
+  
+  
+/**
+ * Get commit counts from ALL branches in the repository
+ */
+async getAllBranchCommits(owner: string, repo: string): Promise<BranchCommitData> {
+  console.log('🐙 [getAllBranchCommits] Fetching commits from ALL branches...');
+  
+  try {
+    const branchesRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100`,
+      { 
+        headers: { 
+          'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+          'Accept': 'application/json'
+        } 
+      }
+    );
+    
+    if (!branchesRes.ok) {
+      console.error(`Failed to fetch branches: ${branchesRes.status}`);
+      return { totalCommits: 0, commitsPerBranch: {} };
+    }
+    
+    const branches: GitHubBranch[] = await branchesRes.json() as GitHubBranch[];
+    
+    if (!Array.isArray(branches)) {
+      console.error('Branches response is not an array');
+      return { totalCommits: 0, commitsPerBranch: {} };
+    }
+    
+    console.log(`📊 Found ${branches.length} branches in repository`);
+    
+    let totalCommits = 0;
+    const commitsPerBranch: Record<string, number> = {};
+    
+    for (const branch of branches) {
+      if (!branch?.name) continue;
+      
+      const commitsRes = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/commits?sha=${encodeURIComponent(branch.name)}&per_page=1`,
+        { 
+          headers: { 
+            'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+            'Accept': 'application/json'
+          } 
+        }
+      );
+      
+      if (!commitsRes.ok) continue;
+      
+      const linkHeader = commitsRes.headers.get('Link');
+      if (linkHeader && linkHeader.includes('rel="last"')) {
+        const match = linkHeader.match(/page=(\d+)>; rel="last"/);
+        if (match && match[1]) {
+          const branchCommits = parseInt(match[1], 10);
+          totalCommits += branchCommits;
+          commitsPerBranch[branch.name] = branchCommits;
+          console.log(`   Branch ${branch.name}: ${branchCommits} commits`);
+        }
+      }
+    }
+    
+    console.log(`📊 TOTAL commits across ${branches.length} branches: ${totalCommits}`);
+    return { totalCommits, commitsPerBranch };
+    
+  } catch (error) {
+    console.error('Error fetching branch commits:', error);
+    return { totalCommits: 0, commitsPerBranch: {} };
+  }
+}
 
 /**
- * Calculate GitHub Score - Progressive 1-Day Mode
- * 1 commit = ~30% | 10+ commits = ~90%
+ * Get detailed commit information including file changes and diffs
  */
+async getCommitWithChanges(owner: string, repo: string, commitSha: string) {
+  console.log(`🐙 [getCommitWithChanges] Fetching commit ${commitSha} with changes...`);
+  
+  try {
+    const url = `https://api.github.com/repos/${owner}/${repo}/commits/${commitSha}`;
+    const response = await fetch(url, {
+      headers: { 
+        'Authorization': `Bearer ${process.env.GITHUB_TOKEN}`,
+        'Accept': 'application/json'
+      }
+    });
+    
+    if (!response.ok) return null;
+    
+    const commit: any = await response.json();
+    
+    return {
+      sha: commit.sha,
+      shortSha: commit.sha?.substring(0, 7),
+      message: commit.commit?.message,
+      author: commit.commit?.author?.name,
+      authorLogin: commit.author?.login,
+      date: commit.commit?.author?.date,
+      url: commit.html_url,
+      stats: commit.stats,  // { additions, deletions, total }
+      // ✅ THIS IS WHAT YOU WANT - FILES CHANGED IN THIS COMMIT
+      files: commit.files?.map((file: any) => ({
+        filename: file.filename,           // File name (e.g., "src/app.js")
+        status: file.status,               // 'added', 'modified', 'removed', 'renamed'
+        additions: file.additions,         // Lines added
+        deletions: file.deletions,         // Lines deleted
+        changes: file.changes,             // Total changes
+        patch: file.patch                  // THE ACTUAL CODE DIFF!
+      }))
+    };
+  } catch (error) {
+    console.error('Error fetching commit with changes:', error);
+    return null;
+  }
+}
+
 /**
- * Calculate GitHub Score - Progressive 1-Day Mode with detailed marks
- * Shows exactly how many points are awarded per parameter
- * 
- * @param session - Session object containing github_links
- * @returns Score and detailed analysis with per-parameter marks
+ * calculateGitHubScore — complete drop-in replacement
+ *
+ * Return now includes perCommitDetail[] — for EVERY commit analyzed you can see:
+ *   - What AI found (matched tasks, confidence, whatWasImplemented, howItWasImplemented)
+ *   - What ML found (matched tasks, confidence, tfidfScore, spacyScore, sentimentMatch)
+ *   - Combined winner decision
+ *
+ * Plus taskImplementationReport with implementedTasks[] / notImplementedTasks[].
  */
-public async calculateGitHubScore(session: any): Promise<{ score: number; analysis: any }> {
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: AI commit → task matcher
+// ─────────────────────────────────────────────────────────────────────────────
+private async matchCommitToTasksWithAI(
+  commit: any,
+  tasks: any[]
+): Promise<CommitTaskMatchResult> {
+  console.log(`   🤖 [AI] Analyzing commit ${commit.shortSha || commit.sha?.substring(0, 7)}...`);
+
+  const totalChanges =
+    (commit.stats?.total || commit.linesAdded || 0) + (commit.linesDeleted || 0);
+  const filesChanged = (commit.files || commit.changedFiles || []).length;
+
+  const IS_TRIVIAL =
+    totalChanges < 5 ||
+    (filesChanged === 1 && totalChanges < 10) ||
+    (commit.message || '').toLowerCase().includes('typo') ||
+    (commit.message || '').toLowerCase().includes('format') ||
+    (commit.message || '').toLowerCase().includes('comment') ||
+    (commit.message || '').toLowerCase().includes('readme') ||
+    (commit.message || '').toLowerCase().includes('docs');
+
+  if (IS_TRIVIAL) {
+    console.log(`   ⏭️ [AI] SKIPPED trivial commit (${totalChanges} lines, ${filesChanged} files)`);
+    return {
+      commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
+      commitMessage:  commit.message || '',
+      matchedTasks:   [],
+      unmatchedParts: [`Trivial commit (${totalChanges} lines) — no task implementation`]
+    };
+  }
+
+  const hasSubstantialCode =
+    totalChanges >= 10 ||
+    (commit.files || []).some(
+      (f: any) =>
+        f.filename?.match(/\.(js|ts|py|java|go|rs|cpp|html|css)$/) &&
+        (f.additions || 0) > 5
+    );
+
+  if (!hasSubstantialCode) {
+    console.log(`   ⏭️ [AI] SKIPPED — no substantial code (${totalChanges} lines)`);
+    return {
+      commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
+      commitMessage:  commit.message || '',
+      matchedTasks:   [],
+      unmatchedParts: ['No substantial code changes in this commit']
+    };
+  }
+
+  console.log(`   ✅ [AI] Proceeding — ${totalChanges} lines changed`);
+
+  const MAX_COMMIT_MSG    = 300;
+  const MAX_DIFF_PER_FILE = 200;
+  const MAX_FILES         = 3;
+
+  const files    = commit.files || commit.changedFiles || [];
+  const topFiles = files
+    .sort((a: any, b: any) => (b.additions || 0) - (a.additions || 0))
+    .slice(0, MAX_FILES);
+
+  let commitMsg = (commit.message || '').split('\n')[0];
+  if (commitMsg.length > MAX_COMMIT_MSG) commitMsg = commitMsg.substring(0, MAX_COMMIT_MSG);
+
+  const commitData = {
+    sha:             commit.shortSha || commit.sha?.substring(0, 7),
+    message:         commitMsg,
+    files: topFiles.map((file: any) => ({
+      filename:     file.filename,
+      status:       file.status,
+      additions:    file.additions || 0,
+      deletions:    file.deletions || 0,
+      diff_preview: (file.patch || '').substring(0, MAX_DIFF_PER_FILE)
+    })),
+    total_additions: commit.stats?.additions || commit.linesAdded  || 0,
+    total_deletions: commit.stats?.deletions || commit.linesDeleted || 0
+  };
+
+  // Build from REAL simulation tasks
+  const tasksList = tasks.slice(0, 8).map((task: any, idx: number) => ({
+    id:          String(task.id || task.order || task.task_index || idx + 1),
+    name:        (task.title || task.task_name || task.name || `Task ${idx + 1}`).substring(0, 60),
+    description: (task.description || task.requirements || task.instructions || '').substring(0, 120)
+  }));
+  
+  // const tasksList = [
+  //   {
+  //     id: "task_1",
+  //     name: "Managing Stuff",
+  //     description: "Add, change, or remove things you own."
+  //   },
+  //   {
+  //     id: "task_2",
+  //     name: "Tracking Spending",
+  //     description: "See how much money you spend on things."
+  //   },
+  //   {
+  //     id: "task_3",
+  //     name: "Changing Account Settings",
+  //     description: "Change your password or email address."
+  //   }
+  // ];
+
+  const prompt = `Analyze this git commit and match it to one or more simulation tasks below.
+
+COMMIT: ${commitData.sha}
+MESSAGE: ${commitData.message}
+STATS: +${commitData.total_additions}/-${commitData.total_deletions}
+
+FILES CHANGED:
+${commitData.files.map((f: any) => `${f.filename} (${f.status}): +${f.additions}/-${f.deletions}`).join('\n')}
+
+CODE DIFFS:
+${commitData.files.map((f: any) => `${f.filename}:\n${f.diff_preview || 'No diff'}`).join('\n')}
+
+SIMULATION TASKS:
+${tasksList.map((t: any) => `${t.id}: ${t.name} - ${t.description}`).join('\n')}
+
+Return ONLY valid JSON:
+{
+  "matchedTasks": [{
+    "taskId": "<id from task list>",
+    "taskName": "<name from task list>",
+    "confidence": 0-100,
+    "whatWasImplemented": "brief description",
+    "howItWasImplemented": "brief implementation note"
+  }],
+  "unmatchedParts": "description of anything not matched (or empty string)",
+  "commitSummary": "one sentence"
+}`;
+
+  try {
+    console.log(`   📤 [AI] Sending (${commitData.files.length} files, ${tasksList.length} tasks)`);
+
+   const completion = await getGroq().chat.completions.create({
+      messages: [
+        {
+          role:    'system',
+          content: 'You are a code reviewer. Match git commits to simulation tasks. Return ONLY valid JSON. Be concise but accurate.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      model:           'llama-3.3-70b-versatile',
+      temperature:     0.2,
+      max_tokens:      600,
+      response_format: { type: 'json_object' }
+    });
+
+    const responseContent = completion.choices[0]?.message?.content || '{"matchedTasks":[]}';
+    const result           = JSON.parse(responseContent);
+
+    console.log(`   ✅ [AI] Matched ${result.matchedTasks?.length || 0} tasks`);
+
+    return {
+      commitSha:      commitData.sha,
+      commitMessage:  commitData.message,
+      matchedTasks:   result.matchedTasks  || [],
+      unmatchedParts: result.unmatchedParts ? [result.unmatchedParts] : [],
+      commitSummary:  result.commitSummary  || ''
+    } as any;
+
+  } catch (error: any) {
+    console.error('   ❌ [AI] Failed:', error.message);
+    return {
+      commitSha:      commitData.sha,
+      commitMessage:  commitData.message,
+      matchedTasks:   [],
+      unmatchedParts: [`AI analysis failed: ${error.message}`]
+    };
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HELPER: ML commit → task matcher (Python server)
+// ─────────────────────────────────────────────────────────────────────────────
+private async matchCommitToTasksWithMl(
+  commit: any,
+  tasks: any[]
+): Promise<CommitTaskMatchResult> {
+  try {
+    const pythonServerUrl = 'http://localhost:8097/match';
+
+    // Build from REAL simulation tasks
+    const tasksList = tasks.map((task: any, idx: number) => ({
+      id:          String(task.id || task.order || task.task_index || idx + 1),
+      name:        task.title || task.task_name || task.name || `Task ${idx + 1}`,
+      description: task.description || task.requirements || task.instructions || ''
+    }));
+    
+    // const tasksList = [
+    //   {
+    //     id: "task_1",
+    //     name: "Managing Stuff",
+    //     description: "Add, change, or remove things you own."
+    //   },
+    //   {
+    //     id: "task_2",
+    //     name: "Tracking Spending",
+    //     description: "See how much money you spend on things."
+    //   },
+    //   {
+    //     id: "task_3",
+    //     name: "Changing Account Settings",
+    //     description: "Change your password or email address."
+    //   }
+    // ];
+
+    const requestBody = {
+      commit_message: commit.message,
+      tasks:          tasksList
+    };
+
+    console.log(`   🤖 [ML] Matching commit: ${commit.shortSha || commit.sha?.substring(0, 7)}`);
+
+    const response = await fetch(pythonServerUrl, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Python server responded with status: ${response.status}`);
+    }
+
+    const result: any = await response.json();
+
+    if (result.success && result.best_match) {
+      const bestMatch       = result.best_match;
+      const confidenceValue = bestMatch.confidence || 0;
+
+      if (confidenceValue >= 35) {
+        return {
+          commitSha:     commit.shortSha || commit.sha?.substring(0, 7),
+          commitMessage: commit.message,
+          matchedTasks: [{
+            taskId:               bestMatch.task_id   || '',
+            taskName:             bestMatch.task_name || '',
+            confidence:           confidenceValue,
+            whatWasImplemented:   bestMatch.task_name || '',
+            howItWasImplemented:  `Matched with ${confidenceValue}% confidence using ML`,
+            keyFiles:             commit.files?.map((f: any) => f.filename) || [],
+            implementedFunctions: []
+          }],
+          unmatchedParts: [],
+          confidence:     confidenceValue,
+          matchLevel:     bestMatch.match_level,
+          tfidfScore:     bestMatch.tfidf_score,
+          spacyScore:     bestMatch.spacy_score,
+          sentimentMatch: bestMatch.sentiment_match
+        };
+      }
+
+      return {
+        commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
+        commitMessage:  commit.message,
+        matchedTasks:   [],
+        unmatchedParts: [commit.message],
+        confidence:     confidenceValue,
+        matchLevel:     bestMatch.match_level,
+        tfidfScore:     bestMatch.tfidf_score,
+        spacyScore:     bestMatch.spacy_score,
+        sentimentMatch: bestMatch.sentiment_match
+      };
+    }
+
+    return {
+      commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
+      commitMessage:  commit.message,
+      matchedTasks:   [],
+      unmatchedParts: [commit.message],
+      confidence:     0
+    };
+
+  } catch (error) {
+    console.error(`   ❌ [ML] Failed for commit ${commit.sha}:`, error);
+    return {
+      commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
+      commitMessage:  commit.message,
+      matchedTasks:   [],
+      unmatchedParts: ['ML matching service unavailable'],
+      confidence:     0
+    };
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN: calculateGitHubScore
+// ─────────────────────────────────────────────────────────────────────────────
+public async calculateGitHubScore(
+  session: any
+): Promise<{ score: number; analysis: any }> {
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('🐙 [calculateGitHubScore] STARTED');
   console.log('═══════════════════════════════════════════════════════════════');
 
   let githubScore = 0;
-  let githubAnalysis = null;
+  let githubAnalysis: any = null;
+
+  let aiMatchingResults:  CommitTaskMatchResult[] = [];
+  let mlMatchingResults:  CommitTaskMatchResult[] = [];
+  let commitTaskMatchingResults: CommitTaskMatchResult[] = [];
+
   let detailedMarks = {
-    commits: { earned: 0, max: 50, details: '', count: 0 },
-    readme: { earned: 0, max: 15, details: '', present: false },
-    configFile: { earned: 0, max: 10, details: '', present: false },
-    gitignore: { earned: 0, max: 5, details: '', present: false },
-    codeFiles: { earned: 0, max: 20, details: '', count: 0 },
-    totalPossible: 100
+    commits:        { earned: 0, max: 50,  details: '', count: 0 },
+    readme:         { earned: 0, max: 15,  details: '', present: false },
+    configFile:     { earned: 0, max: 10,  details: '', present: false },
+    gitignore:      { earned: 0, max: 5,   details: '', present: false },
+    codeFiles:      { earned: 0, max: 20,  details: '', count: 0 },
+    commitMatching: {
+      earned: 0, max: 20, details: '',
+      matchedCount: 0, totalCommitsAnalyzed: 0,
+      aiMatchedCount: 0, mlMatchedCount: 0, combinedMatchedCount: 0
+    },
+    totalPossible: 120
   };
 
-  console.log('📋 Session github_links check:', {
-    hasGithubLinks: !!session.github_links,
-    githubLinksType: typeof session.github_links,
-    githubLinksValue: session.github_links
-  });
-
+  // ── Guard: github_links ───────────────────────────────────────────────────
   if (!session.github_links) {
-    console.log('📭 No github_links found in session');
-    return { 
-      score: 0, 
-      analysis: {
-        analyzed: false,
-        message: 'No GitHub repository linked',
-        detailedMarks: detailedMarks,
-        score: 0
-      } 
-    };
+    return { score: 0, analysis: { analyzed: false, message: 'No GitHub repository linked', detailedMarks, score: 0 } };
   }
 
   let githubLinks = session.github_links;
   if (typeof githubLinks === 'string') {
-    try {
-      githubLinks = JSON.parse(githubLinks);
-      console.log('✅ Successfully parsed github_links from string to object');
-      console.log(`📊 Parsed github_links:`, JSON.stringify(githubLinks, null, 2));
-    } catch (e) {
-      console.warn('⚠️ Failed to parse github_links:', e);
-      return { 
-        score: 0, 
-        analysis: {
-          analyzed: false,
-          message: 'Failed to parse GitHub links',
-          detailedMarks: detailedMarks,
-          score: 0
-        } 
-      };
-    }
+    try { githubLinks = JSON.parse(githubLinks); }
+    catch (e) { return { score: 0, analysis: { analyzed: false, message: 'Failed to parse GitHub links', detailedMarks, score: 0 } }; }
   }
 
   if (!githubLinks?.repoUrl) {
-    console.log('📭 No repoUrl found in github_links');
-    if (githubLinks) {
-      console.log('   githubLinks keys:', Object.keys(githubLinks));
-    }
-    return { 
-      score: 0, 
-      analysis: {
-        analyzed: false,
-        message: 'No repository URL in GitHub links',
-        detailedMarks: detailedMarks,
-        score: 0
-      } 
-    };
+    return { score: 0, analysis: { analyzed: false, message: 'No repository URL in GitHub links', detailedMarks, score: 0 } };
   }
 
   const repoUrl = githubLinks.repoUrl;
-  console.log(`🔍 Parsing GitHub URL: ${repoUrl}`);
-  
-  const parsed = await githubController.parseGitHubUrl(repoUrl);
-  console.log(`📊 Parsed result:`, JSON.stringify(parsed, null, 2));
-  
+  // const parsed  = await githubController.parseGitHubUrl('https://github.com/danieltn889/SpendSmart');
+  const parsed  = await githubController.parseGitHubUrl(repoUrl);
   if (!parsed) {
-    console.log('❌ Failed to parse GitHub URL - parseGitHubUrl returned null');
-    console.log(`   Original URL: ${repoUrl}`);
-    return { 
-      score: 0, 
-      analysis: {
-        analyzed: false,
-        message: 'Invalid GitHub repository URL',
-        detailedMarks: detailedMarks,
-        score: 0
-      } 
-    };
+    return { score: 0, analysis: { analyzed: false, message: 'Invalid GitHub repository URL', detailedMarks, score: 0 } };
   }
 
   const { owner, repo } = parsed;
-  console.log(`✅ Successfully parsed: owner=${owner}, repo=${repo}`);
-  console.log(`🔍 Starting GitHub repository analysis for ${owner}/${repo}...`);
+  console.log(`✅ Repo: ${owner}/${repo}`);
 
   try {
-    const mockReq = { 
-      params: { owner, repo }, 
-      query: { includeContent: 'true', maxFiles: '100' } 
-    } as any;
-    
-    let mockRes: any = {};
+    // ── STEP 1: getEverything ─────────────────────────────────────────────
+    const mockReq = { params: { owner, repo }, query: { includeContent: 'true', maxFiles: '100' } } as any;
     let responseData: any = null;
-    
-    mockRes = {
-      json: (data: any) => { 
-        console.log(`📦 getEverything response received`);
-        console.log(`📦 Response data keys: ${Object.keys(data).join(', ')}`);
-        console.log(`📦 Response data size: ${JSON.stringify(data).length} characters`);
-        responseData = data; 
-        return mockRes; 
-      },
-      status: (code: number) => {
-        console.log(`📊 getEverything status code: ${code}`);
-        return mockRes;
-      }
+    const mockRes: any = {
+      json:   (data: any) => { responseData = data; return mockRes; },
+      status: (_code: number) => mockRes
     };
 
-    console.log(`📡 Calling getEverything for ${owner}/${repo}...`);
-    const getEverythingStart = Date.now();
-    
+    const t0 = Date.now();
     await githubController.getEverything(mockReq, mockRes);
-    
-    const getEverythingDuration = Date.now() - getEverythingStart;
-    console.log(`✅ getEverything completed in ${getEverythingDuration}ms`);
-    
+    console.log(`✅ getEverything done in ${Date.now() - t0}ms`);
+
     if (!responseData?.data) {
-      console.log('⚠️ No data returned from getEverything - responseData was null or missing .data');
-      if (responseData) {
-        console.log('📋 responseData keys:', Object.keys(responseData));
-      }
-      return { 
-        score: 0, 
-        analysis: {
-          analyzed: false,
-          message: 'No data returned from GitHub API',
-          detailedMarks: detailedMarks,
-          score: 0
-        } 
-      };
+      return { score: 0, analysis: { analyzed: false, message: 'No data returned from GitHub API', detailedMarks, score: 0 } };
     }
 
     const repoData = responseData.data;
-    const metrics = this.extractGitHubMetrics(repoData);
-    
-    // Update detailed marks with actual values
-    detailedMarks.commits.count = metrics.commitCount;
-    detailedMarks.codeFiles.count = metrics.codeFilesCount;
-    detailedMarks.readme.present = metrics.hasReadme;
-    detailedMarks.configFile.present = metrics.hasConfigFile;
-    detailedMarks.gitignore.present = metrics.hasGitignore;
-    
-    console.log('📊 GitHub Analysis Results (getEverything):');
-    console.log('═══════════════════════════════════════════════════════════════');
-    
-    console.log('📁 Repository Info:', {
-      name: repoData.repository?.name,
-      fullName: repoData.repository?.fullName,
-      owner: repoData.repository?.owner,
-      description: repoData.repository?.description?.substring(0, 200),
-      stars: repoData.social?.stars,
-      forks: repoData.social?.forks,
-      openIssues: repoData.social?.openIssues,
-      defaultBranch: repoData.repository?.defaultBranch,
-      isPrivate: repoData.repository?.isPrivate,
-      isArchived: repoData.repository?.isArchived,
-      createdAt: repoData.repository?.createdAt,
-      updatedAt: repoData.repository?.updatedAt,
-      lastPush: repoData.repository?.pushedAt
-    });
-    
-    console.log('📊 Commit Metrics:', {
-      totalCommits: metrics.commitCount,
-      commitFrequency: metrics.commitFrequency.toFixed(2),
-      longestStreak: metrics.commitStreak,
-      averagePerWeek: repoData.commits?.averageCommitsPerWeek?.toFixed(2),
-      topAuthors: repoData.commits?.topAuthors?.length
-    });
-    
-    console.log('📁 File Structure Metrics:', {
-      totalFiles: metrics.totalFiles,
-      totalDirectories: repoData.code?.totalDirectories || 0,
-      codeFilesCount: metrics.codeFilesCount,
-      totalLinesOfCode: metrics.totalLinesOfCode.toLocaleString(),
-      hasReadme: metrics.hasReadme,
-      hasConfigFile: metrics.hasConfigFile,
-      hasGitignore: metrics.hasGitignore,
-      primaryLanguage: metrics.primaryLanguage,
-      languagesCount: metrics.languages.length
-    });
-    
-    if (metrics.languages.length > 0) {
-      console.log('💻 Languages Used:', metrics.languages.slice(0, 5).map((l: any) => `${l.name} (${l.percentage?.toFixed(1)}%)`).join(', '));
+
+    // ── STEP 2: Extract commits ───────────────────────────────────────────
+    const commitsWithChanges = (repoData.commits?.recentCommits || []).map((commit: any) => ({
+      sha:          commit.sha,
+      shortSha:     commit.shortSha,
+      message:      commit.message,
+      author:       commit.author,
+      authorLogin:  commit.authorLogin,
+      date:         commit.date,
+      url:          commit.url,
+      stats:        commit.stats,
+      files:        commit.files || [],
+      linesAdded:   commit.stats?.additions  || 0,
+      linesDeleted: commit.stats?.deletions  || 0
+    }));
+
+    console.log(`📊 ${commitsWithChanges.length} commits extracted`);
+
+    // ── STEP 3: Load simulation tasks from DB ─────────────────────────────
+    let simulationTasks: any[] = [];
+    try {
+      if (session.id) {
+        const simulationResult = await DatabaseService.query(`
+          SELECT st.tasks, st.name AS template_name
+          FROM simulation_sessions ss
+          JOIN simulations sim ON ss.simulation_id = sim.id
+          JOIN simulation_templates st ON sim.template_id = st.id
+          WHERE ss.id = $1
+        `, [session.id]);
+
+        if (simulationResult.rows[0]?.tasks) {
+          let tasksData = simulationResult.rows[0].tasks;
+          if (typeof tasksData === 'string') tasksData = JSON.parse(tasksData);
+          if (Array.isArray(tasksData)) {
+            simulationTasks = tasksData;
+            console.log(`📋 ${simulationTasks.length} simulation tasks loaded`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error retrieving tasks:', err);
     }
 
-    // ============================================
-    // CALCULATE SCORE WITH DETAILED MARKS
-    // ============================================
-    
-    // 1. COMMIT COUNT - 50 points max
-    console.log('\n📊 DETAILED GITHUB SCORE BREAKDOWN:');
+    // ── STEP 4: AI matching ───────────────────────────────────────────────
+    let aiMatchedCount    = 0;
+    let aiTotalConfidence = 0;
+
+    if (simulationTasks.length > 0 && commitsWithChanges.length > 0) {
+      console.log('\n🤖 Running AI matching...');
+      for (const commit of commitsWithChanges.slice(0, 10)) {
+        try {
+          const matchResult = await this.matchCommitToTasksWithAI(commit, simulationTasks);
+          aiMatchingResults.push(matchResult);
+          if (matchResult.matchedTasks?.length > 0) {
+            aiMatchedCount++;
+            aiTotalConfidence += (matchResult.matchedTasks[0] as any)?.confidence || 0;
+          }
+        } catch (err) {
+          aiMatchingResults.push({
+            commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
+            commitMessage:  commit.message || '',
+            matchedTasks:   [],
+            unmatchedParts: ['AI matching failed']
+          });
+        }
+      }
+      console.log(`📊 AI SUMMARY: ${aiMatchedCount}/${aiMatchingResults.length} matched`);
+    }
+
+    // ── STEP 5: ML matching ───────────────────────────────────────────────
+    let mlMatchedCount    = 0;
+    let mlTotalConfidence = 0;
+
+    if (simulationTasks.length > 0 && commitsWithChanges.length > 0) {
+      console.log('\n🤖 Running ML matching...');
+      const mlCommits = commitsWithChanges.slice(0, 15);
+      detailedMarks.commitMatching.totalCommitsAnalyzed = mlCommits.length;
+
+      for (const commit of mlCommits) {
+        try {
+          const matchResult = await this.matchCommitToTasksWithMl(commit, simulationTasks);
+          mlMatchingResults.push(matchResult);
+          if (matchResult.matchedTasks?.length > 0) {
+            mlMatchedCount++;
+            if ((matchResult as any).confidence) mlTotalConfidence += (matchResult as any).confidence;
+          }
+        } catch (err) {
+          mlMatchingResults.push({
+            commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
+            commitMessage:  commit.message || '',
+            matchedTasks:   [],
+            unmatchedParts: ['ML matching failed']
+          });
+        }
+      }
+      console.log(`📊 ML SUMMARY: ${mlMatchedCount}/${mlMatchingResults.length} matched`);
+    } else {
+      detailedMarks.commitMatching.totalCommitsAnalyzed = 0;
+    }
+
+    // ── STEP 5b: Deduplicate AI + ML ──────────────────────────────────────
+    commitTaskMatchingResults = [...aiMatchingResults, ...mlMatchingResults];
+
+    const dedupeMap = new Map<string, CommitTaskMatchResult>();
+    for (const r of aiMatchingResults) {
+      if (!dedupeMap.has(r.commitSha) || (r.matchedTasks && r.matchedTasks.length > 0)) {
+        dedupeMap.set(r.commitSha, r);
+      }
+    }
+    for (const r of mlMatchingResults) {
+      const existing = dedupeMap.get(r.commitSha);
+      if (!existing) {
+        dedupeMap.set(r.commitSha, r);
+      } else if (
+        (!existing.matchedTasks || existing.matchedTasks.length === 0) &&
+        r.matchedTasks?.length > 0
+      ) {
+        dedupeMap.set(r.commitSha, r);
+      }
+    }
+
+    const deduplicatedResults    = Array.from(dedupeMap.values());
+    const combinedMatchedCount   = deduplicatedResults.filter(r => r.matchedTasks?.length > 0).length;
+    const totalCommitsConsidered = deduplicatedResults.length;
+
+    const allConfidenceValues = deduplicatedResults
+      .filter(r => r.matchedTasks?.length > 0)
+      .map(r => (r as any).confidence || (r.matchedTasks?.[0] as any)?.confidence || 0);
+    const averageConfidence = allConfidenceValues.length > 0
+      ? allConfidenceValues.reduce((a, b) => a + b, 0) / allConfidenceValues.length
+      : 0;
+
+    const matchPercentage = totalCommitsConsidered > 0
+      ? (combinedMatchedCount / totalCommitsConsidered) * 100
+      : 0;
+
+    if      (matchPercentage >= 80) { detailedMarks.commitMatching.earned = 20; detailedMarks.commitMatching.details = `Excellent! ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
+    else if (matchPercentage >= 60) { detailedMarks.commitMatching.earned = 16; detailedMarks.commitMatching.details = `Good! ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
+    else if (matchPercentage >= 40) { detailedMarks.commitMatching.earned = 12; detailedMarks.commitMatching.details = `Satisfactory: ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
+    else if (matchPercentage >= 20) { detailedMarks.commitMatching.earned =  8; detailedMarks.commitMatching.details = `Needs improvement: ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
+    else if (matchPercentage >   0) { detailedMarks.commitMatching.earned =  4; detailedMarks.commitMatching.details = `Minimal: ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
+    else                            { detailedMarks.commitMatching.earned =  0; detailedMarks.commitMatching.details = `No commits matched to tasks`; }
+
+    detailedMarks.commitMatching.matchedCount         = combinedMatchedCount;
+    detailedMarks.commitMatching.aiMatchedCount       = aiMatchedCount;
+    detailedMarks.commitMatching.mlMatchedCount       = mlMatchedCount;
+    detailedMarks.commitMatching.combinedMatchedCount = combinedMatchedCount;
+
+    // ── STEP 6: Repository quality metrics ───────────────────────────────
+    const codeFilesCount = (repoData.code?.files || []).filter((f: any) =>
+      f.name?.match(/\.(js|ts|py|java|go|rs|cpp|html|css|json)$/)
+    ).length;
+
+    const hasReadme     = repoData.community?.hasReadme || false;
+    const hasConfigFile = (repoData.code?.files || []).some((f: any) =>
+      f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'go.mod'
+    );
+    const hasGitignore  = (repoData.code?.files || []).some((f: any) => f.name === '.gitignore');
+
+    const metrics = {
+      commitCount:           repoData.commits?.total || commitsWithChanges.length,
+      commitsPerBranch:      {} as Record<string, number>,
+      totalFiles:            repoData.code?.totalFiles  || 0,
+      codeFilesCount,
+      totalLinesOfCode:      repoData.code?.totalSize   || 0,
+      hasReadme, hasConfigFile, hasGitignore,
+      hasTests: (repoData.code?.files || []).some((f: any) =>
+        f.name?.includes('test') || f.name?.includes('spec')),
+      primaryLanguage:       repoData.languages?.primary    || 'Unknown',
+      languages:             repoData.languages?.breakdown   || [],
+      recentCommits:         commitsWithChanges,
+      topAuthors:            repoData.commits?.topAuthors    || [],
+      firstCommitDate:       commitsWithChanges[commitsWithChanges.length - 1]?.date,
+      lastCommitDate:        commitsWithChanges[0]?.date,
+      averageCommitsPerWeek: repoData.commits?.averageCommitsPerWeek || 0,
+      totalAdditions:   commitsWithChanges.reduce((s: number, c: any) => s + (c.linesAdded   || 0), 0),
+      totalDeletions:   commitsWithChanges.reduce((s: number, c: any) => s + (c.linesDeleted  || 0), 0),
+      totalFilesChanged: commitsWithChanges.reduce((s: number, c: any) => s + (c.files?.length || 0), 0)
+    };
+
+    detailedMarks.commits.count      = metrics.commitCount;
+    detailedMarks.codeFiles.count    = metrics.codeFilesCount;
+    detailedMarks.readme.present     = metrics.hasReadme;
+    detailedMarks.configFile.present = metrics.hasConfigFile;
+    detailedMarks.gitignore.present  = metrics.hasGitignore;
+
+    // ── STEP 7: Score pillars ─────────────────────────────────────────────
+    if      (metrics.commitCount >= 10) { detailedMarks.commits.earned = 50; detailedMarks.commits.details = `10+ commits (${metrics.commitCount}) - EXCELLENT`; }
+    else if (metrics.commitCount >=  8) { detailedMarks.commits.earned = 45; detailedMarks.commits.details = `8-9 commits (${metrics.commitCount}) - VERY GOOD`; }
+    else if (metrics.commitCount >=  6) { detailedMarks.commits.earned = 40; detailedMarks.commits.details = `6-7 commits (${metrics.commitCount}) - GOOD`; }
+    else if (metrics.commitCount >=  4) { detailedMarks.commits.earned = 30; detailedMarks.commits.details = `4-5 commits (${metrics.commitCount}) - ABOVE AVERAGE`; }
+    else if (metrics.commitCount >=  2) { detailedMarks.commits.earned = 20; detailedMarks.commits.details = `2-3 commits (${metrics.commitCount}) - AVERAGE`; }
+    else if (metrics.commitCount >=  1) { detailedMarks.commits.earned = 10; detailedMarks.commits.details = `1 commit - MINIMAL`; }
+    else                                { detailedMarks.commits.earned =  0; detailedMarks.commits.details = `No commits`; }
+
+    detailedMarks.readme.earned      = metrics.hasReadme     ? 15 : 0;
+    detailedMarks.configFile.earned  = metrics.hasConfigFile ? 10 : 0;
+    detailedMarks.gitignore.earned   = metrics.hasGitignore  ?  5 : 0;
+    detailedMarks.readme.details     = metrics.hasReadme     ? 'README.md present'    : 'Missing README.md';
+    detailedMarks.configFile.details = metrics.hasConfigFile ? 'Config file present'  : 'No config file found';
+    detailedMarks.gitignore.details  = metrics.hasGitignore  ? '.gitignore present'   : 'No .gitignore found';
+
+    if      (metrics.codeFilesCount >= 15) { detailedMarks.codeFiles.earned = 20; detailedMarks.codeFiles.details = `Excellent (${metrics.codeFilesCount} files)`; }
+    else if (metrics.codeFilesCount >= 10) { detailedMarks.codeFiles.earned = 16; detailedMarks.codeFiles.details = `Great (${metrics.codeFilesCount} files)`; }
+    else if (metrics.codeFilesCount >=  6) { detailedMarks.codeFiles.earned = 12; detailedMarks.codeFiles.details = `Good (${metrics.codeFilesCount} files)`; }
+    else if (metrics.codeFilesCount >=  3) { detailedMarks.codeFiles.earned =  8; detailedMarks.codeFiles.details = `Adequate (${metrics.codeFilesCount} files)`; }
+    else if (metrics.codeFilesCount >=  1) { detailedMarks.codeFiles.earned =  4; detailedMarks.codeFiles.details = `Minimal (${metrics.codeFilesCount} files)`; }
+    else                                   { detailedMarks.codeFiles.earned =  0; detailedMarks.codeFiles.details = `No code files`; }
+
+    // ── STEP 8: Total ─────────────────────────────────────────────────────
+    githubScore =
+      detailedMarks.commits.earned        +
+      detailedMarks.readme.earned         +
+      detailedMarks.configFile.earned     +
+      detailedMarks.gitignore.earned      +
+      detailedMarks.codeFiles.earned      +
+      detailedMarks.commitMatching.earned;
+
+    console.log(`\n📊 TOTAL: ${githubScore}/${detailedMarks.totalPossible}`);
+
+    // ── STEP 9: Build PER-COMMIT DETAIL ──────────────────────────────────
+    //
+    // For EVERY commit that was analyzed by AI or ML (or both),
+    // produce a single record showing exactly what each engine said.
+    //
+    // perCommitDetail[] is the main new addition — one entry per unique SHA.
+    // ─────────────────────────────────────────────────────────────────────
+
+    // Collect every commit SHA that was touched by either engine
+    const allAnalyzedShas = new Set([
+      ...aiMatchingResults.map(r => r.commitSha),
+      ...mlMatchingResults.map(r => r.commitSha)
+    ]);
+
+    const perCommitDetail = Array.from(allAnalyzedShas).map(sha => {
+      // Find original commit meta
+      const commitMeta = commitsWithChanges.find(
+        (c: any) => (c.shortSha || c.sha?.substring(0, 7)) === sha
+      );
+
+      // ── What AI said about this commit ────────────────────────────────
+      const aiResult = aiMatchingResults.find(r => r.commitSha === sha);
+      const aiDetail = aiResult
+        ? {
+            ran:          true,
+            skipped:      (aiResult.unmatchedParts || []).some(p =>
+                            typeof p === 'string' && (p.includes('Trivial') || p.includes('No substantial'))
+                          ),
+            matched:      (aiResult.matchedTasks?.length || 0) > 0,
+            matchedTasks: (aiResult.matchedTasks || []).map((t: any) => ({
+              taskId:              t.taskId,
+              taskName:            t.taskName,
+              confidence:          t.confidence,
+              whatWasImplemented:  t.whatWasImplemented  || '',
+              howItWasImplemented: t.howItWasImplemented || ''
+            })),
+            unmatchedParts: aiResult.unmatchedParts || [],
+            commitSummary:  (aiResult as any).commitSummary || ''
+          }
+        : { ran: false, skipped: false, matched: false, matchedTasks: [], unmatchedParts: [], commitSummary: '' };
+
+      // ── What ML said about this commit ────────────────────────────────
+      const mlResult = mlMatchingResults.find(r => r.commitSha === sha);
+      const mlDetail = mlResult
+        ? {
+            ran:          true,
+            matched:      (mlResult.matchedTasks?.length || 0) > 0,
+            matchedTasks: (mlResult.matchedTasks || []).map((t: any) => ({
+              taskId:              t.taskId,
+              taskName:            t.taskName,
+              confidence:          t.confidence,
+              whatWasImplemented:  t.whatWasImplemented || ''
+            })),
+            unmatchedParts: mlResult.unmatchedParts || [],
+            // ML-specific scores
+            confidence:     (mlResult as any).confidence     ?? null,
+            matchLevel:     (mlResult as any).matchLevel     ?? null,
+            tfidfScore:     (mlResult as any).tfidfScore     ?? null,
+            spacyScore:     (mlResult as any).spacyScore     ?? null,
+            sentimentMatch: (mlResult as any).sentimentMatch ?? null
+          }
+        : { ran: false, matched: false, matchedTasks: [], unmatchedParts: [], confidence: null, matchLevel: null, tfidfScore: null, spacyScore: null, sentimentMatch: null };
+
+      // ── Combined winner ────────────────────────────────────────────────
+      const aiMatched = aiDetail.matched;
+      const mlMatched = mlDetail.matched;
+      let winnerSource: 'AI' | 'ML' | 'AI+ML' | 'NONE' = 'NONE';
+      let winnerTasks: any[]                             = [];
+
+      if (aiMatched && mlMatched) {
+        winnerSource = 'AI+ML';
+        // Merge unique tasks by taskId
+        const taskMap = new Map<string, any>();
+        for (const t of aiDetail.matchedTasks) taskMap.set(t.taskId, { ...t, source: 'AI' });
+        for (const t of mlDetail.matchedTasks) {
+          if (!taskMap.has(t.taskId)) taskMap.set(t.taskId, { ...t, source: 'ML' });
+          else {
+            const existing = taskMap.get(t.taskId)!;
+            taskMap.set(t.taskId, { ...existing, source: 'AI+ML', mlConfidence: t.confidence });
+          }
+        }
+        winnerTasks = Array.from(taskMap.values());
+      } else if (aiMatched) {
+        winnerSource = 'AI';
+        winnerTasks  = aiDetail.matchedTasks.map(t => ({ ...t, source: 'AI' }));
+      } else if (mlMatched) {
+        winnerSource = 'ML';
+        winnerTasks  = mlDetail.matchedTasks.map(t => ({ ...t, source: 'ML' }));
+      }
+      
+
+      return {
+        // ── Commit identity ──────────────────────────────────────────────
+        commitSha:     sha,
+        commitMessage: commitMeta?.message || aiResult?.commitMessage || mlResult?.commitMessage || '',
+        commitDate:    commitMeta?.date    || null,
+        commitAuthor:  commitMeta?.author  || null,
+        commitUrl:     commitMeta?.url     || null,
+        linesAdded:    commitMeta?.linesAdded   || 0,
+        linesDeleted:  commitMeta?.linesDeleted || 0,
+        filesChanged:  commitMeta?.files?.length || 0,
+
+        // ── AI result for this commit ────────────────────────────────────
+        ai: aiDetail,
+
+        // ── ML result for this commit ────────────────────────────────────
+        ml: mlDetail,
+
+        // ── Combined winner ──────────────────────────────────────────────
+        winner: {
+          source:       winnerSource,           // 'AI' | 'ML' | 'AI+ML' | 'NONE'
+          matched:      winnerSource !== 'NONE',
+          matchedTasks: winnerTasks
+        }
+      };
+    });
+
+    // Log per-commit detail to console
+    console.log('\n📋 PER-COMMIT DETAIL:');
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log(`   📝 Commit Count: ${metrics.commitCount} commits`);
-    
-    if (metrics.commitCount >= 10) {
-      detailedMarks.commits.earned = 50;
-      detailedMarks.commits.details = `10+ commits (${metrics.commitCount} commits) - EXCELLENT`;
-      console.log(`      → +50/50 points: EXCELLENT`);
-    } else if (metrics.commitCount >= 8) {
-      detailedMarks.commits.earned = 45;
-      detailedMarks.commits.details = `8-9 commits (${metrics.commitCount} commits) - VERY GOOD`;
-      console.log(`      → +45/50 points: VERY GOOD`);
-    } else if (metrics.commitCount >= 6) {
-      detailedMarks.commits.earned = 40;
-      detailedMarks.commits.details = `6-7 commits (${metrics.commitCount} commits) - GOOD`;
-      console.log(`      → +40/50 points: GOOD`);
-    } else if (metrics.commitCount >= 4) {
-      detailedMarks.commits.earned = 30;
-      detailedMarks.commits.details = `4-5 commits (${metrics.commitCount} commits) - ABOVE AVERAGE`;
-      console.log(`      → +30/50 points: ABOVE AVERAGE`);
-    } else if (metrics.commitCount >= 2) {
-      detailedMarks.commits.earned = 20;
-      detailedMarks.commits.details = `2-3 commits (${metrics.commitCount} commits) - AVERAGE`;
-      console.log(`      → +20/50 points: AVERAGE`);
-    } else if (metrics.commitCount >= 1) {
-      detailedMarks.commits.earned = 10;
-      detailedMarks.commits.details = `1 commit (${metrics.commitCount} commits) - MINIMAL`;
-      console.log(`      → +10/50 points: MINIMAL`);
-    } else {
-      detailedMarks.commits.earned = 0;
-      detailedMarks.commits.details = `No commits (${metrics.commitCount} commits) - NONE`;
-      console.log(`      → +0/50 points: NONE`);
+    for (const c of perCommitDetail) {
+      const msg = c.commitMessage.substring(0, 60);
+      console.log(`\n  🔸 ${c.commitSha} — "${msg}"`);
+      console.log(`     AI  → ran:${c.ai.ran} | matched:${c.ai.matched} | tasks:[${c.ai.matchedTasks.map((t:any) => `${t.taskName}(${t.confidence}%)`).join(', ') || 'none'}]`);
+      if (c.ai.skipped) console.log(`     AI  → SKIPPED: ${c.ai.unmatchedParts[0]}`);
+      console.log(`     ML  → ran:${c.ml.ran} | matched:${c.ml.matched} | tasks:[${c.ml.matchedTasks.map((t:any) => `${t.taskName}(${t.confidence}%)`).join(', ') || 'none'}] | tfidf:${c.ml.tfidfScore} spacy:${c.ml.spacyScore} sentiment:${c.ml.sentimentMatch}`);
+      console.log(`     WIN → ${c.winner.source} | tasks:[${c.winner.matchedTasks.map((t:any) => t.taskName).join(', ') || 'none'}]`);
     }
-    
-    // 2. README - 15 points max
-    console.log(`\n   📖 README File:`);
-    if (metrics.hasReadme) {
-      detailedMarks.readme.earned = 15;
-      detailedMarks.readme.details = 'README.md file present';
-      console.log(`      → +15/15 points: README present`);
-    } else {
-      detailedMarks.readme.earned = 0;
-      detailedMarks.readme.details = 'Missing README.md file';
-      console.log(`      → +0/15 points: Missing README`);
-    }
-    
-    // 3. CONFIG FILE - 10 points max
-    console.log(`\n   ⚙️ Config File:`);
-    if (metrics.hasConfigFile) {
-      detailedMarks.configFile.earned = 10;
-      detailedMarks.configFile.details = 'Config file present (package.json, requirements.txt, etc.)';
-      console.log(`      → +10/10 points: Config file present`);
-    } else {
-      detailedMarks.configFile.earned = 0;
-      detailedMarks.configFile.details = 'No config file found';
-      console.log(`      → +0/10 points: Missing config file`);
-    }
-    
-    // 4. GITIGNORE - 5 points max
-    console.log(`\n   🚫 .gitignore File:`);
-    if (metrics.hasGitignore) {
-      detailedMarks.gitignore.earned = 5;
-      detailedMarks.gitignore.details = '.gitignore file present';
-      console.log(`      → +5/5 points: .gitignore present`);
-    } else {
-      detailedMarks.gitignore.earned = 0;
-      detailedMarks.gitignore.details = 'No .gitignore file found';
-      console.log(`      → +0/5 points: Missing .gitignore`);
-    }
-    
-    // 5. CODE FILES - 20 points max (progressive)
-    console.log(`\n   💻 Code Files Count: ${metrics.codeFilesCount} files`);
-    
-    if (metrics.codeFilesCount >= 15) {
-      detailedMarks.codeFiles.earned = 20;
-      detailedMarks.codeFiles.details = `Excellent code structure (${metrics.codeFilesCount} files)`;
-      console.log(`      → +20/20 points: EXCELLENT (15+ files)`);
-    } else if (metrics.codeFilesCount >= 10) {
-      detailedMarks.codeFiles.earned = 16;
-      detailedMarks.codeFiles.details = `Great code structure (${metrics.codeFilesCount} files)`;
-      console.log(`      → +16/20 points: GREAT (10-14 files)`);
-    } else if (metrics.codeFilesCount >= 6) {
-      detailedMarks.codeFiles.earned = 12;
-      detailedMarks.codeFiles.details = `Good code structure (${metrics.codeFilesCount} files)`;
-      console.log(`      → +12/20 points: GOOD (6-9 files)`);
-    } else if (metrics.codeFilesCount >= 3) {
-      detailedMarks.codeFiles.earned = 8;
-      detailedMarks.codeFiles.details = `Adequate code structure (${metrics.codeFilesCount} files)`;
-      console.log(`      → +8/20 points: ADEQUATE (3-5 files)`);
-    } else if (metrics.codeFilesCount >= 1) {
-      detailedMarks.codeFiles.earned = 4;
-      detailedMarks.codeFiles.details = `Minimal code (${metrics.codeFilesCount} files)`;
-      console.log(`      → +4/20 points: MINIMAL (1-2 files)`);
-    } else {
-      detailedMarks.codeFiles.earned = 0;
-      detailedMarks.codeFiles.details = `No code files (${metrics.codeFilesCount} files)`;
-      console.log(`      → +0/20 points: No code files`);
-    }
-    
-    // Calculate total score
-    githubScore = 
-      detailedMarks.commits.earned +
-      detailedMarks.readme.earned +
-      detailedMarks.configFile.earned +
-      detailedMarks.gitignore.earned +
-      detailedMarks.codeFiles.earned;
-    
-    console.log('\n📊 GITHUB SCORE SUMMARY:');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log(`   📝 Commits:        ${detailedMarks.commits.earned}/${detailedMarks.commits.max} points`);
-    console.log(`   📖 README:         ${detailedMarks.readme.earned}/${detailedMarks.readme.max} points`);
-    console.log(`   ⚙️ Config File:    ${detailedMarks.configFile.earned}/${detailedMarks.configFile.max} points`);
-    console.log(`   🚫 .gitignore:     ${detailedMarks.gitignore.earned}/${detailedMarks.gitignore.max} points`);
-    console.log(`   💻 Code Files:     ${detailedMarks.codeFiles.earned}/${detailedMarks.codeFiles.max} points`);
-    console.log(`   ───────────────────────────────────────────────────────────`);
-    console.log(`   📊 TOTAL:          ${githubScore}/${detailedMarks.totalPossible} points (${githubScore}%)`);
     console.log('═══════════════════════════════════════════════════════════════\n');
-    
+
+    // ── STEP 10: Task implementation report ──────────────────────────────
+    const taskImplementationReport = simulationTasks.map((task: any, idx: number) => {
+      const taskId    = String(task.id || task.order || task.task_index || idx + 1);
+      const taskName  = task.title || task.task_name || task.name || `Task ${taskId}`;
+      const shortName = taskName.toLowerCase().substring(0, 25);
+
+      // Pull evidence straight from perCommitDetail for consistency
+      const commitsWithAiMatch  = perCommitDetail.filter(c =>
+        c.ai.matchedTasks.some((t: any) =>
+          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
+        )
+      );
+      const commitsWithMlMatch  = perCommitDetail.filter(c =>
+        c.ml.matchedTasks.some((t: any) =>
+          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
+        )
+      );
+
+      const aiEvidence = commitsWithAiMatch.map(c => {
+        const t = c.ai.matchedTasks.find((t: any) =>
+          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
+        ) as any;
+        return {
+          commitSha:           c.commitSha,
+          commitMessage:       c.commitMessage,
+          commitDate:          c.commitDate,
+          confidence:          t?.confidence          || 0,
+          whatWasImplemented:  t?.whatWasImplemented  || '',
+          howItWasImplemented: t?.howItWasImplemented || ''
+        };
+      });
+
+      const mlEvidence = commitsWithMlMatch.map(c => {
+        const t = c.ml.matchedTasks.find((t: any) =>
+          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
+        ) as any;
+        return {
+          commitSha:      c.commitSha,
+          commitMessage:  c.commitMessage,
+          commitDate:     c.commitDate,
+          confidence:     t?.confidence || c.ml.confidence || 0,
+          tfidfScore:     c.ml.tfidfScore,
+          spacyScore:     c.ml.spacyScore,
+          sentimentMatch: c.ml.sentimentMatch,
+          matchLevel:     c.ml.matchLevel
+        };
+      });
+
+      const isImplemented  = aiEvidence.length > 0 || mlEvidence.length > 0;
+      const implementedBy: string[] = [];
+      if (aiEvidence.length > 0) implementedBy.push('AI');
+      if (mlEvidence.length > 0) implementedBy.push('ML');
+
+      const allConfidences = [
+        ...aiEvidence.map(e => e.confidence),
+        ...mlEvidence.map(e => e.confidence)
+      ].filter(c => c > 0);
+      const avgConfidence = allConfidences.length > 0
+        ? parseFloat((allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length).toFixed(1))
+        : 0;
+
+      return {
+        taskId,
+        taskName,
+        taskDescription: task.description || task.requirements || '',
+        taskOrder:       task.order || idx + 1,
+        implemented:     isImplemented,
+        implementedBy,
+        avgConfidence,
+        ai: { found: aiEvidence.length > 0, commitCount: aiEvidence.length, commits: aiEvidence },
+        ml: { found: mlEvidence.length > 0, commitCount: mlEvidence.length, commits: mlEvidence }
+      };
+    });
+
+    const implementedTasks    = taskImplementationReport.filter(t => t.implemented);
+    const notImplementedTasks = taskImplementationReport.filter(t => !t.implemented);
+
+    console.log(`\n📋 TASK REPORT: ${implementedTasks.length}/${simulationTasks.length} implemented`);
+    for (const t of implementedTasks)
+      console.log(`   ✅ [${t.taskId}] ${t.taskName} — by ${t.implementedBy.join('+')} (avg ${t.avgConfidence}%)`);
+    for (const t of notImplementedTasks)
+      console.log(`   ❌ [${t.taskId}] ${t.taskName}`);
+
+    // ── STEP 11: Assemble full analysis ───────────────────────────────────
     githubAnalysis = {
       analyzed: true,
-      mode: '1-day-progressive',
-      repoUrl: `${owner}/${repo}`,
+      mode:     '1-day-progressive',
+      repoUrl:  `${owner}/${repo}`,
       owner,
       repo,
-      score: githubScore,
-      detailedMarks: detailedMarks,
-      // All individual commits with full details (message, author, date, url)
-      commits: {
-        total: metrics.commitCount,
-        firstCommitDate: metrics.firstCommitDate,
-        lastCommitDate: metrics.lastCommitDate,
-        averagePerWeek: metrics.averageCommitsPerWeek,
-        topAuthors: metrics.topAuthors,
-        list: metrics.recentCommits   // sha, shortSha, message, author, date, url per commit
+      score:    githubScore,
+      detailedMarks,
+
+      // ════════════════════════════════════════════════════════
+      // PER-COMMIT DETAIL — every commit, full AI + ML view
+      // ════════════════════════════════════════════════════════
+      perCommitDetail,
+      // Shape of each entry:
+      // {
+      //   commitSha, commitMessage, commitDate, commitAuthor, commitUrl,
+      //   linesAdded, linesDeleted, filesChanged,
+      //   ai: {
+      //     ran, skipped, matched,
+      //     matchedTasks: [{ taskId, taskName, confidence, whatWasImplemented, howItWasImplemented }],
+      //     unmatchedParts, commitSummary
+      //   },
+      //   ml: {
+      //     ran, matched,
+      //     matchedTasks: [{ taskId, taskName, confidence, whatWasImplemented }],
+      //     unmatchedParts,
+      //     confidence, matchLevel, tfidfScore, spacyScore, sentimentMatch
+      //   },
+      //   winner: { source: 'AI'|'ML'|'AI+ML'|'NONE', matched, matchedTasks[] }
+      // }
+
+      // ════════════════════════════════════════════════════════
+      // TASK IMPLEMENTATION REPORT — per task, AI + ML evidence
+      // ════════════════════════════════════════════════════════
+      taskImplementationReport: {
+        totalTasks:          simulationTasks.length,
+        implementedCount:    implementedTasks.length,
+        notImplementedCount: notImplementedTasks.length,
+        implementationRate:  simulationTasks.length > 0
+          ? parseFloat(((implementedTasks.length / simulationTasks.length) * 100).toFixed(1))
+          : 0,
+        allTasks:            taskImplementationReport,
+        implementedTasks,
+        notImplementedTasks
       },
+
+      // ── Matching summary numbers ───────────────────────────────────────
+      matchingSummary: {
+        aiCommitsAnalyzed:  aiMatchingResults.length,
+        aiMatchedCount,
+        aiMatchRate: aiMatchingResults.length > 0
+          ? parseFloat(((aiMatchedCount / aiMatchingResults.length) * 100).toFixed(1))
+          : 0,
+        aiAvgConfidence: aiMatchedCount > 0
+          ? parseFloat((aiTotalConfidence / aiMatchedCount).toFixed(1))
+          : 0,
+        mlCommitsAnalyzed:  mlMatchingResults.length,
+        mlMatchedCount,
+        mlMatchRate: mlMatchingResults.length > 0
+          ? parseFloat(((mlMatchedCount / mlMatchingResults.length) * 100).toFixed(1))
+          : 0,
+        mlAvgConfidence: mlMatchedCount > 0
+          ? parseFloat((mlTotalConfidence / mlMatchedCount).toFixed(1))
+          : 0,
+        combinedUniqueCommits:  totalCommitsConsidered,
+        combinedMatchedCommits: combinedMatchedCount,
+        combinedMatchRate:      parseFloat(matchPercentage.toFixed(1)),
+        combinedAvgConfidence:  parseFloat(averageConfidence.toFixed(1)),
+        matchingScore:          detailedMarks.commitMatching.earned,
+        matchingDetails:        detailedMarks.commitMatching.details
+      },
+
+      // ── Raw engine arrays (for debugging) ────────────────────────────
+      aiMatchingResults,
+      mlMatchingResults,
+      commitTaskMatching:          commitTaskMatchingResults,
+      deduplicatedMatchingResults: deduplicatedResults,
+
+      // ── Score breakdown ────────────────────────────────────────────────
       breakdown: {
-        commitCount: metrics.commitCount,
-        hasReadme: metrics.hasReadme,
-        hasConfigFile: metrics.hasConfigFile,
-        hasGitignore: metrics.hasGitignore,
-        codeFilesCount: metrics.codeFilesCount,
+        commitCount:      metrics.commitCount,
+        hasReadme:        metrics.hasReadme,
+        hasConfigFile:    metrics.hasConfigFile,
+        hasGitignore:     metrics.hasGitignore,
+        codeFilesCount:   metrics.codeFilesCount,
         totalLinesOfCode: metrics.totalLinesOfCode,
-        primaryLanguage: metrics.primaryLanguage,
-        languagesUsed: metrics.languages.map((l: any) => l.name),
+        primaryLanguage:  metrics.primaryLanguage,
+        languagesUsed:    metrics.languages.map((l: any) => l.name),
         scoreBreakdown: [
-          `Commits: ${detailedMarks.commits.earned}/${detailedMarks.commits.max} - ${detailedMarks.commits.details}`,
-          `README: ${detailedMarks.readme.earned}/${detailedMarks.readme.max} - ${detailedMarks.readme.details}`,
-          `Config: ${detailedMarks.configFile.earned}/${detailedMarks.configFile.max} - ${detailedMarks.configFile.details}`,
-          `.gitignore: ${detailedMarks.gitignore.earned}/${detailedMarks.gitignore.max} - ${detailedMarks.gitignore.details}`,
-          `Code files: ${detailedMarks.codeFiles.earned}/${detailedMarks.codeFiles.max} - ${detailedMarks.codeFiles.details}`
+          `Commits:         ${detailedMarks.commits.earned}/${detailedMarks.commits.max} - ${detailedMarks.commits.details}`,
+          `README:          ${detailedMarks.readme.earned}/${detailedMarks.readme.max} - ${detailedMarks.readme.details}`,
+          `Config:          ${detailedMarks.configFile.earned}/${detailedMarks.configFile.max} - ${detailedMarks.configFile.details}`,
+          `.gitignore:      ${detailedMarks.gitignore.earned}/${detailedMarks.gitignore.max} - ${detailedMarks.gitignore.details}`,
+          `Code files:      ${detailedMarks.codeFiles.earned}/${detailedMarks.codeFiles.max} - ${detailedMarks.codeFiles.details}`,
+          `Commit matching: ${detailedMarks.commitMatching.earned}/${detailedMarks.commitMatching.max} - ${detailedMarks.commitMatching.details}`
         ],
         pointsEarned: {
-          commits: detailedMarks.commits.earned,
-          readme: detailedMarks.readme.earned,
-          configFile: detailedMarks.configFile.earned,
-          gitignore: detailedMarks.gitignore.earned,
-          codeFiles: detailedMarks.codeFiles.earned,
-          total: githubScore,
-          maxPossible: detailedMarks.totalPossible
+          commits:        detailedMarks.commits.earned,
+          readme:         detailedMarks.readme.earned,
+          configFile:     detailedMarks.configFile.earned,
+          gitignore:      detailedMarks.gitignore.earned,
+          codeFiles:      detailedMarks.codeFiles.earned,
+          commitMatching: detailedMarks.commitMatching.earned,
+          total:          githubScore,
+          maxPossible:    detailedMarks.totalPossible
         }
       },
+
+      // ── Repository stats ───────────────────────────────────────────────
       stats: {
-        commits: metrics.commitCount,
-        codeFiles: metrics.codeFilesCount,
-        linesOfCode: metrics.totalLinesOfCode,
-        totalFiles: metrics.totalFiles,
-        hasReadme: metrics.hasReadme,
-        hasConfigFile: metrics.hasConfigFile,
-        hasGitignore: metrics.hasGitignore,
-        hasTests: metrics.hasTests,
-        primaryLanguage: metrics.primaryLanguage,
-        languages: metrics.languages
+        commits:           metrics.commitCount,
+        commitsPerBranch:  metrics.commitsPerBranch,
+        codeFiles:         metrics.codeFilesCount,
+        linesOfCode:       metrics.totalLinesOfCode,
+        totalFiles:        metrics.totalFiles,
+        hasReadme:         metrics.hasReadme,
+        hasConfigFile:     metrics.hasConfigFile,
+        hasGitignore:      metrics.hasGitignore,
+        hasTests:          metrics.hasTests,
+        primaryLanguage:   metrics.primaryLanguage,
+        languages:         metrics.languages,
+        totalAdditions:    metrics.totalAdditions,
+        totalDeletions:    metrics.totalDeletions,
+        totalFilesChanged: metrics.totalFilesChanged
+      },
+
+      commits: {
+        total:           metrics.commitCount,
+        commitsPerBranch: metrics.commitsPerBranch,
+        firstCommitDate: metrics.firstCommitDate,
+        lastCommitDate:  metrics.lastCommitDate,
+        averagePerWeek:  metrics.averageCommitsPerWeek,
+        topAuthors:      metrics.topAuthors,
+        list:            metrics.recentCommits
       }
     };
-    
-    console.log(`✅ GitHub analysis completed successfully`);
-    console.log(`📊 FINAL GITHUB SCORE: ${githubScore}%`);
+
+    console.log(`✅ GitHub analysis complete`);
+    console.log(`📊 SCORE: ${githubScore}/${detailedMarks.totalPossible}`);
+    console.log(`📊 Tasks implemented: ${implementedTasks.length}/${simulationTasks.length}`);
+    console.log(`📊 AI:${aiMatchedCount} ML:${mlMatchedCount} Combined:${combinedMatchedCount}`);
     console.log('═══════════════════════════════════════════════════════════════\n');
-    
+
     return { score: githubScore, analysis: githubAnalysis };
-    
+
   } catch (githubError: any) {
-    console.error('❌ GitHub analysis error:', {
-      message: githubError.message,
-      stack: githubError.stack,
-      status: githubError.status,
-      headers: githubError.headers
-    });
-    return { 
-      score: 0, 
+    console.error('❌ GitHub analysis error:', githubError.message);
+    return {
+      score: 0,
       analysis: {
         analyzed: false,
-        error: githubError.message,
-        message: 'Failed to analyze GitHub repository',
-        detailedMarks: detailedMarks,
+        error:    githubError.message,
+        message:  'Failed to analyze GitHub repository',
+        detailedMarks,
         score: 0
-      } 
+      }
     };
   }
 }
 
 calculateGitHubScoreForRepo = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const { repoUrl, owner, repo } = req.body || {};
+    const { repoUrl, owner, repo, sessionId } = req.body || {};  // ✅ ADD sessionId
     const normalizedRepoUrl = repoUrl || (owner && repo ? `https://github.com/${owner}/${repo}` : null);
 
     if (!normalizedRepoUrl) {
@@ -2232,11 +2952,15 @@ calculateGitHubScoreForRepo = async (req: AuthenticatedRequest, res: Response): 
       return;
     }
 
-    const result = await this.calculateGitHubScore({
+    // ✅ CREATE PROPER SESSION OBJECT WITH ID
+    const session = {
+      id: sessionId,  // ← CRITICAL: This enables task lookup
       github_links: {
         repoUrl: normalizedRepoUrl
       }
-    });
+    };
+
+    const result = await this.calculateGitHubScore(session);
 
     ResponseService.success(res, result, 'GitHub score calculated');
   } catch (error: any) {
@@ -2992,8 +3716,17 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
 /**
  * Extract GitHub metrics from repository data
  */
+/**
+ * Extract GitHub metrics from repository data
+ * Includes commit counts from ALL branches and file change details per commit
+ */
 private extractGitHubMetrics(repoData: any) {
   console.log('📊 [extractGitHubMetrics] Extracting metrics...');
+  
+  // ✅ USE TOTAL ACROSS ALL BRANCHES if available
+  const commitCount = repoData.commits?.totalAcrossBranches || repoData.commits?.total || 0;
+  
+  console.log(`📊 Using commit count: ${commitCount} (from ${repoData.commits?.totalAcrossBranches ? 'ALL branches' : 'default branch only'})`);
   
   const fileStructure = repoData.code?.structure || [];
   
@@ -3008,6 +3741,7 @@ private extractGitHubMetrics(repoData: any) {
       f.path?.toLowerCase().includes('readme')
     );
   
+  // Detect code files (source code files only)
   const codeFiles = fileStructure.filter((f: any) => {
     const path = f.path || '';
     return f.type === 'blob' && (
@@ -3024,47 +3758,131 @@ private extractGitHubMetrics(repoData: any) {
   const codeFilesCount = codeFiles.length;
   const totalLinesOfCode = codeFiles.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
   
+  // Detect config files
+  const hasConfigFile = fileStructure.some((f: any) =>
+    f.path === 'package.json' || f.path === 'requirements.txt' ||
+    f.path === 'go.mod' || f.path === 'Cargo.toml' ||
+    f.path === 'pyproject.toml' || f.path === 'setup.py' ||
+    f.path === 'tsconfig.json' || f.path === '.eslintrc' ||
+    f.path === 'webpack.config.js' || f.path === 'vite.config.js'
+  );
+  
+  // Detect test files
+  const hasTests = fileStructure.some((f: any) =>
+    f.path?.includes('test') || f.path?.includes('spec') || 
+    f.path?.includes('__tests__') || f.path?.endsWith('.test.js') ||
+    f.path?.endsWith('.spec.ts')
+  );
+  
+  // ============================================
+  // ✅ PROCESS COMMITS WITH FILE CHANGE DETAILS
+  // ============================================
+  // Get detailed commits (from getAllBranchCommits + getCommitWithChanges)
+  const detailedCommits = repoData.commits?.detailedCommits || [];
+  const recentCommitsList = repoData.commits?.recentCommits || [];
+  
+  // Combine and process commits
+  const processedCommits = (detailedCommits.length > 0 ? detailedCommits : recentCommitsList).map((commit: any) => {
+    // Get file change details
+    const files = commit.files || [];
+    const stats = commit.stats || { additions: 0, deletions: 0, total: 0 };
+    
+    // Calculate totals from files if stats not available
+    let totalAdditions = stats.additions || 0;
+    let totalDeletions = stats.deletions || 0;
+    let totalChanges = stats.total || 0;
+    
+    if (files.length > 0 && totalAdditions === 0) {
+      totalAdditions = files.reduce((sum: number, f: any) => sum + (f.additions || 0), 0);
+      totalDeletions = files.reduce((sum: number, f: any) => sum + (f.deletions || 0), 0);
+      totalChanges = totalAdditions + totalDeletions;
+    }
+    
+    // ✅ THIS IS WHAT YOU WANT - FILE CHANGES PER COMMIT
+    const changedFiles = files.map((file: any) => ({
+      filename: file.filename,                    // File name (e.g., "src/app.js")
+      status: file.status,                        // 'added', 'modified', 'removed', 'renamed'
+      additions: file.additions || 0,             // Lines added in this file
+      deletions: file.deletions || 0,             // Lines deleted in this file
+      changes: (file.additions || 0) + (file.deletions || 0), // Total changes in this file
+      patch: file.patch || null,                  // THE ACTUAL DIFF CONTENT!
+      raw_url: file.raw_url,
+      blob_url: file.blob_url
+    }));
+    
+    return {
+      sha: commit.sha,
+      shortSha: commit.shortSha || commit.sha?.substring(0, 7),
+      message: commit.message,
+      author: commit.author,
+      authorLogin: commit.authorLogin,
+      date: commit.date,
+      url: commit.url,
+      // Commit statistics
+      stats: {
+        additions: totalAdditions,
+        deletions: totalDeletions,
+        total: totalChanges,
+        filesChanged: files.length
+      },
+      // ✅ FILE CHANGES DETAILS (what you wanted)
+      filesChanged: files.length,
+      linesAdded: totalAdditions,
+      linesDeleted: totalDeletions,
+      netChange: totalAdditions - totalDeletions,
+      // ✅ DETAILED LIST OF CHANGED FILES
+      changedFiles: changedFiles
+    };
+  });
+  
   const metrics = {
-    commitCount: repoData.commits?.total || 0,
+    // Commit metrics from ALL branches
+    commitCount: commitCount,
+    commitsPerBranch: repoData.commits?.perBranch || {},
     commitFrequency: repoData.commits?.commitFrequency || 0,
     commitStreak: repoData.commits?.longestStreak || 0,
+    
+    // File structure metrics
     totalFiles: repoData.code?.totalFiles || 0,
     codeFilesCount: codeFilesCount,
     totalLinesOfCode: totalLinesOfCode,
+    
+    // Documentation & config metrics
     hasReadme: hasReadme,
-    hasConfigFile: fileStructure.some((f: any) =>
-      f.path === 'package.json' || f.path === 'requirements.txt' ||
-      f.path === 'go.mod' || f.path === 'Cargo.toml' ||
-      f.path === 'pyproject.toml' || f.path === 'setup.py'
-    ),
+    hasConfigFile: hasConfigFile,
     hasGitignore: fileStructure.some((f: any) => f.path === '.gitignore'),
-    hasTests: fileStructure.some((f: any) =>
-      f.path?.includes('test') || f.path?.includes('spec') || f.path?.includes('__tests__')
-    ),
+    hasTests: hasTests,
+    
+    // Language metrics
     primaryLanguage: repoData.languages?.primary || 'Unknown',
     languages: repoData.languages?.breakdown || [],
-    // Full commit details — message, author, date, url per commit
-    recentCommits: (repoData.commits?.recentCommits || []).map((c: any) => ({
-      sha: c.sha,
-      shortSha: c.shortSha || c.sha?.substring(0, 7),
-      message: c.message,
-      author: c.author,
-      authorLogin: c.authorLogin,
-      date: c.date,
-      url: c.url
-    })),
+    
+    // ✅ FULL COMMIT DETAILS WITH FILE CHANGES
+    recentCommits: processedCommits,
+    
+    // Author metrics
     topAuthors: repoData.commits?.topAuthors || [],
     firstCommitDate: repoData.commits?.firstCommitDate || null,
     lastCommitDate: repoData.commits?.lastCommitDate || null,
-    averageCommitsPerWeek: repoData.commits?.averageCommitsPerWeek || 0
+    averageCommitsPerWeek: repoData.commits?.averageCommitsPerWeek || 0,
+    
+    // Summary statistics
+    totalAdditions: processedCommits.reduce((sum: number, c: any) => sum + c.linesAdded, 0),
+    totalDeletions: processedCommits.reduce((sum: number, c: any) => sum + c.linesDeleted, 0),
+    totalFilesChanged: processedCommits.reduce((sum: number, c: any) => sum + c.filesChanged, 0)
   };
   
   console.log('📊 Metrics extracted:', {
     commitCount: metrics.commitCount,
+    commitsPerBranch: Object.keys(metrics.commitsPerBranch).length,
     codeFilesCount: metrics.codeFilesCount,
     hasReadme: metrics.hasReadme,
     hasConfigFile: metrics.hasConfigFile,
-    hasGitignore: metrics.hasGitignore
+    hasGitignore: metrics.hasGitignore,
+    totalAdditions: metrics.totalAdditions,
+    totalDeletions: metrics.totalDeletions,
+    totalFilesChanged: metrics.totalFilesChanged,
+    recentCommitsWithChanges: metrics.recentCommits.filter((c: any) => c.filesChanged > 0).length
   });
   
   return metrics;
@@ -3640,7 +4458,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       return;
     }
 
-    // Now sessionId is guaranteed to be a string (non-undefined)
     const validSessionId: string = sessionId;
 
     const sessionCheck = await DatabaseService.query(`
@@ -3775,10 +4592,8 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
     // STEP 5.5: Completion Angle, Data Analysis & Participation Marks
     // ============================================
 
-    // Completion angle (0–360°) for circular/donut chart visualization
     const completionAngle = Math.round((completionRate / 100) * 360);
 
-    // Data quantity — how much data came in from the candidate
     const submittedAnswersCount = Object.keys(answers || {}).length;
     const tasksAttempted = taskAnalysis.filter((t: any) => t.status !== 'not_started').length;
     const tasksWithCode = taskAnalysis.filter((t: any) => t.answer_details?.hasCode).length;
@@ -3794,7 +4609,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       data_completeness_percent: totalTasks > 0 ? Math.round((tasksAttempted / totalTasks) * 100) : 0
     };
 
-    // Data quality — quality of the answers submitted
     const avgAnswerQuality = taskAnalysis.length > 0
       ? Math.round(taskAnalysis.reduce((sum: number, t: any) => sum + (t.scores?.answer_quality || 0), 0) / taskAnalysis.length)
       : 0;
@@ -3817,7 +4631,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       }))
     };
 
-    // Session complete time — exact duration from start to submission
     const sessionCompleteTime = {
       started_at: session.started_at,
       completed_at: new Date().toISOString(),
@@ -3830,8 +4643,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       submitted_on_time: totalTimeSeconds <= timeLimitSeconds
     };
 
-    // Participation marks: awarded when completion rate is 0 but candidate spent >= 30 minutes
-    // Threshold is strictly >= 30 min; submitting before 30 min earns no participation credit
     const PARTICIPATION_MIN_SECONDS = 30 * 60;
     const qualifiesForParticipation = totalTimeSeconds >= PARTICIPATION_MIN_SECONDS;
     let participationBonus = 0;
@@ -3839,7 +4650,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
 
     if (completionRate === 0) {
       if (qualifiesForParticipation) {
-        // 1 point per 6 minutes spent, capped at 10
         participationBonus = Math.min(10, Math.floor(totalTimeSeconds / 360));
         participationMessage = `Participation marks awarded: +${participationBonus} pts (${Math.floor(totalTimeSeconds / 60)} min in session, minimum 30 min met)`;
       } else {
@@ -3850,7 +4660,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
     const finalOverallScore = Math.min(100, overallScore + participationBonus);
     const finalPassed = finalOverallScore >= passingScore;
 
-    // Submission message summarizing key metrics
     const completionRateLabel = `${Math.round(completionRate)}% completion (${completedTasksCount}/${totalTasks} tasks)`;
     const sessionTimeLabel = `${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s`;
     const submissionMessage = finalPassed
@@ -3903,6 +4712,11 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
     const client = await DatabaseService.getClient();
     let evaluationId = null;
     
+    // Blockchain storage variables
+    let blockchainTxHash = null;
+    let blockchainBlockNumber = null;
+    let credentialHash = null;
+    
     try {
       console.log('💾 [STEP 7] Saving submission data...');
       await client.query('BEGIN');
@@ -3919,27 +4733,162 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
           updated_at = NOW()
         WHERE id = $4
       `, [JSON.stringify(mergedAnswers), totalTimeSeconds, finalOverallScore, validSessionId]);
+      
+      // ============================================
+      // STORE ON BLOCKCHAIN (Optional - fails gracefully)
+      // ============================================
+      try {
+        // Only attempt blockchain storage if configured
+        if (process.env.USE_BLOCKCHAIN === 'true') {
+          console.log('🔗 Storing simulation result on blockchain...');
+          
+          // Import blockchain service dynamically to avoid circular deps
+          const { BlockchainService } = await import('../services/blockchain.service.js');
+          const fs = await import('fs');
+          const path = await import('path');
+          const { fileURLToPath } = await import('url');
+          const crypto = await import('crypto');
+          
+          const __filename = fileURLToPath(import.meta.url);
+          const __dirname = path.dirname(__filename);
+          
+          // Load contract artifact
+          const artifactPath = path.join(__dirname, '../../../blockchain/artifacts/contracts/LocalSimulation.sol/LocalSimulation.json');
+          
+          if (fs.existsSync(artifactPath)) {
+            const artifact = JSON.parse(fs.readFileSync(artifactPath, 'utf8'));
+            const blockchain = new BlockchainService();
+            await blockchain.initializeContract(artifact.abi);
+            
+            // Get candidate's blockchain address (from wallet_addresses table or default)
+            const walletResult = await DatabaseService.query(`
+              SELECT address FROM wallet_addresses 
+              WHERE user_id = $1 AND is_primary = true 
+              LIMIT 1
+            `, [req.user.id]);
+            
+            const candidateAddress = walletResult.rows[0]?.address || 
+                                    '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1';
+            
+            // Store on blockchain
+            const result = await blockchain.storeSimulationResult({
+              sessionId: validSessionId,
+              candidateAddress: candidateAddress,
+              overallScore: finalOverallScore,
+              technicalScore: technicalScore,
+              punctualityScore: punctualityScore,
+              adaptabilityScore: adaptabilityScore,
+              githubScore: githubScore
+            });
+            
+            blockchainTxHash = result.txHash;
+            blockchainBlockNumber = result.blockNumber;
+            
+            // Create credential hash for verifiable credential
+            const credentialData = JSON.stringify({
+              sessionId: validSessionId,
+              candidateId: req.user.id,
+              overallScore: finalOverallScore,
+              technicalScore,
+              punctualityScore,
+              adaptabilityScore,
+              githubScore,
+              timestamp: new Date().toISOString(),
+              blockchainTxHash
+            });
+            
+            credentialHash = crypto.createHash('sha256').update(credentialData).digest('hex');
+            
+            // Store in blockchain_records table
+            await client.query(`
+              INSERT INTO blockchain_records (
+                simulation_id, candidate_id, tx_id, block_hash, data_hash, data
+              ) VALUES ($1, $2, $3, $4, $5, $6)
+            `, [
+              simulationRecordId,
+              req.user.id,
+              blockchainTxHash,
+              `Block ${blockchainBlockNumber}`,
+              credentialHash,
+              JSON.stringify({
+                sessionId: validSessionId,
+                scores: {
+                  overall: finalOverallScore,
+                  technical: technicalScore,
+                  punctuality: punctualityScore,
+                  adaptability: adaptabilityScore,
+                  github: githubScore
+                },
+                timestamp: new Date().toISOString()
+              })
+            ]);
+            
+            // Store verifiable credential
+            await client.query(`
+              INSERT INTO verifiable_credentials (
+                simulation_id, candidate_id, credential_data, credential_hash
+              ) VALUES ($1, $2, $3, $4)
+            `, [
+              simulationRecordId,
+              req.user.id,
+              JSON.stringify({
+                type: 'SimulationResult',
+                issuer: 'Recruitment Platform',
+                issuanceDate: new Date().toISOString(),
+                credentialSubject: {
+                  id: req.user.id,
+                  sessionId: validSessionId,
+                  score: finalOverallScore,
+                  details: {
+                    technical: technicalScore,
+                    punctuality: punctualityScore,
+                    adaptability: adaptabilityScore,
+                    github: githubScore
+                  }
+                },
+                proof: {
+                  type: 'BlockchainTx',
+                  txHash: blockchainTxHash,
+                  blockNumber: blockchainBlockNumber
+                }
+              }),
+              credentialHash
+            ]);
+            
+            console.log(`✅ Simulation stored on blockchain!`);
+            console.log(`   TX: ${blockchainTxHash}`);
+            console.log(`   Block: ${blockchainBlockNumber}`);
+            console.log(`   Credential Hash: ${credentialHash}`);
+          } else {
+            console.warn('⚠️ Contract artifact not found at:', artifactPath);
+          }
+        } else {
+          console.log('ℹ️ Blockchain storage disabled (USE_BLOCKCHAIN !== "true")');
+        }
+      } catch (blockchainError: any) {
+        console.error('❌ Blockchain storage failed:', blockchainError?.message);
+        // Continue execution - don't fail submission if blockchain fails
+      }
 
-      // 7.2 Update simulation record
+      // 7.2 Update simulation record with blockchain info
       if (simulationRecordId) {
-        await client.query(`
-          UPDATE simulations 
-          SET 
-            status = 'completed',
-            completed_at = NOW(),
-            answers = $1,
-            time_spent = $2,
-            overall_score = $3,
-            punctuality_score = $4,
-            communication_score = $5,
-            problem_solving_score = $6,
-            adaptability_score = $7,
-            collaboration_score = $8,
-            attention_score = $9,
-            initiative_score = $10,
-            updated_at = NOW()
-          WHERE id = $11
-        `, [
+        const updateFields = [
+          `status = 'completed'`,
+          `completed_at = NOW()`,
+          `answers = $1`,
+          `time_spent = $2`,
+          `overall_score = $3`,
+          `punctuality_score = $4`,
+          `communication_score = $5`,
+          `problem_solving_score = $6`,
+          `adaptability_score = $7`,
+          `collaboration_score = $8`,
+          `attention_score = $9`,
+          `initiative_score = $10`,
+          `updated_at = NOW()`
+        ];
+        
+        const queryParams: any[] = [
           JSON.stringify(mergedAnswers),
           totalTimeSeconds,
           finalOverallScore,
@@ -3949,9 +4898,30 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
           adaptabilityScore,
           collaborationScore,
           punctualityScore,
-          speedScore,
-          simulationRecordId
-        ]);
+          speedScore
+        ];
+        
+        // Add blockchain fields if available
+        if (blockchainTxHash) {
+          updateFields.push(`blockchain_tx_id = $${queryParams.length + 1}`);
+          queryParams.push(blockchainTxHash);
+        }
+        
+        if (credentialHash) {
+          updateFields.push(`blockchain_hash = $${queryParams.length + 1}`);
+          queryParams.push(credentialHash);
+        }
+        
+        if (blockchainBlockNumber) {
+          updateFields.push(`blockchain_timestamp = NOW()`);
+        }
+        
+        updateFields.push(`id = $${queryParams.length + 1}`);
+        queryParams.push(simulationRecordId);
+        
+        const updateQuery = `UPDATE simulations SET ${updateFields.join(', ')} WHERE id = $${queryParams.length}`;
+        
+        await client.query(updateQuery, queryParams);
       }
 
       // 7.3 Insert or update evaluation record
@@ -4003,6 +4973,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
 
       // 7.4 Insert evaluation sections from task analysis
       if (evaluationId) {
+        // 7.4 Insert evaluation sections from task analysis - already has ON CONFLICT
         for (const task of taskAnalysis) {
           await client.query(`
             INSERT INTO evaluation_sections (
@@ -4015,24 +4986,19 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
               total_tasks,
               metadata
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          `, [
-            evaluationId,
-            `Task ${task.task_index + 1}: ${task.task_title}`,
-            task.scores.overall,
-            100,
-            task.scores.overall,
-            task.status === 'completed' ? 1 : 0,
-            1,
-            JSON.stringify({
-              task_type: task.task_type,
-              time_taken: task.time_taken_formatted,
-              status: task.status,
-              answer_details: task.answer_details
-            })
-          ]);
+            ON CONFLICT (evaluation_id, section_name) 
+            DO UPDATE SET
+              score = EXCLUDED.score,
+              max_score = EXCLUDED.max_score,
+              percentage = EXCLUDED.percentage,
+              tasks_completed = EXCLUDED.tasks_completed,
+              total_tasks = EXCLUDED.total_tasks,
+              metadata = EXCLUDED.metadata
+          `, [evaluationId, `Task ${task.task_index + 1}: ${task.task_title}`, task.scores.overall, 100, task.scores.overall, task.status === 'completed' ? 1 : 0, 1, JSON.stringify({ task_type: task.task_type, time_taken: task.time_taken_formatted, status: task.status, answer_details: task.answer_details })]);
         }
 
-        // 7.5 Insert behavioral metrics - FIXED with JSON.stringify
+      
+        // 7.5 Insert behavioral metrics with ON CONFLICT
         await client.query(`
           INSERT INTO evaluation_behavioral_metrics (
             evaluation_id,
@@ -4046,6 +5012,11 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
             ($1, 'Communication', $8, $9, $10),
             ($1, 'Collaboration', $11, $12, $13),
             ($1, 'Technical Skills', $14, $15, $16)
+          ON CONFLICT (evaluation_id, metric) 
+          DO UPDATE SET
+            score = EXCLUDED.score,
+            description = EXCLUDED.description,
+            improvement_suggestion = EXCLUDED.improvement_suggestion
         `, [
           evaluationId,
           punctualityScore,
@@ -4065,7 +5036,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
           JSON.stringify(technicalScore < 70 ? 'Focus on core technical concepts and implementation' : 'Strong technical problem-solving')
         ]);
 
-        // 7.6 Insert AI feedback using analysis data - FIXED with JSON.stringify
+        // 7.6 Insert AI feedback with ON CONFLICT
         const sanitizedSummary = JSON.stringify(fullScoreAnalysis.feedback.summary || '');
         const sanitizedDetailedAnalysis = JSON.stringify(
           `Overall performance shows ${qualityScore}% quality, ${speedScore}% speed, and ${adaptabilityScore}% adaptability. Completion rate: ${completionRate}%. ${fullScoreAnalysis.feedback.detailed_feedback || ''}`
@@ -4096,6 +5067,15 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
             recommendations,
             confidence
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ON CONFLICT (evaluation_id) 
+          DO UPDATE SET
+            summary = EXCLUDED.summary,
+            detailed_analysis = EXCLUDED.detailed_analysis,
+            strengths = EXCLUDED.strengths,
+            areas_for_improvement = EXCLUDED.areas_for_improvement,
+            recommendations = EXCLUDED.recommendations,
+            confidence = EXCLUDED.confidence,
+            updated_at = NOW()
         `, [
           evaluationId,
           sanitizedSummary,
@@ -4141,7 +5121,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       completionAngle: `${completionAngle}°`,
       totalTime: sessionCompleteTime.formatted
     });
-
+    
     // ============================================
     // ✅ RETURN COMPLETE RESPONSE WITH ALL DETAILS
     // ============================================
@@ -4156,19 +5136,17 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       submittedAt: new Date().toISOString(),
       message: submissionMessage,
 
-      // Completion angle (0–360°) for circular progress visualization
+      // Completion angle
       completionAngle: completionAngle,
 
-      // Data quantity — amount of data received from the candidate
+      // Data quantity and quality
       dataQuantity: dataQuantityAnalysis,
-
-      // Data quality — quality assessment of submitted answers
       dataQuality: dataQualityAnalysis,
 
-      // Session complete time — exact duration breakdown
+      // Session complete time
       sessionCompleteTime: sessionCompleteTime,
 
-      // Participation marks (applied when completion rate is 0 and time >= 30 min)
+      // Participation marks
       participation: {
         qualifies: qualifiesForParticipation,
         bonus: participationBonus,
@@ -4202,7 +5180,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
         technical_breakdown: fullScoreAnalysis.scores.technical_breakdown
       },
 
-      // Task analysis (per task details)
+      // Task analysis
       taskAnalysis: taskAnalysis,
 
       // Summary statistics
@@ -4229,7 +5207,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       // Feedback
       feedback: fullScoreAnalysis.feedback,
 
-      // GitHub analysis — full details
+      // GitHub analysis
       githubAnalysis: fullScoreAnalysis.github_analysis || {
         has_repo: false,
         score: 0,
@@ -4239,16 +5217,16 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
         message: 'No GitHub repository linked to this simulation'
       },
 
-      // Communication analysis from V-WES
+      // Communication analysis
       communicationAnalysis: communicationAnalysis || null,
 
       // Scoring configuration
       scoring_config: fullScoreAnalysis.scoring_config,
 
-      // Raw data for reference
+      // Raw data
       raw_data: fullScoreAnalysis.raw_data,
 
-      // Time tracking details
+      // Time tracking
       timeTracking: {
         sessionStartedAt: session.started_at,
         sessionCompletedAt: sessionCompleteTime.completed_at,
@@ -4264,8 +5242,17 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
         submittedOnTime: sessionCompleteTime.submitted_on_time
       },
 
-      // Full analysis object (complete)
-      fullAnalysis: fullScoreAnalysis
+      // Full analysis
+      fullAnalysis: fullScoreAnalysis,
+      
+      // Blockchain info
+      blockchain: blockchainTxHash ? {
+        txHash: blockchainTxHash,
+        blockNumber: blockchainBlockNumber,
+        credentialHash: credentialHash,
+        verified: true,
+        message: 'Simulation result stored on blockchain and verifiable credential created'
+      } : null
 
     }, `Simulation ${finalPassed ? 'passed' : 'completed'} successfully`);
 
@@ -4556,20 +5543,42 @@ async startAppliedJobSimulation(req: AuthenticatedRequest, res: Response): Promi
     // GITHUB OPERATIONS (outside transaction)
     // ============================================
     
-    // Generate UNIQUE repository name with timestamp
+    // ✅ NEW: Get candidate's first name for better repo naming
+    const candidateInfo = await DatabaseService.query(`
+      SELECT first_name, last_name 
+      FROM candidate_profiles 
+      WHERE user_id = $1
+    `, [req.user.id]);
+    
+    const firstName = candidateInfo.rows[0]?.first_name || 'candidate';
+    const lastName = candidateInfo.rows[0]?.last_name || '';
+    const candidateName = `${firstName}${lastName ? `-${lastName}` : ''}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
+    
+    // ✅ NEW: Clean simulation name for use in repo name
+    const simulationName = template.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 30); // Limit length
+    
+    // ✅ NEW: Generate timestamp for uniqueness
     const timestamp = Date.now();
-    const shortSimId = simulationRecordId.substring(0, 8);
-    const shortUserId = req.user.id.substring(0, 8);
-    const repoName = `sim-${shortSimId}-${shortUserId}-${timestamp}`;
+    const shortSimId = simulationRecordId.substring(0, 6);
+    
+    // ✅ NEW REPO NAME FORMAT: {simulation-name}-{candidate-name}-{timestamp}
+    // Example: "frontend-developer-simulation-john-doe-1704067200000"
+    const repoName = `${simulationName}-${candidateName}-${timestamp}`;
     
     const orgName = process.env.GITHUB_ORG_NAME || 'recruitment-platform';
     const repoUrl = `https://github.com/${orgName}/${repoName}`;
     const cloneUrl = `${repoUrl}.git`;
-    const branchName = `candidate-${shortUserId}`;
+    const branchName = `${candidateName}-${shortSimId}`;
 
     console.log('🐙 [GitHub] Creating repository...');
     console.log('📊 GitHub repo config:', { 
       repoName, 
+      simulationName: template.name,
+      candidateName,
       orgName, 
       githubUsername, 
       taskCount: template.tasks?.length 
@@ -4607,6 +5616,7 @@ async startAppliedJobSimulation(req: AuthenticatedRequest, res: Response): Promi
         candidateId: req.user.id,
         sessionId: session.id,
         simulationId: simulationRecordId,
+        simulationName: template.name,
         status: 'active',
         createdAt: new Date().toISOString(),
         issues: repoResult.issuesCreated || [],
@@ -4614,6 +5624,46 @@ async startAppliedJobSimulation(req: AuthenticatedRequest, res: Response): Promi
       };
       
       console.log('📦 GitHub links data prepared');
+      
+      // ✅ Store in github_simulation_repos table
+      await DatabaseService.query(`
+        INSERT INTO github_simulation_repos (
+          simulation_id,
+          candidate_id,
+          session_id,
+          repo_name,
+          repo_url,
+          branch_name,
+          status,
+          attempt_number,
+          metadata,
+          created_at,
+          updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+        ON CONFLICT (simulation_id, candidate_id, session_id) 
+        WHERE status = 'active'
+        DO UPDATE SET
+          repo_name = EXCLUDED.repo_name,
+          repo_url = EXCLUDED.repo_url,
+          branch_name = EXCLUDED.branch_name,
+          updated_at = NOW()
+      `, [
+        simulationRecordId,
+        req.user.id,
+        session.id,
+        repoResult.repoName,
+        repoResult.repoUrl,
+        repoResult.branchName || branchName,
+        'active',
+        repoResult.attemptNumber || 1,
+        JSON.stringify({
+          simulation_name: template.name,
+          candidate_name: candidateName,
+          issues_created: repoResult.issuesCreated?.length || 0
+        })
+      ]);
+      
+      console.log('✅ GitHub repo record saved to database');
       
     } catch (githubError: any) {
       console.error('⚠️ GitHub repo creation error:', {
@@ -4634,6 +5684,7 @@ async startAppliedJobSimulation(req: AuthenticatedRequest, res: Response): Promi
         candidateId: req.user.id,
         sessionId: session.id,
         simulationId: simulationRecordId,
+        simulationName: template.name,
         status: 'pending',
         createdAt: new Date().toISOString(),
         error: githubError?.message || 'Repository creation failed',
@@ -4662,6 +5713,7 @@ async startAppliedJobSimulation(req: AuthenticatedRequest, res: Response): Promi
         console.log('   Session ID:', session.id);
         console.log('   Repo URL:', githubLinksData.repoUrl);
         console.log('   Branch:', githubLinksData.branchName);
+        console.log('   Repo Name Pattern: {simulation-name}-{candidate-name}-{timestamp}');
       } catch (updateError: any) {
         console.error('❌ Failed to update session with GitHub data:', updateError.message);
       } finally {
@@ -4677,6 +5729,9 @@ async startAppliedJobSimulation(req: AuthenticatedRequest, res: Response): Promi
     console.log('📊 Response summary:', {
       sessionId: session.id,
       simulationId: simulationRecordId,
+      simulationName: template.name,
+      candidateName: candidateName,
+      repoName: repoName,
       hasGitHubRepo: !!repoResult,
       githubRepoUrl: repoResult?.repoUrl || repoUrl
     });
@@ -8288,7 +9343,7 @@ async getSimulationSessionById(req: AuthenticatedRequest, res: Response): Promis
     
     if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
       console.log('❌ Invalid session ID format:', sessionId);
-      this.sendError(res, 'Invalid session ID format', 400);
+      ResponseService.error(res, 'Invalid session ID format', 400);  // ✅ Fixed
       return;
     }
     console.log('✅ Session ID validation passed');
@@ -9011,7 +10066,7 @@ async getSimulationSessionById(req: AuthenticatedRequest, res: Response): Promis
     console.log('✅ [getSimulationSessionById] COMPLETED SUCCESSFULLY');
     console.log('═══════════════════════════════════════════════════════════════');
     
-    this.sendSuccess(res, formattedResult);
+    ResponseService.success(res, formattedResult, 'Session retrieved successfully');  // ✅ Fixed
     
   } catch (error: any) {
     console.error('═══════════════════════════════════════════════════════════════');
@@ -9024,7 +10079,7 @@ async getSimulationSessionById(req: AuthenticatedRequest, res: Response): Promis
       detail: error.detail
     });
     console.error('═══════════════════════════════════════════════════════════════');
-    this.sendError(res, 'Failed to fetch session', 500, error as Error);
+    ResponseService.error(res, 'Failed to fetch session', 500, null, this.formatError(error));  // ✅ Fixed
   }
 }
 
@@ -9728,23 +10783,23 @@ async updateTaskScore(req: AuthenticatedRequest, res: Response): Promise<void> {
     console.log('📋 REQUEST PARAMS:', { sessionId, taskIndex, score });
 
     if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-      this.sendError(res, 'Invalid session ID format', 400);
+      ResponseService.error(res, 'Invalid session ID format', 400);  // ✅ Fixed
       return;
     }
 
     if (!taskIndex) {
-      this.sendError(res, 'Task index is required', 400);
+      ResponseService.error(res, 'Task index is required', 400);  // ✅ Fixed
       return;
     }
     
     const parsedTaskIndex = parseInt(taskIndex);
     if (isNaN(parsedTaskIndex) || parsedTaskIndex < 0) {
-      this.sendError(res, 'Invalid task index. Must be 0 or greater', 400);
+      ResponseService.error(res, 'Invalid task index. Must be 0 or greater', 400);  // ✅ Fixed
       return;
     }
 
     if (typeof score !== 'number' || score < 0 || score > 100) {
-      this.sendError(res, 'Score must be a number between 0 and 100', 400);
+      ResponseService.error(res, 'Score must be a number between 0 and 100', 400);  // ✅ Fixed
       return;
     }
 
@@ -9826,7 +10881,7 @@ async updateTaskScore(req: AuthenticatedRequest, res: Response): Promise<void> {
       `, [sessionId, parsedTaskIndex, score]);
     }
 
-    this.sendSuccess(res, {
+   ResponseService.success(res, {  // ✅ Fixed
       ...result.rows[0],
       task_name: taskName,
       task_index: parsedTaskIndex
@@ -9834,7 +10889,7 @@ async updateTaskScore(req: AuthenticatedRequest, res: Response): Promise<void> {
     
   } catch (error: any) {
     console.error('Update task score error:', error);
-    this.sendError(res, 'Failed to update task score', 500, error as Error);
+    ResponseService.error(res, 'Failed to update task score', 500, null, this.formatError(error));  // ✅ Fixed
   }
 }
 
@@ -9850,25 +10905,26 @@ async updateTaskFeedback(req: AuthenticatedRequest, res: Response): Promise<void
     console.log('📋 REQUEST PARAMS:', { sessionId, taskIndex, feedbackLength: feedback?.length });
 
     if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-      this.sendError(res, 'Invalid session ID format', 400);
+      ResponseService.error(res, 'Invalid session ID format', 400);  // ✅ Fixed
       return;
     }
 
     if (!taskIndex) {
-      this.sendError(res, 'Task index is required', 400);
+      ResponseService.error(res, 'Task index is required', 400);  // ✅ Fixed
       return;
     }
     
     const parsedTaskIndex = parseInt(taskIndex);
     if (isNaN(parsedTaskIndex) || parsedTaskIndex < 0) {
-      this.sendError(res, 'Invalid task index. Must be 0 or greater', 400);
+      ResponseService.error(res, 'Invalid task index. Must be 0 or greater', 400);  // ✅ Fixed
       return;
     }
 
     if (!feedback || typeof feedback !== 'string') {
-      this.sendError(res, 'Feedback text is required', 400);
+      ResponseService.error(res, 'Feedback text is required', 400);  // ✅ Fixed
       return;
     }
+
 
     // Get session and template details
     const sessionDetails = await DatabaseService.execute(`
@@ -9948,7 +11004,7 @@ async updateTaskFeedback(req: AuthenticatedRequest, res: Response): Promise<void
       `, [sessionId, parsedTaskIndex, feedback]);
     }
 
-    this.sendSuccess(res, {
+    ResponseService.success(res, {  // ✅ Fixed
       ...result.rows[0],
       task_name: taskName,
       task_index: parsedTaskIndex
@@ -9956,7 +11012,7 @@ async updateTaskFeedback(req: AuthenticatedRequest, res: Response): Promise<void
     
   } catch (error: any) {
     console.error('Update task feedback error:', error);
-    this.sendError(res, 'Failed to update task feedback', 500, error as Error);
+    ResponseService.error(res, 'Failed to update task feedback', 500, null, this.formatError(error));  // ✅ Fixed
   }
 }
 
@@ -10090,6 +11146,170 @@ async startSimulationSession(req: AuthenticatedRequest, res: Response): Promise<
     ResponseService.error(res, error.message || 'Failed to start session', 500);
   } finally {
     client.release();
+  }
+}
+
+/**
+ * Get blockchain record for a simulation
+ * @route GET /api/v1/simulations/sessions/:sessionId/blockchain
+ */
+async getBlockchainRecord(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { sessionId } = req.params;
+
+    if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
+      ResponseService.error(res, 'Invalid session ID format', 400);
+      return;
+    }
+
+    // Get the simulation session
+    const sessionResult = await DatabaseService.query(`
+      SELECT ss.id, ss.simulation_id, ss.user_id
+      FROM simulation_sessions ss
+      WHERE ss.id = $1 AND ss.user_id = $2
+    `, [sessionId, req.user.id]);
+
+    if (!sessionResult.rows[0]) {
+      ResponseService.notFound(res, 'Session not found');
+      return;
+    }
+
+    // Get blockchain record
+    const blockchainResult = await DatabaseService.query(`
+      SELECT 
+        br.tx_id,
+        br.block_hash,
+        br.data_hash,
+        br.data,
+        br.timestamp as blockchain_timestamp,
+        vc.credential_hash,
+        vc.credential_data,
+        vc.issued_at,
+        vc.revoked_at,
+        s.blockchain_tx_id as simulation_tx_id,
+        s.blockchain_hash as simulation_hash
+      FROM blockchain_records br
+      JOIN simulations s ON br.simulation_id = s.id
+      LEFT JOIN verifiable_credentials vc ON vc.simulation_id = s.id
+      WHERE s.id = (
+        SELECT simulation_id FROM simulation_sessions WHERE id = $1
+      )
+    `, [sessionId]);
+
+    if (!blockchainResult.rows[0]) {
+      ResponseService.success(res, {
+        hasBlockchainRecord: false,
+        message: 'No blockchain record found for this simulation'
+      });
+      return;
+    }
+
+    ResponseService.success(res, {
+      hasBlockchainRecord: true,
+      transaction: {
+        txId: blockchainResult.rows[0].tx_id,
+        blockHash: blockchainResult.rows[0].block_hash,
+        dataHash: blockchainResult.rows[0].data_hash,
+        timestamp: blockchainResult.rows[0].blockchain_timestamp,
+        simulationTxId: blockchainResult.rows[0].simulation_tx_id,
+        simulationHash: blockchainResult.rows[0].simulation_hash
+      },
+      credential: {
+        hash: blockchainResult.rows[0].credential_hash,
+        data: blockchainResult.rows[0].credential_data,
+        issuedAt: blockchainResult.rows[0].issued_at,
+        revokedAt: blockchainResult.rows[0].revoked_at,
+        isRevoked: blockchainResult.rows[0].revoked_at !== null
+      },
+      verificationUrl: `/api/v1/simulations/verify/${blockchainResult.rows[0].credential_hash}`
+    });
+  } catch (error: any) {
+    console.error('Error getting blockchain record:', error);
+    ResponseService.error(res, 'Failed to get blockchain record', 500);
+  }
+}
+
+/**
+ * Verify a simulation credential by hash
+ * @route GET /api/v1/simulations/verify/:credentialHash
+ */
+async verifyCredential(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { credentialHash } = req.params;
+
+    if (!credentialHash) {
+      ResponseService.error(res, 'Credential hash is required', 400);
+      return;
+    }
+
+    // Find the credential
+    const credentialResult = await DatabaseService.query(`
+      SELECT 
+        vc.*,
+        s.overall_score,
+        s.punctuality_score,
+        s.communication_score,
+        s.problem_solving_score,
+        s.adaptability_score,
+        s.collaboration_score,
+        s.github_score,
+        u.email as candidate_email,
+        cp.first_name,
+        cp.last_name,
+        br.tx_id,
+        br.block_hash,
+        br.timestamp as blockchain_timestamp
+      FROM verifiable_credentials vc
+      JOIN simulations s ON vc.simulation_id = s.id
+      JOIN users u ON vc.candidate_id = u.id
+      LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
+      LEFT JOIN blockchain_records br ON br.simulation_id = s.id
+      WHERE vc.credential_hash = $1
+    `, [credentialHash]);
+
+    if (!credentialResult.rows[0]) {
+      ResponseService.notFound(res, 'Credential not found or invalid');
+      return;
+    }
+
+    const credential = credentialResult.rows[0];
+    const isRevoked = credential.revoked_at !== null;
+
+    ResponseService.success(res, {
+      verified: !isRevoked,
+      credential: {
+        hash: credential.credential_hash,
+        issuedAt: credential.issued_at,
+        revokedAt: credential.revoked_at,
+        isRevoked: isRevoked,
+        revokedReason: credential.revoked_reason
+      },
+      simulation: {
+        id: credential.simulation_id,
+        overallScore: credential.overall_score,
+        punctualityScore: credential.punctuality_score,
+        communicationScore: credential.communication_score,
+        problemSolvingScore: credential.problem_solving_score,
+        adaptabilityScore: credential.adaptability_score,
+        collaborationScore: credential.collaboration_score,
+        githubScore: credential.github_score
+      },
+      candidate: {
+        email: credential.candidate_email,
+        name: `${credential.first_name || ''} ${credential.last_name || ''}`.trim() || credential.candidate_email,
+        firstName: credential.first_name,
+        lastName: credential.last_name
+      },
+      blockchain: {
+        txId: credential.tx_id,
+        blockHash: credential.block_hash,
+        timestamp: credential.blockchain_timestamp
+      },
+      verificationTimestamp: new Date().toISOString()
+    });
+  } catch (error: any) {
+    console.error('Error verifying credential:', error);
+    ResponseService.error(res, 'Failed to verify credential', 500);
   }
 }
 

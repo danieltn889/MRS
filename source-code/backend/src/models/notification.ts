@@ -1,4 +1,4 @@
-import { BaseEntity, UUID, TIMESTAMP, JSONB, NotificationStatus, NotificationCategory } from './types';
+import { BaseEntity, UUID, TIMESTAMP, JSONB, NotificationStatus, NotificationCategory } from './types.ts';
 
 export interface Notification extends BaseEntity {
   user_id: UUID;

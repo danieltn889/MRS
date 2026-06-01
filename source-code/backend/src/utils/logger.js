@@ -1,80 +1,62 @@
-const winston = require('winston');
-const path = require('path');
+﻿// backend/src/utils/logger.js
 
-// Define log levels
-const levels = {
-  error: 0,
-  warn: 1,
-  info: 2,
-  http: 3,
-  debug: 4,
-};
+/**
+ * Simple console logger for the application
+ * Uses ES module syntax (import/export)
+ */
 
-const colors = {
-  error: 'red',
-  warn: 'yellow',
-  info: 'green',
-  http: 'magenta',
-  debug: 'white',
-};
-
-winston.addColors(colors);
-
-// Create logs directory if it doesn't exist
-const logsDir = path.join(__dirname, '..', '..', 'logs');
-require('fs').mkdirSync(logsDir, { recursive: true });
-
-// Define the format for logs
-const format = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
-  winston.format.colorize({ all: true }),
-  winston.format.printf(
-    (info) => `${info.timestamp} ${info.level}: ${info.message}`,
-  ),
-);
-
-// Define which transports the logger must use
-const transports = [
-  // Console transport for development
-  new winston.transports.Console({
-    level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-    format,
-  }),
-
-  // File transport for all logs
-  new winston.transports.File({
-    filename: path.join(logsDir, 'all.log'),
-    level: 'debug',
-    format: winston.format.combine(
-      winston.format.timestamp(),
-      winston.format.json()
-    ),
-  }),
-
-  // File transport for errors
-  new winston.transports.File({
-    filename: path.join(logsDir, 'error.log'),
-    level: 'error',
-    format: winston.format.combine(
-      winston.format.timestamp(),
-      winston.format.json()
-    ),
-  }),
-];
-
-// Create the logger instance
-const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
-  levels,
-  format,
-  transports,
-});
-
-// Create a stream object for Morgan middleware
-logger.stream = {
-  write: (message) => {
-    logger.http(message.trim());
+export const logger = {
+  /**
+   * Log info level message
+   * @param {...any} args - Message and optional arguments
+   */
+  info: (...args) => {
+    console.log(`[INFO] ${new Date().toISOString()} -`, ...args);
   },
+
+  /**
+   * Log error level message
+   * @param {...any} args - Message and optional arguments
+   */
+  error: (...args) => {
+    console.error(`[ERROR] ${new Date().toISOString()} -`, ...args);
+  },
+
+  /**
+   * Log warning level message
+   * @param {...any} args - Message and optional arguments
+   */
+  warn: (...args) => {
+    console.warn(`[WARN] ${new Date().toISOString()} -`, ...args);
+  },
+
+  /**
+   * Log debug level message (only in development)
+   * @param {...any} args - Message and optional arguments
+   */
+  debug: (...args) => {
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[DEBUG] ${new Date().toISOString()} -`, ...args);
+    }
+  },
+
+  /**
+   * Log HTTP request messages
+   * @param {...any} args - Message and optional arguments
+   */
+  http: (...args) => {
+    console.log(`[HTTP] ${new Date().toISOString()} -`, ...args);
+  },
+
+  /**
+   * Stream interface for Morgan HTTP logger
+   */
+  stream: {
+    write: (message) => {
+      console.log(message.trim());
+    }
+  }
 };
 
-module.exports = { logger };
+// Default export for convenience
+export default logger;

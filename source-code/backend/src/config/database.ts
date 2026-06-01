@@ -1,5 +1,6 @@
+import 'dotenv/config';
 import { Pool, PoolClient, QueryResult, QueryResultRow } from 'pg';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
@@ -7,7 +8,7 @@ const pool = new Pool({
   database: process.env.DB_NAME || 'recruitment_db',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || '',
-  max: 20, // Maximum number of clients in the pool
+  max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
 });
@@ -35,8 +36,8 @@ const initializeDatabase = async (): Promise<void> => {
     logger.info('Database not initialized. Running migrations and seeding...');
 
     // Import migration and seed functions
-    const { migrate } = await import('../db/migrate');
-    const { seed } = await import('../db/seed');
+    const { migrate } = await import('../db/migrate.js');
+    const { seed } = await import('../db/seed.js');
 
     // Run migrations
     await migrate();
@@ -72,8 +73,6 @@ const connectDB = async (): Promise<void> => {
   } catch (error) {
     console.error('Database connection/initialization error:', error);
     console.warn('Server will continue without database connection. Please ensure PostgreSQL is running.');
-    // Don't throw error - allow server to start without database
-    // throw error; // Commented out to allow server to start
   }
 };
 

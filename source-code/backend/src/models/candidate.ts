@@ -1,6 +1,6 @@
-import { BaseEntity, UUID, TIMESTAMP, DATE, JSONB, EmploymentType } from './types';
-import { User } from './user';
-import { JobType } from './types'; // Import JobType for job preferences
+import { BaseEntity, UUID, TIMESTAMP, DATE, JSONB, EmploymentType } from './types.ts';
+import { User } from './user.ts';
+import { JobType } from './types.ts'; // Import JobType for job preferences
 
 // =====================================================
 // CANDIDATE PROFILE INTERFACES (FULLY CORRECTED)

@@ -8,10 +8,10 @@ import {
   resendVerificationEmail,
   verifyEmailCode,
   checkVerificationStatus
-} from '../../controllers/email-verification.controller';
+} from '../../controllers/email-verification.controller.js';
 
 // Import middleware
-import { validateRequest } from '../../middleware/validation.middleware';
+import { validateRequest } from '../../middleware/validation.middleware.js';
 
 const router: Router = express.Router();
 

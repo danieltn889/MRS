@@ -1,9 +1,9 @@
 import { Request, Response } from 'express';
-import { AuthenticatedRequest } from '../types/auth.types';
-import BaseController from './base.controller';
-import DatabaseService from '../services/database.service';
-import ResponseService from '../services/response.service';
-import { logger } from '../config/logger';
+import { AuthenticatedRequest } from '../types/auth.types.js';
+import BaseController from './base.controller.js';
+import DatabaseService from '../services/database.service.js';
+import ResponseService from '../services/response.service.js';
+import { logger } from '../config/logger.js';
 
 interface BillingPlan {
   id?: number;

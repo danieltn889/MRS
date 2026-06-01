@@ -1,13 +1,12 @@
 import express, { Router } from 'express';
 import { body, query, param } from 'express-validator';
-import { protect, authorize } from '../../middleware/auth.middleware';
-import { validateRequest } from '../../middleware/validation.middleware';
-import DatabaseService from '../../services/database.service';
-import ResponseService from '../../services/response.service';
-import { AuthenticatedRequest } from '../../types/auth.types';
-import SimulationController from '../../controllers/simulation.controller';
-
-const router: Router = express.Router();
+import { protect, authorize } from '../../middleware/auth.middleware.js';
+import { validateRequest } from '../../middleware/validation.middleware.js';
+import DatabaseService from '../../services/database.service.js';
+import ResponseService from '../../services/response.service.js';
+import { AuthenticatedRequest } from '../../types/auth.types.js';
+import SimulationController from '../../controllers/simulation.controller.js';
+const router = Router();
 
 // Scoring configuration
 const SCORING_WEIGHTS = {
@@ -797,6 +796,7 @@ router.post('/github-score', protect, [
   body('repoUrl').optional().isURL().withMessage('repoUrl must be a valid URL'),
   body('owner').optional().isString().trim().notEmpty(),
   body('repo').optional().isString().trim().notEmpty(),
+  body('sessionId').optional().isUUID().withMessage('sessionId must be a valid UUID'),
   validateRequest
 ], authHandler((req, res) => (SimulationController as any).calculateGitHubScoreForRepo(req, res)));
 
@@ -896,5 +896,34 @@ router.post('/:id/auto-save', protect, [
   body('progress').optional().isObject(),
   validateRequest
 ], authHandler(SimulationController.autoSaveProgress.bind(SimulationController)));
+
+
+// ============================================
+// BLOCKCHAIN VERIFICATION ROUTES (MUST BE BEFORE GENERIC :id ROUTES)
+// ============================================
+
+/**
+ * @route   GET /api/v1/simulations/sessions/:sessionId/blockchain
+ * @desc    Get blockchain record for a simulation session
+ * @access  Private (Candidate or Recruiter)
+ */
+router.get('/sessions/:sessionId/blockchain', protect, [
+  param('sessionId').isUUID().withMessage('Invalid session ID format'),
+  validateRequest
+], authHandler(async (req: AuthenticatedRequest, res: express.Response) => {
+  return SimulationController.getBlockchainRecord(req, res);
+}));
+
+/**
+ * @route   GET /api/v1/simulations/verify/:credentialHash
+ * @desc    Verify a simulation credential by hash (public endpoint)
+ * @access  Public
+ */
+router.get('/verify/:credentialHash', [
+  param('credentialHash').isString().withMessage('Invalid credential hash'),
+  validateRequest
+], async (req: express.Request, res: express.Response) => {
+  return SimulationController.verifyCredential(req as AuthenticatedRequest, res);
+});
 
 export default router;

@@ -1,4 +1,4 @@
-import { BaseEntity, UUID, TIMESTAMP, JSONB, DATE, AnalysisType } from './types';
+import { BaseEntity, UUID, TIMESTAMP, JSONB, DATE, AnalysisType } from './types.ts';
 
 export interface AIAnalysis extends BaseEntity {
   simulation_id?: UUID;

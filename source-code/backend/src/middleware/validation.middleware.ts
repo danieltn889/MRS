@@ -1,6 +1,6 @@
 import { validationResult, ValidationError } from 'express-validator';
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.ts';
 
 // Middleware to handle validation errors
 const validateRequest = (req: Request, res: Response, next: NextFunction): void => {

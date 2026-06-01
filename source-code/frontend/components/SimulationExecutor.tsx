@@ -174,7 +174,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   } = useFileSystem(sessionId, currentTask);
   
   // ✅ FIXED: Timer only updates UI, NO AUTO-SAVE
-  const {
+    const {
     timeSpent,
     timeLimit,
     isRunning: _isRunning,
@@ -184,12 +184,12 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     resumeTimer,
     formatTime,
     getTimeColor,
-    getElapsedTime,
+    getCurrentTime,  // ✅ Use the correct exported function name
   } = useTimer(session, (newTime) => {
     // ✅ ONLY update UI time, NO auto-save to backend
     if (!isStartingTaskRef.current) {
       // Just update the local UI time without saving
-      console.log(`⏱️ Timer tick: ${newTime} seconds (UI only, no save)`);
+      // console.log(`⏱️ Timer tick: ${newTime} seconds (UI only, no save)`);
       // We still call updateTimeSpent to keep local state in sync,
       // but the hook's saveProgress should be called manually only
       updateTimeSpent?.(newTime);
@@ -381,13 +381,13 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const getMinSubmitMessage = () => {
-    const latestTimeSpent = Math.max(timeSpent, getElapsedTime());
+    const latestTimeSpent = Math.max(timeSpent, getCurrentTime());  // ✅ Changed from getElapsedTime
     const remainingSeconds = Math.max(0, MIN_SUBMIT_SECONDS - latestTimeSpent);
     return `You must spend at least 3 minutes before submitting. ${formatTime(remainingSeconds)} remaining.`;
   };
 
   const handleOpenSubmitDialog = () => {
-    const latestTimeSpent = Math.max(timeSpent, getElapsedTime());
+    const latestTimeSpent = Math.max(timeSpent, getCurrentTime());
     if (latestTimeSpent < MIN_SUBMIT_SECONDS) {
       const message = getMinSubmitMessage();
       setSubmitError(message);
@@ -399,7 +399,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const handleSubmitSimulation = async () => {
-    const latestTimeSpent = Math.max(timeSpent, getElapsedTime());
+    const latestTimeSpent = Math.max(timeSpent, getCurrentTime());  // ✅ Changed from getElapsedTime
     if (latestTimeSpent < MIN_SUBMIT_SECONDS) {
       const message = getMinSubmitMessage();
       setSubmitError(message);

@@ -1,8 +1,8 @@
-import { BaseEntity, UUID, TIMESTAMP, JSONB, SimulationType, SimulationStatus, SimulationDifficulty } from './types';
-import { User } from './user';
-import { Application } from './application';
-import { Job } from './job';
-import { Company } from './company';
+import { BaseEntity, UUID, TIMESTAMP, JSONB, SimulationType, SimulationStatus, SimulationDifficulty } from './types.ts';
+import { User } from './user.ts';
+import { Application } from './application.ts';
+import { Job } from './job.ts';
+import { Company } from './company.ts';
 
 export interface SimulationTemplate extends BaseEntity {
   company_id?: UUID;

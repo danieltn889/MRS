@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { AuthenticatedRequest } from '../types/auth.types';
-import { logger } from '../utils/logger';
-import { query, getClient } from '../config/database';
+import { AuthenticatedRequest } from '../types/auth.types.js';
+import { logger } from '../utils/logger.js';
+import { query, getClient } from '../config/database.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';

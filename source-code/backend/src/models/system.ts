@@ -1,4 +1,4 @@
-import { BaseEntity, UUID, TIMESTAMP, JSONB, PaymentStatus, SubscriptionStatus, TicketStatus, TicketPriority, IntegrationStatus, WebhookStatus } from './types';
+import { BaseEntity, UUID, TIMESTAMP, JSONB, PaymentStatus, SubscriptionStatus, TicketStatus, TicketPriority, IntegrationStatus, WebhookStatus } from './types.ts';
 
 // API Keys and Access Control
 export interface APIKey extends BaseEntity {

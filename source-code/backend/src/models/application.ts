@@ -1,8 +1,8 @@
-import { BaseEntity, UUID, TIMESTAMP, JSONB, ApplicationStatus } from './types';
-import { Job } from './job';
-import { User } from './user';
-import { Simulation } from './simulation';
-import { Company } from './company';
+import { BaseEntity, UUID, TIMESTAMP, JSONB, ApplicationStatus } from './types.ts';
+import { Job } from './job.ts';
+import { User } from './user.ts';
+import { Simulation } from './simulation.ts';
+import { Company } from './company.ts';
 
 export interface Application extends BaseEntity {
   job_id: UUID;

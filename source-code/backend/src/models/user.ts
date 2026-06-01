@@ -1,11 +1,11 @@
-import { BaseEntity, SoftDeleteEntity, UserType, UserStatus, UUID, TIMESTAMP, JSONB } from './types';
-import { CandidateProfile, Education, WorkExperience, UserSkill, Resume, PortfolioLink } from './candidate';
-import { Application } from './application';
-import { SavedJob } from './job';
-import { Simulation } from './simulation';
-import { AIAnalysis, SkillGap, PerformanceTrend } from './ai';
-import { BlockchainCredential } from './blockchain';
-import { Notification, NotificationPreferences } from './notification';
+import { BaseEntity, SoftDeleteEntity, UserType, UserStatus, UUID, TIMESTAMP, JSONB } from './types.ts';
+import { CandidateProfile, Education, WorkExperience, UserSkill, Resume, PortfolioLink } from './candidate.ts';
+import { Application } from './application.ts';
+import { SavedJob } from './job.ts';
+import { Simulation } from './simulation.ts';
+import { AIAnalysis, SkillGap, PerformanceTrend } from './ai.ts';
+import { BlockchainCredential } from './blockchain.ts';
+import { Notification, NotificationPreferences } from './notification.ts';
 
 export interface User extends SoftDeleteEntity {
   email: string;

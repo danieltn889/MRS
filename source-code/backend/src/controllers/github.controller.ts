@@ -1,10 +1,10 @@
 // controllers/github.controller.ts
 import { Request, Response } from 'express';
 import { Octokit } from '@octokit/rest';
-import { logger } from '../utils/logger';
-import { AuthenticatedRequest } from '../types/auth.types';
-import ResponseService from '../services/response.service';
-import DatabaseService from '../services/database.service';
+import { logger } from '../utils/logger.js';  // Use .js, not .ts
+import { AuthenticatedRequest } from '../types/auth.types.js';  // Use .js, not .ts
+import ResponseService from '../services/response.service.js';  // Use .js, not .ts
+import DatabaseService from '../services/database.service.js';  // Use .js, not .ts
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES

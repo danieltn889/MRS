@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { pool } from '../config/database';
-import { logger } from '../config/logger';
+import { pool } from '../config/database.js';
+import { logger } from '../config/logger.js';
 
 export class EvaluationController {
   // Get evaluation for a specific candidate and simulation

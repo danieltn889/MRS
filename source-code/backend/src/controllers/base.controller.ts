@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PoolClient } from 'pg';
-import { query as dbQuery, getClient } from '../config/database';
-import { logger } from '../utils/logger';
+import { query as dbQuery, getClient } from '../config/database.js';
+import { logger } from '../utils/logger.js';
 
 interface PaginationOptions {
   page?: number;

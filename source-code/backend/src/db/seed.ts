@@ -1,6 +1,7 @@
 import { Client } from 'pg';
 import * as bcrypt from 'bcryptjs';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
+import 'dotenv/config';
 
 type SeedCandidateProfile = {
   firstName: string;
@@ -885,7 +886,7 @@ const seed = async (): Promise<void> => {
   }
 };
 
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   seed();
 }
 

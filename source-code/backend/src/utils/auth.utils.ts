@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { AuthenticatedRequest } from '../types/auth.types';
+import { AuthenticatedRequest } from '../types/auth.types.js';
 import jwt from 'jsonwebtoken';
 
 /**

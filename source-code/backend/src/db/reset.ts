@@ -1,5 +1,5 @@
 import { Client } from 'pg';
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.js';
 
 const resetDatabase = async (): Promise<void> => {
   const client = new Client({
@@ -60,7 +60,7 @@ const reset = async (): Promise<void> => {
 };
 
 // Run reset if this file is executed directly
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   reset();
 }
 

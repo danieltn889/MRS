@@ -1,4 +1,4 @@
-import { logger } from '../utils/logger';
+import { logger } from '../utils/logger.ts';
 import { Request, Response, NextFunction } from 'express';
 
 interface ErrorWithStatus {

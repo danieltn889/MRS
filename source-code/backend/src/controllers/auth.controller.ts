@@ -3,11 +3,11 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { Request, Response } from 'express';
-import { query, getClient } from '../config/database';
-import { logger } from '../utils/logger';
-import { sendEmail } from '../services/email.service';
-import { User, AuthenticatedRequest } from '../types/auth.types';
-import { User as BaseUser } from '../models';
+import { query, getClient } from '../config/database.js';
+import { logger } from '../utils/logger.js';
+import { sendEmail } from '../services/email.service.js';
+import { User, AuthenticatedRequest } from '../types/auth.types.js';
+import { User as BaseUser } from '../models/index.js';
 
 // ============ PASSWORD VALIDATION HELPERS ============
 

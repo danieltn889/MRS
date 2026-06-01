@@ -1,8 +1,8 @@
-import { BaseEntity, UUID, TIMESTAMP, JSONB, JobStatus, JobType, JobVisibility } from './types';
-import { Company } from './company';
-import { Application } from './application';
-import { Simulation } from './simulation';
-import { User } from './user';
+import { BaseEntity, UUID, TIMESTAMP, JSONB, JobStatus, JobType, JobVisibility } from './types.ts';
+import { Company } from './company.ts';
+import { Application } from './application.ts';
+import { Simulation } from './simulation.ts';
+import { User } from './user.ts';
 
 // =====================================================
 // JOB INTERFACES (FULLY CORRECTED)

@@ -1,10 +1,10 @@
 // routes/github.routes.ts
 import express, { Router, Request, Response } from 'express';
 import { body, query, param } from 'express-validator';
-import { protect, authorize } from '../../middleware/auth.middleware';
-import { validateRequest } from '../../middleware/validation.middleware';
-import GitHubController from '../../controllers/github.controller';
-import { AuthenticatedRequest } from '../../types/auth.types';
+import { protect, authorize } from '../../middleware/auth.middleware.js';
+import { validateRequest } from '../../middleware/validation.middleware.js';
+import GitHubController from '../../controllers/github.controller.js';
+import { AuthenticatedRequest } from '../../types/auth.types.js';
 
 const router: Router = express.Router();
 

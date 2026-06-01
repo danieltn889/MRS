@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Application, Request, Response } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -5,10 +6,15 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
-import { connectDB } from './config/database';
-import routes from './routes';
-import { errorHandler } from './middleware/error.middleware';
-import { logger } from './utils/logger';
+import { fileURLToPath } from 'url';
+import { connectDB } from './config/database.js';
+import routes from './routes/index.js';
+import { errorHandler } from './middleware/error.middleware.js';
+import { logger } from './utils/logger.js';
+
+// Create __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app: Application = express();
 
@@ -20,10 +26,10 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
-// Rate limiting - DISABLED FOR TESTING
+// Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10000, // Increased from 100 to 10000 for testing - effectively disabled
+  windowMs: 15 * 60 * 1000,
+  max: 10000,
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use(limiter);

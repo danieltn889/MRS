@@ -2742,6 +2742,68 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_recipient ON chat_messages(recipien
 
 -- DO NOT update existing messages - leave recipient_id NULL for existing messages
 
+
+-- Blockchain records for audit trail
+CREATE TABLE IF NOT EXISTS blockchain_records (
+    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    simulation_id  UUID NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
+    candidate_id   UUID NOT NULL REFERENCES users(id),
+    tx_id          VARCHAR(255) UNIQUE NOT NULL,
+    block_hash     VARCHAR(255) NOT NULL,
+    previous_hash  VARCHAR(255),
+    data_hash      VARCHAR(255) NOT NULL,
+    data           JSONB NOT NULL,
+    timestamp      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(simulation_id)
+);
+
+CREATE INDEX idx_blockchain_records_simulation ON blockchain_records(simulation_id);
+CREATE INDEX idx_blockchain_records_tx_id      ON blockchain_records(tx_id);
+CREATE INDEX idx_blockchain_records_candidate  ON blockchain_records(candidate_id);
+
+-- Verifiable credentials table
+CREATE TABLE IF NOT EXISTS verifiable_credentials (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    simulation_id   UUID NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
+    candidate_id    UUID NOT NULL REFERENCES users(id),
+    credential_data JSONB NOT NULL,
+    credential_hash VARCHAR(255) UNIQUE NOT NULL,
+    issued_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    revoked_at      TIMESTAMP WITH TIME ZONE,
+    revoked_reason  TEXT,
+    UNIQUE(simulation_id)
+);
+
+CREATE INDEX idx_verifiable_credentials_simulation ON verifiable_credentials(simulation_id);
+CREATE INDEX idx_verifiable_credentials_candidate  ON verifiable_credentials(candidate_id);
+CREATE INDEX idx_verifiable_credentials_hash       ON verifiable_credentials(credential_hash);
+
+
+-- Store MetaMask nonces for authentication
+CREATE TABLE IF NOT EXISTS metamask_nonces (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    address     VARCHAR(255) NOT NULL,
+    nonce       TEXT NOT NULL,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(address)
+);
+
+CREATE INDEX idx_metamask_nonces_address ON metamask_nonces(address);
+
+-- Create wallet_addresses table
+CREATE TABLE IF NOT EXISTS wallet_addresses (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    address     VARCHAR(255) NOT NULL,
+    is_primary  BOOLEAN DEFAULT FALSE,
+    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(address)
+);
+
+CREATE INDEX idx_wallet_addresses_user    ON wallet_addresses(user_id);
+CREATE INDEX idx_wallet_addresses_address ON wallet_addresses(address);
+
 -- =====================================================
 -- END OF SCHEMA
 -- =====================================================

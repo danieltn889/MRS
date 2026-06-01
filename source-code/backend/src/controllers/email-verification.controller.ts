@@ -5,10 +5,10 @@
 
 import crypto from 'crypto';
 import { Request, Response } from 'express';
-import { query, getClient } from '../config/database';
-import { logger } from '../utils/logger';
-import { sendEmail } from '../services/email.service';
-import { AuthenticatedRequest } from '../types/auth.types';
+import { query, getClient } from '../config/database.js';
+import { logger } from '../utils/logger.js';
+import { sendEmail } from '../services/email.service.js';
+import { AuthenticatedRequest } from '../types/auth.types.js';
 
 interface VerifyEmailRequest extends Request {
   body: {

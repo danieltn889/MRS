@@ -1,8 +1,8 @@
 import express, { Router, Request, Response } from 'express';
 import { query, body } from 'express-validator';
-import { protect, authorize } from '../../middleware/auth.middleware';
-import { validateRequest } from '../../middleware/validation.middleware';
-import aiController from '../../controllers/ai.controller';
+import { protect, authorize } from '../../middleware/auth.middleware.js';
+import { validateRequest } from '../../middleware/validation.middleware.js';
+import aiController from '../../controllers/ai.controller.js';
 
 const router: Router = express.Router();
 

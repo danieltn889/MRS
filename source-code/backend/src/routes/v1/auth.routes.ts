@@ -1,8 +1,8 @@
 import express, { Router, Request, Response } from 'express';
 import { body } from 'express-validator';
 import rateLimit from 'express-rate-limit';
-import { query } from '../../config/database';
-import { customValidators } from '../../middleware/validation.middleware';
+import { query } from '../../config/database.js';
+import { customValidators } from '../../middleware/validation.middleware.js';
 const router: Router = express.Router();
 
 // Import controllers
@@ -40,11 +40,11 @@ import {
   deactivateUser,
   getSecurityAlerts,
   testEmail
-} from '../../controllers/auth.controller';
+} from '../../controllers/auth.controller.js';
 
 // Import middleware
-import { protect, authorize } from '../../middleware/auth.middleware';
-import { validateRequest } from '../../middleware/validation.middleware';
+import { protect, authorize } from '../../middleware/auth.middleware.js';
+import { validateRequest } from '../../middleware/validation.middleware.js';
 
 // Rate limiting for auth routes
 const authLimiter = rateLimit({

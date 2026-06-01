@@ -1,8 +1,8 @@
 import jwt from 'jsonwebtoken';
-import { query } from '../config/database';
-import { logger } from '../utils/logger';
+import { query } from '../config/database.ts';
+import { logger } from '../utils/logger.ts';
 import { Request, Response, NextFunction } from 'express';
-import { AuthenticatedRequest, User } from '../types/auth.types';
+import { AuthenticatedRequest, User } from '../types/auth.types.ts';
 
 // Protect routes - require authentication
 const protect = async (req: Request, res: Response, next: NextFunction): Promise<void> => {

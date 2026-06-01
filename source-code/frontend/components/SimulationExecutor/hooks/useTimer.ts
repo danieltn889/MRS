@@ -1,4 +1,4 @@
-// hooks/useTimer.ts - Optimized version (Saves every 30 seconds instead of every second)
+// hooks/useTimer.ts - Simple version (NO auto-save, manual save only)
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 
@@ -12,12 +12,10 @@ interface SimulationSession {
 }
 
 export const MIN_SUBMIT_SECONDS = 3 * 60;
-const SAVE_INTERVAL_SECONDS = 30; // 👈 Save every 30 seconds instead of every second
 
 export function useTimer(
   session: SimulationSession | null,
-  onTick?: (timeSpent: number) => void,
-  onSaveProgress?: (timeSpent: number) => void  // 👈 Separate callback for saving
+  onTick?: (timeSpent: number) => void
 ) {
   const [timeSpent, setTimeSpent] = useState(0);
   const [timeLimit, setTimeLimit] = useState<number | null>(null);
@@ -25,10 +23,8 @@ export function useTimer(
   const [isPaused, setIsPaused] = useState(false);
   const sessionStartTimeRef = useRef<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);  // 👈 Separate timer for saving
   const isInitializedRef = useRef(false);
   const lastTickRef = useRef<number>(0);
-  const lastSaveRef = useRef<number>(0);
 
   // Calculate real elapsed time from start time
   const calculateElapsedTime = useCallback((): number => {
@@ -61,19 +57,15 @@ export function useTimer(
     return 'text-red-400';
   }, [timeLimit]);
 
-  const clearTimers = useCallback(() => {
+  const clearTimer = useCallback(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    if (saveTimerRef.current) {
-      clearInterval(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
   }, []);
 
-  // Timer that updates UI every second (does NOT save)
-  const startUITimer = useCallback(() => {
+  // Timer that updates UI every second (NO saving)
+  const startTimer = useCallback(() => {
     if (!session) return;
     if (session.status === 'completed' || session.status === 'submitted') return;
     if (!sessionStartTimeRef.current) return;
@@ -88,63 +80,36 @@ export function useTimer(
     if (lastTickRef.current !== elapsed) {
       lastTickRef.current = elapsed;
       setTimeSpent(elapsed);
-      onTick?.(elapsed);  // 👈 This just updates UI, doesn't save
+      onTick?.(elapsed);
     }
     
-    // Update UI every second (NO saving here)
+    // Update UI every second (NO saving)
     timerRef.current = setInterval(() => {
       const newElapsed = calculateElapsedTime();
       if (lastTickRef.current !== newElapsed) {
         lastTickRef.current = newElapsed;
         setTimeSpent(newElapsed);
-        onTick?.(newElapsed);  // 👈 UI update only
+        onTick?.(newElapsed);
       }
     }, 1000);
   }, [session, calculateElapsedTime, onTick]);
 
-  // Separate timer that saves progress periodically (every 30 seconds)
-  const startSaveTimer = useCallback(() => {
-    if (!session) return;
-    if (session.status === 'completed' || session.status === 'submitted') return;
-    if (!onSaveProgress) return;
-    
-    if (saveTimerRef.current) clearInterval(saveTimerRef.current);
-    
-    // Save every SAVE_INTERVAL_SECONDS
-    saveTimerRef.current = setInterval(() => {
-      const currentElapsed = calculateElapsedTime();
-      const timeSinceLastSave = currentElapsed - lastSaveRef.current;
-      
-      // Only save if enough time has passed and we're not saving too frequently
-      if (timeSinceLastSave >= SAVE_INTERVAL_SECONDS) {
-        console.log(`💾 Auto-saving progress at ${currentElapsed} seconds`);
-        onSaveProgress(currentElapsed);
-        lastSaveRef.current = currentElapsed;
-      }
-    }, SAVE_INTERVAL_SECONDS * 1000);
-  }, [session, calculateElapsedTime, onSaveProgress]);
-
   const pauseTimer = useCallback(() => {
     if (session?.status === 'completed' || session?.status === 'submitted') return;
-    clearTimers();
+    clearTimer();
     setIsRunning(false);
     setIsPaused(true);
-  }, [clearTimers, session?.status]);
+  }, [clearTimer, session?.status]);
 
   const resumeTimer = useCallback(() => {
     if (session?.status === 'completed' || session?.status === 'submitted') return;
-    startUITimer();
-    startSaveTimer();
-  }, [startUITimer, startSaveTimer, session?.status]);
+    startTimer();
+  }, [startTimer, session?.status]);
 
-  const saveNow = useCallback(() => {
-    const currentElapsed = calculateElapsedTime();
-    if (onSaveProgress) {
-      console.log(`💾 Manual save at ${currentElapsed} seconds`);
-      onSaveProgress(currentElapsed);
-      lastSaveRef.current = currentElapsed;
-    }
-  }, [calculateElapsedTime, onSaveProgress]);
+  // Get current time for manual save
+  const getCurrentTime = useCallback((): number => {
+    return calculateElapsedTime();
+  }, [calculateElapsedTime]);
 
   // Initialize when session changes
   useEffect(() => {
@@ -154,8 +119,7 @@ export function useTimer(
       setTimeLimit(null);
       isInitializedRef.current = false;
       lastTickRef.current = 0;
-      lastSaveRef.current = 0;
-      clearTimers();
+      clearTimer();
       return;
     }
 
@@ -174,13 +138,11 @@ export function useTimer(
         const elapsed = calculateElapsedTime();
         setTimeSpent(elapsed);
         lastTickRef.current = elapsed;
-        lastSaveRef.current = elapsed;  // 👈 Initialize last save time
         onTick?.(elapsed);
       } 
       else if (session.timeSpent !== undefined && session.timeSpent > 0) {
         setTimeSpent(session.timeSpent);
         lastTickRef.current = session.timeSpent;
-        lastSaveRef.current = session.timeSpent;
         onTick?.(session.timeSpent);
       }
       else if (session.status === 'in_progress') {
@@ -188,41 +150,39 @@ export function useTimer(
         sessionStartTimeRef.current = now;
         setTimeSpent(0);
         lastTickRef.current = 0;
-        lastSaveRef.current = 0;
       }
       
       isInitializedRef.current = true;
     }
-  }, [session, calculateElapsedTime, onTick, timeLimit, clearTimers]);
+  }, [session, calculateElapsedTime, onTick, timeLimit, clearTimer]);
 
-  // Auto-start timers when session is in_progress
+  // Auto-start timer when session is in_progress
   useEffect(() => {
     if (session?.status === 'in_progress' && !isPaused && !isRunning && sessionStartTimeRef.current && isInitializedRef.current) {
-      startUITimer();
-      startSaveTimer();
+      startTimer();
     }
-  }, [session?.status, isPaused, isRunning, startUITimer, startSaveTimer]);
+  }, [session?.status, isPaused, isRunning, startTimer]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      clearTimers();
+      clearTimer();
     };
-  }, [clearTimers]);
+  }, [clearTimer]);
 
   return {
     timeSpent,
     timeLimit,
     isRunning,
     isPaused,
-    startTimer: startUITimer,
+    startTimer,
     pauseTimer,
     resumeTimer,
     formatTime,
     getTimeColor,
-    getElapsedTime: calculateElapsedTime,
-    clearTimer: clearTimers,
-    saveNow,  // 👈 Manual save trigger
+    getCurrentTime,  // 👈 Returns current time for manual save
+    clearTimer,
+    MIN_SUBMIT_SECONDS,
   };
 }
 

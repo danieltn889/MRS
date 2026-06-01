@@ -1062,6 +1062,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
           owner: displayRepo.owner,
           repo: displayRepo.repo,
           repoUrl: `https://github.com/${displayRepo.owner}/${displayRepo.repo}`,
+          sessionId: session?.id,
         });
         const backendAnalysis = githubScoreResult?.data?.analysis || githubScoreResult?.analysis || null;
         setGithubScoreAnalysis(backendAnalysis);
