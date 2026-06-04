@@ -271,8 +271,8 @@ CREATE INDEX idx_skills_category ON skills(category);
 CREATE INDEX idx_skills_type     ON skills(skill_type);
 
 CREATE TABLE user_skills (
-    user_id               UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    skill_id              UUID NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
+    user_id               UUID NOT NULL REFERENCES users(id)   ON DELETE CASCADE,
+    skill_id              UUID NOT NULL REFERENCES skills(id)  ON DELETE CASCADE,
     proficiency_level     INTEGER CHECK (proficiency_level BETWEEN 1 AND 5),
     proficiency_label     VARCHAR(50) GENERATED ALWAYS AS (
         CASE proficiency_level
@@ -449,7 +449,7 @@ CREATE TABLE company_culture (
     team_dynamics         TEXT,
     communication_style   TEXT,
     decision_making       TEXT,
-    feedback_culture      TEXT,
+    feedback_culture      TEXT,  -- merged from ALTER
     work_life_balance     TEXT,
     diversity_info        TEXT,
     inclusion_info        TEXT,
@@ -531,10 +531,10 @@ CREATE TABLE company_projects (
     skills          TEXT[],
     media           JSONB DEFAULT '[]'::JSONB,
     featured        BOOLEAN DEFAULT FALSE,
-    display_order   INTEGER DEFAULT 0,
-    team_size       INTEGER,
-    website_url     TEXT,
-    github_url      TEXT,
+    display_order   INTEGER DEFAULT 0,   -- merged from ALTER
+    team_size       INTEGER,             -- merged from ALTER
+    website_url     TEXT,                -- merged from ALTER
+    github_url      TEXT,                -- merged from ALTER
     team_members    UUID[],
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -630,6 +630,20 @@ CREATE TABLE approval_workflows (
 CREATE INDEX idx_approval_workflows_company    ON approval_workflows(company_id);
 CREATE INDEX idx_approval_workflows_type       ON approval_workflows(workflow_type);
 CREATE INDEX idx_approval_workflows_created_by ON approval_workflows(created_by);
+
+CREATE TABLE communication_standards (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE UNIQUE,
+    standards  TEXT NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE TABLE minimum_score_thresholds (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE UNIQUE,
+    thresholds JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
 
 -- =====================================================
 -- PART 4: JOB MANAGEMENT (Stories 36-60)
@@ -974,13 +988,13 @@ CREATE TABLE simulations (
     results               JSONB,
     ai_analysis           JSONB,
     ai_analysis_version   VARCHAR(50),
-    punctuality_score     INTEGER CHECK (punctuality_score     BETWEEN 0 AND 100),
-    communication_score   INTEGER CHECK (communication_score   BETWEEN 0 AND 100),
-    problem_solving_score INTEGER CHECK (problem_solving_score BETWEEN 0 AND 100),
-    adaptability_score    INTEGER CHECK (adaptability_score    BETWEEN 0 AND 100),
-    collaboration_score   INTEGER CHECK (collaboration_score   BETWEEN 0 AND 100),
-    attention_score       INTEGER CHECK (attention_score       BETWEEN 0 AND 100),
-    initiative_score      INTEGER CHECK (initiative_score      BETWEEN 0 AND 100),
+    punctuality_score     DECIMAL(5,2) CHECK (punctuality_score     BETWEEN 0 AND 100),
+    communication_score   DECIMAL(5,2) CHECK (communication_score   BETWEEN 0 AND 100),
+    problem_solving_score DECIMAL(5,2) CHECK (problem_solving_score BETWEEN 0 AND 100),
+    adaptability_score    DECIMAL(5,2) CHECK (adaptability_score    BETWEEN 0 AND 100),
+    collaboration_score   DECIMAL(5,2) CHECK (collaboration_score   BETWEEN 0 AND 100),
+    attention_score       DECIMAL(5,2) CHECK (attention_score       BETWEEN 0 AND 100),
+    initiative_score      DECIMAL(5,2) CHECK (initiative_score      BETWEEN 0 AND 100),
     overall_score         DECIMAL(5,2),
     feedback              JSONB,
     strengths             TEXT[],
@@ -1094,7 +1108,7 @@ CREATE TABLE chat_messages (
     message_type VARCHAR(50) DEFAULT 'text' CHECK (message_type IN ('text', 'system', 'notification')),
     timestamp    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     is_read      BOOLEAN DEFAULT FALSE,
-    recipient_id UUID REFERENCES users(id),
+    recipient_id UUID REFERENCES users(id),   -- merged from ALTER
     reply_to     UUID REFERENCES chat_messages(id) ON DELETE SET NULL,
     thread_id    UUID,
     reply_count  INTEGER DEFAULT 0,
@@ -1108,26 +1122,26 @@ CREATE INDEX idx_chat_messages_reply_to  ON chat_messages(reply_to);
 CREATE INDEX idx_chat_messages_recipient ON chat_messages(recipient_id);
 
 CREATE TABLE session_task_progress (
-    id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    session_id           UUID NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
-    task_index           INTEGER NOT NULL,
-    status               VARCHAR(50) DEFAULT 'not_started' CHECK (status IN ('not_started', 'in_progress', 'completed')),
-    started_at           TIMESTAMP WITH TIME ZONE,
-    completed_at         TIMESTAMP WITH TIME ZONE,
-    time_spent           INTEGER DEFAULT 0,
-    answer               JSONB,
-    score                DECIMAL(5,2),
-    feedback             TEXT,
-    github_commit_url    TEXT,
-    prerequisites_met    BOOLEAN DEFAULT FALSE,
-    unlocked_at          TIMESTAMP WITH TIME ZONE,
-    max_attempts         INTEGER DEFAULT 3,
-    attempts_used        INTEGER DEFAULT 0,
-    can_skip             BOOLEAN DEFAULT FALSE,
-    skipped_at           TIMESTAMP WITH TIME ZONE,
-    skipped_reason       TEXT,
-    created_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at           TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id        UUID NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
+    task_index        INTEGER NOT NULL,
+    status            VARCHAR(50) DEFAULT 'not_started' CHECK (status IN ('not_started', 'in_progress', 'completed')),
+    started_at        TIMESTAMP WITH TIME ZONE,
+    completed_at      TIMESTAMP WITH TIME ZONE,
+    time_spent        INTEGER DEFAULT 0,
+    answer            JSONB,
+    score             DECIMAL(5,2),
+    feedback          TEXT,
+    github_commit_url TEXT,
+    prerequisites_met BOOLEAN DEFAULT FALSE,
+    unlocked_at       TIMESTAMP WITH TIME ZONE,
+    max_attempts      INTEGER DEFAULT 3,
+    attempts_used     INTEGER DEFAULT 0,
+    can_skip          BOOLEAN DEFAULT FALSE,
+    skipped_at        TIMESTAMP WITH TIME ZONE,
+    skipped_reason    TEXT,
+    created_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at        TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE INDEX idx_session_task_progress_session       ON session_task_progress(session_id);
@@ -1250,6 +1264,12 @@ CREATE TABLE ai_model_monitoring (
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+CREATE TABLE ai_scoring_weights (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    weights    JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- =====================================================
 -- PART 8: BLOCKCHAIN VERIFICATION (Stories 131-145)
 -- =====================================================
@@ -1280,6 +1300,44 @@ CREATE INDEX idx_blockchain_user   ON blockchain_credentials(user_id);
 CREATE INDEX idx_blockchain_tx     ON blockchain_credentials(blockchain_tx_id);
 CREATE INDEX idx_blockchain_hash   ON blockchain_credentials(credential_hash);
 CREATE INDEX idx_blockchain_status ON blockchain_credentials(status);
+
+CREATE TABLE blockchain_records (
+    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    simulation_id  UUID NOT NULL REFERENCES simulations(id)         ON DELETE CASCADE,
+    session_id     UUID NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
+    candidate_id   UUID NOT NULL REFERENCES users(id),
+    tx_id          VARCHAR(255) UNIQUE NOT NULL,
+    block_hash     VARCHAR(255) NOT NULL,
+    data_hash      VARCHAR(255) NOT NULL,
+    data           JSONB NOT NULL,
+    wallet_address VARCHAR(255),
+    timestamp      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(session_id)
+);
+
+CREATE INDEX idx_blockchain_records_simulation ON blockchain_records(simulation_id);
+CREATE INDEX idx_blockchain_records_tx_id      ON blockchain_records(tx_id);
+CREATE INDEX idx_blockchain_records_candidate  ON blockchain_records(candidate_id);
+CREATE INDEX idx_blockchain_records_session    ON blockchain_records(session_id);
+
+CREATE TABLE verifiable_credentials (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    simulation_id   UUID NOT NULL REFERENCES simulations(id)         ON DELETE CASCADE,
+    session_id      UUID NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
+    candidate_id    UUID NOT NULL REFERENCES users(id),
+    credential_data JSONB NOT NULL,
+    credential_hash VARCHAR(255) UNIQUE NOT NULL,
+    issued_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    revoked_at      TIMESTAMP WITH TIME ZONE,
+    revoked_reason  TEXT,
+    UNIQUE(session_id)
+);
+
+CREATE INDEX idx_verifiable_credentials_simulation ON verifiable_credentials(simulation_id);
+CREATE INDEX idx_verifiable_credentials_candidate  ON verifiable_credentials(candidate_id);
+CREATE INDEX idx_verifiable_credentials_hash       ON verifiable_credentials(credential_hash);
+CREATE INDEX idx_verifiable_credentials_session    ON verifiable_credentials(session_id);
 
 CREATE TABLE credential_access (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1367,6 +1425,37 @@ CREATE TABLE external_credentials (
     verified_at         TIMESTAMP WITH TIME ZONE,
     created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+CREATE TABLE metamask_nonces (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    address    VARCHAR(255) NOT NULL,
+    nonce      TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(address)
+);
+
+CREATE INDEX idx_metamask_nonces_address ON metamask_nonces(address);
+
+CREATE TABLE wallet_addresses (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id       UUID NOT NULL REFERENCES users(id)               ON DELETE CASCADE,
+    simulation_id UUID REFERENCES simulations(id)                  ON DELETE SET NULL,
+    session_id    UUID REFERENCES simulation_sessions(id)          ON DELETE SET NULL,
+    address       VARCHAR(255) NOT NULL,
+    private_key   TEXT,
+    is_primary    BOOLEAN DEFAULT FALSE,
+    status        VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'used', 'expired', 'revoked')),
+    used_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(address)
+);
+
+CREATE INDEX idx_wallet_addresses_user      ON wallet_addresses(user_id);
+CREATE INDEX idx_wallet_addresses_address   ON wallet_addresses(address);
+CREATE UNIQUE INDEX idx_unique_address_per_simulation
+    ON wallet_addresses(address) WHERE status = 'active';
+CREATE UNIQUE INDEX idx_unique_address_per_candidate_simulation
+    ON wallet_addresses(user_id, simulation_id) WHERE status = 'active';
 
 -- =====================================================
 -- PART 9: DASHBOARD & ANALYTICS (Stories 146-165)
@@ -1936,7 +2025,7 @@ CREATE TABLE feature_suggestions (
 );
 
 CREATE TABLE feature_votes (
-    user_id       UUID NOT NULL REFERENCES users(id)              ON DELETE CASCADE,
+    user_id       UUID NOT NULL REFERENCES users(id)               ON DELETE CASCADE,
     suggestion_id UUID NOT NULL REFERENCES feature_suggestions(id) ON DELETE CASCADE,
     voted_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY (user_id, suggestion_id)
@@ -2095,26 +2184,6 @@ CREATE TABLE evaluation_interview_questions (
 
 CREATE INDEX idx_evaluation_questions_evaluation ON evaluation_interview_questions(evaluation_id);
 
-CREATE TABLE ai_scoring_weights (
-    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    weights    JSONB NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE communication_standards (
-    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE UNIQUE,
-    standards  TEXT NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE TABLE minimum_score_thresholds (
-    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE UNIQUE,
-    thresholds JSONB NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
 -- =====================================================
 -- GITHUB INTEGRATION TABLES
 -- =====================================================
@@ -2156,14 +2225,16 @@ CREATE TABLE github_simulation_repos (
     updated_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-CREATE INDEX idx_github_simulation_repos_candidate    ON github_simulation_repos(candidate_id);
-CREATE INDEX idx_github_simulation_repos_simulation   ON github_simulation_repos(simulation_id);
-CREATE INDEX idx_github_simulation_repos_status       ON github_simulation_repos(status);
-CREATE INDEX idx_github_repos_session_id              ON github_simulation_repos(session_id);
-CREATE INDEX idx_github_repos_sim_candidate           ON github_simulation_repos(simulation_id, candidate_id);
-CREATE INDEX idx_github_repos_lookup                  ON github_simulation_repos(simulation_id, candidate_id, session_id, status);
-CREATE UNIQUE INDEX idx_unique_repo_per_session       ON github_simulation_repos(simulation_id, candidate_id, session_id) WHERE status = 'active';
-CREATE UNIQUE INDEX idx_unique_active_repo_no_session ON github_simulation_repos(simulation_id, candidate_id) WHERE status = 'active' AND session_id IS NULL;
+CREATE INDEX idx_github_simulation_repos_candidate  ON github_simulation_repos(candidate_id);
+CREATE INDEX idx_github_simulation_repos_simulation ON github_simulation_repos(simulation_id);
+CREATE INDEX idx_github_simulation_repos_status     ON github_simulation_repos(status);
+CREATE INDEX idx_github_repos_session_id            ON github_simulation_repos(session_id);
+CREATE INDEX idx_github_repos_sim_candidate         ON github_simulation_repos(simulation_id, candidate_id);
+CREATE INDEX idx_github_repos_lookup                ON github_simulation_repos(simulation_id, candidate_id, session_id, status);
+CREATE UNIQUE INDEX idx_unique_repo_per_session
+    ON github_simulation_repos(simulation_id, candidate_id, session_id) WHERE status = 'active';
+CREATE UNIQUE INDEX idx_unique_active_repo_no_session
+    ON github_simulation_repos(simulation_id, candidate_id) WHERE status = 'active' AND session_id IS NULL;
 
 CREATE TABLE github_repo_analysis (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -2218,17 +2289,12 @@ CREATE INDEX idx_github_submissions_submitted  ON github_submissions(submitted_a
 
 CREATE TABLE task_dependencies (
     id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    simulation_id      UUID NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
+    simulation_id      UUID NOT NULL REFERENCES simulations(id)      ON DELETE CASCADE,
     task_id            UUID NOT NULL REFERENCES simulation_tasks(id),
     depends_on_task_id UUID NOT NULL REFERENCES simulation_tasks(id),
     dependency_type    VARCHAR(50) DEFAULT 'completion' CHECK (dependency_type IN (
-        'completion',
-        'score_minimum',
-        'time_spent',
-        'github_repo',
-        'github_pr',
-        'github_commit',
-        'order'
+        'completion', 'score_minimum', 'time_spent',
+        'github_repo', 'github_pr', 'github_commit', 'order'
     )),
     min_score_required INTEGER CHECK (min_score_required BETWEEN 0 AND 100),
     min_time_spent     INTEGER,
@@ -2272,26 +2338,25 @@ CREATE INDEX idx_task_history_session ON task_progression_history(session_id);
 CREATE INDEX idx_task_history_task    ON task_progression_history(task_id);
 CREATE INDEX idx_task_history_created ON task_progression_history(created_at);
 
--- ADD THIS TABLE (Missing from your schema)
 CREATE TABLE simulation_task_issues (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    simulation_id   UUID NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
-    task_id         UUID NOT NULL REFERENCES simulation_tasks(id) ON DELETE CASCADE,
-    task_index      INTEGER NOT NULL,
-    task_name       VARCHAR(255) NOT NULL,
-    task_type       VARCHAR(100),
-    issue_number    INTEGER NOT NULL,
-    issue_url       TEXT NOT NULL,
-    repo_name       VARCHAR(255) NOT NULL,
-    repo_owner      VARCHAR(100) NOT NULL,
-    depends_on      INTEGER,
-    min_commits     INTEGER,
-    requires_pr     BOOLEAN DEFAULT FALSE,
-    min_score       INTEGER,
-    status          VARCHAR(50) DEFAULT 'open',
-    completed_at    TIMESTAMP WITH TIME ZONE,
-    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    simulation_id UUID NOT NULL REFERENCES simulations(id)      ON DELETE CASCADE,
+    task_id       UUID NOT NULL REFERENCES simulation_tasks(id) ON DELETE CASCADE,
+    task_index    INTEGER NOT NULL,
+    task_name     VARCHAR(255) NOT NULL,
+    task_type     VARCHAR(100),
+    issue_number  INTEGER NOT NULL,
+    issue_url     TEXT NOT NULL,
+    repo_name     VARCHAR(255) NOT NULL,
+    repo_owner    VARCHAR(100) NOT NULL,
+    depends_on    INTEGER,
+    min_commits   INTEGER,
+    requires_pr   BOOLEAN DEFAULT FALSE,
+    min_score     INTEGER,
+    status        VARCHAR(50) DEFAULT 'open',
+    completed_at  TIMESTAMP WITH TIME ZONE,
+    created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(simulation_id, task_id)
 );
 
@@ -2307,15 +2372,15 @@ CREATE MATERIALIZED VIEW candidate_dashboard AS
 SELECT
     u.id,
     u.email,
-    COUNT(DISTINCT a.id)      AS total_applications,
-    COUNT(DISTINCT s.id)      AS total_simulations,
-    AVG(s.punctuality_score)  AS avg_punctuality,
-    AVG(s.communication_score)  AS avg_communication,
-    AVG(s.problem_solving_score) AS avg_problem_solving,
-    AVG(s.adaptability_score) AS avg_adaptability,
-    MAX(a.applied_at)         AS last_application,
-    MAX(s.completed_at)       AS last_simulation,
-    COUNT(DISTINCT sa.job_id) AS saved_jobs_count
+    COUNT(DISTINCT a.id)               AS total_applications,
+    COUNT(DISTINCT s.id)               AS total_simulations,
+    AVG(s.punctuality_score)           AS avg_punctuality,
+    AVG(s.communication_score)         AS avg_communication,
+    AVG(s.problem_solving_score)       AS avg_problem_solving,
+    AVG(s.adaptability_score)          AS avg_adaptability,
+    MAX(a.applied_at)                  AS last_application,
+    MAX(s.completed_at)                AS last_simulation,
+    COUNT(DISTINCT sa.job_id)          AS saved_jobs_count
 FROM users u
 LEFT JOIN applications a  ON u.id = a.user_id
 LEFT JOIN simulations  s  ON u.id = s.user_id
@@ -2541,8 +2606,7 @@ DECLARE
     v_dependency        RECORD;
 BEGIN
     FOR v_dependency IN
-        SELECT td.*, stp.status, stp.score, stp.time_spent,
-               stp.github_commit_url
+        SELECT td.*, stp.status, stp.score, stp.time_spent, stp.github_commit_url
         FROM task_dependencies td
         LEFT JOIN session_task_progress stp
                ON stp.task_index = (
@@ -2553,32 +2617,19 @@ BEGIN
     LOOP
         CASE v_dependency.dependency_type
             WHEN 'completion' THEN
-                IF v_dependency.status != 'completed' THEN
-                    v_prerequisites_met := FALSE;
-                END IF;
+                IF v_dependency.status != 'completed' THEN v_prerequisites_met := FALSE; END IF;
             WHEN 'score_minimum' THEN
-                IF COALESCE(v_dependency.score, 0) < v_dependency.min_score_required THEN
-                    v_prerequisites_met := FALSE;
-                END IF;
+                IF COALESCE(v_dependency.score, 0) < v_dependency.min_score_required THEN v_prerequisites_met := FALSE; END IF;
             WHEN 'time_spent' THEN
-                IF COALESCE(v_dependency.time_spent, 0) < v_dependency.min_time_spent THEN
-                    v_prerequisites_met := FALSE;
-                END IF;
+                IF COALESCE(v_dependency.time_spent, 0) < v_dependency.min_time_spent THEN v_prerequisites_met := FALSE; END IF;
             WHEN 'github_repo' THEN
-                IF v_dependency.github_commit_url IS NULL THEN
-                    v_prerequisites_met := FALSE;
-                END IF;
+                IF v_dependency.github_commit_url IS NULL THEN v_prerequisites_met := FALSE; END IF;
             WHEN 'order' THEN
-                IF v_dependency.status != 'completed' THEN
-                    v_prerequisites_met := FALSE;
-                END IF;
-            ELSE
-                NULL;
+                IF v_dependency.status != 'completed' THEN v_prerequisites_met := FALSE; END IF;
+            ELSE NULL;
         END CASE;
 
-        IF NOT v_prerequisites_met THEN
-            RETURN FALSE;
-        END IF;
+        IF NOT v_prerequisites_met THEN RETURN FALSE; END IF;
     END LOOP;
 
     RETURN v_prerequisites_met;
@@ -2616,8 +2667,7 @@ BEGIN
 
             IF v_prerequisites_met THEN
                 UPDATE session_task_progress
-                SET prerequisites_met = TRUE,
-                    unlocked_at       = NOW()
+                SET prerequisites_met = TRUE, unlocked_at = NOW()
                 WHERE id = v_next_task.id;
 
                 INSERT INTO task_progression_history
@@ -2642,13 +2692,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-DROP TRIGGER IF EXISTS trigger_auto_unlock_next_task ON session_task_progress;
 CREATE TRIGGER trigger_auto_unlock_next_task
     AFTER UPDATE OF status ON session_task_progress
     FOR EACH ROW
     EXECUTE FUNCTION auto_unlock_next_task();
-
-
 
 -- =====================================================
 -- SEED DATA
@@ -2723,86 +2770,16 @@ SELECT 'How are my simulation results used?',
        'Privacy', 4, true, 0, 0, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM faqs WHERE question = 'How are my simulation results used?');
 
--- =====================================================
--- MIGRATIONS: add columns that may be missing from existing DBs
--- =====================================================
-ALTER TABLE company_culture   ADD COLUMN IF NOT EXISTS feedback_culture TEXT;
-ALTER TABLE company_projects  ADD COLUMN IF NOT EXISTS display_order   INTEGER DEFAULT 0;
-ALTER TABLE company_projects  ADD COLUMN IF NOT EXISTS team_size       INTEGER;
-ALTER TABLE company_projects  ADD COLUMN IF NOT EXISTS website_url     TEXT;
-ALTER TABLE company_projects  ADD COLUMN IF NOT EXISTS github_url      TEXT;
+-- Change these columns from INTEGER to DECIMAL
+ALTER TABLE simulations 
+  ALTER COLUMN attention_score TYPE DECIMAL(5,2),
+  ALTER COLUMN initiative_score TYPE DECIMAL(5,2);
+  
+ALTER TABLE wallet_addresses 
+ADD COLUMN updated_at TIMESTAMP DEFAULT NOW();
 
-
--- Add recipient_id column to chat_messages (nullable, don't update existing)
-ALTER TABLE chat_messages 
-ADD COLUMN IF NOT EXISTS recipient_id UUID REFERENCES users(id);
-
--- Add index for recipient_id
-CREATE INDEX IF NOT EXISTS idx_chat_messages_recipient ON chat_messages(recipient_id);
-
--- DO NOT update existing messages - leave recipient_id NULL for existing messages
-
-
--- Blockchain records for audit trail
-CREATE TABLE IF NOT EXISTS blockchain_records (
-    id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    simulation_id  UUID NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
-    candidate_id   UUID NOT NULL REFERENCES users(id),
-    tx_id          VARCHAR(255) UNIQUE NOT NULL,
-    block_hash     VARCHAR(255) NOT NULL,
-    previous_hash  VARCHAR(255),
-    data_hash      VARCHAR(255) NOT NULL,
-    data           JSONB NOT NULL,
-    timestamp      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(simulation_id)
-);
-
-CREATE INDEX idx_blockchain_records_simulation ON blockchain_records(simulation_id);
-CREATE INDEX idx_blockchain_records_tx_id      ON blockchain_records(tx_id);
-CREATE INDEX idx_blockchain_records_candidate  ON blockchain_records(candidate_id);
-
--- Verifiable credentials table
-CREATE TABLE IF NOT EXISTS verifiable_credentials (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    simulation_id   UUID NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
-    candidate_id    UUID NOT NULL REFERENCES users(id),
-    credential_data JSONB NOT NULL,
-    credential_hash VARCHAR(255) UNIQUE NOT NULL,
-    issued_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    revoked_at      TIMESTAMP WITH TIME ZONE,
-    revoked_reason  TEXT,
-    UNIQUE(simulation_id)
-);
-
-CREATE INDEX idx_verifiable_credentials_simulation ON verifiable_credentials(simulation_id);
-CREATE INDEX idx_verifiable_credentials_candidate  ON verifiable_credentials(candidate_id);
-CREATE INDEX idx_verifiable_credentials_hash       ON verifiable_credentials(credential_hash);
-
-
--- Store MetaMask nonces for authentication
-CREATE TABLE IF NOT EXISTS metamask_nonces (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    address     VARCHAR(255) NOT NULL,
-    nonce       TEXT NOT NULL,
-    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(address)
-);
-
-CREATE INDEX idx_metamask_nonces_address ON metamask_nonces(address);
-
--- Create wallet_addresses table
-CREATE TABLE IF NOT EXISTS wallet_addresses (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    address     VARCHAR(255) NOT NULL,
-    is_primary  BOOLEAN DEFAULT FALSE,
-    created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(address)
-);
-
-CREATE INDEX idx_wallet_addresses_user    ON wallet_addresses(user_id);
-CREATE INDEX idx_wallet_addresses_address ON wallet_addresses(address);
+ALTER TABLE blockchain_records 
+ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255);
 
 -- =====================================================
 -- END OF SCHEMA

@@ -1,10 +1,10 @@
-import { Play, Timer, CheckCircle, AlertCircle, FileText } from 'lucide-react';
-import { IconType } from 'lucide-react';
+import { Play, Timer, CheckCircle, AlertCircle, FileText, LucideIcon } from 'lucide-react';
 
+// Use LucideIcon instead of IconType
 export interface StatusBadge {
   label: string;
   color: string;
-  icon: IconType;
+  icon: LucideIcon;  // ✅ Use LucideIcon instead of IconType
 }
 
 export interface DailyWindow {
@@ -28,12 +28,41 @@ export interface SimulationMetadata {
 export interface Simulation {
   id?: string | null;
   status?: string;
-  sessionId?: string;
-  startedAt?: string;
-  completedAt?: string;
-  score?: number;
+  sessionId?: string | null;
+  sessionStatus?: string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  score?: number | string | null;  // Allow number, string, or null
   applicationId?: string;
   metadata?: SimulationMetadata;
+  jobTitle?: string;
+  companyName?: string;
+  simulationName?: string;
+  description?: string;
+  duration?: number;
+  difficulty?: string;
+  type?: string;
+  matchScore?: number;
+  applicationStatus?: string;
+  tasks?: any[];
+  tasksStructure?: any;
+  scoringRubric?: any;
+}
+
+// Helper function to get numeric score safely
+export function getNumericScore(score: number | string | null | undefined): number | undefined {
+  if (score === null || score === undefined) return undefined;
+  const num = typeof score === 'string' ? parseFloat(score) : score;
+  return isNaN(num) ? undefined : num;
+}
+
+// Helper to check if score has a valid value
+export function hasValidScore(score: number | string | null | undefined): boolean {
+  if (score === null || score === undefined) return false;
+  const strScore = String(score).trim();
+  if (strScore === '' || strScore === 'null' || strScore === 'undefined') return false;
+  const numScore = parseFloat(strScore);
+  return !isNaN(numScore) && numScore > 0;
 }
 
 export function nowInTimezone(tz: string): Date {
@@ -153,7 +182,8 @@ export function getCurrentDayInTz(simulation: Simulation, currentDateTime: Date)
 export function resolveStatus(sim: Simulation): string {
   if (sim.id === null || sim.id === 'null') return 'no_template';
   if (sim.sessionId && sim.startedAt && !sim.completedAt) return 'in_progress';
-  if (sim.completedAt || (sim.score !== undefined && sim.score !== null)) return 'completed';
+  // Use hasValidScore helper for score check
+  if (sim.completedAt || hasValidScore(sim.score)) return 'completed';
   if (sim.status === 'expired') return 'expired';
   return 'not_started';
 }

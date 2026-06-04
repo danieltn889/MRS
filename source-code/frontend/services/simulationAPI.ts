@@ -17,7 +17,9 @@ const getAuthHeaders = () => {
   };
 };
 
-// In simulationAPI.ts - REPLACE the handleResponse function with this:
+// ============================================
+// COMPLETE handleResponse - Handles ALL response types
+// ============================================
 
 const handleResponse = async (response: Response) => {
   if (!response.ok) {
@@ -30,15 +32,43 @@ const handleResponse = async (response: Response) => {
   const isTaskProgressResponse = data.data && Array.isArray(data.data) && 
     data.data.length > 0 && (data.data[0]?.task_index !== undefined || data.data[0]?.taskIndex !== undefined);
   
-  // ✅ Check if this is a simulation sessions response (has tasks array)
+  // ✅ Check if this is a simulation session response (has tasks array)
   const isSimulationSessionResponse = data.data && !Array.isArray(data.data) && 
     (data.data.tasks !== undefined || data.data.session_id !== undefined);
+  
+  // ✅ Check if this is a GitHub repository response (has repo_url, repo_name, or github_links)
+  const isGitHubRepoResponse = data.data && (
+    data.data.repo_url !== undefined ||
+    data.data.repoName !== undefined ||
+    data.data.github_links !== undefined ||
+    data.data.repoUrl !== undefined ||
+    (Array.isArray(data.data) && data.data[0]?.repo_name !== undefined)
+  );
+  
+  // ✅ Check if this is a blockchain/verification response
+  const isBlockchainResponse = data.data && (
+    data.data.credential_hash !== undefined ||
+    data.data.blockchain_tx_id !== undefined ||
+    data.data.tx_id !== undefined ||
+    data.data.verified !== undefined
+  );
+  
+  // ✅ Check if this is a GitHub score analysis response
+  const isGitHubScoreResponse = data.data && (
+    data.data.analysis !== undefined ||
+    data.data.detailedMarks !== undefined ||
+    data.data.score !== undefined
+  );
   
   console.log('🔍 [handleResponse] Detecting response type:', {
     isTaskProgressResponse,
     isSimulationSessionResponse,
+    isGitHubRepoResponse,
+    isBlockchainResponse,
+    isGitHubScoreResponse,
     hasDataArray: !!(data.data && Array.isArray(data.data)),
-    firstItemKeys: data.data && Array.isArray(data.data) && data.data[0] ? Object.keys(data.data[0]) : []
+    firstItemKeys: data.data && Array.isArray(data.data) && data.data[0] ? Object.keys(data.data[0]) : [],
+    dataKeys: data.data && !Array.isArray(data.data) ? Object.keys(data.data) : []
   });
 
   // ✅ For task progress responses - DO NOT modify the status
@@ -51,6 +81,46 @@ const handleResponse = async (response: Response) => {
   // ✅ For simulation session responses - DO NOT modify (contains tasks, current_task, etc.)
   if (isSimulationSessionResponse) {
     console.log('📊 [handleResponse] Simulation session response - keeping original data');
+    return data;
+  }
+  
+  // ✅ For GitHub repository responses - DO NOT modify, return as-is
+  if (isGitHubRepoResponse) {
+    console.log('📊 [handleResponse] GitHub repository response - keeping original repo data');
+    if (data.data && Array.isArray(data.data)) {
+      console.log(`📊 Found ${data.data.length} GitHub repositories`);
+      data.data.forEach((repo: any, idx: number) => {
+        console.log(`  Repo ${idx + 1}:`, {
+          name: repo.repo_name || repo.repoName,
+          url: repo.repo_url || repo.repoUrl,
+          branch: repo.branch_name || repo.branchName
+        });
+      });
+    } else if (data.data) {
+      console.log('📊 GitHub repo data:', {
+        repoName: data.data.repoName || data.data.repo_name,
+        repoUrl: data.data.repoUrl || data.data.repo_url,
+        branchName: data.data.branchName || data.data.branch_name,
+        cloneUrl: data.data.cloneUrl || data.data.clone_url
+      });
+    }
+    return data;
+  }
+  
+  // ✅ For blockchain/verification responses - DO NOT modify
+  if (isBlockchainResponse) {
+    console.log('📊 [handleResponse] Blockchain/verification response - keeping original data');
+    return data;
+  }
+  
+  // ✅ For GitHub score analysis responses - DO NOT modify
+  if (isGitHubScoreResponse) {
+    console.log('📊 [handleResponse] GitHub score analysis response - keeping original data');
+    if (data.data?.analysis) {
+      console.log('  Score:', data.data.analysis.score || data.data.score);
+      console.log('  Has detailed marks:', !!data.data.analysis.detailedMarks);
+      console.log('  Repo URL:', data.data.analysis.repoUrl);
+    }
     return data;
   }
 
@@ -96,10 +166,6 @@ const handleResponse = async (response: Response) => {
 
   return data;
 };
-
-
-
-
 
 // ════════════════════════════════════════════════════════════════════════════
 // TEMPLATE ROUTES
@@ -172,20 +238,17 @@ export const publishSimulation = async (simulation: any) => {
   const hasRealId = simulation.id && isValidUUID(simulation.id);
 
   if (hasRealId) {
-    // 1. Save all latest data first
     await fetch(`${API_BASE_URL}/simulations/${simulation.id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
       body: JSON.stringify(buildFullPayload(simulation, 'draft')),
     });
-    // 2. Then publish
     const publishRes = await fetch(`${API_BASE_URL}/simulations/${simulation.id}/publish`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
     return handleResponse(publishRes);
   } else {
-    // New simulation — create directly as published
     const response = await fetch(`${API_BASE_URL}/simulations`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -286,7 +349,6 @@ export const getMySimulationById = async (simulationId: string) => {
   return handleResponse(response);
 };
 
-// In your API service (simulationAPI.ts)
 export const resumeMySimulation = async (sessionId: string) => {
   const response = await fetch(
     `${API_BASE_URL}/simulations/my-simulations/${sessionId}/resume`,
@@ -294,7 +356,6 @@ export const resumeMySimulation = async (sessionId: string) => {
   );
   const result = await handleResponse(response);
   
-  // Log to verify githubRepo is present
   console.log('Resume response:', result.data);
   console.log('githubRepo:', result.data?.githubRepo);
   
@@ -337,10 +398,7 @@ export const getMySimulationResults = async (simulationId: string) => {
 // SIMULATION SESSION ROUTES (executing and submitting)
 // ════════════════════════════════════════════════════════════════════════════
 
-// simulationAPI.ts - Fix getSimulationSession (around line 180-185)
-
 export const getSimulationSession = async (sessionId: string) => {
-  // ✅ CHANGE: Use the sessions endpoint which returns full session data with started_at
   const response = await fetch(
     `${API_BASE_URL}/simulations/sessions/${sessionId}`,
     { method: 'GET', headers: getAuthHeaders() }
@@ -353,7 +411,6 @@ export const saveSimulationProgress = async (
   data: { currentTask: number; answers: Record<string, any>; timeSpent?: number }
 ) => {
   try {
-    // ✅ Normalize answer keys to "task_X" format for backend consistency
     const normalizedAnswers: Record<string, any> = {};
     for (const [key, value] of Object.entries(data.answers || {})) {
       const taskKey = String(key).startsWith('task_') ? key : `task_${key}`;
@@ -399,9 +456,6 @@ export const submitSimulationSession = async (
   );
   return handleResponse(response);
 };
-
-// simulationAPI.ts - Fix getSimulationSession (line ~180-185)
-
 
 // ════════════════════════════════════════════════════════════════════════════
 // DIRECT SIMULATION SESSIONS ROUTES (from simulation_sessions table)
@@ -609,12 +663,8 @@ export const getChatMessages = async (sessionId: string, options: { limit?: numb
   return handleResponse(response);
 };
 
-// simulationAPI.ts - CHANGE THIS FUNCTION
-
-// simulationAPI.ts - Change getChatMessagesWithReplies to use session ID
-
 export const getChatMessagesWithReplies = async (
-  sessionId: string,  // ← Expect SESSION ID
+  sessionId: string,
   options: { limit?: number; offset?: number; filter?: string } = {}
 ) => {
   const { limit = 50, offset = 0, filter = 'all' } = options;
@@ -624,7 +674,6 @@ export const getChatMessagesWithReplies = async (
     filter 
   });
   
-  // ✅ Use session-scoped endpoint
   const response = await fetch(
     `${API_BASE_URL}/simulations/sessions/${sessionId}/chat/threaded?${params}`,
     { method: 'GET', headers: getAuthHeaders() }
@@ -632,16 +681,13 @@ export const getChatMessagesWithReplies = async (
   return handleResponse(response);
 };
 
-// simulationAPI.ts - CHANGE sendChatMessage to use simulation ID
-
 export const sendChatMessage = async (
-  simulationId: string,  // ← Changed from sessionId to simulationId
+  simulationId: string,
   message: string,
   attachments: any[] = [],
   replyTo?: string | null,
   sessionId?: string | null
 ) => {
-  // Serialize exactly once here
   const messagePayload = { text: message, attachments: attachments || [] };
   const payload: any = {
     message: JSON.stringify(messagePayload),
@@ -656,7 +702,6 @@ export const sendChatMessage = async (
     payload.sessionId = sessionId;
   }
 
-  // ✅ CHANGE: Use simulation-scoped endpoint (remove '/sessions/')
   const response = await fetch(
     `${API_BASE_URL}/simulations/${simulationId}/chat`,
     {
@@ -763,12 +808,11 @@ export const getChatMessagesWithRepliesBySimulation = async (
 
 export const sendChatMessageBySimulation = async (
   simulationId: string,
-  message: string,          // ← raw text
-  attachments: any[] = [],  // ← raw attachments array
+  message: string,
+  attachments: any[] = [],
   replyTo?: string | null,
   sessionId?: string | null
 ) => {
-  // ✅ Serialize exactly once here
   const messagePayload = { text: message, attachments: attachments || [] };
   const payload: any = {
     message: JSON.stringify(messagePayload),
@@ -783,7 +827,7 @@ export const sendChatMessageBySimulation = async (
     payload.sessionId = sessionId;
   }
 
-   const response = await fetch(
+  const response = await fetch(
     `${API_BASE_URL}/simulations/${simulationId}/chat`,
     {
       method: 'POST',
@@ -795,12 +839,27 @@ export const sendChatMessageBySimulation = async (
 };
 
 export const deleteChatMessageBySimulation = async (simulationId: string, messageId: string) => {
-  // ✅ CORRECT - use the simulation-scoped DELETE route
   const response = await fetch(
     `${API_BASE_URL}/simulations/${simulationId}/chat/${messageId}`,
     {
       method: 'DELETE',
       headers: getAuthHeaders(),
+    }
+  );
+  return handleResponse(response);
+};
+
+export const editChatMessageBySimulation = async (
+  simulationId: string,
+  messageId: string,
+  newContent: string
+) => {
+  const response = await fetch(
+    `${API_BASE_URL}/simulations/${simulationId}/chat/${messageId}`,
+    {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ message: newContent }),
     }
   );
   return handleResponse(response);
@@ -889,85 +948,8 @@ export const autoSaveProgress = async (
 };
 
 // ════════════════════════════════════════════════════════════════════════════
-// PRIVATE HELPERS
+// CANDIDATES ROUTES (Recruiter view)
 // ════════════════════════════════════════════════════════════════════════════
-
-function deriveType(tasks: any[]): string {
-  const typeMap: Record<string, string> = {
-    behavioral: 'behavioral',
-    case_study: 'case_study',
-    role_play: 'role_play',
-    presentation: 'presentation',
-    cognitive: 'cognitive',
-    situational: 'situational',
-  };
-  for (const task of tasks ?? []) {
-    if (typeMap[task.type]) return typeMap[task.type];
-  }
-  return 'technical';
-}
-
-function buildFullPayload(simulation: any, statusOverride?: string) {
-  return {
-    // Core
-    title:              simulation.title,
-    jobRole:            simulation.jobRole,
-    jobId:              simulation.jobId     ?? null,
-    description:        simulation.description,
-    duration:           simulation.duration,
-    difficulty:         simulation.difficulty,
-    status:             statusOverride || simulation.status || 'draft',
-
-    // Content
-    objectives:         simulation.objectives         ?? [],
-    tasks:              simulation.tasks              ?? [],
-
-    // Config
-    scoring:            simulation.scoring            ?? {},
-    settings:           simulation.settings           ?? {},
-    passFailCriteria:   simulation.passFailCriteria   ?? null,
-    availability:       simulation.availability       ?? null,
-
-    // Practice
-    practiceEnabled:    simulation.practiceEnabled    ?? false,
-    practiceSimulation: simulation.practiceSimulation ?? null,
-
-    // Compliance / metadata
-    compliance:         simulation.compliance         ?? [],
-    metadata: {
-      ...(simulation.metadata ?? {}),
-      availability: simulation.availability ?? null,
-    },
-  };
-}
-
-function buildCreatePayload(simulation: any) {
-  return buildFullPayload(simulation);
-}
-
-function buildUpdatePayload(simulation: any) {
-  return buildFullPayload(simulation);
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// HELPER: Create or get simulation session
-// ════════════════════════════════════════════════════════════════════════════
-
-export const getOrCreateSimulationSession = async (templateId: string, applicationId: string) => {
-  try {
-    const response = await startAppliedJobSimulation(templateId, applicationId);
-    if (response.success && response.data?.sessionId) {
-      return response;
-    }
-    throw new Error('Failed to create session');
-  } catch (error) {
-    console.error('Failed to create session:', error);
-    throw error;
-  }
-};
-
-
-// Add this to simulationAPI.ts (around line 200-250, with other GET methods)
 
 export const getSimulationCandidates = async (
   simulationId: string,
@@ -992,7 +974,9 @@ export const getSimulationCandidates = async (
   return handleResponse(response);
 };
 
-// Add after the updateTaskProgress function (around line 250-280)
+// ════════════════════════════════════════════════════════════════════════════
+// TASK SCORE ROUTES (Recruiter view)
+// ════════════════════════════════════════════════════════════════════════════
 
 export const updateTaskScore = async (sessionId: string, taskIndex: number, score: number) => {
   const response = await fetch(
@@ -1018,15 +1002,10 @@ export const updateTaskFeedback = async (sessionId: string, taskIndex: number, f
   return handleResponse(response);
 };
 
-// simulationAPI.ts - Add these missing GitHub methods
+// ════════════════════════════════════════════════════════════════════════════
+// GITHUB API METHODS
+// ════════════════════════════════════════════════════════════════════════════
 
-// Add these after your existing imports and before the DEFAULT EXPORT
-
-// ============================================
-// GITHUB API METHODS - Add these to your simulationAPI
-// ============================================
-
-// GitHub Repository Methods
 export const getFileContent = async (owner: string, repo: string, path: string, ref?: string) => {
   const params = new URLSearchParams();
   if (ref) params.append('ref', ref);
@@ -1092,7 +1071,6 @@ export const compareCommits = async (owner: string, repo: string, base: string, 
   return handleResponse(response);
 };
 
-// GitHub Stats API Methods
 export const getContributorWeeklyStats = async (owner: string, repo: string) => {
   const url = `${API_BASE_URL}/github/repo/${owner}/${repo}/stats/contributors`;
   const response = await fetch(url, { 
@@ -1138,7 +1116,6 @@ export const getCommitActivityStats = async (owner: string, repo: string) => {
   return handleResponse(response);
 };
 
-// Actions / CI-CD Statistics
 export const getActionsStats = async (owner: string, repo: string) => {
   const url = `${API_BASE_URL}/github/repo/${owner}/${repo}/actions/stats`;
   const response = await fetch(url, { 
@@ -1148,7 +1125,6 @@ export const getActionsStats = async (owner: string, repo: string) => {
   return handleResponse(response);
 };
 
-// Release Statistics
 export const getReleaseStats = async (owner: string, repo: string) => {
   const url = `${API_BASE_URL}/github/repo/${owner}/${repo}/releases/stats`;
   const response = await fetch(url, { 
@@ -1158,7 +1134,6 @@ export const getReleaseStats = async (owner: string, repo: string) => {
   return handleResponse(response);
 };
 
-// User Profile Stats
 export const getUserProfileStats = async (username: string) => {
   const url = `${API_BASE_URL}/github/user/${username}/stats`;
   const response = await fetch(url, { 
@@ -1168,39 +1143,10 @@ export const getUserProfileStats = async (username: string) => {
   return handleResponse(response);
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// SIMULATION RESULTS ROUTES
+// ════════════════════════════════════════════════════════════════════════════
 
-// Also add to the default export object (at the bottom of the file)
-// Inside the default export object, add:
-//   updateTaskScore,
-//   updateTaskFeedback,
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PATCH: Add this function to simulationAPI.ts
-//
-// Place it directly after `deleteChatMessageBySimulation` in the
-// "CHAT ROUTES - BY SIMULATION ID" section.
-// Then add `editChatMessageBySimulation` to the default export object.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const editChatMessageBySimulation = async (
-  simulationId: string,
-  messageId: string,
-  newContent: string
-) => {
-  // ✅ CORRECT - single 'simulations' in path
-  const response = await fetch(
-    `${API_BASE_URL}/simulations/${simulationId}/chat/${messageId}`,
-    {
-      method: 'PUT',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ message: newContent }),
-    }
-  );
-  return handleResponse(response);
-};
-
-
-// Add this function (around line 200-210)
 export const getSimulationSessionResults = async (sessionId: string) => {
   const response = await fetch(
     `${API_BASE_URL}/simulations/sessions/${sessionId}/results`,
@@ -1213,7 +1159,7 @@ export const calculateGitHubScoreForRepo = async (data: {
   repoUrl?: string;
   owner?: string;
   repo?: string;
-  sessionId?: string;  // ✅ ADD THIS
+  sessionId?: string;
 }) => {
   const response = await fetch(`${API_BASE_URL}/simulations/github-score`, {
     method: 'POST',
@@ -1223,21 +1169,83 @@ export const calculateGitHubScoreForRepo = async (data: {
   return handleResponse(response);
 };
 
+// ════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ════════════════════════════════════════════════════════════════════════════
 
+function deriveType(tasks: any[]): string {
+  const typeMap: Record<string, string> = {
+    behavioral: 'behavioral',
+    case_study: 'case_study',
+    role_play: 'role_play',
+    presentation: 'presentation',
+    cognitive: 'cognitive',
+    situational: 'situational',
+  };
+  for (const task of tasks ?? []) {
+    if (typeMap[task.type]) return typeMap[task.type];
+  }
+  return 'technical';
+}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// In the default export object, add:
-//   editChatMessageBySimulation,
-// alongside deleteChatMessageBySimulation.
-// ─────────────────────────────────────────────────────────────────────────────
+function buildFullPayload(simulation: any, statusOverride?: string) {
+  return {
+    title: simulation.title,
+    jobRole: simulation.jobRole,
+    jobId: simulation.jobId ?? null,
+    description: simulation.description,
+    duration: simulation.duration,
+    difficulty: simulation.difficulty,
+    status: statusOverride || simulation.status || 'draft',
+    objectives: simulation.objectives ?? [],
+    tasks: simulation.tasks ?? [],
+    scoring: simulation.scoring ?? {},
+    settings: simulation.settings ?? {},
+    passFailCriteria: simulation.passFailCriteria ?? null,
+    availability: simulation.availability ?? null,
+    practiceEnabled: simulation.practiceEnabled ?? false,
+    practiceSimulation: simulation.practiceSimulation ?? null,
+    compliance: simulation.compliance ?? [],
+    metadata: {
+      ...(simulation.metadata ?? {}),
+      availability: simulation.availability ?? null,
+    },
+  };
+}
 
+function buildCreatePayload(simulation: any) {
+  return buildFullPayload(simulation);
+}
+
+function buildUpdatePayload(simulation: any) {
+  return buildFullPayload(simulation);
+}
+
+export const getOrCreateSimulationSession = async (templateId: string, applicationId: string) => {
+  try {
+    const response = await startAppliedJobSimulation(templateId, applicationId);
+    if (response.success && response.data?.sessionId) {
+      return response;
+    }
+    throw new Error('Failed to create session');
+  } catch (error) {
+    console.error('Failed to create session:', error);
+    throw error;
+  }
+};
+
+// Add to simulationAPI.ts
+export const verifyGitHubUser = async (username: string) => {
+  const response = await fetch(`${API_BASE_URL}/github/verify-user`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ username }),
+  });
+  return handleResponse(response);
+};
 
 // ════════════════════════════════════════════════════════════════════════════
 // DEFAULT EXPORT
-// ════════════════════════════════════════════════════════════════════════════
-
-// ════════════════════════════════════════════════════════════════════════════
-// DEFAULT EXPORT - Add the new GitHub methods
 // ════════════════════════════════════════════════════════════════════════════
 
 export default {
@@ -1294,6 +1302,7 @@ export default {
   getChatMessagesWithRepliesBySimulation,
   sendChatMessageBySimulation,
   deleteChatMessageBySimulation,
+  editChatMessageBySimulation,
   getUnreadMessageCountBySimulation,
   markMessagesAsReadBySimulation,
   getChatStatisticsBySimulation,
@@ -1325,9 +1334,7 @@ export default {
   updateTaskScore,
   updateTaskFeedback,
 
-  // ============================================
-  // GITHUB API METHODS - ADD THESE
-  // ============================================
+  // GitHub API Methods
   getFileContent,
   getEverything,
   getTree,
@@ -1342,6 +1349,6 @@ export default {
   getActionsStats,
   getReleaseStats,
   getUserProfileStats,
-  editChatMessageBySimulation,
   calculateGitHubScoreForRepo,
+  verifyGitHubUser,
 };

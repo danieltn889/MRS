@@ -109,7 +109,14 @@ export class LocalBlockchainService {
     }
 
     try {
+      // ✅ Now correctly reads the full struct object returned by the Solidity update
       const result = await this.contract.getResult(sessionId);
+      
+      // Safety guard against empty address indicators for uninitialized states
+      if (!result.candidate || result.candidate === ethers.constants.AddressZero) {
+        return null;
+      }
+
       return {
         candidate: result.candidate,
         overallScore: result.overallScore.toNumber(),

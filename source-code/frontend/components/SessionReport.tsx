@@ -308,6 +308,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
   const [showScoreModal, setShowScoreModal] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [apiResponseData, setApiResponseData] = useState<any>(null);
 
   // ── Toast helper ──
   const showToast = (msg: string, ok = true) => {
@@ -340,12 +341,34 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
     if (!sessionId) return;
     try {
       setLoading(true);
-      const res = await simulationAPI.getSessionById(sessionId);
-      const data = res?.data || res;
-      setSessionData(data);
-      if (data?.task_progress) setTaskProgress(data.task_progress);
-      setError(null);
+      console.log('🔍 Fetching session data for ID:', sessionId);
+      
+      const response = await simulationAPI.getSessionById(sessionId);
+      console.log('📡 Raw API response:', response);
+      
+      // The API returns { success: true, data: {...} }
+      const data = response?.data || response;
+      setApiResponseData(data);
+      
+      if (!data) {
+        throw new Error('No data returned from API');
+      }
+      
+      // Check if the response has the expected structure
+      if (data.session || data.candidate || data.simulation_template) {
+        setSessionData(data);
+        if (data?.task_progress) setTaskProgress(data.task_progress);
+        setError(null);
+      } else if (data.message === 'Session not found' || !data.session) {
+        throw new Error('Session not found. The session ID may be invalid or you do not have access.');
+      } else {
+        // Maybe the data is directly the session object
+        setSessionData({ session: data, task_progress: data.task_progress || [] });
+        if (data.task_progress) setTaskProgress(data.task_progress);
+        setError(null);
+      }
     } catch (e: any) {
+      console.error('❌ Error fetching session:', e);
       setError(e?.message || 'Failed to load session');
     } finally {
       setLoading(false);
@@ -361,14 +384,14 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
       setSaving(true);
 
       const sessionRecord = sessionData?.session;
-      const sessionRecordId = sessionRecord?.id;
+      const sessionRecordId = sessionRecord?.id || sessionId;
 
       if (sessionRecordId && simulationAPI.updateTaskScore) {
         await simulationAPI.updateTaskScore(sessionRecordId, taskIndex, score);
       } else {
         const token = localStorage.getItem('authToken');
         const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api/v1';
-        await fetch(`${apiBase}/simulations/sessions/${sessionRecordId}/tasks/${taskIndex}/score`, {
+        const response = await fetch(`${apiBase}/simulations/sessions/${sessionRecordId}/tasks/${taskIndex}/score`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -376,6 +399,10 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
           },
           body: JSON.stringify({ score }),
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
       }
 
       setTaskProgress(prev =>
@@ -396,12 +423,12 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
     if (!task) return;
     try {
       setSaving(true);
-      const sessionRecordId = sessionData?.session?.id;
+      const sessionRecordId = sessionData?.session?.id || sessionId;
       const token = localStorage.getItem('authToken');
       const apiBase = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api/v1';
 
       if (sessionRecordId) {
-        await fetch(`${apiBase}/simulations/sessions/${sessionRecordId}/tasks/${taskIndex}/feedback`, {
+        const response = await fetch(`${apiBase}/simulations/sessions/${sessionRecordId}/tasks/${taskIndex}/feedback`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -409,6 +436,10 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
           },
           body: JSON.stringify({ feedback: tempFeedback }),
         });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
       }
 
       setTaskProgress(prev =>
@@ -417,7 +448,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
       setEditingFeedback(null);
       showToast(`✓ Feedback saved for Task ${taskIndex}`);
     } catch (e: any) {
-      showToast(`✗ Failed to save feedback`, false);
+      showToast(`✗ Failed to save feedback: ${e?.message || 'Unknown error'}`, false);
     } finally {
       setSaving(false);
     }
@@ -456,8 +487,25 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
         <AlertTriangle size={48} style={{ color: '#f59e0b', marginBottom: 16 }} />
         <h2 style={{ margin: '0 0 8px', color: '#111827' }}>Session Not Found</h2>
         <p style={{ color: '#6b7280', marginBottom: 20 }}>{error || 'Session does not exist.'}</p>
-        <code style={{ display: 'block', padding: '8px 12px', background: '#f3f4f6', borderRadius: 8, fontSize: 11, color: '#374151', wordBreak: 'break-all', marginBottom: 20 }}>{sessionId}</code>
-        <button onClick={handleBack} style={{ padding: '10px 24px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700 }}>← Go Back</button>
+        
+        {/* Show debug info if available */}
+        {apiResponseData && (
+          <details style={{ marginBottom: 20, textAlign: 'left', fontSize: 11 }}>
+            <summary style={{ cursor: 'pointer', color: '#7c3aed' }}>Debug Info</summary>
+            <pre style={{ background: '#f3f4f6', padding: 8, borderRadius: 8, overflow: 'auto', maxHeight: 200 }}>
+              {JSON.stringify(apiResponseData, null, 2)}
+            </pre>
+          </details>
+        )}
+        
+        <code style={{ display: 'block', padding: '8px 12px', background: '#f3f4f6', borderRadius: 8, fontSize: 11, color: '#374151', wordBreak: 'break-all', marginBottom: 20 }}>
+          Session ID: {sessionId}
+        </code>
+        
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+          <button onClick={handleBack} style={{ padding: '10px 24px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700 }}>← Go Back</button>
+          <button onClick={fetchSession} style={{ padding: '10px 24px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>⟳ Retry</button>
+        </div>
       </div>
     </div>
   );
@@ -470,8 +518,8 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
   const template = sessionData.simulation_template || {};
   const job = sessionData.job || {};
   const company = sessionData.company || {};
-  const overallScore = sessionData.total_score || 0;
-  const passed = sessionData.passed || false;
+  const overallScore = sessionData.total_score || session.score || evaluation.overall_score || 0;
+  const passed = sessionData.passed || (overallScore >= 70);
   
   // Fixed counts using effective status
   const completedTasks = taskProgress.filter(t => t.status === 'completed').length;
@@ -494,6 +542,20 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
   ].filter(d => d.val !== undefined && d.val !== null);
 
   const initials = `${candidate.first_name?.charAt(0) || ''}${candidate.last_name?.charAt(0) || ''}`;
+
+  // If no task progress, show message
+  if (taskProgress.length === 0) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', maxWidth: 420, padding: 32, background: '#fff', borderRadius: 20 }}>
+          <AlertTriangle size={48} style={{ color: '#f59e0b', marginBottom: 16 }} />
+          <h2>No Tasks Found</h2>
+          <p>No task progress data available for this session.</p>
+          <button onClick={handleBack} style={{ padding: '10px 24px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', marginTop: 16 }}>Go Back</button>
+        </div>
+      </div>
+    );
+  }
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -565,7 +627,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
 
             {/* Info */}
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, fontSize: 22, color: '#111827' }}>{candidate.full_name || 'Candidate'}</div>
+              <div style={{ fontWeight: 800, fontSize: 22, color: '#111827' }}>{candidate.full_name || candidate.name || 'Candidate'}</div>
               <div style={{ color: '#6b7280', fontSize: 14 }}>{candidate.email}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
                 {candidate.headline && <span style={{ fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}><Briefcase size={13} />{candidate.headline}</span>}
@@ -958,7 +1020,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               { label: 'Company', val: company.name },
               { label: 'Difficulty', val: template.difficulty },
               { label: 'Duration', val: template.duration_minutes ? `${template.duration_minutes} min` : undefined },
-              { label: 'Total Tasks', val: template.total_tasks },
+              { label: 'Total Tasks', val: template.total_tasks || totalTasks },
               { label: 'Time Spent', val: formatTime(session.time_spent) },
               { label: 'Session Status', val: session.status },
             ].filter(r => r.val !== undefined && r.val !== null).map(row => (

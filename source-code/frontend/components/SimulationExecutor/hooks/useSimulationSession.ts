@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import simulationAPI from '../../../services/simulationAPI';
+import githubAPI from '../../../services/githubAPI';
 import { MIN_SUBMIT_SECONDS } from './useTimer';
 
 interface SimulationSession {
@@ -44,6 +45,9 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
   const [taskProgress, setTaskProgress] = useState<any[]>([]);
   const [githubLinks, setGithubLinks] = useState<Record<string, string>>({});
   const [githubRepo, setGithubRepo] = useState<any>(null);
+  const [githubFiles, setGithubFiles] = useState<Record<string, string>>({});
+  const [githubFileStructure, setGithubFileStructure] = useState<any[]>([]);
+  const [loadingGithub, setLoadingGithub] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [submissionResult, setSubmissionResult] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -106,6 +110,84 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     return userType === 'company_admin' || userType === 'recruiter' || userType === 'system_admin';
   };
 
+  // ✅ PARSE GITHUB URL - Helper function
+  const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
+    if (!url) return null;
+    const match = url.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
+    if (!match) return null;
+    const owner = match[1];
+    let repo = match[2].replace(/\.git$/, '').replace(/[?#].*$/, '');
+    return { owner, repo };
+  };
+
+  // ✅ LOAD GITHUB REPOSITORY FILES
+  const loadGithubRepository = useCallback(async (repoUrl: string, branchName?: string) => {
+    if (!repoUrl) {
+      console.warn('⚠️ No GitHub repo URL provided');
+      return false;
+    }
+    
+    setLoadingGithub(true);
+    
+    try {
+      const parsed = parseGitHubUrl(repoUrl);
+      if (!parsed) {
+        console.error('❌ Failed to parse GitHub URL:', repoUrl);
+        return false;
+      }
+      
+      const { owner, repo } = parsed;
+      const branch = branchName || 'main';
+      
+      console.log(`📦 Loading GitHub repository: ${owner}/${repo}`, { branch });
+      
+      // Fetch all repository contents
+      const response = await githubAPI.getEverything(owner, repo, true, 500);
+      
+      if (response?.data?.code?.structure || response?.data?.files) {
+        const files = response.data.code?.structure || response.data.files || [];
+        const fileMap: Record<string, string> = {};
+        
+        // Helper to decode base64 content
+        const decodeContent = (content: string, encoding?: string): string => {
+          if (!content) return '';
+          if (encoding === 'base64') {
+            try {
+              return atob(content);
+            } catch {
+              return content;
+            }
+          }
+          return content;
+        };
+        
+        // Process each file
+        for (const file of files) {
+          if (file.type !== 'tree') {
+            let content = file.content || '';
+            if (file.encoding === 'base64' && content) {
+              content = decodeContent(content, file.encoding);
+            }
+            fileMap[file.path] = content || `// File: ${file.path}`;
+          }
+        }
+        
+        setGithubFiles(fileMap);
+        setGithubFileStructure(files);
+        
+        console.log(`✅ Loaded ${Object.keys(fileMap).length} files from GitHub`);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('❌ Failed to load GitHub repository:', error);
+      return false;
+    } finally {
+      setLoadingGithub(false);
+    }
+  }, []);
+
   const loadTaskProgress = useCallback(async (sessionId: string, forceRefresh: boolean = false) => {
     if (!sessionId) return null;
     
@@ -116,7 +198,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       console.log('📊 [loadTaskProgress] Raw API response:', result);
       
       if (result.success && result.data) {
-        // Process the progress data
         const progressData = result.data.map((item: any) => ({
           ...item,
           task_index: Number(item?.task_index ?? item?.taskIndex ?? 0),
@@ -125,13 +206,9 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         
         console.log('📊 [loadTaskProgress] Processed taskProgress:', progressData);
         
-        // Update state with a fresh array
         setTaskProgress([...progressData]);
-        
-        // Also update ref immediately for synchronous access
         taskProgressRef.current = [...progressData];
         
-        // Restore answers from task progress
         const restoredAnswers: Record<string, any> = {};
         const restoredProgress: Record<string, any> = {};
         
@@ -176,15 +253,41 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         : await simulationAPI.resumeMySimulation(simulationId);
       const data = result?.data ?? result;
       
+      // ✅ EXTRACT GITHUB REPO FROM RESPONSE
       if (data?.githubRepo) {
+        console.log('📦 GitHub repo found in session:', data.githubRepo);
         setGithubRepo(data.githubRepo);
+        
+        // Auto-load repository files
+        if (data.githubRepo.repoUrl) {
+          await loadGithubRepository(data.githubRepo.repoUrl, data.githubRepo.branchName);
+        }
+      } else if (data?.github_links) {
+        console.log('📦 GitHub links found in session:', data.github_links);
+        setGithubLinks(data.github_links);
+        
+        // Also try to extract repo from github_links
+        if (data.github_links.repoUrl) {
+          setGithubRepo({
+            repoUrl: data.github_links.repoUrl,
+            repoName: data.github_links.repoName,
+            branchName: data.github_links.branchName || 'main',
+            organizationName: data.github_links.organizationName,
+            candidateUsername: data.github_links.candidateUsername
+          });
+          await loadGithubRepository(data.github_links.repoUrl, data.github_links.branchName);
+        }
       }
       
       const sessionStatus = data?.status || data?.session?.status;
+      const sessionIdValue = data?.id || data?.sessionId || data?.session_id || data?.session?.id || simulationId;
+      
+      // FIXED: Redirect to session report (not simulation results) when completed
       if (!isCompanyReviewer() && (sessionStatus === 'completed' || sessionStatus === 'submitted')) {
-        setError('This simulation has already been completed. Redirecting...');
+        setError('This simulation has already been completed. Redirecting to report...');
         setTimeout(() => {
-          window.location.href = `/simulation/results/${simulationId}`;
+          // Use session ID to go to session report
+          window.location.href = `/session-report/${sessionIdValue}`;
         }, 2000);
         setLoading(false);
         return;
@@ -201,7 +304,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         const savedProgress = data.sessionProgress ?? data.progress ?? nestedSession.progress ?? nestedSimulation.progress ?? {};
         setAnswers(savedAnswers);
         setProgress(savedProgress);
-        setGithubLinks(data.githubLinks ?? data.github_links ?? nestedSession.github_links ?? {});
         
         const currentTaskIndex = data.currentTask ?? data.currentTaskIndex ?? nestedSession.current_task ?? nestedSimulation.current_task ?? 0;
         setCurrentTask(rawTasks[currentTaskIndex] ?? rawTasks[0] ?? null);
@@ -218,8 +320,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         } else if (nestedSession.time_spent !== undefined && nestedSession.time_spent > 0) {
           elapsedTime = nestedSession.time_spent;
         }
-        
-        const sessionIdValue = data.id || data.sessionId || data.session_id || nestedSession.id || simulationId;
         
         const newSession: SimulationSession = {
           id: sessionIdValue,
@@ -238,7 +338,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         
         setSession(newSession);
         
-        // Load task progress
         if (Array.isArray(data.task_progress)) {
           const progressData = [...data.task_progress];
           setTaskProgress(progressData);
@@ -256,7 +355,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     } finally {
       setLoading(false);
     }
-  }, [simulationId, currentUserType, loadTaskProgress]);
+  }, [simulationId, currentUserType, loadTaskProgress, loadGithubRepository]);
 
   const saveProgress = useCallback(async () => {
     const currentSession = sessionRef.current;
@@ -290,7 +389,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     
     if (currentSession.status === 'completed' || currentSession.status === 'submitted') return null;
     
-    // Queue updates to prevent race conditions
     const updatePromise = (async () => {
       try {
         console.log(`📝 [updateTaskProgress] Updating task ${taskIndex}:`, data);
@@ -301,22 +399,13 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         if (saved) {
           console.log(`✅ [updateTaskProgress] Task ${taskIndex} updated:`, saved);
           
-          // Update both state and ref synchronously
-          const updatedProgress = saved;
-          
-          // Update using functional update to ensure we have latest state
           setTaskProgress(prev => {
             const filtered = prev.filter(t => t.task_index !== taskIndex);
-            const newProgress = [...filtered, updatedProgress].sort((a, b) => a.task_index - b.task_index);
-            console.log(`📊 [updateTaskProgress] New taskProgress:`, newProgress);
-            
-            // Update ref immediately
+            const newProgress = [...filtered, saved].sort((a, b) => a.task_index - b.task_index);
             taskProgressRef.current = newProgress;
-            
             return newProgress;
           });
           
-          // Also update progress object if needed
           if (data.status) {
             setProgress(prev => ({ ...prev, [`task_${taskIndex}_status`]: data.status }));
           }
@@ -407,7 +496,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       return;
     }
     
-    // Wait for any pending updates to complete
     if (updateQueueRef.current) {
       try {
         await updateQueueRef.current;
@@ -416,7 +504,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       }
     }
     
-    // Use ref for most up-to-date check (avoids stale closures)
     const existingProgress = taskProgressRef.current.find(tp => tp.task_index === taskIndex);
     
     if (existingProgress?.status === 'completed') {
@@ -434,9 +521,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     
     try {
       console.log(`🚀 [startTask] Starting task ${taskIndex}...`);
-      console.log(`📊 Current taskProgress before start:`, taskProgressRef.current);
       
-      // Update the task progress
       const result = await updateTaskProgress(taskIndex, {
         status: 'in_progress',
         started_at: new Date().toISOString(),
@@ -445,13 +530,11 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       
       console.log(`✅ [startTask] Task ${taskIndex} started:`, result);
       
-      // Force an immediate refresh to ensure UI updates
       if (currentSession.id) {
         console.log(`🔄 [startTask] Reloading task progress...`);
         const refreshed = await loadTaskProgress(currentSession.id, true);
         if (refreshed) {
           taskProgressRef.current = refreshed;
-          console.log(`📊 Final taskProgress after reload:`, taskProgressRef.current);
         }
       }
       
@@ -462,7 +545,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       showNotification('error', `Failed to start task ${taskIndex + 1}`);
       throw error;
     } finally {
-      // Reset the flag after a delay to prevent rapid successive calls
       setTimeout(() => {
         isStartingTaskRef.current = false;
       }, 1000);
@@ -489,6 +571,9 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     githubLinks,
     setGithubLinks,
     githubRepo,
+    githubFiles,
+    githubFileStructure,
+    loadingGithub,
     notification,
     submissionResult,
     isSubmitting,
@@ -500,5 +585,6 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     loadSession,
     updateTimeSpent,
     refreshTaskProgress,
+    loadGithubRepository,
   };
 }

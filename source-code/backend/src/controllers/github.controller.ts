@@ -281,8 +281,8 @@ async createSimulationRepoInternal(
     // ── attempt number ────────────────────────────────────────────────────
     const existing = await DatabaseService.query(`
       SELECT COUNT(*) AS attempt_count FROM github_simulation_repos
-      WHERE simulation_id = $1 AND candidate_id = $2 AND session_id = $3
-    `, [simulationId, candidateId, sessionId]);
+      WHERE simulation_id = $1 AND candidate_id = $2
+    `, [simulationId, candidateId]);
 
     const attemptNumber = parseInt(existing.rows[0]?.attempt_count || '0') + 1;
     const uniqueRepoName = `${repoName}-attempt-${attemptNumber}`;
@@ -454,99 +454,40 @@ async createSimulationRepoInternal(
     };
 
     // ═══════════════════════════════════════════════════════════════════════
-    // SIMPLE GITHUB ACTIONS WORKFLOW - NO COMPLEX JOBS, NO PERMISSION ERRORS
+    // CREATE README ONLY (NO .gitignore, NO workflows)
     // ═══════════════════════════════════════════════════════════════════════
     
-    const githubActionsWorkflow = `name: CI/CD Pipeline
+    // const readmeContent = `# 🎯 Recruitment Simulation Repository
 
-on:
-  push:
-    branches: [ main, master, develop, candidate-* ]
-  pull_request:
-    branches: [ main, master ]
-  workflow_dispatch:
+    //   ## 🚀 Getting Started
 
-jobs:
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Repository Info
-        run: |
-          echo "========================================="
-          echo "Repository: \${{ github.repository }}"
-          echo "Branch: \${{ github.ref_name }}"
-          echo "Commit: \${{ github.sha }}"
-          echo "========================================="
-      
-      - name: List Files
-        run: |
-          echo ""
-          echo "Files in repository:"
-          ls -la
-          echo ""
-          echo "========================================="
-      
-      - name: Build Complete
-        run: echo "✅ Build completed successfully!"`;
+    //   \`\`\`bash
+    //   git clone ${repoUrl}
+    //   cd ${finalRepoName}
+    //   git checkout ${branchName}
+    //   \`\`\`
 
-    await updateFile('.github/workflows/test.yml', githubActionsWorkflow, 'Add CI/CD workflow');
+    //   ## 🎯 Your Tasks
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // CREATE README
-    // ═══════════════════════════════════════════════════════════════════════
-    
-    const readmeContent = `# 🎯 Recruitment Simulation Repository
+    //   ${tasks.map((task, idx) => `
+    //   ### Task ${idx + 1}: ${task.title || task.task_name || `Task ${idx + 1}`}
+    //   ${task.description || 'Complete this task as described'}
+    //   `).join('\n')}
 
-## 🚀 Getting Started
+    //   ## ✅ How to Submit
 
-\`\`\`bash
-git clone ${repoUrl}
-cd ${finalRepoName}
-git checkout ${branchName}
-\`\`\`
+    //   1. Complete the tasks
+    //   2. Commit and push to the \`${branchName}\` branch
+    //   3. Notify your recruiter when done
 
-## 🎯 Your Tasks
+    //   Good luck! 🚀
+    //   `;
 
-${tasks.map((task, idx) => `
-### Task ${idx + 1}: ${task.title || task.task_name || `Task ${idx + 1}`}
-${task.description || 'Complete this task as described'}
-`).join('\n')}
+    // await updateFile('README.md', readmeContent, 'Update README');
 
-## ✅ How to Submit
+    // console.log(`✅ README created in ${finalRepoName}`);
 
-1. Complete the tasks
-2. Commit and push to the \`${branchName}\` branch
-3. GitHub Actions will automatically run
-4. Check the **Actions** tab for results
-
-Good luck! 🚀
-`;
-
-    await updateFile('README.md', readmeContent, 'Update README');
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // CREATE .GITIGNORE
-    // ═══════════════════════════════════════════════════════════════════════
-    
-    const gitignore = `node_modules/
-coverage/
-dist/
-build/
-.env
-.DS_Store
-*.log
-`;
-
-    await updateFile('.gitignore', gitignore, 'Add .gitignore');
-
-    console.log(`✅ All files created in ${finalRepoName}`);
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // ADD COLLABORATOR - SENDS INVITATION
-    // ═══════════════════════════════════════════════════════════════════════
+    // ── ADD COLLABORATOR - SENDS INVITATION ───────────────────────────────
     let invitationSent = false;
     
     try {
@@ -586,7 +527,7 @@ build/
       console.warn('Create branch warning:', e.message); 
     }
 
-    // ── create task issues ─────────────────────────────────────────────────────
+    // ── create task issues ────────────────────────────────────────────────
     const issuesCreated: any[] = [];
     if (tasks?.length) {
       const sorted = [...tasks].sort((a, b) => (a.order || a.task_index || 0) - (b.order || b.task_index || 0));
@@ -644,8 +585,7 @@ build/
         candidateUsername: candidateGitHubUsername, 
         issuesCreated: issuesCreated.length,
         repoCreated: true,
-        invitationSent: invitationSent,
-        githubActionsEnabled: true
+        invitationSent: invitationSent
       })
     ]);
 
@@ -657,7 +597,6 @@ build/
     console.log(`   Branch: ${branchName}`);
     console.log(`   Invitation sent: ${invitationSent ? 'YES ✅' : 'NO ❌'}`);
     console.log(`   Issues created: ${issuesCreated.length}`);
-    console.log(`   GitHub Actions: ENABLED ✅`);
     console.log(`═══════════════════════════════════════════════════════════════`);
 
     return { 
@@ -672,8 +611,7 @@ build/
       sessionId, 
       attemptNumber, 
       branchName,
-      invitationSent,
-      githubActionsEnabled: true
+      invitationSent
     };
 
   } catch (error: any) {
@@ -2156,12 +2094,26 @@ getCommitActivityStats = async (req: AuthenticatedRequest, res: Response): Promi
   // 21. GET EVERYTHING — full repo + ALL commits paginated + full stats
   // ═══════════════════════════════════════════════════════════════════════════
 
+// In GitHubController.ts
+
+/**
+ * GET /api/v1/github/repo/:owner/:repo/everything
+ * Get everything about a repository: files, structure, stats, commits, etc.
+ * Query params:
+ *   - includeContent: boolean (default: true) - whether to include file contents
+ *   - maxFiles: number (default: 200, max: 500) - maximum number of files to fetch
+ *   - branch: string (default: repository's default branch) - branch name to fetch from
+ */
 getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const startTime = Date.now();
 
   try {
     const { owner, repo } = req.params;
-    const { includeContent = 'true', maxFiles = '200' } = req.query;
+    const { 
+      includeContent = 'true', 
+      maxFiles = '200',
+      branch: queryBranch  // ✅ ADD branch parameter
+    } = req.query;
 
     if (!owner || !repo) { 
       ResponseService.error(res, 'Owner and repository name are required', 400); 
@@ -2170,6 +2122,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
 
     const maxFilesToFetch = parseInt(maxFiles as string);
     const shouldIncludeContent = includeContent === 'true';
+    const requestedBranch = queryBranch as string || null;
 
     // ── fetch ALL commits (full pagination) + all other data ──────────────
     const [
@@ -2203,6 +2156,40 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
       return; 
     }
 
+    // ✅ Determine which branch to use
+    const defaultBranch = repoData.data.default_branch;
+    const targetBranch = requestedBranch || defaultBranch;
+    
+    console.log(`📦 getEverything for ${owner}/${repo}`, {
+      requestedBranch,
+      defaultBranch,
+      targetBranch,
+      includeContent: shouldIncludeContent,
+      maxFiles: maxFilesToFetch
+    });
+
+    // Check if the requested branch exists
+    let branchExists = false;
+    let branchData = null;
+    let actualBranch = targetBranch;
+    
+    try {
+      branchData = await this.octokit.repos.getBranch({ owner, repo, branch: targetBranch });
+      branchExists = true;
+      console.log(`✅ Branch '${targetBranch}' exists`);
+    } catch (branchError: any) {
+      if (branchError.status === 404) {
+        console.warn(`⚠️ Branch '${targetBranch}' not found, falling back to default branch '${defaultBranch}'`);
+        actualBranch = defaultBranch;
+        try {
+          branchData = await this.octokit.repos.getBranch({ owner, repo, branch: defaultBranch });
+          branchExists = true;
+        } catch (fallbackError) {
+          console.error(`❌ Neither branch '${targetBranch}' nor default branch '${defaultBranch}' found`);
+        }
+      }
+    }
+
     // Type the arrays properly
     const typedReleases = releases as any[];
     const typedCommits = allCommits as any[];
@@ -2213,29 +2200,58 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const typedTopics = topics as any;
     const typedCommunityProfile = communityProfile as any;
 
-    // ── get full repository tree + optional file content ──────────────────
-    const defaultBranch = repoData.data.default_branch;
+    // ── get full repository tree + optional file content for the target branch ──
     let tree: any[] = [];
     let filesWithContent: any[] = [];
 
-    const branchRef = await this.octokit.git.getRef({ owner, repo, ref: `heads/${defaultBranch}` }).catch(() => null);
-
-    if (branchRef) {
-      const fullTree = await this.octokit.git.getTree({ owner, repo, tree_sha: branchRef.data.object.sha, recursive: 'true' }).catch(() => null);
+    if (branchExists && branchData) {
+      const commitSha = branchData.data.commit.sha;
+      
+      const fullTree = await this.octokit.git.getTree({ 
+        owner, 
+        repo, 
+        tree_sha: commitSha, 
+        recursive: 'true' 
+      }).catch(() => null);
+      
       if (fullTree) {
         tree = fullTree.data.tree;
+        
         if (shouldIncludeContent) {
           const blobs = tree.filter((item: any) => item.type === 'blob').slice(0, maxFilesToFetch);
+          console.log(`📄 Fetching content for ${blobs.length} files from branch '${actualBranch}'...`);
+          
           filesWithContent = (await Promise.all(
             blobs.map(async (item: any) => {
               try {
-                const cr = await this.octokit.repos.getContent({ owner, repo, path: item.path, ref: defaultBranch }).catch(() => null);
+                const cr = await this.octokit.repos.getContent({ 
+                  owner, 
+                  repo, 
+                  path: item.path, 
+                  ref: actualBranch  // ✅ Use the actual branch
+                }).catch(() => null);
+                
                 if (!cr || Array.isArray(cr.data) || cr.data.type !== 'file') return null;
                 const fd = cr.data as any;
                 const decoded = fd.content ? Buffer.from(fd.content, 'base64').toString('utf-8') : null;
-                return { path: item.path, name: item.path.split('/').pop(), size: item.size, sha: item.sha, content: decoded, contentPreview: decoded?.substring(0, 500) || null };
+                
+                return { 
+                  path: item.path, 
+                  name: item.path.split('/').pop(), 
+                  size: item.size, 
+                  sha: item.sha, 
+                  content: decoded, 
+                  contentPreview: decoded?.substring(0, 500) || null 
+                };
               } catch { 
-                return { path: item.path, name: item.path.split('/').pop(), size: item.size, sha: item.sha, content: null, error: 'Could not fetch content' }; 
+                return { 
+                  path: item.path, 
+                  name: item.path.split('/').pop(), 
+                  size: item.size, 
+                  sha: item.sha, 
+                  content: null, 
+                  error: 'Could not fetch content' 
+                }; 
               }
             })
           )).filter(Boolean) as any[];
@@ -2247,24 +2263,17 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const commitStreaks = this.calculateCommitStreaks(typedCommits);
     const commitFrequency = this.calculateCommitFrequency(typedCommits);
     const avgCommitsPerWeek = this.calculateAvgCommitsPerWeek(typedCommits);
-    const dailyCommits = this.calculateDailyCommits(typedCommits);
-    const weeklyCommits = this.calculateWeeklyCommits(typedCommits);
-    const monthlyCommits = this.calculateMonthlyCommits(typedCommits);
-    const yearlyCommits = this.calculateYearlyCommits(typedCommits);
     const commitsByHour = this.calculateCommitsByHour(typedCommits);
     const commitsByDayOfWeek = this.calculateCommitsByDayOfWeek(typedCommits);
     const commitsByMonth = this.calculateCommitsByMonth(typedCommits);
     const commitsByYear = this.calculateCommitsByYear(typedCommits);
-    const commitsByWeek = this.calculateCommitsByWeek(typedCommits);
-    const commitsByDate = this.calculateCommitsByDate(typedCommits);
     const commitsByAuthor = this.calculateCommitsByAuthor(typedCommits);
     const topAuthors = this.getTopAuthors(typedCommits, 10);
-    const commitTimeline = this.calculateCommitTimeline(typedCommits);
-    const fileChangeStats = this.calculateFileChangeStats(typedCommits);
     const commitMessageAnalysis = this.analyzeCommitMessages(typedCommits);
 
     const firstCommitDate = typedCommits.length > 0 ? typedCommits[typedCommits.length - 1]?.commit?.author?.date : null;
     const lastCommitDate = typedCommits.length > 0 ? typedCommits[0]?.commit?.author?.date : null;
+    
     const recentCommitDetails = await Promise.all(
       typedCommits.slice(0, 20).map(async (c: any) => {
         const detail = await this.octokit.repos.getCommit({ owner, repo, ref: c.sha }).catch(() => null);
@@ -2300,16 +2309,6 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
       })
     );
 
-    let totalDays = 0, totalWeeks = 0, totalMonths = 0, totalYears = 0;
-    if (firstCommitDate && lastCommitDate) {
-      const first = new Date(firstCommitDate), last = new Date(lastCommitDate);
-      const ms = last.getTime() - first.getTime();
-      totalDays = Math.ceil(ms / 86400000);
-      totalWeeks = Math.ceil(ms / (86400000 * 7));
-      totalMonths = (last.getFullYear() - first.getFullYear()) * 12 + (last.getMonth() - first.getMonth());
-      totalYears = last.getFullYear() - first.getFullYear();
-    }
-
     const issueStats = this.calculateIssueStats(typedIssues);
     const contributorStats = this.calculateContributorStats(typedContributors);
     const languagePercentages = this.calculateLanguagePercentages(languages.data);
@@ -2324,8 +2323,10 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
       hasCodeOfConduct 
     });
 
+    // Calculate weekly commits for participation chart
+    const weeklyCommits = this.calculateWeeklyCommits(typedCommits);
+
     // ── TRANSFORMED RESPONSE FOR FRONTEND ──────────────────────────────────
-    // This ensures the frontend receives properly formatted data
     const transformedResponse = {
       // Repository basic info
       repository: {
@@ -2335,6 +2336,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         description: repoData.data.description,
         homepage: repoData.data.homepage,
         defaultBranch: repoData.data.default_branch,
+        currentBranch: actualBranch,  // ✅ Add the actual branch used
         isPrivate: repoData.data.private,
         isFork: repoData.data.fork,
         isArchived: repoData.data.archived,
@@ -2352,7 +2354,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         sshUrl: repoData.data.ssh_url
       },
       
-      // Social metrics (simplified for frontend)
+      // Social metrics
       social: {
         stars: repoData.data.stargazers_count,
         forks: repoData.data.forks_count,
@@ -2369,7 +2371,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         percentages: languagePercentages.percentages
       },
       
-      // Commits data (simplified for frontend)
+      // Commits data
       commits: {
         total: typedCommits.length,
         firstCommitDate: firstCommitDate,
@@ -2386,7 +2388,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         recentCommits: recentCommitDetails
       },
       
-      // Pull Requests data (simplified for frontend)
+      // Pull Requests data
       pullRequests: {
         total: typedPullRequests.length,
         open: typedPullRequests.filter((p: any) => p.state === 'open').length,
@@ -2410,7 +2412,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         }))
       },
       
-      // Issues data (simplified for frontend)
+      // Issues data
       issues: {
         total: typedIssues.length,
         open: typedIssues.filter((i: any) => i.state === 'open').length,
@@ -2433,7 +2435,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         }))
       },
       
-      // Contributors data (simplified for frontend)
+      // Contributors data
       contributors: {
         total: typedContributors.length,
         totalContributions: typedContributors.reduce((s: number, c: any) => s + (c.contributions || 0), 0),
@@ -2449,6 +2451,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
       // Branches
       branches: {
         total: typedBranches.length,
+        current: actualBranch,  // ✅ Add current branch
         list: typedBranches.map((b: any) => ({ name: b.name, protected: b.protected }))
       },
       
@@ -2485,7 +2488,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         totalSize: tree.reduce((s: number, i: any) => s + (i.size || 0), 0),
         structure: tree.map((i: any) => ({ path: i.path, type: i.type, size: i.size, sha: i.sha?.substring(0, 7) })),
         files: filesWithContent,
-        treeSha: branchRef?.data.object.sha || null
+        treeSha: branchData?.data.commit.sha || null
       },
       
       // Participation stats for charts
@@ -2515,13 +2518,15 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         durationMs: Date.now() - startTime,
         includedContent: shouldIncludeContent,
         filesFetched: filesWithContent.length,
-        totalFilesAvailable: tree.filter((i: any) => i.type === 'blob').length
+        totalFilesAvailable: tree.filter((i: any) => i.type === 'blob').length,
+        branchUsed: actualBranch  // ✅ Add branch used
       }
     };
 
     // Log for debugging
     console.log(`📊 getEverything completed for ${owner}/${repo} in ${Date.now() - startTime}ms`);
     console.log(`📊 Stats: ${typedCommits.length} commits, ${typedPullRequests.length} PRs, ${typedIssues.length} issues, ${typedContributors.length} contributors`);
+    console.log(`📊 Branch used: ${actualBranch}`);
     
     ResponseService.success(res, transformedResponse);
 

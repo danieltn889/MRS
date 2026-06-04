@@ -72,7 +72,7 @@ export interface GitHubRepoState {
   owner: string;
   repo: string;
   repoUrl: string;
-  branchName?: string;  // ✅ ADD BRANCH NAME
+  branchName?: string;
   fileStructure: FileNode[];
   files: Record<string, string>;
   lastLoaded: Date | null;
@@ -82,12 +82,12 @@ export interface GitHubRepoState {
   statsLoading?: boolean;
 }
 
-// Per-task repository storage - ADD branchName
+// Per-task repository storage
 interface TaskRepository {
   owner: string;
   repo: string;
   repoUrl: string;
-  branchName?: string;  // ✅ ADD BRANCH NAME
+  branchName?: string;
   fileStructure: FileNode[];
   files: Record<string, string>;
   fullStats?: GitHubStats | null;
@@ -113,7 +113,6 @@ interface GitHubRepoContextValue {
   error: string | null;
   hasRepo: boolean;
   refreshStats: () => Promise<void>;
-  // Per-task methods
   saveCurrentRepoForTask: () => void;
   loadRepoForTask: (taskIndex: number) => void;
   getReposForAllTasks: () => Record<number, TaskRepository>;
@@ -126,10 +125,9 @@ const GitHubRepoContext = createContext<GitHubRepoContextValue | undefined>(unde
 export const useGitHubRepo = () => {
   const context = useContext(GitHubRepoContext);
   if (!context) {
-    console.error('❌ useGitHubRepo: Context not found! Make sure component is wrapped with GitHubRepoProvider');
+    console.error('❌ useGitHubRepo: Context not found!');
     throw new Error('useGitHubRepo must be used within GitHubRepoProvider');
   }
-  // console.log('✅ useGitHubRepo: Context found, returning context');
   return context;
 };
 
@@ -287,19 +285,16 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
   const [statsLoading, setStatsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Per-task repositories storage: { sessionId: { taskIndex: TaskRepository } }
   const [taskRepos, setTaskRepos] = useState<Record<string, Record<number, TaskRepository>>>(() => loadTaskReposFromStorage());
   
-  const sessionId = 'current-session'; // You can pass actual session ID as prop
+  const sessionId = 'current-session';
   
-  console.log('📦 [GitHubRepoProvider] Initialized with taskRepos:', Object.keys(taskRepos || {}).length, 'sessions');
+  console.log('📦 [GitHubRepoProvider] Initialized');
 
-  // Save task repositories to localStorage whenever they change
   useEffect(() => {
     saveTaskReposToStorage(taskRepos);
   }, [taskRepos]);
 
-  // Save current repository for the current task (INCLUDING BRANCH NAME)
   const saveCurrentRepoForTask = useCallback(() => {
     if (!currentRepo) return;
     
@@ -307,32 +302,26 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       owner: currentRepo.owner,
       repo: currentRepo.repo,
       repoUrl: currentRepo.repoUrl,
-      branchName: currentRepo.branchName,  // ✅ SAVE BRANCH NAME
+      branchName: currentRepo.branchName,
       fileStructure: currentRepo.fileStructure,
       files: currentRepo.files,
       fullStats: currentRepo.fullStats,
       lastLoaded: new Date(),
     };
     
-    setTaskRepos(prev => {
-      const sessionRepos = prev[sessionId] || {};
-      return {
-        ...prev,
-        [sessionId]: {
-          ...sessionRepos,
-          [currentTaskIndex]: taskRepo
-        }
-      };
-    });
+    setTaskRepos(prev => ({
+      ...prev,
+      [sessionId]: {
+        ...(prev[sessionId] || {}),
+        [currentTaskIndex]: taskRepo
+      }
+    }));
     
     console.log(`💾 Saved repository for Task ${currentTaskIndex}:`, {
-      owner: currentRepo.owner,
-      repo: currentRepo.repo,
       branchName: currentRepo.branchName
     });
   }, [currentRepo, currentTaskIndex, sessionId]);
 
-  // Load repository for a specific task (INCLUDING BRANCH NAME)
   const loadRepoForTask = useCallback((taskIndex: number) => {
     const savedRepo = taskRepos[sessionId]?.[taskIndex];
     
@@ -347,7 +336,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
         owner: savedRepo.owner,
         repo: savedRepo.repo,
         repoUrl: savedRepo.repoUrl,
-        branchName: savedRepo.branchName,  // ✅ LOAD BRANCH NAME
+        branchName: savedRepo.branchName,
         fileStructure: savedRepo.fileStructure,
         files: savedRepo.files,
         fullStats: savedRepo.fullStats,
@@ -364,18 +353,15 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     }
   }, [taskRepos, sessionId]);
 
-  // Get all repositories for all tasks
   const getReposForAllTasks = useCallback(() => {
     return taskRepos[sessionId] || {};
   }, [taskRepos, sessionId]);
 
-  // Fetch all statistics for the repository
   const fetchAllStats = useCallback(async (owner: string, repo: string) => {
     setStatsLoading(true);
     
     try {
       console.log('Fetching stats for:', owner, repo);
-      
       const everythingResult = await githubAPI.getEverything(owner, repo, false, 50);
       
       let fullStats: GitHubStats = {};
@@ -406,21 +392,8 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       }
       
       setCurrentRepo(prev => prev ? { ...prev, fullStats, lastLoaded: new Date() } : prev);
-      console.log('Stats fetched successfully');
-      
     } catch (err) {
       console.error('Failed to fetch stats:', err);
-      const fileCount = currentRepo?.files ? Object.keys(currentRepo.files).length : 0;
-      setCurrentRepo(prev => prev ? {
-        ...prev,
-        fullStats: {
-          social: { stars: 0, forks: 0, watchers: 0, openIssues: 0 },
-          commits: { total: fileCount || 6, averageCommitsPerWeek: 0 },
-          contributors: { total: 1 },
-          scores: { overall: fileCount > 0 ? 65 : 0, documentation: 50, activity: 50, community: 50 },
-        },
-        lastLoaded: new Date(),
-      } : prev);
     } finally {
       setStatsLoading(false);
     }
@@ -432,15 +405,19 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     }
   }, [currentRepo, fetchAllStats]);
 
-  // ✅ UPDATE loadRepository to accept branchName
+  // ✅ FIXED: loadRepository with correct branch handling
   const loadRepository = useCallback(async (owner: string, repo: string, repoUrl?: string, branchName?: string) => {
     setIsLoading(true);
     setError(null);
     
+    // ✅ FIX: Define effectiveBranch before using it
+    const effectiveBranch = branchName || 'main';
+    
     try {
-      console.log(`Loading GitHub repo: ${owner}/${repo}`, { branchName });
+      console.log(`Loading GitHub repo: ${owner}/${repo}`, { branchName: effectiveBranch });
       
-      const response = await githubAPI.getEverything(owner, repo, true, 500);
+      // ✅ Pass branch name to API call
+      const response = await githubAPI.getEverything(owner, repo, true, 500, effectiveBranch);
       
       if (!response?.data?.code?.structure && !response?.data?.files) {
         throw new Error('No files found in repository');
@@ -450,7 +427,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       const fileMap: Record<string, string> = {};
       const fileItems = files.filter((file: any) => file.type !== 'tree');
       
-      console.log(`Found ${fileItems.length} files in repository`);
+      console.log(`Found ${fileItems.length} files in repository (branch: ${effectiveBranch})`);
       
       for (let i = 0; i < fileItems.length; i++) {
         const file = fileItems[i];
@@ -493,7 +470,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
         owner,
         repo,
         repoUrl: repoUrl || `https://github.com/${owner}/${repo}`,
-        branchName: branchName || 'main',  // ✅ STORE BRANCH NAME
+        branchName: effectiveBranch,
         fileStructure,
         files: fileMap,
         lastLoaded: new Date(),
@@ -504,11 +481,10 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       };
       
       setCurrentRepo(newRepo);
-      console.log(`Successfully loaded ${Object.keys(fileMap).length} files from ${owner}/${repo}`, { branchName: newRepo.branchName });
+      console.log(`✅ Successfully loaded ${Object.keys(fileMap).length} files from ${owner}/${repo}`, { branchName: newRepo.branchName });
       
       await fetchAllStats(owner, repo);
       
-      // Auto-save for current task after loading
       setTimeout(() => {
         saveCurrentRepoForTask();
       }, 500);
@@ -553,7 +529,6 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       lastLoaded: new Date(),
     });
     
-    // Auto-save after file change
     setTimeout(() => {
       saveCurrentRepoForTask();
     }, 1000);
@@ -629,41 +604,37 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     return currentRepo?.fileStructure || [];
   }, [currentRepo]);
 
-  // Clear all cached task repositories from localStorage
   const clearAllTaskRepos = useCallback(() => {
     console.log('🧹 Clearing all cached task repositories...');
     try {
       localStorage.removeItem('task-repositories');
       setTaskRepos({});
       setCurrentRepo(null);
-      console.log('✅ All task repositories cleared');
     } catch (e) {
       console.error('Failed to clear task repositories:', e);
     }
   }, []);
 
-  // ✅ UPDATE loadSessionGitHubRepo to accept branchName
   const loadSessionGitHubRepo = useCallback(async (repoUrl: string, branchName?: string) => {
     console.log('🔄 [loadSessionGitHubRepo] Loading from session:', { repoUrl, branchName });
     
     if (!repoUrl) {
-      console.warn('⚠️ No repoUrl provided to loadSessionGitHubRepo');
+      console.warn('⚠️ No repoUrl provided');
       return;
     }
 
-    // Parse URL to get owner/repo
     const parsed = parseGitHubUrl(repoUrl);
     if (!parsed) {
       console.error('❌ Failed to parse GitHub URL:', repoUrl);
       return;
     }
 
-    console.log('🔍 Parsed GitHub URL:', parsed);
+    console.log('🔍 Parsed:', parsed);
+    console.log('📌 Using branch:', branchName || 'main');
 
-    // Load the repository directly, bypassing cache, with branch name
     try {
-      await loadRepository(parsed.owner, parsed.repo, repoUrl, branchName);
-      console.log('✅ Session GitHub repo loaded successfully with branch:', branchName);
+      await loadRepository(parsed.owner, parsed.repo, repoUrl, branchName || 'main');
+      console.log('✅ Session GitHub repo loaded successfully');
     } catch (err) {
       console.error('❌ Failed to load session GitHub repo:', err);
     }

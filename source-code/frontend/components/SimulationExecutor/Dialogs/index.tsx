@@ -5,20 +5,22 @@ import {
   Eye, GitCommit, Users, Activity, TrendingUp, Search, Loader2, Edit, 
   RefreshCw, Download, Save, Brain, FolderGit2, ExternalLink, Copy, Timer,
   GitPullRequest, Code, ChevronDown, ChevronUp, MessageCircle, Calendar, 
-  User, GitBranch, Clock, XCircle
+  User, GitBranch, Clock, XCircle, FileCode
 } from 'lucide-react';
 import aiEvaluationService from '../../../services/aiEvaluation.service';
-import { calculateGitHubScoreForRepo } from '../../../services/simulationAPI';
+import { calculateGitHubScoreForRepo,verifyGitHubUser } from '../../../services/simulationAPI';
 import { GitHubStatsCompact } from '../GitHubStatsCompact';
 
 // ============================================
 // TYPES
 // ============================================
 
+// Update this interface (around line 20-30)
 interface SimulationSession {
   id?: string;
   status?: string;
-  simulation_id?: string;
+  simulation_id?: string;  // ✅ Add this line
+  simulationId?: string;    // ✅ Add this line (camelCase version)
   started_at?: string;
   time_limit?: number;
   current_task?: number;
@@ -74,6 +76,10 @@ interface StartDialogProps {
 // ============================================
 // RESUME SIMULATION DIALOG
 // ============================================
+// ============================================
+// RESUME SIMULATION DIALOG - UPDATED
+// ============================================
+
 interface ResumeSimulationDialogProps {
   open: boolean;
   sessionData: {
@@ -88,6 +94,7 @@ interface ResumeSimulationDialogProps {
     timeSpent?: number;
     timeRemaining?: number;
     progress?: number;
+    isRecruiter?: boolean;
     githubRepo?: {
       repoName: string;
       repoUrl: string;
@@ -100,6 +107,7 @@ interface ResumeSimulationDialogProps {
   onResume: () => void;
   onCancel: () => void;
   onViewDetails?: () => void;
+  onViewReport?: (sessionId: string) => void;  // ✅ Changed from onViewResults
   isLoading?: boolean;
 }
 
@@ -109,6 +117,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
   onResume,
   onCancel,
   onViewDetails,
+  onViewReport,
   isLoading = false,
 }) => {
   const [showFullDetails, setShowFullDetails] = useState(false);
@@ -151,193 +160,216 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
   const gitCommand = sessionData.githubRepo?.repoUrl
     ? `git clone ${sessionData.githubRepo.repoUrl}`
     : '';
+    
+  const handleViewReport = () => {
+    if (onViewReport && sessionData.sessionId) {
+      onViewReport(sessionData.sessionId);
+    } else if (onViewDetails) {
+      onViewDetails();
+    } else if (sessionData?.sessionId) {
+      window.open(`/dashboard?view=session-report&sessionId=${sessionData.sessionId}`, '_blank');
+    }
+  };
+
+  const showViewReport = onViewReport !== undefined || onViewDetails !== undefined;
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
-      <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full p-6 border border-gray-700">
-        <div className="text-center mb-4">
-          <div className="bg-orange-500/20 rounded-full p-3 inline-flex mx-auto mb-3">
-            <Timer size={32} className="text-orange-400" />
+      <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border border-gray-700 flex flex-col max-h-[90vh]">
+        
+        <div className="p-6 pb-4 border-b border-gray-700 flex-shrink-0">
+          <div className="text-center">
+            <div className="bg-orange-500/20 rounded-full p-3 inline-flex mx-auto mb-3">
+              <Timer size={32} className="text-orange-400" />
+            </div>
+            <h2 className="text-2xl font-bold text-white">Resume Simulation</h2>
+            <p className="text-gray-400 mt-1">
+              You have an in-progress simulation session
+            </p>
           </div>
-          <h2 className="text-2xl font-bold text-white">Resume Simulation</h2>
-          <p className="text-gray-400 mt-1">
-            You have an in-progress simulation session
-          </p>
         </div>
 
-        <div className="bg-gray-900 rounded-lg p-4 mb-4 border border-gray-700">
-          <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-700">
-            <span className="text-gray-400 text-sm font-medium">📋 Session Details</span>
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          
+          <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-700">
+              <span className="text-gray-400 text-sm font-medium">📋 Session Details</span>
+              <button
+                onClick={() => setShowFullDetails(!showFullDetails)}
+                className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+              >
+                {showFullDetails ? 'Show Less ▲' : 'Show More ▼'}
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span className="text-gray-500 text-sm">Simulation:</span>
+                <span className="text-white text-sm font-medium">{sessionData.simulationName}</span>
+              </div>
+              {sessionData.jobTitle && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-sm">Position:</span>
+                  <span className="text-gray-300 text-sm">{sessionData.jobTitle}</span>
+                </div>
+              )}
+              {sessionData.companyName && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 text-sm">Company:</span>
+                  <span className="text-gray-300 text-sm">{sessionData.companyName}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-gray-700">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-gray-400">Progress</span>
+                <span className="text-orange-400">{progressPercentage}%</span>
+              </div>
+              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+              <div className="flex justify-between text-xs mt-2">
+                <span className="text-gray-500">Task {sessionData.currentTask || 0} / {sessionData.totalTasks || 0}</span>
+                <span className="text-gray-500">{formatTime(sessionData.timeSpent)} spent</span>
+              </div>
+            </div>
+
+            {sessionData.githubRepo && (
+              <div className="mt-3 pt-3 border-t border-gray-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <Github size={14} className="text-green-400" />
+                  <span className="text-green-400 text-xs font-medium">GitHub Repository Ready</span>
+                  <span className="text-green-400/70 text-xs">✓ Already Created</span>
+                </div>
+                
+                <div className="bg-gray-800 rounded p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <code className="text-xs text-green-400 font-mono truncate flex-1">
+                      {sessionData.githubRepo.organizationName || 'recruitment-platform'}/{sessionData.githubRepo.repoName}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(sessionData.githubRepo?.repoUrl || '', 'repoUrl')}
+                      className="text-gray-500 hover:text-gray-300 ml-2 flex-shrink-0"
+                      title="Copy URL"
+                    >
+                      {copied === 'repoUrl' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <code className="flex-1 text-xs bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono truncate">
+                      {gitCommand}
+                    </code>
+                    <button
+                      onClick={() => copyToClipboard(gitCommand, 'cloneCommand')}
+                      className="text-gray-500 hover:text-gray-300 flex-shrink-0"
+                      title="Copy clone command"
+                    >
+                      {copied === 'cloneCommand' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
+                    </button>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-500">Branch:</span>
+                    <code className="text-purple-400">{sessionData.githubRepo.branchName || 'main'}</code>
+                  </div>
+                  
+                  {sessionData.githubRepo.candidateUsername && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">Candidate:</span>
+                      <code className="text-blue-400">{sessionData.githubRepo.candidateUsername}</code>
+                    </div>
+                  )}
+                  
+                  <a
+                    href={sessionData.githubRepo.repoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 pt-2 border-t border-gray-700"
+                  >
+                    <ExternalLink size={10} />
+                    Open on GitHub
+                  </a>
+                </div>
+              </div>
+            )}
+
+            {showFullDetails && (
+              <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
+                {sessionData.startedAt && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 text-xs">Started:</span>
+                    <span className="text-gray-400 text-xs">{formatDate(sessionData.startedAt)}</span>
+                  </div>
+                )}
+                {sessionData.lastActivityAt && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 text-xs">Last Activity:</span>
+                    <span className="text-gray-400 text-xs">{formatDate(sessionData.lastActivityAt)}</span>
+                  </div>
+                )}
+                {sessionData.timeRemaining !== undefined && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 text-xs">Time Remaining:</span>
+                    <span className="text-yellow-400 text-xs font-mono">{formatTime(sessionData.timeRemaining)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="p-3 bg-green-900/30 border border-green-700 rounded-lg">
+            <p className="text-green-300 text-xs flex items-center gap-2">
+              <Github size={12} />
+              Your GitHub repository is ready. Click Resume to continue where you left off.
+            </p>
+          </div>
+
+        </div>
+
+        <div className="p-6 pt-4 border-t border-gray-700 flex-shrink-0">
+          <div className="flex gap-3">
             <button
-              onClick={() => setShowFullDetails(!showFullDetails)}
-              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+              onClick={onCancel}
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
             >
-              {showFullDetails ? 'Show Less ▲' : 'Show More ▼'}
+              Cancel
+            </button>
+            <button
+              onClick={onResume}
+              disabled={isLoading}
+              className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <Play size={16} />
+                  Resume Simulation
+                </>
+              )}
             </button>
           </div>
 
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-500 text-sm">Simulation:</span>
-              <span className="text-white text-sm font-medium">{sessionData.simulationName}</span>
-            </div>
-            {sessionData.jobTitle && (
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">Position:</span>
-                <span className="text-gray-300 text-sm">{sessionData.jobTitle}</span>
-              </div>
-            )}
-            {sessionData.companyName && (
-              <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">Company:</span>
-                <span className="text-gray-300 text-sm">{sessionData.companyName}</span>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-3 pt-3 border-t border-gray-700">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="text-gray-400">Progress</span>
-              <span className="text-orange-400">{progressPercentage}%</span>
-            </div>
-            <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                style={{ width: `${progressPercentage}%` }}
-              />
-            </div>
-            <div className="flex justify-between text-xs mt-2">
-              <span className="text-gray-500">Task {sessionData.currentTask || 0} / {sessionData.totalTasks || 0}</span>
-              <span className="text-gray-500">{formatTime(sessionData.timeSpent)} spent</span>
-            </div>
-          </div>
-
-          {sessionData.githubRepo && (
-            <div className="mt-3 pt-3 border-t border-gray-700">
-              <div className="flex items-center gap-2 mb-2">
-                <Github size={14} className="text-green-400" />
-                <span className="text-green-400 text-xs font-medium">GitHub Repository Ready</span>
-                <span className="text-green-400/70 text-xs">✓ Already Created</span>
-              </div>
-              
-              <div className="bg-gray-800 rounded p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <code className="text-xs text-green-400 font-mono truncate flex-1">
-                    {sessionData.githubRepo.organizationName || 'recruitment-platform'}/{sessionData.githubRepo.repoName}
-                  </code>
-                  <button
-                    onClick={() => copyToClipboard(sessionData.githubRepo?.repoUrl || '', 'repoUrl')}
-                    className="text-gray-500 hover:text-gray-300 ml-2"
-                    title="Copy URL"
-                  >
-                    {copied === 'repoUrl' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
-                  </button>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono truncate">
-                    {gitCommand}
-                  </code>
-                  <button
-                    onClick={() => copyToClipboard(gitCommand, 'cloneCommand')}
-                    className="text-gray-500 hover:text-gray-300"
-                    title="Copy clone command"
-                  >
-                    {copied === 'cloneCommand' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
-                  </button>
-                </div>
-                
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-500">Branch:</span>
-                  <code className="text-purple-400">{sessionData.githubRepo.branchName || 'main'}</code>
-                </div>
-                
-                {sessionData.githubRepo.candidateUsername && (
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-gray-500">Candidate:</span>
-                    <code className="text-blue-400">{sessionData.githubRepo.candidateUsername}</code>
-                  </div>
-                )}
-                
-                <a
-                  href={sessionData.githubRepo.repoUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-2 pt-2 border-t border-gray-700"
-                >
-                  <ExternalLink size={10} />
-                  Open on GitHub
-                </a>
-              </div>
-            </div>
-          )}
-
-          {showFullDetails && (
-            <div className="mt-3 pt-3 border-t border-gray-700 space-y-2">
-              {sessionData.startedAt && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500 text-xs">Started:</span>
-                  <span className="text-gray-400 text-xs">{formatDate(sessionData.startedAt)}</span>
-                </div>
-              )}
-              {sessionData.lastActivityAt && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500 text-xs">Last Activity:</span>
-                  <span className="text-gray-400 text-xs">{formatDate(sessionData.lastActivityAt)}</span>
-                </div>
-              )}
-              {sessionData.timeRemaining !== undefined && (
-                <div className="flex justify-between">
-                  <span className="text-gray-500 text-xs">Time Remaining:</span>
-                  <span className="text-yellow-400 text-xs font-mono">{formatTime(sessionData.timeRemaining)}</span>
-                </div>
-              )}
-            </div>
+          {showViewReport && (
+            <button
+              onClick={handleViewReport}
+              className="w-full mt-3 text-center text-blue-400 hover:text-blue-300 text-xs transition-colors flex items-center justify-center gap-2"
+            >
+              <ExternalLink size={12} />
+              View Session Report 📊
+            </button>
           )}
         </div>
 
-        <div className="mb-4 p-3 bg-green-900/30 border border-green-700 rounded-lg">
-          <p className="text-green-300 text-xs flex items-center gap-2">
-            <Github size={12} />
-            Your GitHub repository is ready. Click Resume to continue where you left off.
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onResume}
-            disabled={isLoading}
-            className="flex-1 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Loading...
-              </>
-            ) : (
-              <>
-                <Play size={16} />
-                Resume Simulation
-              </>
-            )}
-          </button>
-        </div>
-
-        {onViewDetails && (
-          <button
-            onClick={onViewDetails}
-            className="w-full mt-3 text-center text-gray-500 hover:text-gray-400 text-xs"
-          >
-            View Full Details
-          </button>
-        )}
       </div>
     </div>
   );
@@ -381,18 +413,15 @@ export const SessionStartDialog: React.FC<SessionStartDialogProps> = ({
     setIsVerifying(true);
     setVerifyError(null);
     
-    try {
-      const response = await fetch('http://localhost:3001/api/v1/github/verify-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: githubUsername.trim() })
-      });
+     try {
+      // ✅ Use simulationAPI instead of direct fetch
+      const response = await verifyGitHubUser(githubUsername.trim());
       
-      if (!response.ok) {
-        throw new Error('GitHub user not found');
+      if (response.success) {
+        setUsernameValid(true);
+      } else {
+        throw new Error(response.message || 'GitHub user not found');
       }
-      
-      setUsernameValid(true);
     } catch (err: any) {
       setVerifyError(err.message || 'Failed to verify GitHub username');
       setUsernameValid(false);
@@ -996,7 +1025,6 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
   const autoGithubUrl = displayRepo ? `https://github.com/${displayRepo.owner}/${displayRepo.repo}` : '';
   const displayGithubUrl = draft.githubCommitUrl || autoGithubUrl;
   
-  // ✅ CRITICAL: Define these variables before using them in GitHubStatsCompact
   const stats = displayRepo?.fullStats;
   const fileCount = displayRepo?.files ? Object.keys(displayRepo.files).length : 0;
   const folderCount = displayRepo?.fileStructure?.filter((f: any) => f.type === 'folder').length || 0;
@@ -1405,7 +1433,6 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {activeTab === 'submission' ? (
             <>
-              {/* GitHub Repository Loader */}
               <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600">
                 <div className="flex items-center gap-2 mb-3">
                   <Github size={16} className="text-white" />
@@ -1446,7 +1473,6 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                 </p>
               </div>
               
-              {/* GITHUB STATS COMPACT - SHOWS ALL DETAILS */}
               {displayRepo && (
                 <GitHubStatsCompact
                   currentRepo={displayRepo}
@@ -1467,13 +1493,11 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                 </div>
               )}
               
-              {/* Task Completion Checkbox */}
               <label className="flex items-center gap-3 rounded border border-gray-700 p-3 bg-gray-900 cursor-pointer">
                 <input type="checkbox" checked={draft.completed} onChange={(e) => onDraftChange({ ...draft, completed: e.target.checked })} className="h-5 w-5 text-green-600 rounded" />
                 <span className="text-white font-medium">I have completed this task</span>
               </label>
               
-              {/* Comment Fields */}
               <div>
                 <label className="block text-gray-400 text-xs font-medium mb-1.5">📝 Comment / Summary</label>
                 <textarea value={draft.comment} onChange={(e) => onDraftChange({ ...draft, comment: e.target.value })} rows={3} className="w-full rounded border border-gray-700 bg-gray-900 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Describe what you accomplished..." />
@@ -1502,7 +1526,6 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
               )}
             </>
           ) : (
-            // EVALUATION TAB
             <div className="space-y-4">
               {isEvaluating ? (
                 <div className="text-center py-8">
@@ -1580,6 +1603,14 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
   );
 };
 
+// ============================================
+// POST SUBMIT DIALOG WITH GITHUB STATS
+// ============================================
+
+// ============================================
+// POST SUBMIT DIALOG WITH GITHUB STATS - FIXED (using simulationId)
+// ============================================
+
 interface PostSubmitDialogProps {
   open: boolean;
   onReviewResults: () => void;
@@ -1587,6 +1618,36 @@ interface PostSubmitDialogProps {
   session?: SimulationSession | null;
   result?: any;
   formatTime?: (seconds: number) => string;
+  githubAnalysis?: {
+    has_repo?: boolean;
+    score?: number;
+    repo_info?: {
+      repoName?: string;
+      repoUrl?: string;
+      branchName?: string;
+      organizationName?: string;
+      candidateUsername?: string;
+    };
+    detailed_marks?: {
+      commits?: { earned: number; max: number; details: string; count?: number };
+      readme?: { earned: number; max: number; details: string; present?: boolean };
+      configFile?: { earned: number; max: number; details: string; found?: string[] };
+      gitignore?: { earned: number; max: number; details: string; present?: boolean };
+      codeFiles?: { earned: number; max: number; details: string; count?: number };
+    };
+    breakdown?: {
+      commits?: { earned: number; max: number; details: string };
+      readme?: { earned: number; max: number; details: string };
+      configFiles?: { earned: number; max: number; details: string };
+      gitignore?: { earned: number; max: number; details: string };
+      codeFiles?: { earned: number; max: number; details: string };
+      commitMatching?: { earned: number; max: number; details: string };
+      total?: number;
+      maxPossible?: number;
+      percentage?: number;
+    };
+    message?: string;
+  } | null;
 }
 
 export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
@@ -1596,6 +1657,7 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
   session,
   result,
   formatTime,
+  githubAnalysis,
 }) => {
   if (!open) return null;
 
@@ -1603,10 +1665,12 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
   const summary = result?.summary || {};
   const score = result?.score ?? scoreBreakdown.overall ?? 0;
   const passed = Boolean(result?.passed);
+  
   const displayTime = (seconds?: number) => {
     const safeSeconds = Number(seconds || 0);
     return formatTime ? formatTime(safeSeconds) : `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, '0')}`;
   };
+  
   const scoreRows = [
     ['Quality', scoreBreakdown.quality],
     ['Technical', scoreBreakdown.technical],
@@ -1617,7 +1681,50 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
     ['Collaboration', scoreBreakdown.collaboration],
     ['Punctuality', scoreBreakdown.punctuality],
   ].filter(([, value]) => value !== undefined && value !== null);
-  
+
+  const gitHubScore = githubAnalysis?.score ?? scoreBreakdown.github ?? 0;
+  const hasGitHub = githubAnalysis?.has_repo === true;
+  const repoInfo = githubAnalysis?.repo_info;
+  const detailedMarks = githubAnalysis?.detailed_marks;
+  const breakdown = githubAnalysis?.breakdown;
+
+  const getMarkDisplay = (mark: any) => {
+    if (!mark) return null;
+    const earned = Number(mark.earned || 0);
+    const max = Number(mark.max || 0);
+    const percentage = max > 0 ? Math.round((earned / max) * 100) : 0;
+    return { earned, max, percentage, details: mark.details };
+  };
+
+  const commitsMark = getMarkDisplay(detailedMarks?.commits);
+  const readmeMark = getMarkDisplay(detailedMarks?.readme);
+  const configMark = getMarkDisplay(detailedMarks?.configFile);
+  const gitignoreMark = getMarkDisplay(detailedMarks?.gitignore);
+  const codeFilesMark = getMarkDisplay(detailedMarks?.codeFiles);
+
+  const getScoreColor = (value: number): string => {
+    if (value >= 80) return 'text-green-400';
+    if (value >= 60) return 'text-yellow-400';
+    return 'text-red-400';
+  };
+
+  // FIXED: Use session ID for navigation instead of simulation ID
+  const handleReviewResults = () => {
+    console.log('📊 Review Full Results clicked in PostSubmitDialog');
+    
+    // Get session ID from various possible locations (NOT simulation ID)
+    const sessionId = session?.id || result?.sessionId || result?.session_id || result?.session?.id;
+    
+    if (sessionId) {
+      console.log('🔍 Navigating to session report with sessionId:', sessionId);
+      // Use window.location.href for direct navigation to session report
+      window.location.href = `/session-report/${sessionId}`;
+    } else {
+      console.warn('No sessionId available, using onReviewResults callback');
+      onReviewResults();
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full p-6 border border-gray-700 text-center max-h-[90vh] overflow-y-auto">
@@ -1646,30 +1753,162 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
           </div>
         </div>
 
-        <div className="mt-4 bg-gray-900 rounded-lg border border-gray-700 p-4 text-left">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-white font-semibold text-sm">Submission Details</p>
-            <span className="text-xs text-gray-400">
-              {summary.completed_tasks ?? 0}/{summary.total_tasks ?? 0} tasks completed
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <p className="text-gray-500">Completion</p>
-              <p className="text-gray-200">{Math.round(summary.completion_rate ?? 0)}%</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Passing Score</p>
-              <p className="text-gray-200">{result?.passingScore ?? summary.passing_score ?? 70}%</p>
-            </div>
-            {result?.participation?.message && (
-              <div className="col-span-2">
-                <p className="text-gray-500">Participation</p>
-                <p className="text-gray-200">{result.participation.message}</p>
+        {/* GitHub Stats Compact Section */}
+        {hasGitHub && repoInfo && (
+          <div className="mt-4 bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+            <div className="bg-gray-800 px-4 py-2 border-b border-gray-700 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Github size={16} className="text-green-400" />
+                <span className="text-white text-sm font-semibold">GitHub Repository Analysis</span>
               </div>
-            )}
+              <div className="flex items-center gap-2">
+                <span className={`text-lg font-bold ${getScoreColor(gitHubScore)}`}>
+                  {gitHubScore}%
+                </span>
+                <a
+                  href={repoInfo.repoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-blue-400"
+                >
+                  <ExternalLink size={14} />
+                </a>
+              </div>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="flex flex-wrap gap-3 text-xs">
+                <div className="flex items-center gap-1 text-gray-400">
+                  <FolderGit2 size={12} />
+                  <span>{repoInfo.organizationName || 'org'}/{repoInfo.repoName}</span>
+                </div>
+                {repoInfo.branchName && (
+                  <div className="flex items-center gap-1 text-gray-400">
+                    <GitBranch size={12} />
+                    <span>{repoInfo.branchName}</span>
+                  </div>
+                )}
+                {repoInfo.candidateUsername && (
+                  <div className="flex items-center gap-1 text-gray-400">
+                    <User size={12} />
+                    <span>@{repoInfo.candidateUsername}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {commitsMark && (
+                  <div className="bg-gray-800 rounded p-2">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-400 flex items-center gap-1">
+                        <GitCommit size={10} /> Commits
+                      </span>
+                      <span className={getScoreColor(commitsMark.percentage)}>
+                        {commitsMark.earned}/{commitsMark.max}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${commitsMark.percentage}%` }} />
+                    </div>
+                    {detailedMarks?.commits?.count !== undefined && (
+                      <p className="text-gray-500 text-[10px] mt-1">{detailedMarks.commits.count} commits</p>
+                    )}
+                  </div>
+                )}
+
+                {readmeMark && (
+                  <div className="bg-gray-800 rounded p-2">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-400 flex items-center gap-1">
+                        <Code size={10} /> README
+                      </span>
+                      <span className={getScoreColor(readmeMark.percentage)}>
+                        {readmeMark.earned}/{readmeMark.max}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${readmeMark.percentage}%` }} />
+                    </div>
+                    {detailedMarks?.readme?.present && (
+                      <p className="text-green-400 text-[10px] mt-1">✓ Present</p>
+                    )}
+                  </div>
+                )}
+
+                {codeFilesMark && (
+                  <div className="bg-gray-800 rounded p-2">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-400 flex items-center gap-1">
+                        <FileCode size={10} /> Code Files
+                      </span>
+                      <span className={getScoreColor(codeFilesMark.percentage)}>
+                        {codeFilesMark.earned}/{codeFilesMark.max}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${codeFilesMark.percentage}%` }} />
+                    </div>
+                    {detailedMarks?.codeFiles?.count !== undefined && (
+                      <p className="text-gray-500 text-[10px] mt-1">{detailedMarks.codeFiles.count} files</p>
+                    )}
+                  </div>
+                )}
+
+                {configMark && (
+                  <div className="bg-gray-800 rounded p-2">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-400">Config</span>
+                      <span className={getScoreColor(configMark.percentage)}>
+                        {configMark.earned}/{configMark.max}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${configMark.percentage}%` }} />
+                    </div>
+                   {detailedMarks?.configFile?.found && detailedMarks.configFile.found.length > 0 && (
+                      <p className="text-gray-500 text-[10px] mt-1 truncate">
+                        {detailedMarks.configFile.found.slice(0, 2).join(', ')}
+                        {detailedMarks.configFile.found.length > 2 && '...'}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {gitignoreMark && (
+                  <div className="bg-gray-800 rounded p-2">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="text-gray-400">.gitignore</span>
+                      <span className={getScoreColor(gitignoreMark.percentage)}>
+                        {gitignoreMark.earned}/{gitignoreMark.max}
+                      </span>
+                    </div>
+                    <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${gitignoreMark.percentage}%` }} />
+                    </div>
+                    {detailedMarks?.gitignore?.present && (
+                      <p className="text-green-400 text-[10px] mt-1">✓ Present</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {breakdown?.total !== undefined && breakdown?.maxPossible !== undefined && (
+                <div className="pt-2 border-t border-gray-700">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-400">Total GitHub Score</span>
+                    <span className={`font-bold ${getScoreColor(breakdown.percentage || 0)}`}>
+                      {breakdown.total}/{breakdown.maxPossible} ({breakdown.percentage || 0}%)
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {githubAnalysis?.message && !hasGitHub && (
+                <p className="text-gray-500 text-xs text-center">{githubAnalysis.message}</p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {scoreRows.length > 0 && (
           <div className="mt-4 bg-gray-900 rounded-lg border border-gray-700 p-4 text-left">
@@ -1690,16 +1929,47 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="mt-4 bg-gray-900 rounded-lg border border-gray-700 p-4 text-left">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-white font-semibold text-sm">Submission Details</p>
+            <span className="text-xs text-gray-400">
+              {summary.completed_tasks ?? 0}/{summary.total_tasks ?? 0} tasks completed
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <p className="text-gray-500">Completion Rate</p>
+              <p className="text-gray-200">{Math.round(summary.completion_rate ?? 0)}%</p>
+            </div>
+            <div>
+              <p className="text-gray-500">Passing Score</p>
+              <p className="text-gray-200">{result?.passingScore ?? summary.passing_score ?? 70}%</p>
+            </div>
+            {result?.participation?.message && (
+              <div className="col-span-2 mt-2 pt-2 border-t border-gray-700">
+                <p className="text-gray-500 text-xs">Participation</p>
+                <p className="text-gray-300 text-sm">{result.participation.message}</p>
+                {result.participation.bonus > 0 && (
+                  <p className="text-green-400 text-xs mt-1">
+                    +{result.participation.bonus} bonus points
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* FIXED: Buttons with window.location.href using simulationId */}
+        <div className="flex gap-3 mt-4">
           <button
-            onClick={onReviewResults}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            onClick={handleReviewResults}
+            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            Review Results
+            Review Full Results
           </button>
           <button
             onClick={onExit}
-            className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700"
+            className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
           >
             Exit
           </button>

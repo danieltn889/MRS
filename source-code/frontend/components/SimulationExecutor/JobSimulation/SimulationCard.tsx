@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import {
   Play, Clock, CheckCircle, Timer, Briefcase, Calendar, Target,
   ClipboardList, Trophy, Settings, Eye, FileText, AlertCircle,
-  ChevronDown, ChevronUp, Star
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import DifficultyBadge from './DifficultyBadge';
-import { getStatusBadge, getAvailabilityStatus, getCurrentDayInTz, getCurrentTimeInTz, nowInTimezone, AvailabilityStatus, Simulation } from './simulationHelpers';
+import { getStatusBadge, getCurrentDayInTz, getCurrentTimeInTz, nowInTimezone, AvailabilityStatus, Simulation } from './simulationHelpers';
 
 interface TaskStructure {
   objectives?: string[];
@@ -29,6 +29,13 @@ interface ScoringRubric {
   speedWeight?: number;
 }
 
+// Helper to convert score to number
+const toNumber = (value: number | string | undefined | null): number | undefined => {
+  if (value === undefined || value === null) return undefined;
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  return isNaN(num) ? undefined : num;
+};
+
 interface SimulationCardProps {
   simulation: Simulation & {
     companyLogo?: string;
@@ -42,9 +49,23 @@ interface SimulationCardProps {
     tasks?: Task[];
     scoringRubric?: ScoringRubric;
     matchScore?: number;
-    score?: number;
+    score?: number | string;
     appliedAt?: string;
     applicationStatus?: string;
+    sessionId?: string | null;
+    startedAt?: string | null;
+    status?: string;
+    metadata?: {
+      availability?: {
+        timezone?: string;
+        dailyWindows?: Array<{
+          enabled: boolean;
+          dayOfWeek: number;
+          startTime: string;
+          endTime: string;
+        }>;
+      };
+    };
   };
   isTemplateMissing: boolean;
   isCompleted: boolean;
@@ -79,6 +100,34 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
   const StatusIcon = statusBadge.icon;
   const objectives = simulation.tasksStructure?.objectives ?? [];
   const tasks = simulation.tasks ?? [];
+  
+  // Convert score to number for display
+  const numericScore = toNumber(simulation.score);
+
+  // Debug logging - moved outside return
+  useEffect(() => {
+    console.log(`🎨 SimulationCard ${simulation.id} render:`, {
+      isInProgress,
+      isCompleted,
+      isNotStarted,
+      isTemplateMissing,
+      hasSessionId: !!simulation.sessionId,
+      score: simulation.score,
+      numericScore,
+      status: simulation.status,
+      canStart: availability.canStart,
+      availableMessage: availability.message
+    });
+    
+    console.log('🎯 Button render decision:', {
+      id: simulation.id,
+      isTemplateMissing,
+      isInProgress,
+      isCompleted,
+      isNotStarted,
+      canStart: availability.canStart
+    });
+  }, [simulation.id, isInProgress, isCompleted, isNotStarted, isTemplateMissing, simulation.sessionId, simulation.score, numericScore, simulation.status, availability]);
 
   return (
     <div className="bg-white rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden">
@@ -171,7 +220,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
               {simulation.metadata.availability.dailyWindows
                 .filter((w) => w.enabled)
                 .map((w, idx) => {
-                  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+                  const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                   const tz = simulation.metadata?.availability?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
                   const local = nowInTimezone(tz);
                   const isToday = local.getDay() === w.dayOfWeek;
@@ -196,7 +245,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
               </h4>
             </div>
             <ul className="text-xs text-gray-600 space-y-1 pl-6">
-              {objectives.slice(0, 2).map((obj, i) => (
+              {objectives.slice(0, 2).map((obj: string, i: number) => (
                 <li key={i} className="list-disc">{obj}</li>
               ))}
               {objectives.length > 2 && (
@@ -218,7 +267,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
               </h4>
             </div>
             <div className="space-y-2">
-              {tasks.slice(0, showTasks ? tasks.length : 1).map((task, i) => (
+              {tasks.slice(0, showTasks ? tasks.length : 1).map((task: Task, i: number) => (
                 <div key={i} className="text-xs text-gray-600 p-2 bg-gray-50 rounded">
                   <div className="font-medium flex items-center justify-between">
                     <span>{task.title ?? `Task ${i + 1}`}</span>
@@ -306,24 +355,24 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
           </div>
         )}
 
-        {/* Completed score */}
-        {isCompleted && simulation.score != null && (
+        {/* Completed score - using numericScore */}
+        {isCompleted && numericScore != null && (
           <div className="bg-green-50 rounded-lg p-3 mb-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-green-800">Your Score</span>
-              <span className="text-lg font-bold text-green-600">{simulation.score}%</span>
+              <span className="text-lg font-bold text-green-600">{numericScore}%</span>
             </div>
             <div className="bg-green-200 rounded-full h-2">
               <div
                 className="bg-green-600 h-2 rounded-full"
-                style={{ width: `${simulation.score}%` }}
+                style={{ width: `${numericScore}%` }}
               />
             </div>
           </div>
         )}
 
-        {/* In-progress status */}
-        {isInProgress && simulation.startedAt && (
+        {/* In-progress status - Only show if in progress and NOT completed */}
+        {isInProgress && !isCompleted && simulation.startedAt && (
           <div className="bg-orange-50 rounded-lg p-3 mb-4">
             <div className="flex items-center gap-2 text-orange-800">
               <Timer className="w-4 h-4" />
@@ -332,6 +381,11 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
             <p className="text-xs text-orange-700">
               Started on {new Date(simulation.startedAt).toLocaleDateString()}
             </p>
+            {simulation.sessionId && (
+              <p className="text-xs text-orange-600 mt-1">
+                Session ID: {simulation.sessionId.substring(0, 8)}...
+              </p>
+            )}
           </div>
         )}
 
@@ -343,25 +397,50 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
           </span>
         </div>
 
-        {/* CTA buttons - SINGLE BUTTON LOGIC */}
+        {/* CTA BUTTONS */}
         <div className="flex flex-col gap-2">
           {isTemplateMissing ? (
-            <button
-              disabled
-              className="w-full px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2"
-            >
+            <button disabled className="w-full px-4 py-2 bg-yellow-100 text-yellow-700 rounded-lg cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2">
               <FileText className="w-4 h-4" />
               Assessment Coming Soon
             </button>
+          ) : isInProgress ? (
+            availability.canStart ? (
+              <button
+                onClick={() => onStartSimulation(simulation)}
+                disabled={startingSimulation === simulation.id}
+                className="w-full px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {startingSimulation === simulation.id ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                ) : (
+                  <>
+                    <Timer className="w-4 h-4" />
+                    Resume Simulation
+                  </>
+                )}
+              </button>
+            ) : (
+              <button disabled className="w-full px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2">
+                <Clock className="w-4 h-4" />
+                {availability.message}
+              </button>
+            )
           ) : isCompleted ? (
-            // Completed: Show Review Results + Start New Session (if available)
             <>
               <button
                 onClick={() => onReviewSimulation(simulation)}
-                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                disabled={startingSimulation === simulation.id}
+                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <Eye className="w-4 h-4" />
-                Review Results
+                {startingSimulation === simulation.id ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                ) : (
+                  <>
+                    <Eye className="w-4 h-4" />
+                    Review Results
+                  </>
+                )}
               </button>
               {availability.canStart && (
                 <button
@@ -380,34 +459,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
                 </button>
               )}
             </>
-          ) : isInProgress ? (
-            // In Progress: Show ONLY Resume button (no Start New Session)
-            availability.canStart ? (
-              <button
-                onClick={() => onStartSimulation(simulation)}
-                disabled={startingSimulation === simulation.id}
-                className="w-full px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {startingSimulation === simulation.id ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                ) : (
-                  <>
-                    <Timer className="w-4 h-4" />
-                    Resume Simulation
-                  </>
-                )}
-              </button>
-            ) : (
-              <button
-                disabled
-                className="w-full px-4 py-2 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2"
-              >
-                <Clock className="w-4 h-4" />
-                {availability.message}
-              </button>
-            )
           ) : isNotStarted ? (
-            // Not Started: Show ONLY Start Simulation button
             availability.canStart ? (
               <button
                 onClick={() => onStartSimulation(simulation)}

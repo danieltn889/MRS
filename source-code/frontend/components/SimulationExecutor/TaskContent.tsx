@@ -144,8 +144,9 @@ const TaskContent: React.FC<TaskContentProps> = ({
       interval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         setElapsedTime(elapsed);
-        // Save progress every 30 seconds instead of every second
-        if (onUpdateTaskProgress && elapsed % 30 === 0 && elapsed > 0) {
+        
+        // ✅ Save progress every 3600 seconds (1 hour) instead of every 30 seconds
+        if (onUpdateTaskProgress && elapsed % 3600 === 0 && elapsed > 0) {
           onUpdateTaskProgress(taskIndex!, { timeSpent: elapsed });
         }
       }, 1000);

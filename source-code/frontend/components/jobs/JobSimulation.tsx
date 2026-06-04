@@ -6,7 +6,8 @@ import {
   getMySimulationStats, 
   startAppliedJobSimulation, 
   resumeMySimulation, 
-  getMySimulationById 
+  getMySimulationById,
+  getSessionById
 } from '../../services/simulationAPI';
 import SimulationCard from '../SimulationExecutor/JobSimulation/SimulationCard';
 import StatsCards from '../SimulationExecutor/JobSimulation/StatsCards';
@@ -39,7 +40,7 @@ interface ExtendedSimulation extends Simulation {
   duration?: number;
   difficulty?: string;
   type?: string;
-  score?: number;
+  score?: number | string;
   appliedAt?: string;
   applicationStatus?: string;
   matchScore?: number;
@@ -50,11 +51,30 @@ interface ExtendedSimulation extends Simulation {
   instructions?: string;
   sessionDetails?: any;
   sessionId?: string;
+  sessionStatus?: string;
+  simulation_status?: string;
 }
 
 interface JobSimulationProps {
   onBack: () => void;
 }
+
+// Helper function to check if score has a valid value
+const hasValidScore = (score: any): boolean => {
+  if (score === null || score === undefined) return false;
+  const strScore = String(score).trim();
+  if (strScore === '' || strScore === 'null' || strScore === 'undefined') return false;
+  const numScore = parseFloat(strScore);
+  return !isNaN(numScore) && numScore > 0;
+};
+
+// Helper function to check if simulation has valid configuration (has tasks)
+const hasValidConfig = (simulation: ExtendedSimulation): boolean => {
+  return simulation.tasks !== null && 
+         simulation.tasks !== undefined && 
+         Array.isArray(simulation.tasks) && 
+         simulation.tasks.length > 0;
+};
 
 const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
   const navigate = useNavigate();
@@ -70,9 +90,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
   const [sessionStartDialogOpen, setSessionStartDialogOpen] = useState(false);
   const [repoCreatedDialogOpen, setRepoCreatedDialogOpen] = useState(false);
   
-  // ============================================
-  // ✅ ADD MISSING STATE VARIABLES
-  // ============================================
+  // State variables for resume dialog
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [resumeSessionData, setResumeSessionData] = useState<any>(null);
   const [resumeSimulationRef, setResumeSimulationRef] = useState<ExtendedSimulation | null>(null);
@@ -82,6 +100,10 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
   const [dialogLoading, setDialogLoading] = useState(false);
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
   const [isResuming, setIsResuming] = useState(false);
+  
+  // State for no session modal
+  const [noSessionModalOpen, setNoSessionModalOpen] = useState(false);
+  const [noSessionSimulation, setNoSessionSimulation] = useState<ExtendedSimulation | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentDateTime(new Date()), 60000);
@@ -102,12 +124,56 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
 
       if (response.success && response.data) {
         const rawData = response.data.data ?? response.data;
-        const mapped: ExtendedSimulation[] = rawData.map((sim: any) => ({
-          ...sim,
-          status: resolveStatus(sim),
-          // Extract sessionId from the data
-          sessionId: sim.sessionId || sim.session?.id || null
-        }));
+        const mapped: ExtendedSimulation[] = rawData.map((sim: any) => {
+          // Check all possible session ID locations
+          const sessionId = sim.sessionId || 
+                           sim.session?.id || 
+                           sim.session_id ||
+                           sim.simulation_session?.id;
+          
+          const sessionStatus = sim.sessionStatus || sim.session?.status;
+          const hasSessionId = !!sessionId;
+          const hasScore = hasValidScore(sim.score);
+          
+          // Determine the correct status based on session status
+          let computedStatus = sim.status;
+          
+          // If there's a session and it's completed, mark as completed
+          if (hasSessionId && sessionStatus === 'completed') {
+            computedStatus = 'completed';
+          }
+          // If there's a session and it's in progress, mark as in_progress
+          else if (hasSessionId && (sessionStatus === 'in_progress' || sessionStatus === 'scheduled')) {
+            computedStatus = 'in_progress';
+          }
+          // If completed from API
+          else if (sim.status === 'completed') {
+            computedStatus = 'completed';
+          }
+          // If has score without session (legacy)
+          else if (hasScore && !hasSessionId) {
+            computedStatus = 'completed';
+          }
+          
+          console.log(`📊 Simulation ${sim.id}:`, {
+            status: computedStatus,
+            hasSessionId,
+            sessionId,
+            sessionStatus,
+            hasScore,
+            originalStatus: sim.status,
+            hasTasks: sim.tasks && Array.isArray(sim.tasks) && sim.tasks.length > 0
+          });
+          
+          return {
+            ...sim,
+            status: computedStatus,
+            sessionId: sessionId,
+            sessionStatus: sessionStatus,
+            simulation_status: sim.simulation_status || sim.status,
+            is_completed: computedStatus === 'completed'
+          };
+        });
         setSimulations(deduplicateSimulations(mapped) as ExtendedSimulation[]);
       } else {
         setSimulations([]);
@@ -137,64 +203,80 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     loadStats();
   }, [selectedStatus]);
 
-  // Fetch session details for resume dialog
+  // Handle viewing report - using handleViewReport pattern
+  const handleViewReport = (sessionId: string) => {
+    console.log('📊 Viewing report for session ID:', sessionId);
+    navigate(`/session-report/${sessionId}`);
+  };
+
+  // Fetch session details for resume dialog using simulationAPI
   const fetchSessionDetails = async (sessionId: string, simulation: ExtendedSimulation) => {
     try {
       setIsResuming(true);
       
       console.log('🔍 Fetching session details for sessionId:', sessionId);
       
-      const response = await fetch(`http://localhost:3001/api/v1/simulations/sessions/${sessionId}`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      const response = await getSessionById(sessionId);
+      const result = response?.data;
+      const session = result?.session || result;
+      
+      console.log('📦 Session data received:', session);
+      
+      if (!session) {
+        console.warn('Session not found, resuming directly');
+        await handleResumeExistingSession(simulation);
+        return;
+      }
+      
+      let githubRepo = null;
+      if (session.github_links || session.githubRepo) {
+        const ghData = session.github_links || session.githubRepo;
+        githubRepo = typeof ghData === 'string' ? JSON.parse(ghData) : ghData;
+        console.log('🐙 GitHub repo found in session:', githubRepo);
+      }
+      
+      const userStr = localStorage.getItem('user');
+      let isRecruiter = false;
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          isRecruiter = user.user_type === 'recruiter' || 
+                        user.user_type === 'company_admin' || 
+                        user.user_type === 'system_admin';
+        } catch (e) {
+          console.error('Failed to parse user:', e);
         }
+      }
+      
+      setResumeSessionData({
+        sessionId: session.id,
+        simulationName: simulation.simulationName || simulation.name || 'Simulation',
+        jobTitle: simulation.jobTitle,
+        companyName: simulation.companyName,
+        startedAt: session.started_at,
+        lastActivityAt: session.updated_at,
+        currentTask: session.current_task ? session.current_task + 1 : 1,
+        totalTasks: simulation.tasks?.length || 0,
+        timeSpent: session.time_spent,
+        timeRemaining: session.time_remaining,
+        progress: session.progress?.percentage || 
+          (session.current_task && simulation.tasks?.length 
+            ? Math.round((session.current_task / simulation.tasks.length) * 100) 
+            : 0),
+        githubRepo: githubRepo ? {
+          repoName: githubRepo.repoName,
+          repoUrl: githubRepo.repoUrl,
+          cloneUrl: githubRepo.cloneUrl,
+          branchName: githubRepo.branchName || 'main',
+          organizationName: githubRepo.organizationName || 'recruitment-platform',
+          candidateUsername: githubRepo.candidateUsername
+        } : null,
+        isRecruiter: isRecruiter
       });
       
-      if (response.ok) {
-        const result = await response.json();
-        const session = result.data;
-        
-        console.log('📦 Session data received:', session);
-        
-        // ✅ Extract GitHub repo from session
-        let githubRepo = null;
-        if (session.github_links || session.githubRepo) {
-          const ghData = session.github_links || session.githubRepo;
-          githubRepo = typeof ghData === 'string' ? JSON.parse(ghData) : ghData;
-          console.log('🐙 GitHub repo found in session:', githubRepo);
-        }
-        
-        setResumeSessionData({
-          sessionId: session.id,
-          simulationName: simulation.simulationName || simulation.name || 'Simulation',
-          jobTitle: simulation.jobTitle,
-          companyName: simulation.companyName,
-          startedAt: session.started_at,
-          lastActivityAt: session.updated_at,
-          currentTask: session.current_task ? session.current_task + 1 : 1,
-          totalTasks: simulation.tasks?.length || 0,
-          timeSpent: session.time_spent,
-          timeRemaining: session.time_remaining,
-          progress: session.progress?.percentage || 
-            (session.current_task && simulation.tasks?.length 
-              ? Math.round((session.current_task / simulation.tasks.length) * 100) 
-              : 0),
-          githubRepo: githubRepo ? {
-            repoName: githubRepo.repoName,
-            repoUrl: githubRepo.repoUrl,
-            cloneUrl: githubRepo.cloneUrl,
-            branchName: githubRepo.branchName || 'main',
-            organizationName: githubRepo.organizationName || 'recruitment-platform',
-            candidateUsername: githubRepo.candidateUsername
-          } : null
-        });
-        
-        setResumeSimulationRef(simulation);
-        setResumeDialogOpen(true);
-      } else {
-        console.warn('Could not fetch session details, resuming directly');
-        await handleResumeExistingSession(simulation);
-      }
+      setResumeSimulationRef(simulation);
+      setResumeDialogOpen(true);
+      
     } catch (err) {
       console.error('Failed to fetch session details:', err);
       await handleResumeExistingSession(simulation);
@@ -203,9 +285,15 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     }
   };
 
-  // Handle starting a simulation (shows appropriate dialog)
   const handleStartSimulation = async (simulation: ExtendedSimulation, forceNew: boolean = false) => {
-    console.log('🎯 handleStartSimulation called:', { simulationId: simulation.id, forceNew, hasSessionId: !!simulation.sessionId });
+    console.log('🎯 handleStartSimulation called:', { 
+      simulationId: simulation.id, 
+      forceNew, 
+      hasSessionId: !!simulation.sessionId,
+      sessionStatus: simulation.sessionStatus,
+      status: simulation.status,
+      score: simulation.score
+    });
     
     if (!simulation.id || simulation.id === 'null') {
       alert('This simulation is not yet available.');
@@ -218,22 +306,20 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       return;
     }
 
-    // Check if there's an existing session ID to resume
-    if (simulation.sessionId && !forceNew) {
-      console.log('🔄 Existing session found, showing resume dialog');
-      // Show resume dialog with session details
+    // Check if there's an existing session ID to resume (only if session is not completed)
+    if (simulation.sessionId && simulation.sessionStatus !== 'completed' && !forceNew) {
+      console.log('🔄 Existing active session found, showing resume dialog. SessionId:', simulation.sessionId);
       await fetchSessionDetails(simulation.sessionId, simulation);
       return;
     }
 
     // For new sessions, show GitHub username dialog
-    console.log('✨ No existing session, showing GitHub dialog');
+    console.log('✨ No existing active session or forceNew=true, showing GitHub dialog');
     setPendingSimulation(simulation);
     setSessionStartDialogOpen(true);
     setDialogError(null);
   };
 
-  // Handle resuming an existing session after dialog confirmation
   const handleResumeExistingSession = async (simulation: ExtendedSimulation) => {
     console.log('🎯 handleResumeExistingSession called with simulation:', simulation);
     
@@ -262,10 +348,8 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         
         console.log('✅ Resume successful, opening simulation with sessionId:', finalSessionId);
         
-        // Open the simulation executor in a new tab
         window.open(`/simulation/execute/${finalSessionId}`, '_blank');
         
-        // Refresh the list to update status
         await loadSimulations();
         await loadStats();
       } else {
@@ -282,11 +366,9 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     }
   };
 
-  // Handle resume from dialog
   const handleResumeFromDialog = () => {
     console.log('🔘 Resume button clicked in dialog');
     if (resumeSimulationRef) {
-      console.log('📌 Resuming simulation:', resumeSimulationRef);
       handleResumeExistingSession(resumeSimulationRef);
     } else {
       console.error('No simulation reference available for resume');
@@ -295,7 +377,6 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     }
   };
 
-  // Handle starting a NEW simulation with GitHub username
   const handleSessionStart = async (githubUsername: string) => {
     if (!pendingSimulation) return;
     const simulation = pendingSimulation;
@@ -349,7 +430,6 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     }
   };
 
-  // Handle continue after repo creation
   const handleRepoCreatedContinue = async () => {
     if (!pendingSimulation) return;
 
@@ -384,23 +464,69 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     setResumeSimulationRef(null);
   };
 
+  const findSessionIdForSimulation = async (simulationId: string): Promise<string | null> => {
+    try {
+      const response = await getMySimulationById(simulationId);
+      const data = response?.data;
+      
+      if (data) {
+        const sessionId = data.sessionId || 
+                         data.session?.id || 
+                         data.session_id ||
+                         data.simulation_session?.id;
+        
+        if (sessionId) {
+          console.log('✅ Found sessionId from API:', sessionId);
+          return sessionId;
+        }
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('Failed to fetch sessions:', err);
+      return null;
+    }
+  };
+
   const handleReviewSimulation = async (simulation: ExtendedSimulation) => {
+    console.log('🔍 handleReviewSimulation called:', {
+      id: simulation.id,
+      sessionId: simulation.sessionId,
+      sessionStatus: simulation.sessionStatus,
+      status: simulation.status,
+      score: simulation.score
+    });
+    
     if (!simulation.id || simulation.id === 'null') {
       alert('Cannot review simulation: Assessment not available');
       return;
     }
 
+    if (simulation.sessionId) {
+      console.log('✅ Using sessionId for navigation to session report:', simulation.sessionId);
+      navigate(`/session-report/${simulation.sessionId}`);
+      return;
+    }
+
     try {
-      const results = await getMySimulationById(simulation.id);
-      if (results.success) {
-        navigate(`/simulation/results/${simulation.id}`);
-      } else if (simulation.sessionId) {
-        navigate(`/simulation/results/${simulation.sessionId}`);
-      } else {
-        alert('No results available for this simulation yet.');
+      const foundSessionId = await findSessionIdForSimulation(simulation.id);
+      if (foundSessionId) {
+        console.log('✅ Found sessionId via API, navigating to session report:', foundSessionId);
+        navigate(`/session-report/${foundSessionId}`);
+        return;
       }
-    } catch (err) {
-      console.error('Failed to get simulation results:', err);
+
+      if (hasValidScore(simulation.score)) {
+        console.log('⚠️ Simulation has score but no sessionId, showing modal');
+        setNoSessionSimulation(simulation);
+        setNoSessionModalOpen(true);
+        return;
+      }
+
+      console.log('❌ No sessionId found anywhere, falling back to results page');
+      navigate(`/simulation/results/${simulation.id}`);
+    } catch (error) {
+      console.error('❌ Error finding sessionId:', error);
       navigate(`/simulation/results/${simulation.id}`);
     }
   };
@@ -528,10 +654,45 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       ) : (
         <div className="grid grid-cols-1 gap-6">
           {simulations.map((simulation, index) => {
-            const isTemplateMissing = simulation.status === 'no_template';
-            const isCompleted = simulation.status === 'completed';
-            const isInProgress = simulation.status === 'in_progress';
-            const isNotStarted = !isTemplateMissing && !isCompleted && !isInProgress && simulation.status !== 'expired';
+            // ✅ Check if simulation has valid configuration (has tasks)
+            const isValidConfig = hasValidConfig(simulation);
+            const isTemplateMissing = simulation.status === 'no_template' || !isValidConfig;
+            
+            const hasSessionId = !!simulation.sessionId;
+            const hasScore = hasValidScore(simulation.score);
+            const sessionStatus = simulation.sessionStatus;
+            
+            // ✅ IN PROGRESS only if: has sessionId AND session is NOT completed/submitted AND has valid config
+            const isInProgress = hasSessionId && 
+                                 !isTemplateMissing && 
+                                 sessionStatus !== 'completed' && 
+                                 sessionStatus !== 'submitted';
+            
+            // ✅ COMPLETED if: status is 'completed' OR (has sessionId and session is completed) OR (has score without session)
+            const isCompleted = (simulation.status === 'completed' || 
+                                (hasSessionId && sessionStatus === 'completed') ||
+                                (hasScore && !hasSessionId)) && 
+                                !isTemplateMissing;
+            
+            // ✅ NOT STARTED: has valid config, no sessionId, no score, not completed
+            const isNotStarted = !hasSessionId && 
+                                 !hasScore && 
+                                 !isTemplateMissing && 
+                                 simulation.status !== 'completed';
+            
+            console.log(`🎯 Simulation ${simulation.id}:`, {
+              isValidConfig,
+              isTemplateMissing,
+              hasSessionId,
+              hasScore,
+              sessionStatus,
+              isInProgress,
+              isCompleted,
+              isNotStarted,
+              status: simulation.status,
+              tasksCount: simulation.tasks?.length || 0
+            });
+            
             const availability = getAvailabilityStatus(simulation, currentDateTime);
             const showTasks = showAllTasks[simulation.applicationId || ''] ?? false;
             const uniqueKey = `${simulation.applicationId}-${simulation.id ?? index}`;
@@ -558,16 +719,17 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         </div>
       )}
 
-      {/* ✅ Resume Simulation Dialog - Shows session details before resuming */}
+      {/* Resume Simulation Dialog */}
       <ResumeSimulationDialog
         open={resumeDialogOpen}
         sessionData={resumeSessionData}
         onResume={handleResumeFromDialog}
         onCancel={handleCancelResume}
+        onViewReport={handleViewReport}
         isLoading={isResuming}
       />
 
-      {/* Session Start Dialog - ONLY for NEW simulations (asks for GitHub username) */}
+      {/* Session Start Dialog */}
       <SessionStartDialog
         open={sessionStartDialogOpen}
         templateId={pendingSimulation?.id || ''}
@@ -578,7 +740,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         error={dialogError}
       />
 
-      {/* Repo Created Dialog - Show GitHub Repo Details for NEW simulations */}
+      {/* Repo Created Dialog */}
       {repoData && (
         <RepoCreatedDialog
           open={repoCreatedDialogOpen}
@@ -586,6 +748,48 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
           onContinue={handleRepoCreatedContinue}
           onBeforeContinue={clearAllTaskRepos}
         />
+      )}
+
+      {/* No Session Data Modal */}
+      {noSessionModalOpen && noSessionSimulation && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8 text-yellow-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Cannot View Results</h2>
+              <p className="text-gray-600 mb-4">
+                This simulation has a score of <strong>{String(noSessionSimulation.score)}%</strong> but no session data is available.
+              </p>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-left">
+                <p className="text-sm text-yellow-800 font-medium mb-2">This may happen if:</p>
+                <ul className="text-sm text-yellow-700 space-y-1 list-disc list-inside">
+                  <li>The simulation was completed in a previous version</li>
+                  <li>The session was deleted or archived</li>
+                  <li>There was an issue creating the session</li>
+                </ul>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setNoSessionModalOpen(false)}
+                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    setNoSessionModalOpen(false);
+                    navigate(`/simulation/results/${noSessionSimulation.id}`);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  View Raw Results
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

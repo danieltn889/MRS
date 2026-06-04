@@ -232,12 +232,14 @@ const githubAPI = {
 
   // ============================================
   // COMPLETE REPOSITORY DATA (CODE + STATS)
+  // ✅ FIXED: Added branch parameter (5th parameter)
   // ============================================
 
-  getEverything: async (owner: string, repo: string, includeContent: boolean = true, maxFiles: number = 100) => {
+  getEverything: async (owner: string, repo: string, includeContent: boolean = true, maxFiles: number = 100, branch: string = 'main') => {
     const params = new URLSearchParams({
       includeContent: includeContent.toString(),
       maxFiles: maxFiles.toString(),
+      branch: branch,  // ✅ Add branch to query params
     });
     const response = await fetch(`${API_BASE_URL}/github/repo/${owner}/${repo}/everything?${params}`, {
       method: 'GET',
@@ -408,7 +410,5 @@ const githubAPI = {
   },
   
 };
-
-
 
 export default githubAPI;

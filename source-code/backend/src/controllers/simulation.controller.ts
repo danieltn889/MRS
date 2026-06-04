@@ -52,9 +52,66 @@ const SIMULATION_CONFIG = {
 // Helper function to call the communication classifier API
 const COMMUNICATION_API_URL = process.env.COMMUNICATION_API_URL || 'http://localhost:8091';
 
-async function callCommunicationClassifier(messages: any[]): Promise<any> {
+interface CommunicationClassifierResponse {
+  dominant_style: string;
+  communication_score: number;
+  style_counts: {
+    formal: number;
+    semi_formal: number;
+    informal: number;
+  };
+  total_messages: number;
+  average_confidence: number;
+  recommendation: string;
+}
+
+// Define the interface for chat message rows
+interface ChatMessageRow {
+  id: string;
+  user_id: string;
+  message: string;
+  message_type: string;
+  timestamp: Date;
+  created_at: Date;
+  email: string;
+  user_type: string;
+  first_name: string | null;
+  last_name: string | null;
+  sender_type: 'candidate' | 'recruiter';
+}
+
+async function callCommunicationClassifier(messages: any[]): Promise<CommunicationClassifierResponse | null> {
   try {
-    const messageTexts = messages.map(msg => msg.message || msg.parsed_message || '');
+    // Extract message texts from the messages array
+    const messageTexts = messages.map(msg => {
+      // Try to extract clean text from nested JSON
+      let text = msg.message || msg.parsed_message || '';
+      try {
+        let parsed = JSON.parse(text);
+        let depth = 0;
+        while (typeof parsed === 'string' && depth < 10) {
+          try {
+            parsed = JSON.parse(parsed);
+            depth++;
+          } catch {
+            break;
+          }
+        }
+        if (parsed && typeof parsed === 'object') {
+          text = parsed.text || parsed.message || text;
+        }
+      } catch {
+        // Not JSON, use as is
+      }
+      return text;
+    }).filter(text => text && text.trim().length > 0);
+    
+    if (messageTexts.length === 0) {
+      console.log('⚠️ No valid message texts to analyze');
+      return null;
+    }
+    
+    console.log(`📤 Sending ${messageTexts.length} messages to communication classifier`);
     
     const response = await fetch(`${COMMUNICATION_API_URL}/analyze/chat`, {
       method: 'POST',
@@ -73,13 +130,22 @@ async function callCommunicationClassifier(messages: any[]): Promise<any> {
       return null;
     }
     
-    const result = await response.json();
+    const result = await response.json() as CommunicationClassifierResponse;
+    
+    console.log('✅ Communication classifier response:', {
+      dominant_style: result.dominant_style,
+      communication_score: result.communication_score,
+      total_messages: result.total_messages
+    });
+    
     return result;
   } catch (error: any) {
     console.error('Failed to call communication classifier:', error.message);
     return null;
   }
 }
+
+
 
 // ============================================
 // VALIDATION SCHEMAS
@@ -178,6 +244,24 @@ interface CreateSimulationRequest extends AuthenticatedRequest {
     status?: string;
   };
 }
+interface CodeQualityResult {
+  score: number;
+  maxScore: number;
+  details: {
+    hasFunctions: boolean;
+    hasVariables: boolean;
+    hasConditionals: boolean;
+    hasLoops: boolean;
+    hasReturns: boolean;
+    hasErrorHandling: boolean;
+    hasClasses: boolean;
+    hasImports: boolean;
+    linesOfCode: number;
+    codeLength: number;
+    language: string;
+    detectedFeatures: string[];
+  };
+}
 
 // Add these interfaces at the top of SimulationController.ts (after imports)
 interface GitHubBranch {
@@ -265,43 +349,7 @@ class SimulationController extends BaseController {
     }
     return null;
   }
-
-  private calculateScores(answers: any, tasks: any[], timeSpent: number, timeLimit: number): any {
-    const totalTasks = tasks.length;
-    const answeredTasks = Object.keys(answers || {}).length;
-    
-    const completionScore = (answeredTasks / totalTasks) * 100;
-    const punctualityScore = Math.max(0, Math.min(100, (1 - (timeSpent / timeLimit)) * 100));
-    
-    const problemSolvingScore = Math.min(100, completionScore + Math.random() * 20);
-    const communicationScore = Math.min(100, completionScore + Math.random() * 15);
-    const adaptabilityScore = Math.min(100, completionScore + Math.random() * 10);
-    const collaborationScore = Math.min(100, completionScore + Math.random() * 15);
-    const attentionScore = Math.min(100, completionScore + Math.random() * 10);
-    const initiativeScore = Math.min(100, completionScore + Math.random() * 15);
-    
-    const overallScore = Math.round(
-      (punctualityScore * SIMULATION_CONFIG.SCORING_WEIGHTS.punctuality) +
-      (communicationScore * SIMULATION_CONFIG.SCORING_WEIGHTS.communication) +
-      (problemSolvingScore * SIMULATION_CONFIG.SCORING_WEIGHTS.problem_solving) +
-      (adaptabilityScore * SIMULATION_CONFIG.SCORING_WEIGHTS.adaptability) +
-      (collaborationScore * SIMULATION_CONFIG.SCORING_WEIGHTS.collaboration) +
-      (attentionScore * SIMULATION_CONFIG.SCORING_WEIGHTS.attention_to_detail) +
-      (initiativeScore * SIMULATION_CONFIG.SCORING_WEIGHTS.initiative)
-    );
-    
-    return {
-      overallScore,
-      punctualityScore,
-      communicationScore,
-      problemSolvingScore,
-      adaptabilityScore,
-      collaborationScore,
-      attentionScore,
-      initiativeScore
-    };
-  }
-
+  
   private async isSimulationExpired(simulationId: string): Promise<{ expired: boolean; reason?: string }> {
     try {
       const result = await DatabaseService.query(
@@ -1521,8 +1569,7 @@ async deleteSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       return;
     }
 
-    // Start transaction for complete deletion
-    console.log('🔄 Starting database transaction...');
+    // ✅ FIX: Use a single client and handle errors properly
     const client = await DatabaseService.getClient();
     
     try {
@@ -1695,8 +1742,8 @@ async deleteSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       console.log('✅ Transaction committed successfully');
       
     } catch (txError: any) {
+      console.error('❌ Transaction error, rolling back:', txError.message);
       await client.query('ROLLBACK');
-      console.error('❌ Transaction failed, rolling back:', txError);
       throw txError;
     } finally {
       client.release();
@@ -2274,99 +2321,564 @@ private async matchCommitToTasksWithMl(
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN: calculateGitHubScore
-// ─────────────────────────────────────────────────────────────────────────────
+// ============================================
+// HELPER FUNCTIONS FOR GITHUB ANALYSIS
+// ============================================
+
+/**
+ * Detects README file with fuzzy matching (case-insensitive, multiple patterns)
+ */
+private detectReadmeFile(files: any[]): { file: any | null; fileName: string | null } {
+  console.log('🔍 [detectReadmeFile] Searching for README files...');
+  
+  const readmePatterns = [
+    /^README\.md$/i,      // README.md, ReadMe.md, README.MD
+    /^readme\.md$/i,      // readme.md
+    /^README$/i,          // README (no extension)
+    /^readme$/i,          // readme (no extension)
+    /^ReadMe\.md$/i,      // ReadMe.md
+    /^README\.txt$/i,     // README.txt
+    /^readme\.txt$/i,     // readme.txt
+    /\.md$/i              // Any .md file that might be README
+  ];
+  
+  // First, try exact matches
+  for (const file of files) {
+    const fileName = file.name || '';
+    const isReadme = readmePatterns.some(pattern => pattern.test(fileName));
+    
+    if (isReadme) {
+      console.log(`✅ Found README file: ${fileName}`);
+      return { file, fileName };
+    }
+  }
+  
+  // If no README found, check if any .md file contains 'readme' in name
+  const mdFiles = files.filter((f: any) => 
+    f.name?.toLowerCase().includes('readme') || 
+    (f.name?.endsWith('.md') && f.name?.toLowerCase().includes('readme'))
+  );
+  
+  if (mdFiles.length > 0) {
+    const file = mdFiles[0];
+    console.log(`✅ Found README-like file: ${file.name}`);
+    return { file, fileName: file.name };
+  }
+  
+  console.log('❌ No README file found');
+  return { file: null, fileName: null };
+}
+
+/**
+ * Analyzes README content using Groq AI to check task documentation
+ */
+private async analyzeReadmeWithAI(
+  readmeContent: string, 
+  readmeFileName: string, 
+  simulationTasks: any[]
+): Promise<{
+  documentedTasks: string[];
+  missingTasks: string[];
+  quality: string;
+  hasInstallation: boolean;
+  hasUsageExamples: boolean;
+  hasApiDocs: boolean;
+  hasTaskBreakdown: boolean;
+  readmeScore: number;
+  suggestions: string[];
+  overallAssessment: string;
+}> {
+  console.log('🤖 [analyzeReadmeWithAI] Starting Groq AI analysis...');
+  
+  const defaultResult = {
+    documentedTasks: [],
+    missingTasks: [],
+    quality: 'basic',
+    hasInstallation: false,
+    hasUsageExamples: false,
+    hasApiDocs: false,
+    hasTaskBreakdown: false,
+    readmeScore: 50,
+    suggestions: ['Add more documentation to README'],
+    overallAssessment: 'Basic README documentation'
+  };
+  
+  if (!readmeContent || readmeContent.length < 100) {
+    console.log('⚠️ README content too short for analysis (< 100 chars)');
+    return defaultResult;
+  }
+  
+  if (simulationTasks.length === 0) {
+    console.log('⚠️ No simulation tasks to compare against');
+    return defaultResult;
+  }
+  
+  try {
+    const taskNames = simulationTasks.map((task, idx) => 
+      `${idx + 1}. ${task.title || task.task_name || `Task ${idx + 1}`}`
+    ).join('\n');
+    
+    // Limit README content to 3000 chars for prompt
+    const truncatedReadme = readmeContent.substring(0, 3000);
+    console.log(`📄 README content truncated to 3000 chars for AI analysis`);
+    console.log(`📊 Analyzing README for ${truncatedReadme} tasks...`);
+    
+    const prompt = `Analyze this README file (${readmeFileName}) and determine which simulation tasks are documented.
+
+    SIMULATION TASKS:
+    ${taskNames}
+
+    README CONTENT:
+    ${truncatedReadme}
+
+    Return ONLY valid JSON:
+    {
+      "tasks_documented": ["task name 1", "task name 2"],
+      "tasks_missing": ["task name 3"],
+      "documentation_quality": "excellent" or "good" or "basic" or "poor",
+      "has_installation": true/false,
+      "has_usage_examples": true/false,
+      "has_api_docs": true/false,
+      "has_task_breakdown": true/false,
+      "readme_score": 0-100,
+      "suggestions": ["suggestion 1", "suggestion 2"],
+      "overall_assessment": "brief assessment"
+    }`;
+
+    const completion = await getGroq().chat.completions.create({
+      messages: [
+        { role: 'system', content: 'You analyze README files for technical documentation quality. Return ONLY valid JSON.' },
+        { role: 'user', content: prompt }
+      ],
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.3,
+      max_tokens: 800,
+      response_format: { type: 'json_object' }
+    });
+
+    const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
+    
+    console.log(`✅ README Analysis complete:`, {
+      quality: result.documentation_quality,
+      documentedCount: result.tasks_documented?.length || 0,
+      missingCount: result.tasks_missing?.length || 0,
+      readmeScore: result.readme_score
+    });
+    
+    return {
+      documentedTasks: result.tasks_documented || [],
+      missingTasks: result.tasks_missing || [],
+      quality: result.documentation_quality || 'basic',
+      hasInstallation: result.has_installation || false,
+      hasUsageExamples: result.has_usage_examples || false,
+      hasApiDocs: result.has_api_docs || false,
+      hasTaskBreakdown: result.has_task_breakdown || false,
+      readmeScore: result.readme_score || 50,
+      suggestions: result.suggestions || [],
+      overallAssessment: result.overall_assessment || 'Basic documentation'
+    };
+    
+  } catch (error: any) {
+    console.error('❌ README Groq analysis failed:', error.message);
+    return defaultResult;
+  }
+}
+
+/**
+ * Calculates README score based on presence, quality, and task coverage
+ */
+private calculateReadmeScore(
+  hasReadme: boolean,
+  quality: string,
+  taskCoveragePercentage: number
+): { score: number; maxScore: number; details: string } {
+  console.log('📊 [calculateReadmeScore] Calculating README score...');
+  
+  const maxScore = 25;
+  let score = 0;
+  
+  if (!hasReadme) {
+    console.log('   No README found → 0/25');
+    return { score: 0, maxScore, details: 'No README file found' };
+  }
+  
+  // Base points for having README: 5
+  score = 0;
+  let details = 'README present';
+  
+  // Quality bonus: up to 8 more points
+  if (quality === 'excellent') {
+    score += 10;
+    details += ' - Excellent documentation quality';
+    console.log('   +10: Excellent quality');
+  } else if (quality === 'good') {
+    score += 8;
+    details += ' - Good documentation quality';
+    console.log('   +8: Good quality');
+  } else if (quality === 'basic') {
+    score += 4;
+    details += ' - Basic documentation quality';
+    console.log('   +4: Basic quality');
+  }
+  
+  // Task coverage bonus: up to 2 more points
+  if (taskCoveragePercentage >= 80) {
+    score += 2;
+    details += `, ${Math.round(taskCoveragePercentage)}% task coverage (Excellent)`;
+    console.log(`   +2: Excellent task coverage (${Math.round(taskCoveragePercentage)}%)`);
+  } else if (taskCoveragePercentage >= 50) {
+    score += 1;
+    details += `, ${Math.round(taskCoveragePercentage)}% task coverage (Good)`;
+    console.log(`   +1: Good task coverage (${Math.round(taskCoveragePercentage)}%)`);
+  } else if (taskCoveragePercentage > 0) {
+    details += `, ${Math.round(taskCoveragePercentage)}% task coverage`;
+    console.log(`   Task coverage: ${Math.round(taskCoveragePercentage)}%`);
+  }
+  
+  score = Math.min(maxScore, score);
+  console.log(`   Final README score: ${score}/${maxScore}`);
+  
+  return { score, maxScore, details };
+}
+
+/**
+ * Detects configuration files in repository
+ */
+private detectConfigFiles(files: any[]): { found: string[]; score: number; maxScore: number; details: string } {
+  console.log('⚙️ [detectConfigFiles] Scanning for config files...');
+  
+  const configFilePatterns = [
+    { name: 'package.json', points: 10, lang: 'Node.js' },
+    { name: 'requirements.txt', points: 10, lang: 'Python' },
+    { name: 'go.mod', points: 10, lang: 'Go' },
+    { name: 'Cargo.toml', points: 10, lang: 'Rust' },
+    { name: 'pyproject.toml', points: 8, lang: 'Python' },
+    { name: 'setup.py', points: 8, lang: 'Python' },
+    { name: 'tsconfig.json', points: 8, lang: 'TypeScript' },
+    { name: '.eslintrc', points: 6, lang: 'JavaScript/TypeScript' },
+    { name: '.eslintrc.js', points: 6, lang: 'JavaScript' },
+    { name: '.eslintrc.json', points: 6, lang: 'JavaScript' },
+    { name: 'webpack.config.js', points: 6, lang: 'JavaScript' },
+    { name: 'vite.config.js', points: 6, lang: 'JavaScript' },
+    { name: 'composer.json', points: 8, lang: 'PHP' },
+    { name: 'Gemfile', points: 8, lang: 'Ruby' },
+    { name: 'build.gradle', points: 8, lang: 'Java' },
+    { name: 'pom.xml', points: 8, lang: 'Java' },
+    { name: '.env.example', points: 4, lang: 'Environment' },
+    { name: 'docker-compose.yml', points: 6, lang: 'Docker' },
+    { name: 'Dockerfile', points: 6, lang: 'Docker' }
+  ];
+  
+  const maxScore = 10;
+  let score = 0;
+  const foundFiles: string[] = [];
+  
+  for (const pattern of configFilePatterns) {
+    const hasFile = files.some((f: any) => f.name === pattern.name);
+    if (hasFile && !foundFiles.includes(pattern.name)) {
+      foundFiles.push(pattern.name);
+      const pointsToAdd = Math.min(maxScore - score, pattern.points);
+      score += pointsToAdd;
+      console.log(`   ✅ Found: ${pattern.name} (+${pointsToAdd} points, ${pattern.lang})`);
+      if (score >= maxScore) break;
+    }
+  }
+  
+  score = Math.min(maxScore, score);
+  const details = foundFiles.length > 0 
+    ? `Found ${foundFiles.length} config file(s): ${foundFiles.join(', ')}` 
+    : 'No config files found';
+  
+  console.log(`📊 Config files score: ${score}/${maxScore} (${foundFiles.length} files found)`);
+  
+  return { found: foundFiles, score, maxScore, details };
+}
+
+/**
+ * Detects .gitignore file
+ */
+private detectGitignore(files: any[]): { present: boolean; score: number; maxScore: number; details: string } {
+  console.log('🚫 [detectGitignore] Checking for .gitignore...');
+  
+  const hasGitignore = files.some((f: any) => f.name === '.gitignore');
+  const maxScore = 5;
+  const score = hasGitignore ? maxScore : 0;
+  const details = hasGitignore ? '.gitignore present' : 'No .gitignore found';
+  
+  console.log(`📊 .gitignore: ${hasGitignore ? '✅ Present' : '❌ Missing'} (${score}/${maxScore})`);
+  
+  return { present: hasGitignore, score, maxScore, details };
+}
+
+/**
+ * Counts and scores code files by extension
+ */
+private analyzeCodeFiles(files: any[]): { count: number; score: number; maxScore: number; details: string } {
+  console.log('💻 [analyzeCodeFiles] Counting code files...');
+  
+  const codeExtensions = /\.(js|ts|py|java|go|rs|cpp|c|hpp|h|html|css|scss|sass|less|json|rb|php|swift|kt|kts|sql|sh|bash|zsh)$/i;
+  
+  const codeFiles = files.filter((f: any) => 
+    f.name?.match(codeExtensions) && f.type !== 'dir'
+  );
+  
+  const count = codeFiles.length;
+  const maxScore = 20;
+  let score = 0;
+  let details = '';
+  
+  console.log(`   Found ${count} code files`);
+  
+  if (count >= 15) {
+    score = 20;
+    details = `Excellent (${count} files)`;
+    console.log(`   → 20/20: EXCELLENT (15+ files)`);
+  } else if (count >= 10) {
+    score = 16;
+    details = `Great (${count} files)`;
+    console.log(`   → 16/20: GREAT (10-14 files)`);
+  } else if (count >= 6) {
+    score = 12;
+    details = `Good (${count} files)`;
+    console.log(`   → 12/20: GOOD (6-9 files)`);
+  } else if (count >= 3) {
+    score = 8;
+    details = `Adequate (${count} files)`;
+    console.log(`   → 8/20: ADEQUATE (3-5 files)`);
+  } else if (count >= 1) {
+    score = 4;
+    details = `Minimal (${count} files)`;
+    console.log(`   → 4/20: MINIMAL (1-2 files)`);
+  } else {
+    score = 0;
+    details = `No code files`;
+    console.log(`   → 0/20: No code files`);
+  }
+  
+  return { count, score, maxScore, details };
+}
+
+/**
+ * Scores commit count
+ */
+private scoreCommitCount(commitCount: number): { earned: number; max: number; details: string } {
+  console.log(`📊 [scoreCommitCount] Scoring ${commitCount} commits...`);
+  
+  const max = 40;
+  let earned = 0;
+  let details = '';
+  
+  if (commitCount >= 12) {
+    earned = 40;
+    details = `10+ commits (${commitCount}) - EXCELLENT`;
+    console.log(`   → 40/40: EXCELLENT (10+ commits)`);
+  } else if (commitCount >= 10) {
+    earned = 35;
+    details = `8-9 commits (${commitCount}) - VERY GOOD`;
+    console.log(`   → 35/40: VERY GOOD (8-9 commits)`);
+  } else if (commitCount >= 8) {
+    earned = 30;
+    details = `6-7 commits (${commitCount}) - GOOD`;
+    console.log(`   → 30/40: GOOD (6-7 commits)`);
+  } else if (commitCount >= 6) {
+    earned = 20;
+    details = `4-5 commits (${commitCount}) - ABOVE AVERAGE`;
+    console.log(`   → 20/40: ABOVE AVERAGE (4-5 commits)`);
+  } else if (commitCount >= 4) {
+    earned = 15;
+    details = `2-3 commits (${commitCount}) - AVERAGE`;
+    console.log(`   → 15/40: AVERAGE (2-3 commits)`);
+  } else if (commitCount >= 2) {
+    earned = 8;
+    details = `1 commit - MINIMAL`;
+    console.log(`   → 8/40: MINIMAL (1 commit)`);
+  } else {
+    earned = 0;
+    details = `No commits`;
+    console.log(`   → 0/40: No commits`);
+  }
+  
+  return { earned, max, details };
+}
+
+/**
+ * Scores commit matching based on match percentage
+ */
+private scoreCommitMatching(matchPercentage: number, matchedCount: number, totalAnalyzed: number): { earned: number; max: number; details: string } {
+  console.log(`📊 [scoreCommitMatching] Scoring ${matchPercentage.toFixed(1)}% match rate...`);
+  
+  const max = 30;
+  let earned = 0;
+  let details = '';
+  
+  if (matchPercentage >= 80) {
+    earned = 30;
+    details = `Excellent! ${matchedCount}/${totalAnalyzed} (${matchPercentage.toFixed(0)}%) - EXCELLENT`;
+    console.log(`   → 30/30: EXCELLENT (${matchPercentage.toFixed(0)}% match rate)`);
+  } else if (matchPercentage >= 60) {
+    earned = 24;
+    details = `Good! ${matchedCount}/${totalAnalyzed} (${matchPercentage.toFixed(0)}%) - GOOD`;
+    console.log(`   → 24/30: GOOD (${matchPercentage.toFixed(0)}% match rate)`);
+  } else if (matchPercentage >= 40) {
+    earned = 18;
+    details = `Satisfactory: ${matchedCount}/${totalAnalyzed} (${matchPercentage.toFixed(0)}%) - SATISFACTORY`;
+    console.log(`   → 18/30: SATISFACTORY (${matchPercentage.toFixed(0)}% match rate)`);
+  } else if (matchPercentage >= 20) {
+    earned = 12;
+    details = `Needs improvement: ${matchedCount}/${totalAnalyzed} (${matchPercentage.toFixed(0)}%) - NEEDS IMPROVEMENT`;
+    console.log(`   → 12/30: NEEDS IMPROVEMENT (${matchPercentage.toFixed(0)}% match rate)`);
+  } else if (matchPercentage > 0) {
+    earned = 6;
+    details = `Minimal: ${matchedCount}/${totalAnalyzed} (${matchPercentage.toFixed(0)}%) - MINIMAL`;
+    console.log(`   → 6/30: MINIMAL (${matchPercentage.toFixed(0)}% match rate)`);
+  } else {
+    earned = 0;
+    details = `No commits matched to tasks`;
+    console.log(`   → 0/30: No matches found`);
+  }
+  
+  return { earned, max, details };
+}
+
+/**
+ * Formats commit data for analysis
+ */
+private formatCommitsForAnalysis(commits: any[]): any[] {
+  return commits.map((commit: any) => ({
+    sha: commit.sha,
+    shortSha: commit.shortSha || commit.sha?.substring(0, 7),
+    message: commit.message,
+    author: commit.author,
+    authorLogin: commit.authorLogin,
+    date: commit.date,
+    url: commit.url,
+    stats: commit.stats,
+    files: commit.files || [],
+    linesAdded: commit.stats?.additions || commit.linesAdded || 0,
+    linesDeleted: commit.stats?.deletions || commit.linesDeleted || 0
+  }));
+}
+
+/**
+ * Extracts metrics from repository data
+ */
+private extractRepoMetrics(repoData: any, commitsWithChanges: any[]) {
+  const files = repoData.code?.files || [];
+  
+  return {
+    totalFiles: repoData.code?.totalFiles || 0,
+    totalSize: repoData.code?.totalSize || 0,
+    primaryLanguage: repoData.languages?.primary || 'Unknown',
+    languages: repoData.languages?.breakdown || [],
+    hasReadme: repoData.community?.hasReadme || false,
+    hasContributing: repoData.community?.hasContributing || false,
+    hasCodeOfConduct: repoData.community?.hasCodeOfConduct || false,
+    hasLicense: repoData.community?.hasLicense || false,
+    stars: repoData.repository?.stars || 0,
+    forks: repoData.repository?.forks || 0,
+    watchers: repoData.repository?.watchers || 0,
+    openIssues: repoData.repository?.openIssues || 0,
+    defaultBranch: repoData.repository?.defaultBranch || 'main'
+  };
+}
+
+// ============================================
+// UPDATED calculateGitHubScore USING HELPER FUNCTIONS
+// ============================================
+
 public async calculateGitHubScore(
   session: any
 ): Promise<{ score: number; analysis: any }> {
   console.log('═══════════════════════════════════════════════════════════════');
   console.log('🐙 [calculateGitHubScore] STARTED');
   console.log('═══════════════════════════════════════════════════════════════');
+  console.log('📋 Session input:', { 
+    hasGithubLinks: !!session.github_links, 
+    sessionId: session.id 
+  });
 
   let githubScore = 0;
   let githubAnalysis: any = null;
 
-  let aiMatchingResults:  CommitTaskMatchResult[] = [];
-  let mlMatchingResults:  CommitTaskMatchResult[] = [];
-  let commitTaskMatchingResults: CommitTaskMatchResult[] = [];
-
+  // Initialize detailed marks
   let detailedMarks = {
-    commits:        { earned: 0, max: 50,  details: '', count: 0 },
-    readme:         { earned: 0, max: 15,  details: '', present: false },
-    configFile:     { earned: 0, max: 10,  details: '', present: false },
+    commits:        { earned: 0, max: 40,  details: '', count: 0 },
+    readme:         { earned: 0, max: 15,  details: '', present: false, quality: '', taskCoverage: 0, missingTasks: [] as string[], documented_tasks: [] as string[], file_name: null as string | null },
+    configFile:     { earned: 0, max: 10,  details: '', present: false, found: [] as string[] },
     gitignore:      { earned: 0, max: 5,   details: '', present: false },
     codeFiles:      { earned: 0, max: 20,  details: '', count: 0 },
     commitMatching: {
-      earned: 0, max: 20, details: '',
+      earned: 0, max: 30, details: '',
       matchedCount: 0, totalCommitsAnalyzed: 0,
       aiMatchedCount: 0, mlMatchedCount: 0, combinedMatchedCount: 0
     },
     totalPossible: 120
   };
 
-  // ── Guard: github_links ───────────────────────────────────────────────────
+  // Guard: check github_links
   if (!session.github_links) {
+    console.log('❌ No GitHub repository linked');
     return { score: 0, analysis: { analyzed: false, message: 'No GitHub repository linked', detailedMarks, score: 0 } };
   }
 
   let githubLinks = session.github_links;
   if (typeof githubLinks === 'string') {
-    try { githubLinks = JSON.parse(githubLinks); }
-    catch (e) { return { score: 0, analysis: { analyzed: false, message: 'Failed to parse GitHub links', detailedMarks, score: 0 } }; }
+    try { 
+      githubLinks = JSON.parse(githubLinks); 
+      console.log('✅ Parsed github_links from JSON');
+    } catch (e) { 
+      console.error('❌ Failed to parse GitHub links:', e);
+      return { score: 0, analysis: { analyzed: false, message: 'Failed to parse GitHub links', detailedMarks, score: 0 } }; 
+    }
   }
 
   if (!githubLinks?.repoUrl) {
+    console.log('❌ No repository URL in GitHub links');
     return { score: 0, analysis: { analyzed: false, message: 'No repository URL in GitHub links', detailedMarks, score: 0 } };
   }
 
   const repoUrl = githubLinks.repoUrl;
-  // const parsed  = await githubController.parseGitHubUrl('https://github.com/danieltn889/SpendSmart');
-  const parsed  = await githubController.parseGitHubUrl(repoUrl);
+  console.log(`📦 Repository URL: ${repoUrl}`);
+  
+  const parsed = await githubController.parseGitHubUrl(repoUrl);
   if (!parsed) {
+    console.log('❌ Invalid GitHub repository URL');
     return { score: 0, analysis: { analyzed: false, message: 'Invalid GitHub repository URL', detailedMarks, score: 0 } };
   }
 
   const { owner, repo } = parsed;
-  console.log(`✅ Repo: ${owner}/${repo}`);
+  console.log(`✅ Repo parsed: ${owner}/${repo}`);
 
   try {
-    // ── STEP 1: getEverything ─────────────────────────────────────────────
+    // Fetch repository data
+    console.log('\n📡 [STEP 1] Fetching GitHub repository data...');
     const mockReq = { params: { owner, repo }, query: { includeContent: 'true', maxFiles: '100' } } as any;
     let responseData: any = null;
     const mockRes: any = {
-      json:   (data: any) => { responseData = data; return mockRes; },
+      json: (data: any) => { responseData = data; return mockRes; },
       status: (_code: number) => mockRes
     };
 
     const t0 = Date.now();
     await githubController.getEverything(mockReq, mockRes);
-    console.log(`✅ getEverything done in ${Date.now() - t0}ms`);
+    console.log(`✅ getEverything completed in ${Date.now() - t0}ms`);
 
     if (!responseData?.data) {
+      console.log('❌ No data returned from GitHub API');
       return { score: 0, analysis: { analyzed: false, message: 'No data returned from GitHub API', detailedMarks, score: 0 } };
     }
 
     const repoData = responseData.data;
+    const files = repoData.code?.files || [];
 
-    // ── STEP 2: Extract commits ───────────────────────────────────────────
-    const commitsWithChanges = (repoData.commits?.recentCommits || []).map((commit: any) => ({
-      sha:          commit.sha,
-      shortSha:     commit.shortSha,
-      message:      commit.message,
-      author:       commit.author,
-      authorLogin:  commit.authorLogin,
-      date:         commit.date,
-      url:          commit.url,
-      stats:        commit.stats,
-      files:        commit.files || [],
-      linesAdded:   commit.stats?.additions  || 0,
-      linesDeleted: commit.stats?.deletions  || 0
-    }));
-
+    // Extract commits
+    console.log('\n📝 [STEP 2] Extracting commits...');
+    const rawCommits = (repoData.commits?.recentCommits || []);
+    const commitsWithChanges = this.formatCommitsForAnalysis(rawCommits);
     console.log(`📊 ${commitsWithChanges.length} commits extracted`);
 
-    // ── STEP 3: Load simulation tasks from DB ─────────────────────────────
+    // Load simulation tasks
+    console.log('\n📋 [STEP 3] Loading simulation tasks...');
     let simulationTasks: any[] = [];
     try {
       if (session.id) {
@@ -2383,7 +2895,7 @@ public async calculateGitHubScore(
           if (typeof tasksData === 'string') tasksData = JSON.parse(tasksData);
           if (Array.isArray(tasksData)) {
             simulationTasks = tasksData;
-            console.log(`📋 ${simulationTasks.length} simulation tasks loaded`);
+            console.log(`✅ ${simulationTasks.length} simulation tasks loaded`);
           }
         }
       }
@@ -2391,555 +2903,294 @@ public async calculateGitHubScore(
       console.error('❌ Error retrieving tasks:', err);
     }
 
-    // ── STEP 4: AI matching ───────────────────────────────────────────────
-    let aiMatchedCount    = 0;
-    let aiTotalConfidence = 0;
+    // ============================================
+    // README ANALYSIS using helper functions
+    // ============================================
+    console.log('\n📖 [STEP 4] README Analysis...');
+    const { file: readmeFile, fileName: readmeFileName } = this.detectReadmeFile(files);
 
-    if (simulationTasks.length > 0 && commitsWithChanges.length > 0) {
-      console.log('\n🤖 Running AI matching...');
-      for (const commit of commitsWithChanges.slice(0, 10)) {
-        try {
-          const matchResult = await this.matchCommitToTasksWithAI(commit, simulationTasks);
-          aiMatchingResults.push(matchResult);
-          if (matchResult.matchedTasks?.length > 0) {
-            aiMatchedCount++;
-            aiTotalConfidence += (matchResult.matchedTasks[0] as any)?.confidence || 0;
-          }
-        } catch (err) {
-          aiMatchingResults.push({
-            commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
-            commitMessage:  commit.message || '',
-            matchedTasks:   [],
-            unmatchedParts: ['AI matching failed']
-          });
-        }
-      }
-      console.log(`📊 AI SUMMARY: ${aiMatchedCount}/${aiMatchingResults.length} matched`);
-    }
+    let readmeAnalysis = null;
+    let taskCoveragePercentage = 0;
 
-    // ── STEP 5: ML matching ───────────────────────────────────────────────
-    let mlMatchedCount    = 0;
-    let mlTotalConfidence = 0;
-
-    if (simulationTasks.length > 0 && commitsWithChanges.length > 0) {
-      console.log('\n🤖 Running ML matching...');
-      const mlCommits = commitsWithChanges.slice(0, 15);
-      detailedMarks.commitMatching.totalCommitsAnalyzed = mlCommits.length;
-
-      for (const commit of mlCommits) {
-        try {
-          const matchResult = await this.matchCommitToTasksWithMl(commit, simulationTasks);
-          mlMatchingResults.push(matchResult);
-          if (matchResult.matchedTasks?.length > 0) {
-            mlMatchedCount++;
-            if ((matchResult as any).confidence) mlTotalConfidence += (matchResult as any).confidence;
-          }
-        } catch (err) {
-          mlMatchingResults.push({
-            commitSha:      commit.shortSha || commit.sha?.substring(0, 7),
-            commitMessage:  commit.message || '',
-            matchedTasks:   [],
-            unmatchedParts: ['ML matching failed']
-          });
-        }
-      }
-      console.log(`📊 ML SUMMARY: ${mlMatchedCount}/${mlMatchingResults.length} matched`);
-    } else {
-      detailedMarks.commitMatching.totalCommitsAnalyzed = 0;
-    }
-
-    // ── STEP 5b: Deduplicate AI + ML ──────────────────────────────────────
-    commitTaskMatchingResults = [...aiMatchingResults, ...mlMatchingResults];
-
-    const dedupeMap = new Map<string, CommitTaskMatchResult>();
-    for (const r of aiMatchingResults) {
-      if (!dedupeMap.has(r.commitSha) || (r.matchedTasks && r.matchedTasks.length > 0)) {
-        dedupeMap.set(r.commitSha, r);
-      }
-    }
-    for (const r of mlMatchingResults) {
-      const existing = dedupeMap.get(r.commitSha);
-      if (!existing) {
-        dedupeMap.set(r.commitSha, r);
-      } else if (
-        (!existing.matchedTasks || existing.matchedTasks.length === 0) &&
-        r.matchedTasks?.length > 0
-      ) {
-        dedupeMap.set(r.commitSha, r);
-      }
-    }
-
-    const deduplicatedResults    = Array.from(dedupeMap.values());
-    const combinedMatchedCount   = deduplicatedResults.filter(r => r.matchedTasks?.length > 0).length;
-    const totalCommitsConsidered = deduplicatedResults.length;
-
-    const allConfidenceValues = deduplicatedResults
-      .filter(r => r.matchedTasks?.length > 0)
-      .map(r => (r as any).confidence || (r.matchedTasks?.[0] as any)?.confidence || 0);
-    const averageConfidence = allConfidenceValues.length > 0
-      ? allConfidenceValues.reduce((a, b) => a + b, 0) / allConfidenceValues.length
-      : 0;
-
-    const matchPercentage = totalCommitsConsidered > 0
-      ? (combinedMatchedCount / totalCommitsConsidered) * 100
-      : 0;
-
-    if      (matchPercentage >= 80) { detailedMarks.commitMatching.earned = 20; detailedMarks.commitMatching.details = `Excellent! ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
-    else if (matchPercentage >= 60) { detailedMarks.commitMatching.earned = 16; detailedMarks.commitMatching.details = `Good! ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
-    else if (matchPercentage >= 40) { detailedMarks.commitMatching.earned = 12; detailedMarks.commitMatching.details = `Satisfactory: ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
-    else if (matchPercentage >= 20) { detailedMarks.commitMatching.earned =  8; detailedMarks.commitMatching.details = `Needs improvement: ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
-    else if (matchPercentage >   0) { detailedMarks.commitMatching.earned =  4; detailedMarks.commitMatching.details = `Minimal: ${combinedMatchedCount}/${totalCommitsConsidered} (${matchPercentage.toFixed(0)}%) [AI+ML]`; }
-    else                            { detailedMarks.commitMatching.earned =  0; detailedMarks.commitMatching.details = `No commits matched to tasks`; }
-
-    detailedMarks.commitMatching.matchedCount         = combinedMatchedCount;
-    detailedMarks.commitMatching.aiMatchedCount       = aiMatchedCount;
-    detailedMarks.commitMatching.mlMatchedCount       = mlMatchedCount;
-    detailedMarks.commitMatching.combinedMatchedCount = combinedMatchedCount;
-
-    // ── STEP 6: Repository quality metrics ───────────────────────────────
-    const codeFilesCount = (repoData.code?.files || []).filter((f: any) =>
-      f.name?.match(/\.(js|ts|py|java|go|rs|cpp|html|css|json)$/)
-    ).length;
-
-    const hasReadme     = repoData.community?.hasReadme || false;
-    const hasConfigFile = (repoData.code?.files || []).some((f: any) =>
-      f.name === 'package.json' || f.name === 'requirements.txt' || f.name === 'go.mod'
-    );
-    const hasGitignore  = (repoData.code?.files || []).some((f: any) => f.name === '.gitignore');
-
-    const metrics = {
-      commitCount:           repoData.commits?.total || commitsWithChanges.length,
-      commitsPerBranch:      {} as Record<string, number>,
-      totalFiles:            repoData.code?.totalFiles  || 0,
-      codeFilesCount,
-      totalLinesOfCode:      repoData.code?.totalSize   || 0,
-      hasReadme, hasConfigFile, hasGitignore,
-      hasTests: (repoData.code?.files || []).some((f: any) =>
-        f.name?.includes('test') || f.name?.includes('spec')),
-      primaryLanguage:       repoData.languages?.primary    || 'Unknown',
-      languages:             repoData.languages?.breakdown   || [],
-      recentCommits:         commitsWithChanges,
-      topAuthors:            repoData.commits?.topAuthors    || [],
-      firstCommitDate:       commitsWithChanges[commitsWithChanges.length - 1]?.date,
-      lastCommitDate:        commitsWithChanges[0]?.date,
-      averageCommitsPerWeek: repoData.commits?.averageCommitsPerWeek || 0,
-      totalAdditions:   commitsWithChanges.reduce((s: number, c: any) => s + (c.linesAdded   || 0), 0),
-      totalDeletions:   commitsWithChanges.reduce((s: number, c: any) => s + (c.linesDeleted  || 0), 0),
-      totalFilesChanged: commitsWithChanges.reduce((s: number, c: any) => s + (c.files?.length || 0), 0)
-    };
-
-    detailedMarks.commits.count      = metrics.commitCount;
-    detailedMarks.codeFiles.count    = metrics.codeFilesCount;
-    detailedMarks.readme.present     = metrics.hasReadme;
-    detailedMarks.configFile.present = metrics.hasConfigFile;
-    detailedMarks.gitignore.present  = metrics.hasGitignore;
-
-    // ── STEP 7: Score pillars ─────────────────────────────────────────────
-    if      (metrics.commitCount >= 10) { detailedMarks.commits.earned = 50; detailedMarks.commits.details = `10+ commits (${metrics.commitCount}) - EXCELLENT`; }
-    else if (metrics.commitCount >=  8) { detailedMarks.commits.earned = 45; detailedMarks.commits.details = `8-9 commits (${metrics.commitCount}) - VERY GOOD`; }
-    else if (metrics.commitCount >=  6) { detailedMarks.commits.earned = 40; detailedMarks.commits.details = `6-7 commits (${metrics.commitCount}) - GOOD`; }
-    else if (metrics.commitCount >=  4) { detailedMarks.commits.earned = 30; detailedMarks.commits.details = `4-5 commits (${metrics.commitCount}) - ABOVE AVERAGE`; }
-    else if (metrics.commitCount >=  2) { detailedMarks.commits.earned = 20; detailedMarks.commits.details = `2-3 commits (${metrics.commitCount}) - AVERAGE`; }
-    else if (metrics.commitCount >=  1) { detailedMarks.commits.earned = 10; detailedMarks.commits.details = `1 commit - MINIMAL`; }
-    else                                { detailedMarks.commits.earned =  0; detailedMarks.commits.details = `No commits`; }
-
-    detailedMarks.readme.earned      = metrics.hasReadme     ? 15 : 0;
-    detailedMarks.configFile.earned  = metrics.hasConfigFile ? 10 : 0;
-    detailedMarks.gitignore.earned   = metrics.hasGitignore  ?  5 : 0;
-    detailedMarks.readme.details     = metrics.hasReadme     ? 'README.md present'    : 'Missing README.md';
-    detailedMarks.configFile.details = metrics.hasConfigFile ? 'Config file present'  : 'No config file found';
-    detailedMarks.gitignore.details  = metrics.hasGitignore  ? '.gitignore present'   : 'No .gitignore found';
-
-    if      (metrics.codeFilesCount >= 15) { detailedMarks.codeFiles.earned = 20; detailedMarks.codeFiles.details = `Excellent (${metrics.codeFilesCount} files)`; }
-    else if (metrics.codeFilesCount >= 10) { detailedMarks.codeFiles.earned = 16; detailedMarks.codeFiles.details = `Great (${metrics.codeFilesCount} files)`; }
-    else if (metrics.codeFilesCount >=  6) { detailedMarks.codeFiles.earned = 12; detailedMarks.codeFiles.details = `Good (${metrics.codeFilesCount} files)`; }
-    else if (metrics.codeFilesCount >=  3) { detailedMarks.codeFiles.earned =  8; detailedMarks.codeFiles.details = `Adequate (${metrics.codeFilesCount} files)`; }
-    else if (metrics.codeFilesCount >=  1) { detailedMarks.codeFiles.earned =  4; detailedMarks.codeFiles.details = `Minimal (${metrics.codeFilesCount} files)`; }
-    else                                   { detailedMarks.codeFiles.earned =  0; detailedMarks.codeFiles.details = `No code files`; }
-
-    // ── STEP 8: Total ─────────────────────────────────────────────────────
-    githubScore =
-      detailedMarks.commits.earned        +
-      detailedMarks.readme.earned         +
-      detailedMarks.configFile.earned     +
-      detailedMarks.gitignore.earned      +
-      detailedMarks.codeFiles.earned      +
-      detailedMarks.commitMatching.earned;
-
-    console.log(`\n📊 TOTAL: ${githubScore}/${detailedMarks.totalPossible}`);
-
-    // ── STEP 9: Build PER-COMMIT DETAIL ──────────────────────────────────
-    //
-    // For EVERY commit that was analyzed by AI or ML (or both),
-    // produce a single record showing exactly what each engine said.
-    //
-    // perCommitDetail[] is the main new addition — one entry per unique SHA.
-    // ─────────────────────────────────────────────────────────────────────
-
-    // Collect every commit SHA that was touched by either engine
-    const allAnalyzedShas = new Set([
-      ...aiMatchingResults.map(r => r.commitSha),
-      ...mlMatchingResults.map(r => r.commitSha)
-    ]);
-
-    const perCommitDetail = Array.from(allAnalyzedShas).map(sha => {
-      // Find original commit meta
-      const commitMeta = commitsWithChanges.find(
-        (c: any) => (c.shortSha || c.sha?.substring(0, 7)) === sha
+    if (readmeFile && readmeFile.content) {
+      detailedMarks.readme.present = true;
+      detailedMarks.readme.file_name = readmeFileName;
+      
+      // ✅ FIX: Handle null fileName by providing a default
+      const safeFileName = readmeFileName || 'README.md';
+      
+      const aiReadmeAnalysis = await this.analyzeReadmeWithAI(
+        readmeFile.content,
+        safeFileName,  // ← Now guaranteed to be a string
+        simulationTasks
       );
+      
+      readmeAnalysis = aiReadmeAnalysis;
+      detailedMarks.readme.quality = aiReadmeAnalysis.quality;
+      detailedMarks.readme.documented_tasks = aiReadmeAnalysis.documentedTasks;
+      detailedMarks.readme.missingTasks = aiReadmeAnalysis.missingTasks;
+      
+      taskCoveragePercentage = simulationTasks.length > 0 
+        ? (aiReadmeAnalysis.documentedTasks.length / simulationTasks.length) * 100 
+        : 0;
+      detailedMarks.readme.taskCoverage = Math.round(taskCoveragePercentage);
+      
+      const readmeScoreResult = this.calculateReadmeScore(
+        true,
+        aiReadmeAnalysis.quality,
+        taskCoveragePercentage
+      );
+      
+      detailedMarks.readme.earned = readmeScoreResult.score;
+      detailedMarks.readme.details = readmeScoreResult.details;
+    } else {
+      const readmeScoreResult = this.calculateReadmeScore(false, 'none', 0);
+      detailedMarks.readme.earned = readmeScoreResult.score;
+      detailedMarks.readme.details = readmeScoreResult.details;
+    }
 
-      // ── What AI said about this commit ────────────────────────────────
-      const aiResult = aiMatchingResults.find(r => r.commitSha === sha);
-      const aiDetail = aiResult
-        ? {
-            ran:          true,
-            skipped:      (aiResult.unmatchedParts || []).some(p =>
-                            typeof p === 'string' && (p.includes('Trivial') || p.includes('No substantial'))
-                          ),
-            matched:      (aiResult.matchedTasks?.length || 0) > 0,
-            matchedTasks: (aiResult.matchedTasks || []).map((t: any) => ({
-              taskId:              t.taskId,
-              taskName:            t.taskName,
-              confidence:          t.confidence,
-              whatWasImplemented:  t.whatWasImplemented  || '',
-              howItWasImplemented: t.howItWasImplemented || ''
-            })),
-            unmatchedParts: aiResult.unmatchedParts || [],
-            commitSummary:  (aiResult as any).commitSummary || ''
-          }
-        : { ran: false, skipped: false, matched: false, matchedTasks: [], unmatchedParts: [], commitSummary: '' };
+    // ============================================
+    // CONFIG FILES ANALYSIS using helper function
+    // ============================================
+    console.log('\n⚙️ [STEP 5] Config Files Analysis...');
+    const configResult = this.detectConfigFiles(files);
+    detailedMarks.configFile.earned = configResult.score;
+    detailedMarks.configFile.present = configResult.found.length > 0;
+    detailedMarks.configFile.found = configResult.found;
+    detailedMarks.configFile.details = configResult.details;
 
-      // ── What ML said about this commit ────────────────────────────────
-      const mlResult = mlMatchingResults.find(r => r.commitSha === sha);
-      const mlDetail = mlResult
-        ? {
-            ran:          true,
-            matched:      (mlResult.matchedTasks?.length || 0) > 0,
-            matchedTasks: (mlResult.matchedTasks || []).map((t: any) => ({
-              taskId:              t.taskId,
-              taskName:            t.taskName,
-              confidence:          t.confidence,
-              whatWasImplemented:  t.whatWasImplemented || ''
-            })),
-            unmatchedParts: mlResult.unmatchedParts || [],
-            // ML-specific scores
-            confidence:     (mlResult as any).confidence     ?? null,
-            matchLevel:     (mlResult as any).matchLevel     ?? null,
-            tfidfScore:     (mlResult as any).tfidfScore     ?? null,
-            spacyScore:     (mlResult as any).spacyScore     ?? null,
-            sentimentMatch: (mlResult as any).sentimentMatch ?? null
-          }
-        : { ran: false, matched: false, matchedTasks: [], unmatchedParts: [], confidence: null, matchLevel: null, tfidfScore: null, spacyScore: null, sentimentMatch: null };
+    // ============================================
+    // GITIGNORE ANALYSIS using helper function
+    // ============================================
+    console.log('\n🚫 [STEP 6] Gitignore Analysis...');
+    const gitignoreResult = this.detectGitignore(files);
+    detailedMarks.gitignore.earned = gitignoreResult.score;
+    detailedMarks.gitignore.present = gitignoreResult.present;
+    detailedMarks.gitignore.details = gitignoreResult.details;
 
-      // ── Combined winner ────────────────────────────────────────────────
-      const aiMatched = aiDetail.matched;
-      const mlMatched = mlDetail.matched;
-      let winnerSource: 'AI' | 'ML' | 'AI+ML' | 'NONE' = 'NONE';
-      let winnerTasks: any[]                             = [];
+    // ============================================
+    // CODE FILES ANALYSIS using helper function
+    // ============================================
+    console.log('\n💻 [STEP 7] Code Files Analysis...');
+    const codeFilesResult = this.analyzeCodeFiles(files);
+    detailedMarks.codeFiles.earned = codeFilesResult.score;
+    detailedMarks.codeFiles.count = codeFilesResult.count;
+    detailedMarks.codeFiles.details = codeFilesResult.details;
 
-      if (aiMatched && mlMatched) {
-        winnerSource = 'AI+ML';
-        // Merge unique tasks by taskId
-        const taskMap = new Map<string, any>();
-        for (const t of aiDetail.matchedTasks) taskMap.set(t.taskId, { ...t, source: 'AI' });
-        for (const t of mlDetail.matchedTasks) {
-          if (!taskMap.has(t.taskId)) taskMap.set(t.taskId, { ...t, source: 'ML' });
-          else {
-            const existing = taskMap.get(t.taskId)!;
-            taskMap.set(t.taskId, { ...existing, source: 'AI+ML', mlConfidence: t.confidence });
-          }
-        }
-        winnerTasks = Array.from(taskMap.values());
-      } else if (aiMatched) {
-        winnerSource = 'AI';
-        winnerTasks  = aiDetail.matchedTasks.map(t => ({ ...t, source: 'AI' }));
-      } else if (mlMatched) {
-        winnerSource = 'ML';
-        winnerTasks  = mlDetail.matchedTasks.map(t => ({ ...t, source: 'ML' }));
-      }
+    // ============================================
+    // COMMIT COUNT SCORE using helper function
+    // ============================================
+    console.log('\n📊 [STEP 8] Commit Count Score...');
+    const commitCountResult = this.scoreCommitCount(commitsWithChanges.length);
+    detailedMarks.commits.earned = commitCountResult.earned;
+    detailedMarks.commits.count = commitsWithChanges.length;
+    detailedMarks.commits.details = commitCountResult.details;
+
+    // ============================================
+    // AI + ML COMMIT MATCHING
+    // ============================================
+    console.log('\n🤖 [STEP 9] AI + ML Commit Matching...');
+    let aiMatchedCount = 0;
+    let mlMatchedCount = 0;
+    let combinedMatchedCount = 0;
+    let matchPercentage = 0;
+    
+    if (simulationTasks.length > 0 && commitsWithChanges.length > 0) {
+      // AI Matching
+      const aiResults = await this.runAIMatching(commitsWithChanges, simulationTasks);
+      aiMatchedCount = aiResults.matchedCount;
+      
+      // ML Matching
+      const mlResults = await this.runMLMatching(commitsWithChanges, simulationTasks);
+      mlMatchedCount = mlResults.matchedCount;
+      
+      // Combine results
+      const combined = this.combineMatchingResults(aiResults.results, mlResults.results);
+      combinedMatchedCount = combined.matchedCount;
+      matchPercentage = combined.matchPercentage;
+      
+      detailedMarks.commitMatching.totalCommitsAnalyzed = combined.totalAnalyzed;
+      detailedMarks.commitMatching.aiMatchedCount = aiMatchedCount;
+      detailedMarks.commitMatching.mlMatchedCount = mlMatchedCount;
+      detailedMarks.commitMatching.combinedMatchedCount = combinedMatchedCount;
+      
+      const commitMatchingScore = this.scoreCommitMatching(matchPercentage, combinedMatchedCount, combined.totalAnalyzed);
+      detailedMarks.commitMatching.earned = commitMatchingScore.earned;
+      detailedMarks.commitMatching.details = commitMatchingScore.details;
+    }
+
+    // ============================================
+    // CALCULATE TOTAL SCORE
+    // ============================================
+    githubScore = 
+      detailedMarks.commits.earned +
+      detailedMarks.readme.earned +
+      detailedMarks.configFile.earned +
+      detailedMarks.gitignore.earned +
+      detailedMarks.codeFiles.earned +
+      detailedMarks.commitMatching.earned;
       
 
-      return {
-        // ── Commit identity ──────────────────────────────────────────────
-        commitSha:     sha,
-        commitMessage: commitMeta?.message || aiResult?.commitMessage || mlResult?.commitMessage || '',
-        commitDate:    commitMeta?.date    || null,
-        commitAuthor:  commitMeta?.author  || null,
-        commitUrl:     commitMeta?.url     || null,
-        linesAdded:    commitMeta?.linesAdded   || 0,
-        linesDeleted:  commitMeta?.linesDeleted || 0,
-        filesChanged:  commitMeta?.files?.length || 0,
+    // Print final breakdown
+    console.log('\n╔═══════════════════════════════════════════════════════════════╗');
+    console.log('║                    GITHUB SCORE BREAKDOWN                      ║');
+    console.log('╠═══════════════════════════════════════════════════════════════╣');
+    console.log(`║ 📝 Commits:        ${detailedMarks.commits.earned.toString().padStart(2)}/${detailedMarks.commits.max}  - ${detailedMarks.commits.details}`);
+    console.log(`║ 📖 README:         ${detailedMarks.readme.earned.toString().padStart(2)}/${detailedMarks.readme.max}  - ${detailedMarks.readme.details}`);
+    console.log(`║ ⚙️ Config Files:   ${detailedMarks.configFile.earned.toString().padStart(2)}/${detailedMarks.configFile.max}  - ${detailedMarks.configFile.details}`);
+    console.log(`║ 🚫 .gitignore:     ${detailedMarks.gitignore.earned.toString().padStart(2)}/${detailedMarks.gitignore.max}  - ${detailedMarks.gitignore.details}`);
+    console.log(`║ 💻 Code Files:     ${detailedMarks.codeFiles.earned.toString().padStart(2)}/${detailedMarks.codeFiles.max}  - ${detailedMarks.codeFiles.details}`);
+    console.log(`║ 🔗 Commit Match:   ${detailedMarks.commitMatching.earned.toString().padStart(2)}/${detailedMarks.commitMatching.max}  - ${detailedMarks.commitMatching.details}`);
+    console.log(`╠═══════════════════════════════════════════════════════════════╣`);
+    console.log(`║ 📊 TOTAL:          ${githubScore.toString().padStart(2)}/${detailedMarks.totalPossible} points (${Math.round((githubScore / detailedMarks.totalPossible) * 100)}%)`);
+    console.log('╚═══════════════════════════════════════════════════════════════╝');
 
-        // ── AI result for this commit ────────────────────────────────────
-        ai: aiDetail,
-
-        // ── ML result for this commit ────────────────────────────────────
-        ml: mlDetail,
-
-        // ── Combined winner ──────────────────────────────────────────────
-        winner: {
-          source:       winnerSource,           // 'AI' | 'ML' | 'AI+ML' | 'NONE'
-          matched:      winnerSource !== 'NONE',
-          matchedTasks: winnerTasks
-        }
-      };
-    });
-
-    // Log per-commit detail to console
-    console.log('\n📋 PER-COMMIT DETAIL:');
-    console.log('═══════════════════════════════════════════════════════════════');
-    for (const c of perCommitDetail) {
-      const msg = c.commitMessage.substring(0, 60);
-      console.log(`\n  🔸 ${c.commitSha} — "${msg}"`);
-      console.log(`     AI  → ran:${c.ai.ran} | matched:${c.ai.matched} | tasks:[${c.ai.matchedTasks.map((t:any) => `${t.taskName}(${t.confidence}%)`).join(', ') || 'none'}]`);
-      if (c.ai.skipped) console.log(`     AI  → SKIPPED: ${c.ai.unmatchedParts[0]}`);
-      console.log(`     ML  → ran:${c.ml.ran} | matched:${c.ml.matched} | tasks:[${c.ml.matchedTasks.map((t:any) => `${t.taskName}(${t.confidence}%)`).join(', ') || 'none'}] | tfidf:${c.ml.tfidfScore} spacy:${c.ml.spacyScore} sentiment:${c.ml.sentimentMatch}`);
-      console.log(`     WIN → ${c.winner.source} | tasks:[${c.winner.matchedTasks.map((t:any) => t.taskName).join(', ') || 'none'}]`);
-    }
-    console.log('═══════════════════════════════════════════════════════════════\n');
-
-    // ── STEP 10: Task implementation report ──────────────────────────────
-    const taskImplementationReport = simulationTasks.map((task: any, idx: number) => {
-      const taskId    = String(task.id || task.order || task.task_index || idx + 1);
-      const taskName  = task.title || task.task_name || task.name || `Task ${taskId}`;
-      const shortName = taskName.toLowerCase().substring(0, 25);
-
-      // Pull evidence straight from perCommitDetail for consistency
-      const commitsWithAiMatch  = perCommitDetail.filter(c =>
-        c.ai.matchedTasks.some((t: any) =>
-          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
-        )
-      );
-      const commitsWithMlMatch  = perCommitDetail.filter(c =>
-        c.ml.matchedTasks.some((t: any) =>
-          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
-        )
-      );
-
-      const aiEvidence = commitsWithAiMatch.map(c => {
-        const t = c.ai.matchedTasks.find((t: any) =>
-          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
-        ) as any;
-        return {
-          commitSha:           c.commitSha,
-          commitMessage:       c.commitMessage,
-          commitDate:          c.commitDate,
-          confidence:          t?.confidence          || 0,
-          whatWasImplemented:  t?.whatWasImplemented  || '',
-          howItWasImplemented: t?.howItWasImplemented || ''
-        };
-      });
-
-      const mlEvidence = commitsWithMlMatch.map(c => {
-        const t = c.ml.matchedTasks.find((t: any) =>
-          String(t.taskId) === taskId || t.taskName?.toLowerCase().includes(shortName)
-        ) as any;
-        return {
-          commitSha:      c.commitSha,
-          commitMessage:  c.commitMessage,
-          commitDate:     c.commitDate,
-          confidence:     t?.confidence || c.ml.confidence || 0,
-          tfidfScore:     c.ml.tfidfScore,
-          spacyScore:     c.ml.spacyScore,
-          sentimentMatch: c.ml.sentimentMatch,
-          matchLevel:     c.ml.matchLevel
-        };
-      });
-
-      const isImplemented  = aiEvidence.length > 0 || mlEvidence.length > 0;
-      const implementedBy: string[] = [];
-      if (aiEvidence.length > 0) implementedBy.push('AI');
-      if (mlEvidence.length > 0) implementedBy.push('ML');
-
-      const allConfidences = [
-        ...aiEvidence.map(e => e.confidence),
-        ...mlEvidence.map(e => e.confidence)
-      ].filter(c => c > 0);
-      const avgConfidence = allConfidences.length > 0
-        ? parseFloat((allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length).toFixed(1))
-        : 0;
-
-      return {
-        taskId,
-        taskName,
-        taskDescription: task.description || task.requirements || '',
-        taskOrder:       task.order || idx + 1,
-        implemented:     isImplemented,
-        implementedBy,
-        avgConfidence,
-        ai: { found: aiEvidence.length > 0, commitCount: aiEvidence.length, commits: aiEvidence },
-        ml: { found: mlEvidence.length > 0, commitCount: mlEvidence.length, commits: mlEvidence }
-      };
-    });
-
-    const implementedTasks    = taskImplementationReport.filter(t => t.implemented);
-    const notImplementedTasks = taskImplementationReport.filter(t => !t.implemented);
-
-    console.log(`\n📋 TASK REPORT: ${implementedTasks.length}/${simulationTasks.length} implemented`);
-    for (const t of implementedTasks)
-      console.log(`   ✅ [${t.taskId}] ${t.taskName} — by ${t.implementedBy.join('+')} (avg ${t.avgConfidence}%)`);
-    for (const t of notImplementedTasks)
-      console.log(`   ❌ [${t.taskId}] ${t.taskName}`);
-
-    // ── STEP 11: Assemble full analysis ───────────────────────────────────
+    // Build final analysis
     githubAnalysis = {
       analyzed: true,
-      mode:     '1-day-progressive',
-      repoUrl:  `${owner}/${repo}`,
+      mode: '1-day-progressive',
+      repoUrl: `${owner}/${repo}`,
       owner,
       repo,
-      score:    githubScore,
+      score: Math.round((githubScore / detailedMarks.totalPossible) * 100),
       detailedMarks,
-
-      // ════════════════════════════════════════════════════════
-      // PER-COMMIT DETAIL — every commit, full AI + ML view
-      // ════════════════════════════════════════════════════════
-      perCommitDetail,
-      // Shape of each entry:
-      // {
-      //   commitSha, commitMessage, commitDate, commitAuthor, commitUrl,
-      //   linesAdded, linesDeleted, filesChanged,
-      //   ai: {
-      //     ran, skipped, matched,
-      //     matchedTasks: [{ taskId, taskName, confidence, whatWasImplemented, howItWasImplemented }],
-      //     unmatchedParts, commitSummary
-      //   },
-      //   ml: {
-      //     ran, matched,
-      //     matchedTasks: [{ taskId, taskName, confidence, whatWasImplemented }],
-      //     unmatchedParts,
-      //     confidence, matchLevel, tfidfScore, spacyScore, sentimentMatch
-      //   },
-      //   winner: { source: 'AI'|'ML'|'AI+ML'|'NONE', matched, matchedTasks[] }
-      // }
-
-      // ════════════════════════════════════════════════════════
-      // TASK IMPLEMENTATION REPORT — per task, AI + ML evidence
-      // ════════════════════════════════════════════════════════
-      taskImplementationReport: {
-        totalTasks:          simulationTasks.length,
-        implementedCount:    implementedTasks.length,
-        notImplementedCount: notImplementedTasks.length,
-        implementationRate:  simulationTasks.length > 0
-          ? parseFloat(((implementedTasks.length / simulationTasks.length) * 100).toFixed(1))
-          : 0,
-        allTasks:            taskImplementationReport,
-        implementedTasks,
-        notImplementedTasks
+      readme_analysis: {
+        present: detailedMarks.readme.present,
+        file_name: detailedMarks.readme.file_name,
+        quality: detailedMarks.readme.quality,
+        task_coverage: detailedMarks.readme.taskCoverage,
+        documented_tasks: detailedMarks.readme.documented_tasks,
+        missing_tasks: detailedMarks.readme.missingTasks,
+        suggestions: readmeAnalysis?.suggestions || [],
+        overall_assessment: readmeAnalysis?.overallAssessment || ''
       },
-
-      // ── Matching summary numbers ───────────────────────────────────────
-      matchingSummary: {
-        aiCommitsAnalyzed:  aiMatchingResults.length,
-        aiMatchedCount,
-        aiMatchRate: aiMatchingResults.length > 0
-          ? parseFloat(((aiMatchedCount / aiMatchingResults.length) * 100).toFixed(1))
-          : 0,
-        aiAvgConfidence: aiMatchedCount > 0
-          ? parseFloat((aiTotalConfidence / aiMatchedCount).toFixed(1))
-          : 0,
-        mlCommitsAnalyzed:  mlMatchingResults.length,
-        mlMatchedCount,
-        mlMatchRate: mlMatchingResults.length > 0
-          ? parseFloat(((mlMatchedCount / mlMatchingResults.length) * 100).toFixed(1))
-          : 0,
-        mlAvgConfidence: mlMatchedCount > 0
-          ? parseFloat((mlTotalConfidence / mlMatchedCount).toFixed(1))
-          : 0,
-        combinedUniqueCommits:  totalCommitsConsidered,
-        combinedMatchedCommits: combinedMatchedCount,
-        combinedMatchRate:      parseFloat(matchPercentage.toFixed(1)),
-        combinedAvgConfidence:  parseFloat(averageConfidence.toFixed(1)),
-        matchingScore:          detailedMarks.commitMatching.earned,
-        matchingDetails:        detailedMarks.commitMatching.details
+      config_files_analysis: {
+        found: detailedMarks.configFile.found,
+        count: detailedMarks.configFile.found.length,
+        score: detailedMarks.configFile.earned
       },
-
-      // ── Raw engine arrays (for debugging) ────────────────────────────
-      aiMatchingResults,
-      mlMatchingResults,
-      commitTaskMatching:          commitTaskMatchingResults,
-      deduplicatedMatchingResults: deduplicatedResults,
-
-      // ── Score breakdown ────────────────────────────────────────────────
+      commit_statistics: {
+        total_commits: commitsWithChanges.length,
+        first_commit: commitsWithChanges[commitsWithChanges.length - 1]?.date,
+        last_commit: commitsWithChanges[0]?.date
+      },
+      matching_summary: {
+        ai_matched: detailedMarks.commitMatching.aiMatchedCount,
+        ml_matched: detailedMarks.commitMatching.mlMatchedCount,
+        combined_matched: detailedMarks.commitMatching.combinedMatchedCount,
+        match_rate: matchPercentage,
+        total_analyzed: detailedMarks.commitMatching.totalCommitsAnalyzed
+      },
       breakdown: {
-        commitCount:      metrics.commitCount,
-        hasReadme:        metrics.hasReadme,
-        hasConfigFile:    metrics.hasConfigFile,
-        hasGitignore:     metrics.hasGitignore,
-        codeFilesCount:   metrics.codeFilesCount,
-        totalLinesOfCode: metrics.totalLinesOfCode,
-        primaryLanguage:  metrics.primaryLanguage,
-        languagesUsed:    metrics.languages.map((l: any) => l.name),
-        scoreBreakdown: [
-          `Commits:         ${detailedMarks.commits.earned}/${detailedMarks.commits.max} - ${detailedMarks.commits.details}`,
-          `README:          ${detailedMarks.readme.earned}/${detailedMarks.readme.max} - ${detailedMarks.readme.details}`,
-          `Config:          ${detailedMarks.configFile.earned}/${detailedMarks.configFile.max} - ${detailedMarks.configFile.details}`,
-          `.gitignore:      ${detailedMarks.gitignore.earned}/${detailedMarks.gitignore.max} - ${detailedMarks.gitignore.details}`,
-          `Code files:      ${detailedMarks.codeFiles.earned}/${detailedMarks.codeFiles.max} - ${detailedMarks.codeFiles.details}`,
-          `Commit matching: ${detailedMarks.commitMatching.earned}/${detailedMarks.commitMatching.max} - ${detailedMarks.commitMatching.details}`
-        ],
-        pointsEarned: {
-          commits:        detailedMarks.commits.earned,
-          readme:         detailedMarks.readme.earned,
-          configFile:     detailedMarks.configFile.earned,
-          gitignore:      detailedMarks.gitignore.earned,
-          codeFiles:      detailedMarks.codeFiles.earned,
-          commitMatching: detailedMarks.commitMatching.earned,
-          total:          githubScore,
-          maxPossible:    detailedMarks.totalPossible
-        }
-      },
-
-      // ── Repository stats ───────────────────────────────────────────────
-      stats: {
-        commits:           metrics.commitCount,
-        commitsPerBranch:  metrics.commitsPerBranch,
-        codeFiles:         metrics.codeFilesCount,
-        linesOfCode:       metrics.totalLinesOfCode,
-        totalFiles:        metrics.totalFiles,
-        hasReadme:         metrics.hasReadme,
-        hasConfigFile:     metrics.hasConfigFile,
-        hasGitignore:      metrics.hasGitignore,
-        hasTests:          metrics.hasTests,
-        primaryLanguage:   metrics.primaryLanguage,
-        languages:         metrics.languages,
-        totalAdditions:    metrics.totalAdditions,
-        totalDeletions:    metrics.totalDeletions,
-        totalFilesChanged: metrics.totalFilesChanged
-      },
-
-      commits: {
-        total:           metrics.commitCount,
-        commitsPerBranch: metrics.commitsPerBranch,
-        firstCommitDate: metrics.firstCommitDate,
-        lastCommitDate:  metrics.lastCommitDate,
-        averagePerWeek:  metrics.averageCommitsPerWeek,
-        topAuthors:      metrics.topAuthors,
-        list:            metrics.recentCommits
+        commits: { earned: detailedMarks.commits.earned, max: detailedMarks.commits.max, details: detailedMarks.commits.details },
+        readme: { earned: detailedMarks.readme.earned, max: detailedMarks.readme.max, details: detailedMarks.readme.details },
+        configFiles: { earned: detailedMarks.configFile.earned, max: detailedMarks.configFile.max, details: detailedMarks.configFile.details },
+        gitignore: { earned: detailedMarks.gitignore.earned, max: detailedMarks.gitignore.max, details: detailedMarks.gitignore.details },
+        codeFiles: { earned: detailedMarks.codeFiles.earned, max: detailedMarks.codeFiles.max, details: detailedMarks.codeFiles.details },
+        commitMatching: { earned: detailedMarks.commitMatching.earned, max: detailedMarks.commitMatching.max, details: detailedMarks.commitMatching.details },
+        total: githubScore,
+        maxPossible: detailedMarks.totalPossible,
+        percentage: Math.round((githubScore / detailedMarks.totalPossible) * 100)
       }
     };
 
-    console.log(`✅ GitHub analysis complete`);
-    console.log(`📊 SCORE: ${githubScore}/${detailedMarks.totalPossible}`);
-    console.log(`📊 Tasks implemented: ${implementedTasks.length}/${simulationTasks.length}`);
-    console.log(`📊 AI:${aiMatchedCount} ML:${mlMatchedCount} Combined:${combinedMatchedCount}`);
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log('✅ [calculateGitHubScore] COMPLETED SUCCESSFULLY');
     console.log('═══════════════════════════════════════════════════════════════\n');
 
     return { score: githubScore, analysis: githubAnalysis };
 
   } catch (githubError: any) {
-    console.error('❌ GitHub analysis error:', githubError.message);
+    console.error('\n═══════════════════════════════════════════════════════════════');
+    console.error('❌ [calculateGitHubScore] ERROR');
+    console.error('═══════════════════════════════════════════════════════════════');
+    console.error('Error details:', githubError.message);
+    console.error('═══════════════════════════════════════════════════════════════\n');
+    
     return {
       score: 0,
       analysis: {
         analyzed: false,
-        error:    githubError.message,
-        message:  'Failed to analyze GitHub repository',
+        error: githubError.message,
+        message: 'Failed to analyze GitHub repository',
         detailedMarks,
         score: 0
       }
     };
   }
+}
+
+// ============================================
+// ADDITIONAL HELPER FUNCTIONS FOR MATCHING
+// ============================================
+
+private async runAIMatching(commits: any[], tasks: any[]): Promise<{ matchedCount: number; results: any[] }> {
+  console.log('🤖 Running AI matching...');
+  const results = [];
+  let matchedCount = 0;
+  
+  for (let i = 0; i < Math.min(commits.length, 10); i++) {
+    const commit = commits[i];
+    try {
+      const matchResult = await this.matchCommitToTasksWithAI(commit, tasks);
+      results.push(matchResult);
+      if (matchResult.matchedTasks?.length > 0) matchedCount++;
+    } catch (err) {
+      results.push({
+        commitSha: commit.shortSha,
+        commitMessage: commit.message,
+        matchedTasks: [],
+        unmatchedParts: ['AI matching failed']
+      });
+    }
+  }
+  
+  console.log(`   AI matched: ${matchedCount}/${results.length}`);
+  return { matchedCount, results };
+}
+
+private async runMLMatching(commits: any[], tasks: any[]): Promise<{ matchedCount: number; results: any[] }> {
+  console.log('🤖 Running ML matching...');
+  const results = [];
+  let matchedCount = 0;
+  
+  for (let i = 0; i < Math.min(commits.length, 15); i++) {
+    const commit = commits[i];
+    try {
+      const matchResult = await this.matchCommitToTasksWithMl(commit, tasks);
+      results.push(matchResult);
+      if (matchResult.matchedTasks?.length > 0) matchedCount++;
+    } catch (err) {
+      results.push({
+        commitSha: commit.shortSha,
+        commitMessage: commit.message,
+        matchedTasks: [],
+        unmatchedParts: ['ML matching failed']
+      });
+    }
+  }
+  
+  console.log(`   ML matched: ${matchedCount}/${results.length}`);
+  return { matchedCount, results };
+}
+
+private combineMatchingResults(aiResults: any[], mlResults: any[]): { matchedCount: number; totalAnalyzed: number; matchPercentage: number } {
+  console.log('🔗 Combining AI and ML results...');
+  
+  const dedupeMap = new Map();
+  for (const r of aiResults) dedupeMap.set(r.commitSha, r);
+  for (const r of mlResults) {
+    if (!dedupeMap.has(r.commitSha)) dedupeMap.set(r.commitSha, r);
+  }
+  
+  const combined = Array.from(dedupeMap.values());
+  const matchedCount = combined.filter(r => r.matchedTasks?.length > 0).length;
+  const totalAnalyzed = combined.length;
+  const matchPercentage = totalAnalyzed > 0 ? (matchedCount / totalAnalyzed) * 100 : 0;
+  
+  console.log(`   Combined: ${matchedCount}/${totalAnalyzed} matches (${matchPercentage.toFixed(1)}%)`);
+  
+  return { matchedCount, totalAnalyzed, matchPercentage };
 }
 
 calculateGitHubScoreForRepo = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
@@ -2967,6 +3218,338 @@ calculateGitHubScoreForRepo = async (req: AuthenticatedRequest, res: Response): 
     ResponseService.error(res, error.message || 'Failed to calculate GitHub score', 500);
   }
 };
+
+
+/**
+ * Code Quality Detection for Multiple Languages
+ * Detects programming language and evaluates code quality
+ */
+
+
+private detectProgrammingLanguage = (code: string): string => {
+  if (!code || code.trim().length === 0) return 'unknown';
+  
+  const languagePatterns: Array<{ lang: string; pattern: RegExp }> = [
+    { lang: 'python', pattern: /def\s+\w+\s*\(|import\s+\w+|from\s+\w+\s+import|print\(|if\s+__name__\s*==\s*['"]__main__['"]/ },
+    { lang: 'javascript', pattern: /function\s+\w+\s*\(|const\s+\w+\s*=|let\s+\w+\s*=|var\s+\w+\s*=|=>|console\.log|export\s+default/ },
+    { lang: 'typescript', pattern: /interface\s+\w+|type\s+\w+\s*=|:\s*string|:\s*number|:\s*boolean|<[A-Z]>/ },
+    { lang: 'java', pattern: /public\s+class|private\s+\w+|protected\s+\w+|System\.out\.println|import\s+java\./ },
+    { lang: 'csharp', pattern: /using\s+System|namespace\s+\w+|public\s+class|private\s+void|Console\.WriteLine/ },
+    { lang: 'cpp', pattern: /#include\s+[<"]|using\s+namespace\s+std|int\s+main\(|std::|cout\s*<<|cin\s*>>/ },
+    { lang: 'go', pattern: /func\s+\w+\s*\(|package\s+\w+|import\s+\(|fmt\.Println|:=/ },
+    { lang: 'rust', pattern: /fn\s+\w+\s*\(|let\s+mut|impl\s+\w+|println!|match\s+/ },
+    { lang: 'ruby', pattern: /def\s+\w+|end\s*$|puts\s+|require\s+['"]|attr_accessor/ },
+    { lang: 'php', pattern: /function\s+\w+\s*\(|<\?php|echo\s+|namespace\s+\w+|use\s+\w+/ },
+    { lang: 'swift', pattern: /func\s+\w+\s*\(|var\s+\w+|let\s+\w+|print\(|import\s+UIKit/ },
+    { lang: 'kotlin', pattern: /fun\s+\w+\s*\(|val\s+\w+|var\s+\w+|println\(|import\s+kotlin\./ },
+    { lang: 'sql', pattern: /SELECT\s+|INSERT\s+INTO|UPDATE\s+|DELETE\s+FROM|CREATE\s+TABLE/i },
+    { lang: 'html', pattern: /<[^>]+>|<\/[^>]+>|<!DOCTYPE/i },
+    { lang: 'css', pattern: /[a-zA-Z-]+\s*\{|@media|@import/ },
+    { lang: 'shell', pattern: /#!\/bin\/bash|#!\/bin\/sh|echo\s+|export\s+\w+=/ }
+  ];
+  
+  for (const { lang, pattern } of languagePatterns) {
+    if (pattern.test(code)) {
+      return lang;
+    }
+  }
+  
+  return 'unknown';
+};
+
+private detectCodeQuality = (code: string, language?: string): CodeQualityResult => {
+  if (!code || code.trim().length === 0) {
+    return {
+      score: 0,
+      maxScore: 100,
+      details: {
+        hasFunctions: false,
+        hasVariables: false,
+        hasConditionals: false,
+        hasLoops: false,
+        hasReturns: false,
+        hasErrorHandling: false,
+        hasClasses: false,
+        hasImports: false,
+        linesOfCode: 0,
+        codeLength: 0,
+        language: language || 'none',
+        detectedFeatures: []
+      }
+    };
+  }
+  
+  const detectedLanguage = language || this.detectProgrammingLanguage(code);
+  const lines = code.split('\n');
+  const linesOfCode = lines.filter(line => line.trim().length > 0).length;
+  
+  let hasFunctions = false;
+  let hasVariables = false;
+  let hasConditionals = false;
+  let hasLoops = false;
+  let hasReturns = false;
+  let hasErrorHandling = false;
+  let hasClasses = false;
+  let hasImports = false;
+  
+  const detectedFeatures: string[] = [];
+  
+  // Language-specific patterns
+  const patterns: Record<string, any> = {
+    // Functions/Methods
+    functions: {
+      python: /\bdef\s+\w+\s*\(/,
+      javascript: /\bfunction\s+\w+\s*\(|\w+\s*=\s*\([^)]*\)\s*=>/,
+      typescript: /\bfunction\s+\w+\s*\(|\w+\s*=\s*\([^)]*\)\s*=>/,
+      java: /\b(public|private|protected)?\s+\w+\s+\w+\s*\(/,
+      csharp: /\b(public|private|protected)?\s+\w+\s+\w+\s*\(/,
+      cpp: /\b\w+\s+\w+\s*\([^)]*\)\s*\{/,
+      go: /\bfunc\s+\w+\s*\(/,
+      rust: /\bfn\s+\w+\s*\(/,
+      ruby: /\bdef\s+\w+/,
+      php: /\bfunction\s+\w+\s*\(/,
+      swift: /\bfunc\s+\w+\s*\(/,
+      kotlin: /\bfun\s+\w+\s*\(/
+    },
+    // Variables
+    variables: {
+      python: /\b\w+\s*=/,
+      javascript: /\b(const|let|var)\s+\w+/,
+      typescript: /\b(const|let|var)\s+\w+/,
+      java: /\b(int|String|boolean|double|float|long)\s+\w+/,
+      csharp: /\b(int|string|bool|double|float|long)\s+\w+/,
+      cpp: /\b(int|string|bool|double|float|long|auto)\s+\w+/,
+      go: /:=\s*\w+|\bvar\s+\w+/,
+      rust: /\b(let|let mut)\s+\w+/,
+      ruby: /\b\w+\s*=/,
+      php: /\$\w+\s*=/,
+      swift: /\b(var|let)\s+\w+/,
+      kotlin: /\b(var|val)\s+\w+/
+    },
+    // Conditionals
+    conditionals: {
+      python: /\bif\s+|elif\s+|else\s*:/,
+      javascript: /\bif\s*\(|else\s+if|else\s*\{/,
+      typescript: /\bif\s*\(|else\s+if|else\s*\{/,
+      java: /\bif\s*\(|else\s+if|else\s*\{/,
+      csharp: /\bif\s*\(|else\s+if|else\s*\{/,
+      cpp: /\bif\s*\(|else\s+if|else\s*\{/,
+      go: /\bif\s+|else\s+if|else\s*\{/,
+      rust: /\bif\s+|else\s+if|else\s*\{/,
+      ruby: /\bif\s+|elsif|else\s*$/,
+      php: /\bif\s*\(|elseif|else\s*\{/,
+      swift: /\bif\s+|else\s+if|else\s*\{/,
+      kotlin: /\bif\s*\(|else\s+if|else\s*\{/
+    },
+    // Loops
+    loops: {
+      python: /\bfor\s+\w+\s+in|while\s+/,
+      javascript: /\bfor\s*\(|while\s*\(|do\s*\{/,
+      typescript: /\bfor\s*\(|while\s*\(|do\s*\{/,
+      java: /\bfor\s*\(|while\s*\(|do\s*\{/,
+      csharp: /\bfor\s*\(|foreach\s*\(|while\s*\(|do\s*\{/,
+      cpp: /\bfor\s*\(|while\s*\(|do\s*\{/,
+      go: /\bfor\s+|range\s+/,
+      rust: /\bfor\s+\w+\s+in|while\s+/,
+      ruby: /\bfor\s+\w+\s+in|while\s+/,
+      php: /\bfor\s*\(|foreach\s*\(|while\s*\(/,
+      swift: /\bfor\s+\w+\s+in|while\s+/,
+      kotlin: /\bfor\s*\(|while\s*\(/
+    },
+    // Returns
+    returns: {
+      python: /\breturn\s+/,
+      javascript: /\breturn\s+/,
+      typescript: /\breturn\s+/,
+      java: /\breturn\s+/,
+      csharp: /\breturn\s+/,
+      cpp: /\breturn\s+/,
+      go: /\breturn\s+/,
+      rust: /\breturn\s+/,
+      ruby: /\breturn\s+/,
+      php: /\breturn\s+/,
+      swift: /\breturn\s+/,
+      kotlin: /\breturn\s+/
+    },
+    // Error handling
+    errorHandling: {
+      python: /\btry\s*:|except\s+|finally\s*:/,
+      javascript: /\btry\s*\{|catch\s*\(|finally\s*\{/,
+      typescript: /\btry\s*\{|catch\s*\(|finally\s*\{/,
+      java: /\btry\s*\{|catch\s*\(|finally\s*\{/,
+      csharp: /\btry\s*\{|catch\s*\(|finally\s*\{/,
+      cpp: /\btry\s*\{|catch\s*\(/,
+      go: /if\s+err\s*!=\s*nil/,
+      rust: /\bResult|Option|unwrap\(\)|expect\(/,
+      ruby: /\bbegin\s*$|rescue\s+|ensure\s*$/,
+      php: /\btry\s*\{|catch\s*\(|finally\s*\{/,
+      swift: /\bdo\s*\{|catch\s+|try!/,
+      kotlin: /\btry\s*\{|catch\s*\(|finally\s*\{/
+    },
+    // Classes/OOP
+    classes: {
+      python: /\bclass\s+\w+/,
+      javascript: /\bclass\s+\w+\s*\{/,
+      typescript: /\bclass\s+\w+\s*\{|interface\s+\w+/,
+      java: /\bclass\s+\w+\s*\{|interface\s+\w+/,
+      csharp: /\bclass\s+\w+\s*\{|interface\s+\w+/,
+      cpp: /\bclass\s+\w+\s*\{/,
+      go: /\btype\s+\w+\s+struct/,
+      rust: /\bstruct\s+\w+|impl\s+\w+/,
+      ruby: /\bclass\s+\w+/,
+      php: /\bclass\s+\w+/,
+      swift: /\bclass\s+\w+|struct\s+\w+/,
+      kotlin: /\bclass\s+\w+|interface\s+\w+/
+    },
+    // Imports/Includes
+    imports: {
+      python: /^(import|from)\s+/m,
+      javascript: /^(import|require\()/m,
+      typescript: /^(import|from\s+['"])/m,
+      java: /^import\s+/m,
+      csharp: /^using\s+/m,
+      cpp: /^#include/m,
+      go: /^import\s+/m,
+      rust: /^use\s+/m,
+      ruby: /^(require|include)\s+/m,
+      php: /^(use|require|include)\s+/m,
+      swift: /^import\s+/m,
+      kotlin: /^import\s+/m
+    }
+  };
+  
+  // Detect features
+  const langLower = detectedLanguage.toLowerCase();
+  
+  // Helper function to check pattern for current language
+  const checkFeature = (feature: string): boolean => {
+    const patternSet = patterns[feature];
+    if (!patternSet) return false;
+    
+    // Try exact language match
+    if (patternSet[langLower]) {
+      return patternSet[langLower].test(code);
+    }
+    
+    // Try default patterns (JavaScript-based for unknown languages)
+    if (patternSet.javascript) {
+      return patternSet.javascript.test(code);
+    }
+    
+    return false;
+  };
+  
+  hasFunctions = checkFeature('functions');
+  hasVariables = checkFeature('variables');
+  hasConditionals = checkFeature('conditionals');
+  hasLoops = checkFeature('loops');
+  hasReturns = checkFeature('returns');
+  hasErrorHandling = checkFeature('errorHandling');
+  hasClasses = checkFeature('classes');
+  hasImports = checkFeature('imports');
+  
+  if (hasFunctions) detectedFeatures.push('functions');
+  if (hasVariables) detectedFeatures.push('variables');
+  if (hasConditionals) detectedFeatures.push('conditionals');
+  if (hasLoops) detectedFeatures.push('loops');
+  if (hasReturns) detectedFeatures.push('returns');
+  if (hasErrorHandling) detectedFeatures.push('error_handling');
+  if (hasClasses) detectedFeatures.push('classes');
+  if (hasImports) detectedFeatures.push('imports');
+  
+  // Calculate score (max 100 points)
+  let score = 0;
+  
+  // Core features (50 points)
+  if (hasFunctions) score += 15;
+  if (hasVariables) score += 10;
+  if (hasConditionals) score += 10;
+  if (hasReturns) score += 15;
+  
+  // Advanced features (30 points)
+  if (hasLoops) score += 10;
+  if (hasErrorHandling) score += 10;
+  if (hasClasses) score += 10;
+  
+  // Project structure (20 points)
+  if (hasImports) score += 10;
+  if (linesOfCode > 10) score += 5;
+  if (code.length > 500) score += 5;
+  
+  // Cap at 100
+  score = Math.min(100, score);
+  
+  return {
+    score,
+    maxScore: 100,
+    details: {
+      hasFunctions,
+      hasVariables,
+      hasConditionals,
+      hasLoops,
+      hasReturns,
+      hasErrorHandling,
+      hasClasses,
+      hasImports,
+      linesOfCode,
+      codeLength: code.length,
+      language: detectedLanguage,
+      detectedFeatures
+    }
+  };
+};
+
+/**
+   * Calculate answer quality for a task
+   */
+  private calculateAnswerQuality(answer: any): {
+    score: number;
+    codeQuality: number;
+    essayQuality: number;
+    completeness: number;
+    details: any;
+  } {
+    let codeQuality = 0;
+    let essayQuality = 0;
+    let completeness = 0;
+    let codeQualityDetails = null;
+    
+    if (answer.code) {
+      const qualityResult = this.detectCodeQuality(answer.code, answer.language);
+      codeQuality = qualityResult.score;
+      codeQualityDetails = qualityResult.details;
+    }
+    
+    if (answer.essay) {
+      essayQuality = Math.min(50,
+        (answer.essay.length > 100 ? 15 : 0) +
+        (answer.essay.split(' ').length > 50 ? 15 : 0) +
+        (answer.essay.includes('.') ? 10 : 0) +
+        (answer.essay.includes('\n') ? 10 : 0)
+      );
+    }
+    
+    completeness = answer.completed ? 30 : 0;
+    
+    const totalScore = Math.min(100, codeQuality + essayQuality + completeness);
+    
+    return {
+      score: totalScore,
+      codeQuality,
+      essayQuality,
+      completeness,
+      details: {
+        codeQualityDetails,
+        essayLength: answer.essay?.length || 0,
+        essayWords: answer.essay?.split(' ').length || 0,
+        hasCode: !!answer.code,
+        hasEssay: !!answer.essay,
+        hasComment: !!answer.comment,
+        markedCompleted: answer.completed || false
+      }
+    };
+  }
+
 
 /**
  * Calculate comprehensive scores for a simulation session
@@ -3091,7 +3674,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     const timeLimitSeconds = session.time_limit || (session.duration_minutes * 60) || 3600;
 
     // ============================================
-    // 3. GITHUB SCORE - FULL DETAILED BREAKDOWN (INCLUDED IN RETURN)
+    // 3. GITHUB SCORE - FULL DETAILED BREAKDOWN
     // ============================================
     let githubScore = 0;
     let githubAnalysis = null;
@@ -3112,14 +3695,9 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         githubAnalysis = githubScoreResult.analysis;
         githubDetailedMarks = githubAnalysis?.detailedMarks || githubDetailedMarks;
         
-        // Extract GitHub repo info
         let githubLinks = session.github_links;
         if (typeof githubLinks === 'string') {
-          try {
-            githubLinks = JSON.parse(githubLinks);
-          } catch (e) {
-            githubLinks = null;
-          }
+          try { githubLinks = JSON.parse(githubLinks); } catch (e) { githubLinks = null; }
         }
         
         if (githubLinks) {
@@ -3132,18 +3710,30 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
             issuesCreated: githubLinks.issues?.length || 0
           };
         }
-        
-        console.log('📊 GitHub Score Details:', {
-          score: githubScore,
-          commits: githubDetailedMarks.commits,
-          readme: githubDetailedMarks.readme,
-          configFile: githubDetailedMarks.configFile,
-          gitignore: githubDetailedMarks.gitignore,
-          codeFiles: githubDetailedMarks.codeFiles
-        });
       } catch (err) {
         console.warn('GitHub score calculation failed:', err);
       }
+    }
+    
+    // ============================================
+    // 3.5 COMMUNICATION SCORE - WITH FULL DETAILS
+    // ============================================
+    let communicationScoreResult = null;
+    let calculatedCommunicationScore = 0;
+    
+    try {
+      communicationScoreResult = await this.calculateCommunicationScore(sessionId, userId);
+      calculatedCommunicationScore = communicationScoreResult.score;
+      
+      console.log('📊 Communication Score Details:', {
+        score: calculatedCommunicationScore,
+        messageCount: communicationScoreResult.messageCount,
+        hasClassifier: !!communicationScoreResult.classifierAnalysis,
+        hasGroq: !!communicationScoreResult.groqAnalysis,
+        insightsCount: communicationScoreResult.combinedInsights?.keyInsights?.length || 0
+      });
+    } catch (err) {
+      console.warn('Communication score calculation failed:', err);
     }
 
     // ============================================
@@ -3178,7 +3768,6 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       
       const qualityScore = progress?.score || 0;
       
-      // Answer quality analysis with detailed marks
       let answerQualityScore = 0;
       let answerDetails = null;
       let answerMarks = {
@@ -3189,65 +3778,61 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       };
       
       if (progress?.answer) {
-        const answer = progress.answer;
-        let codeQuality = 0;
-        let essayQuality = 0;
-        let completeness = 0;
+        const qualityResult = this.calculateAnswerQuality(progress.answer);
+        answerQualityScore = qualityResult.score;
         
-        if (answer.code) {
-          const code = answer.code;
-          codeQuality = Math.min(50, 
-            (code.includes('function') || code.includes('const') || code.includes('let') ? 10 : 0) +
-            (code.includes('if') || code.includes('else') ? 8 : 0) +
-            (code.includes('return') ? 8 : 0) +
-            (code.includes('try') ? 8 : 0) +
-            (code.split('\n').length > 5 ? 8 : 0) +
-            (code.length > 200 ? 8 : 0)
-          );
-          answerMarks.codeQuality = {
-            earned: codeQuality,
-            max: 50,
-            details: `Code quality: functions=${code.includes('function') || code.includes('const') || code.includes('let')}, conditionals=${code.includes('if') || code.includes('else')}, error handling=${code.includes('try')}, lines=${code.split('\n').length}`
-          };
-        }
-        
-        if (answer.essay) {
-          essayQuality = Math.min(50,
-            (answer.essay.length > 100 ? 15 : 0) +
-            (answer.essay.split(' ').length > 50 ? 15 : 0) +
-            (answer.essay.includes('.') ? 10 : 0) +
-            (answer.essay.includes('\n') ? 10 : 0)
-          );
-          answerMarks.essayQuality = {
-            earned: essayQuality,
-            max: 50,
-            details: `Essay: ${answer.essay.length} chars, ${answer.essay.split(' ').length} words`
-          };
-        }
-        
-        completeness = answer.completed ? 30 : 0;
-        answerMarks.completeness = {
-          earned: completeness,
-          max: 30,
-          details: `Task marked as ${answer.completed ? 'completed' : 'incomplete'}`
+        const code = progress.answer.code || '';
+        const codeAnalysis = {
+          hasFunctions: code.includes('function') || code.includes('const') || code.includes('let') || code.includes('def') || code.includes('fun'),
+          hasConditionals: code.includes('if') || code.includes('else') || code.includes('switch') || code.includes('elif') || code.includes('case'),
+          hasReturns: code.includes('return'),
+          hasErrorHandling: (code.includes('try') && code.includes('catch')) || code.includes('except') || code.includes('finally'),
+          linesOfCode: code.split('\n').length,
+          codeLength: code.length,
+          completed: progress.answer.completed === true,
+          language: qualityResult.details.codeQualityDetails?.language || 'unknown',
+          detectedFeatures: qualityResult.details.codeQualityDetails?.detectedFeatures || []
         };
         
-        answerQualityScore = Math.min(100, codeQuality + essayQuality + completeness);
-        answerMarks.total = {
-          earned: answerQualityScore,
-          max: 100,
-          details: `Total answer quality: ${answerQualityScore}%`
+        answerMarks = {
+          codeQuality: {
+            earned: qualityResult.codeQuality,
+            max: 50,
+            details: qualityResult.details.codeQualityDetails 
+              ? `Language: ${qualityResult.details.codeQualityDetails.language}, Features: ${qualityResult.details.codeQualityDetails.detectedFeatures.join(', ')}`
+              : 'No code provided'
+          },
+          essayQuality: {
+            earned: qualityResult.essayQuality,
+            max: 50,
+            details: `Essay: ${qualityResult.details.essayLength} chars, ${qualityResult.details.essayWords} words`
+          },
+          completeness: {
+            earned: qualityResult.completeness,
+            max: 30,
+            details: `Task marked as ${qualityResult.details.markedCompleted ? 'completed' : 'incomplete'}`
+          },
+          total: {
+            earned: qualityResult.score,
+            max: 100,
+            details: `Total answer quality: ${qualityResult.score}%`
+          }
         };
         
         answerDetails = {
-          hasCode: !!answer.code,
-          codeLength: answer.code?.length || 0,
-          codeLines: answer.code?.split('\n').length || 0,
-          hasEssay: !!answer.essay,
-          essayLength: answer.essay?.length || 0,
-          hasComment: !!answer.comment,
-          commentLength: answer.comment?.length || 0,
-          markedCompleted: answer.completed || false,
+          hasCode: qualityResult.details.hasCode,
+          codeLength: progress.answer.code?.length || 0,
+          codeLines: progress.answer.code?.split('\n').length || 0,
+          codeLanguage: qualityResult.details.codeQualityDetails?.language || 'unknown',
+          codeQualityScore: qualityResult.codeQuality,
+          codeFeatures: qualityResult.details.codeQualityDetails?.detectedFeatures || [],
+          codeAnalysis: codeAnalysis,
+          hasEssay: qualityResult.details.hasEssay,
+          essayLength: qualityResult.details.essayLength,
+          essayWords: qualityResult.details.essayWords,
+          hasComment: qualityResult.details.hasComment,
+          commentLength: progress.answer.comment?.length || 0,
+          markedCompleted: qualityResult.details.markedCompleted,
           marks: answerMarks
         };
       }
@@ -3299,12 +3884,13 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     const overallTaskPercentage = totalPointsPossible > 0 ? (totalPointsEarned / totalPointsPossible) * 100 : 0;
 
     // ============================================
-    // 6. Punctuality Score
+    // 6. Punctuality Score with Partial Credit
     // ============================================
     let totalWeightSum = 0;
     let onTimeWeightSum = 0;
+    let partialCreditSum = 0;
     const punctualityBreakdown: any[] = [];
-    
+
     for (let i = 0; i < templateTasks.length; i++) {
       const task = templateTasks[i];
       const taskWeight = task.evaluation?.weight || task.priority || 1;
@@ -3314,16 +3900,40 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       let wasOnTime = false;
       let taskElapsedSeconds = 0;
       let taskTimeLimit = 0;
+      let punctualityPercentage = 0;
+      let creditEarned = 0;
+      let overtimeSeconds = 0;
       
       if (progress?.status === 'completed' && progress.completed_at) {
         const taskCompletedAt = new Date(progress.completed_at);
         taskTimeLimit = (task.duration || task.duration_minutes || 30) * 60;
         taskElapsedSeconds = (taskCompletedAt.getTime() - sessionStartTime.getTime()) / 1000;
-        wasOnTime = taskElapsedSeconds <= taskTimeLimit;
         
-        if (wasOnTime) {
+        if (taskElapsedSeconds <= taskTimeLimit) {
+          wasOnTime = true;
+          punctualityPercentage = 100;
+          creditEarned = taskWeight;
           onTimeWeightSum += taskWeight;
+        } else {
+          overtimeSeconds = taskElapsedSeconds - taskTimeLimit;
+          const maxOvertimeAllowed = taskTimeLimit;
+          
+          if (overtimeSeconds <= maxOvertimeAllowed) {
+            punctualityPercentage = Math.max(0, 100 - (overtimeSeconds / maxOvertimeAllowed) * 100);
+            creditEarned = taskWeight * (punctualityPercentage / 100);
+            partialCreditSum += creditEarned;
+          } else {
+            punctualityPercentage = 0;
+            creditEarned = 0;
+          }
         }
+      } else if (progress?.status === 'completed') {
+        punctualityPercentage = 50;
+        creditEarned = taskWeight * 0.5;
+        partialCreditSum += creditEarned;
+      } else {
+        punctualityPercentage = 0;
+        creditEarned = 0;
       }
       
       punctualityBreakdown.push({
@@ -3333,73 +3943,161 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         completed: progress?.status === 'completed',
         completed_at: progress?.completed_at,
         time_limit_seconds: taskTimeLimit,
-        time_limit_formatted: `${Math.floor(taskTimeLimit / 60)}m ${taskTimeLimit % 60}s`,
+        time_limit_formatted: taskTimeLimit > 0 ? `${Math.floor(taskTimeLimit / 60)}m ${taskTimeLimit % 60}s` : 'Not set',
         time_taken_seconds: Math.round(taskElapsedSeconds),
-        time_taken_formatted: taskElapsedSeconds > 0 ? `${Math.floor(taskElapsedSeconds / 60)}m ${Math.floor(taskElapsedSeconds % 60)}s` : 'Not completed',
+        time_taken_formatted: taskElapsedSeconds > 0 
+          ? `${Math.floor(taskElapsedSeconds / 60)}m ${Math.floor(taskElapsedSeconds % 60)}s` 
+          : 'Not completed',
         was_on_time: wasOnTime,
-        contributed_weight: wasOnTime ? taskWeight : 0
+        punctuality_percentage: Math.round(punctualityPercentage),
+        credit_earned: parseFloat(creditEarned.toFixed(2)),
+        full_credit_possible: taskWeight,
+        overtime_seconds: Math.max(0, overtimeSeconds),
+        overtime_formatted: overtimeSeconds > 0 
+          ? `${Math.floor(overtimeSeconds / 60)}m ${overtimeSeconds % 60}s` 
+          : 'None'
       });
     }
-    
+
     const punctualityScore = totalWeightSum > 0 
-      ? Math.round((onTimeWeightSum / totalWeightSum) * 100)
+      ? Math.round(((onTimeWeightSum + partialCreditSum) / totalWeightSum) * 100)
       : Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
 
     // ============================================
-    // 7. Adaptability Score
+    // 7. Adaptability Score (ENHANCED)
     // ============================================
     let responseQualitySum = 0;
     let responseSpeedSum = 0;
     let unexpectedEventsCount = 0;
+    let abandonedUnexpectedCount = 0;
+    let creativeSolutionsCount = 0;
     const adaptabilityBreakdown: any[] = [];
-    
+
     for (let i = 0; i < templateTasks.length; i++) {
       const task = templateTasks[i];
       const isUnexpected = task.type === 'emergency' || task.type === 'change_request' || task.unexpected === true;
+      const taskImportance = task.importance || task.priority || (task.type === 'emergency' ? 1.5 : 1.0);
       
       if (isUnexpected) {
         unexpectedEventsCount++;
         const progress = taskProgress.find((tp: any) => tp.task_index === i);
         let qualityScore = 0;
         let speedScore = 0;
+        let creativityBonus = 0;
+        let abandonedPenalty = 0;
         
-        if (progress?.score) {
-          qualityScore = progress.score;
-        } else if (progress?.answer) {
-          let qScore = 50;
-          const answer = progress.answer;
-          if (answer.code?.trim().length > 0) qScore += 20;
-          if (answer.essay?.trim().length > 50) qScore += 15;
-          if (answer.comment?.trim().length > 20) qScore += 15;
-          if (answer.completed === true) qScore += 10;
-          qualityScore = Math.min(100, qScore);
+        if (progress?.status === 'cancelled' || (progress?.status === 'not_started' && unexpectedEventsCount > 0)) {
+          abandonedUnexpectedCount++;
+          abandonedPenalty = -30;
+          qualityScore = 0;
+          speedScore = 0;
+        } else {
+          if (progress?.score) {
+            qualityScore = progress.score;
+          } else if (progress?.answer) {
+            let qScore = 0;  // ✅ Start at 0 - NO FREE MARKS
+            const answer = progress.answer;
+            
+            // CODE QUALITY (max 40 points)
+            if (answer.code?.trim().length > 0) {
+                qScore += 15;  // Has code
+                
+                // Actual code quality indicators
+                const code = answer.code;
+                if (code.includes('function') || code.includes('def') || code.includes('class')) qScore += 10;
+                if (code.includes('return')) qScore += 5;
+                if (code.includes('if') || code.includes('else')) qScore += 5;
+                if (code.includes('for') || code.includes('while')) qScore += 5;
+                if (code.length > 200) qScore += 5;  // Substantial implementation
+            }
+            
+            // ESSAY QUALITY (max 30 points)
+            if (answer.essay?.trim().length > 0) {
+                qScore += 10;  // Has explanation
+                
+                const essay = answer.essay;
+                if (essay.length > 100) qScore += 10;  // Detailed
+                if (essay.includes('because') || essay.includes('therefore')) qScore += 5;  // Reasoning
+                if (essay.includes('.') && essay.split('.').length >= 3) qScore += 5;  // Multiple sentences
+            }
+            
+            // COMMENT QUALITY (max 15 points)
+            if (answer.comment?.trim().length > 0) {
+                qScore += 5;  // Has comment
+                if (answer.comment.length > 100) qScore += 10;  // Thoughtful comment
+            }
+            
+            // COMPLETION (max 15 points)
+            if (answer.completed === true) qScore += 15;
+            
+            qualityScore = Math.min(100, qScore);
         }
-        responseQualitySum += qualityScore;
+          
+          if (progress?.answer) {
+            const answerText = JSON.stringify(progress.answer).toLowerCase();
+            if (answerText.includes('alternative') || answerText.includes('creative') || 
+                answerText.includes('innovative') || answerText.includes('workaround')) {
+              creativityBonus += 15;
+              creativeSolutionsCount++;
+            }
+            if (answerText.includes('research') || answerText.includes('documentation') || 
+                answerText.includes('stack overflow') || answerText.includes('example')) {
+              creativityBonus += 10;
+            }
+            if (progress.answer.comment && (progress.answer.comment.includes('?') || 
+                progress.answer.comment.toLowerCase().includes('clarify'))) {
+              creativityBonus += 5;
+            }
+            creativityBonus = Math.min(30, creativityBonus);
+          }
+          
+          if (progress?.completed_at && progress?.started_at) {
+            const responseTimeSeconds = (new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000;
+            const expectedResponseTime = (task.expected_response_time || 300);
+            speedScore = Math.max(0, Math.min(100, (1 - (responseTimeSeconds / expectedResponseTime)) * 100));
+            if (responseTimeSeconds < expectedResponseTime * 0.3) {
+              speedScore = Math.min(100, speedScore + 10);
+            }
+            responseSpeedSum += speedScore;
+          } else if (progress?.status === 'completed') {
+            speedScore = 50;
+            responseSpeedSum += 50;
+          }
+        }
         
-        if (progress?.completed_at && progress?.started_at) {
-          const responseTimeSeconds = (new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000;
-          const expectedResponseTime = (task.expected_response_time || 300);
-          speedScore = Math.max(0, Math.min(100, (1 - (responseTimeSeconds / expectedResponseTime)) * 100));
-          responseSpeedSum += speedScore;
-        } else if (progress?.status === 'completed') {
-          speedScore = 50;
-          responseSpeedSum += 50;
-        }
+        responseQualitySum += qualityScore * taskImportance;
+        responseSpeedSum += speedScore * taskImportance;
         
         adaptabilityBreakdown.push({
           task_index: i,
           task_title: task.title || task.task_name || `Task ${i + 1}`,
           task_type: 'unexpected',
+          importance: taskImportance,
           quality_score: Math.round(qualityScore),
           speed_score: Math.round(speedScore),
-          completed: progress?.status === 'completed'
+          creativity_bonus: creativityBonus,
+          abandoned_penalty: abandonedPenalty,
+          completed: progress?.status === 'completed',
+          was_abandoned: abandonedPenalty < 0,
+          was_creative: creativityBonus > 0
         });
       }
     }
+
+    let avgResponseQuality = 0;
+    let avgResponseSpeed = 0;
+    if (unexpectedEventsCount > 0) {
+      avgResponseQuality = responseQualitySum / unexpectedEventsCount;
+      avgResponseSpeed = responseSpeedSum / unexpectedEventsCount;
+    }
+
+    const abandonmentRate = unexpectedEventsCount > 0 ? abandonedUnexpectedCount / unexpectedEventsCount : 0;
+    const abandonmentPenalty = abandonmentRate * 30;
+    const creativityRate = unexpectedEventsCount > 0 ? creativeSolutionsCount / unexpectedEventsCount : 0;
+    const creativityBonusTotal = creativityRate * 15;
     
-    const avgResponseQuality = unexpectedEventsCount > 0 ? responseQualitySum / unexpectedEventsCount : 50;
-    const avgResponseSpeed = unexpectedEventsCount > 0 ? responseSpeedSum / unexpectedEventsCount : 50;
-    const adaptabilityScore = Math.round((avgResponseQuality * 0.5) + (avgResponseSpeed * 0.5));
+    let baseAdaptabilityScore = Math.round((avgResponseQuality * 0.5) + (avgResponseSpeed * 0.5));
+    let adaptabilityScore = Math.max(0, Math.min(100, baseAdaptabilityScore - abandonmentPenalty + creativityBonusTotal));
 
     // ============================================
     // 8. Technical Score
@@ -3407,7 +4105,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     let technicalScoreSum = 0;
     let technicalTasksCount = 0;
     const technicalBreakdown: any[] = [];
-    
+
     for (let i = 0; i < templateTasks.length; i++) {
       const task = templateTasks[i];
       const isTechnical = task.type === 'technical' || task.type === 'code_editor' || task.type === 'code_execution';
@@ -3416,52 +4114,117 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         technicalTasksCount++;
         const progress = taskProgress.find((tp: any) => tp.task_index === i);
         let techScore = 0;
-        let codeAnalysis: any = null;
+        let techCodeAnalysis: any = null;
         
         if (progress?.score) {
           techScore = progress.score;
         } else if (progress?.answer?.code) {
-          techScore = 50;
-          const code = progress.answer.code;
-          codeAnalysis = {
-            hasFunctions: code.includes('function') || code.includes('const') || code.includes('let'),
-            hasConditionals: code.includes('if') || code.includes('else') || code.includes('switch'),
-            hasReturns: code.includes('return'),
-            hasErrorHandling: code.includes('try') && code.includes('catch'),
-            linesOfCode: code.split('\n').length,
-            codeLength: code.length,
+          const codeQualityResult = this.detectCodeQuality(progress.answer.code, progress.answer.language);
+          techScore = codeQualityResult.score;
+          techCodeAnalysis = {
+            hasFunctions: codeQualityResult.details.hasFunctions,
+            hasConditionals: codeQualityResult.details.hasConditionals,
+            hasReturns: codeQualityResult.details.hasReturns,
+            hasErrorHandling: codeQualityResult.details.hasErrorHandling,
+            hasLoops: codeQualityResult.details.hasLoops,
+            hasClasses: codeQualityResult.details.hasClasses,
+            hasVariables: codeQualityResult.details.hasVariables,
+            hasImports: codeQualityResult.details.hasImports,
+            linesOfCode: codeQualityResult.details.linesOfCode,
+            codeLength: codeQualityResult.details.codeLength,
+            language: codeQualityResult.details.language,
+            detectedFeatures: codeQualityResult.details.detectedFeatures,
             completed: progress.answer.completed === true
           };
-          
-          if (codeAnalysis.hasFunctions) techScore += 10;
-          if (codeAnalysis.hasConditionals) techScore += 10;
-          if (codeAnalysis.hasReturns) techScore += 10;
-          if (codeAnalysis.hasErrorHandling) techScore += 10;
-          if (codeAnalysis.linesOfCode > 5) techScore += 10;
-          if (codeAnalysis.completed) techScore += 10;
-          techScore = Math.min(100, techScore);
         }
         
         technicalScoreSum += techScore;
-        
         technicalBreakdown.push({
           task_index: i,
           task_title: task.title || task.task_name || `Task ${i + 1}`,
           technical_score: Math.round(techScore),
           has_code: !!progress?.answer?.code,
-          code_analysis: codeAnalysis,
+          code_analysis: techCodeAnalysis,
           completed: progress?.status === 'completed'
         });
       }
     }
-    
+
     const technicalScore = technicalTasksCount > 0 ? Math.round(technicalScoreSum / technicalTasksCount) : 50;
 
     // ============================================
     // 9. Speed Score
     // ============================================
-    const speedScore = Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
-    
+    let totalSpeedScoreSum = 0;
+    let tasksWithTimeData = 0;
+    let totalTasksForSpeed = 0;
+    const speedTaskBreakdown: any[] = [];
+
+    for (let i = 0; i < templateTasks.length; i++) {
+      const task = templateTasks[i];
+      const taskWeight = task.evaluation?.weight || task.priority || 1;
+      const progress = taskProgress.find((tp: any) => tp.task_index === i);
+      
+      let taskSpeedScore = 0;
+      let taskTimeSpent = 0;
+      let taskTimeLimit = (task.duration || task.duration_minutes || 30) * 60;
+      let scoringMethod = 'not_completed';
+      
+      totalTasksForSpeed += taskWeight;
+      
+      if (progress?.status === 'completed') {
+        if (progress?.started_at && progress?.completed_at) {
+          taskTimeSpent = Math.floor((new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000);
+          
+          if (taskTimeSpent <= taskTimeLimit) {
+            const speedPercentage = (1 - (taskTimeSpent / taskTimeLimit)) * 100;
+            taskSpeedScore = Math.max(60, Math.min(100, speedPercentage));
+            scoringMethod = 'on_time';
+          } else {
+            const overtimeRatio = Math.min(2, (taskTimeSpent - taskTimeLimit) / taskTimeLimit);
+            taskSpeedScore = Math.max(20, 100 * Math.exp(-1.5 * overtimeRatio));
+            scoringMethod = 'late';
+          }
+          totalSpeedScoreSum += taskSpeedScore * taskWeight;
+          tasksWithTimeData++;
+        } else if (progress?.completed_at && !progress?.started_at) {
+          taskSpeedScore = 50;
+          totalSpeedScoreSum += taskSpeedScore * taskWeight;
+          scoringMethod = 'partial_data';
+        } else {
+          taskSpeedScore = 40;
+          totalSpeedScoreSum += taskSpeedScore * taskWeight;
+          scoringMethod = 'no_time_data';
+        }
+      } else if (progress?.status === 'in_progress') {
+        taskSpeedScore = 25;
+        totalSpeedScoreSum += taskSpeedScore * taskWeight;
+        scoringMethod = 'in_progress';
+      } else {
+        taskSpeedScore = 0;
+        scoringMethod = 'not_started';
+      }
+      
+      speedTaskBreakdown.push({
+        task_index: i,
+        task_title: task.title || task.task_name || `Task ${i + 1}`,
+        weight: taskWeight,
+        status: progress?.status || 'not_started',
+        time_spent_seconds: taskTimeSpent,
+        time_spent_formatted: taskTimeSpent > 0 ? `${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s` : 'N/A',
+        time_limit_seconds: taskTimeLimit,
+        time_limit_formatted: `${Math.floor(taskTimeLimit / 60)}m ${taskTimeLimit % 60}s`,
+        speed_score: Math.round(taskSpeedScore),
+        weighted_contribution: (taskSpeedScore * taskWeight).toFixed(2),
+        scoring_method: scoringMethod
+      });
+    }
+
+    let weightedSpeedScore = 0;
+    if (totalTasksForSpeed > 0) weightedSpeedScore = Math.round(totalSpeedScoreSum / totalTasksForSpeed);
+    const sessionSpeedScore = Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
+    const speedScore = tasksWithTimeData > 0 ? weightedSpeedScore : sessionSpeedScore;
+
     const speedBreakdown = {
       total_time_seconds: totalTimeSeconds,
       total_time_formatted: `${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s`,
@@ -3469,10 +4232,15 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       time_limit_formatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
       time_remaining_seconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
       time_remaining_formatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0 
-        ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s` 
-        : 'EXPIRED',
+        ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s` : 'EXPIRED',
       percentage_used: Math.min(100, Math.round((totalTimeSeconds / timeLimitSeconds) * 100)),
-      speed_score: speedScore
+      speed_score: speedScore,
+      weighted_speed_score: weightedSpeedScore,
+      session_speed_score: sessionSpeedScore,
+      tasks_with_time_data: tasksWithTimeData,
+      total_tasks_weighted: totalTasksForSpeed,
+      per_task_speed: speedTaskBreakdown,
+      calculation_method: tasksWithTimeData > 0 ? 'weighted_per_task' : 'session_based'
     };
 
     // ============================================
@@ -3490,22 +4258,72 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     // ============================================
     // 11. Behavioral Score
     // ============================================
-    const behavioralScore = Math.round((adaptabilityScore + (session.communication_score || 50)) / 2);
+    const behavioralScore = Math.round((adaptabilityScore + calculatedCommunicationScore) / 2);
     
     const behavioralBreakdown = {
       adaptability: { score: adaptabilityScore, weight: 50, contribution: ((adaptabilityScore * 0.5)).toFixed(2) },
-      communication: { score: session.communication_score || 50, weight: 50, contribution: (((session.communication_score || 50) * 0.5)).toFixed(2) },
+      communication: { score: calculatedCommunicationScore, weight: 50, contribution: ((calculatedCommunicationScore * 0.5)).toFixed(2) },
       total: behavioralScore
     };
 
     // ============================================
-    // 12. Communication & Collaboration Scores
+    // 12. Collaboration Score
     // ============================================
-    const communicationScore = session.communication_score || 50;
-    const collaborationScore = session.collaboration_score || 50;
+    let collaborationScore = 0;
+
+    if (communicationScoreResult && communicationScoreResult.messageCount > 0) {
+        const messageCount = communicationScoreResult.messageCount;
+        const candidateMessages = communicationScoreResult.candidateMessages;
+        const recruiterMessages = communicationScoreResult.recruiterMessages;
+        
+        // Factor 1: Total interaction volume (max 40 points)
+        let volumeScore = 0;
+        if (messageCount >= 12) volumeScore = 40;
+        else if (messageCount >= 8) volumeScore = 30;
+        else if (messageCount >= 4) volumeScore = 20;
+        else if (messageCount >= 2) volumeScore = 10;
+        else if (messageCount >= 1) volumeScore = 5;
+        
+        // Factor 2: Balanced conversation (max 30 points)
+        // Both parties should participate roughly equally
+        let balanceScore = 0;
+        const total = candidateMessages + recruiterMessages;
+        if (total > 0) {
+            const ratio = Math.min(candidateMessages, recruiterMessages) / Math.max(candidateMessages, recruiterMessages, 1);
+            balanceScore = Math.round(ratio * 30);
+        }
+        
+        // Factor 3: Meaningful responses (max 30 points)
+        // Check if candidate responded to recruiter questions
+        let responsivenessScore = 0;
+        // You could track question/answer pairs or use the avgResponseTime
+        if (communicationScoreResult.classifierAnalysis) {
+            // If you have classifier data, use it
+            responsivenessScore = communicationScoreResult.score || 20;
+        } else {
+            // Fallback: if candidate has messages, give partial credit
+            responsivenessScore = candidateMessages > 0 ? 20 : 0;
+        }
+        
+        collaborationScore = Math.min(100, volumeScore + balanceScore + responsivenessScore);
+        
+        console.log('📊 Collaboration Score Breakdown:', {
+            messageCount,
+            candidateMessages,
+            recruiterMessages,
+            volumeScore,
+            balanceScore,
+            responsivenessScore,
+            collaborationScore
+        });
+    } else {
+        collaborationScore = 0;
+        console.log('📊 No chat messages - collaboration score = 0');
+    }
+    
 
     // ============================================
-    // 13. Final Overall Score with weights
+    // 13. Final Overall Score
     // ============================================
     const weights = scoringRubric.weights || {
       quality: 0.60,
@@ -3529,13 +4347,13 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     );
 
     // ============================================
-    // 14. Pass/Fail Determination
+    // 14. Pass/Fail
     // ============================================
     const passingScore = scoringRubric.passingScore || 70;
     const passed = overallScore >= passingScore;
 
     // ============================================
-    // 15. Generate Strengths & Improvements
+    // 15. Strengths & Improvements
     // ============================================
     const strengths = [];
     const improvements = [];
@@ -3558,8 +4376,8 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     if (averageTaskScore >= 80) strengths.push(`✅ Consistent performance across tasks (${Math.round(averageTaskScore)}% average task score)`);
     else if (averageTaskScore < 60) improvements.push(`⚠️ Improve consistency across tasks (${Math.round(averageTaskScore)}% average task score, target: 80%)`);
     
-    if (communicationScore >= 80) strengths.push(`✅ Strong communication skills (${communicationScore}% communication score)`);
-    else if (communicationScore < 60) improvements.push(`⚠️ Improve communication (${communicationScore}% communication score, target: 80%)`);
+    if (calculatedCommunicationScore >= 80) strengths.push(`✅ Strong communication skills (${calculatedCommunicationScore}% communication score)`);
+    else if (calculatedCommunicationScore < 60) improvements.push(`⚠️ Improve communication (${calculatedCommunicationScore}% communication score, target: 80%)`);
     
     if (githubScore >= 80) strengths.push(`✅ Excellent GitHub repository structure (${githubScore}% GitHub score)`);
     else if (githubScore >= 50) strengths.push(`✅ Adequate GitHub setup (${githubScore}% GitHub score)`);
@@ -3569,7 +4387,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     if (improvements.length === 0 && overallScore < 80) improvements.push('⚠️ Review all tasks and ensure completeness for a higher score');
 
     // ============================================
-    // 16. Return Complete Analysis with ALL details INCLUDING GITHUB
+    // 16. RETURN COMPLETE ANALYSIS WITH ALL DETAILS
     // ============================================
     const result = {
       session_id: sessionId,
@@ -3605,7 +4423,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         adaptability: adaptabilityScore,
         speed: speedScore,
         behavioral: behavioralScore,
-        communication: communicationScore,
+        communication: calculatedCommunicationScore,
         collaboration: collaborationScore,
         github: githubScore,
         completion_rate: Math.round(completionRate),
@@ -3616,15 +4434,34 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         speed_breakdown: speedBreakdown,
         punctuality_breakdown: { 
           total_weight: totalWeightSum, 
-          on_time_weight: onTimeWeightSum, 
-          score: punctualityScore, 
+          on_time_weight: onTimeWeightSum,
+          partial_credit_sum: parseFloat(partialCreditSum.toFixed(2)),
+          total_earned: parseFloat((onTimeWeightSum + partialCreditSum).toFixed(2)),
+          score: punctualityScore,
+          scoring_method: 'partial_credit',
           tasks: punctualityBreakdown 
         },
         adaptability_breakdown: { 
           events_count: unexpectedEventsCount, 
+          abandoned_count: abandonedUnexpectedCount,
+          creative_solutions_count: creativeSolutionsCount,
+          abandonment_rate: Math.round(abandonmentRate * 100),
+          creativity_rate: Math.round(creativityRate * 100),
+          base_score: baseAdaptabilityScore,
+          abandonment_penalty: Math.round(abandonmentPenalty),
+          creativity_bonus: Math.round(creativityBonusTotal),
           avg_response_quality: Math.round(avgResponseQuality), 
           avg_response_speed: Math.round(avgResponseSpeed), 
-          score: adaptabilityScore, 
+          score: adaptabilityScore,
+          assessment: (() => {
+            if (unexpectedEventsCount === 0) return 'No unexpected events to assess';
+            if (abandonmentRate > 0.5) return 'Poor - abandoned most unexpected tasks';
+            if (abandonmentRate > 0.3) return 'Needs improvement - gave up on several challenges';
+            if (creativityRate > 0.7 && adaptabilityScore >= 80) return 'Excellent - highly adaptable and creative';
+            if (creativityRate > 0.5 && adaptabilityScore >= 70) return 'Good - handled unexpected challenges well';
+            if (adaptabilityScore >= 60) return 'Satisfactory - managed unexpected tasks adequately';
+            return 'Needs improvement - struggled with unexpected changes';
+          })(),
           tasks: adaptabilityBreakdown 
         },
         technical_breakdown: { 
@@ -3649,7 +4486,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       },
       
       // ============================================
-      // ✅ GITHUB ANALYSIS - FULLY INCLUDED IN RETURN
+      // ✅ GITHUB ANALYSIS - FULL DETAILS
       // ============================================
       github_analysis: {
         has_repo: !!githubRepoInfo,
@@ -3658,7 +4495,91 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         detailed_marks: githubDetailedMarks,
         full_analysis: githubAnalysis,
         breakdown: githubAnalysis?.breakdown || null,
-        stats: githubAnalysis?.stats || null
+        stats: githubAnalysis?.stats || null,
+        per_commit_detail: githubAnalysis?.perCommitDetail || null,
+        task_implementation_report: githubAnalysis?.taskImplementationReport || null,
+        matching_summary: githubAnalysis?.matchingSummary || null
+      },
+      
+      // ============================================
+      // ✅ COMMUNICATION ANALYSIS - FULL DETAILS (CLASSIFIER + GROQ)
+      // ============================================
+      communication_analysis: communicationScoreResult ? {
+        score: communicationScoreResult.score,
+        message_count: communicationScoreResult.messageCount,
+        candidate_messages: communicationScoreResult.candidateMessages,
+        recruiter_messages: communicationScoreResult.recruiterMessages,
+        has_chat: communicationScoreResult.messageCount > 0,
+        
+        // ✅ FULL CLASSIFIER API ANALYSIS
+        classifier_analysis: communicationScoreResult.classifierAnalysis ? {
+          dominant_style: communicationScoreResult.classifierAnalysis.dominant_style,
+          style_counts: communicationScoreResult.classifierAnalysis.style_counts,
+          total_messages: communicationScoreResult.classifierAnalysis.total_messages,
+          average_confidence: communicationScoreResult.classifierAnalysis.average_confidence,
+          recommendation: communicationScoreResult.classifierAnalysis.recommendation,
+          raw_response: communicationScoreResult.classifierAnalysis
+        } : null,
+        
+        // ✅ FULL GROQ AI ANALYSIS
+        groq_analysis: communicationScoreResult.groqAnalysis ? {
+          message_tone: communicationScoreResult.groqAnalysis.message_tone,
+          clarity_level: communicationScoreResult.groqAnalysis.clarity_level,
+          professionalism_level: communicationScoreResult.groqAnalysis.professionalism_level,
+          engagement_level: communicationScoreResult.groqAnalysis.engagement_level,
+          overall_assessment: communicationScoreResult.groqAnalysis.overall_assessment,
+          task_discussion_summary: communicationScoreResult.groqAnalysis.task_discussion_summary,
+          questions_asked: communicationScoreResult.groqAnalysis.questions_asked || [],
+          answers_provided: communicationScoreResult.groqAnalysis.answers_provided || [],
+          task_references: communicationScoreResult.groqAnalysis.task_references || [],
+          key_insights: communicationScoreResult.groqAnalysis.key_insights || [],
+          strengths: communicationScoreResult.groqAnalysis.strengths || [],
+          areas_for_improvement: communicationScoreResult.groqAnalysis.areas_for_improvement || [],
+          raw_response: communicationScoreResult.groqAnalysis
+        } : null,
+        
+        // ✅ COMBINED INSIGHTS (Easy access)
+        combined_insights: communicationScoreResult.combinedInsights || {
+          taskDiscussionSummary: '',
+          messageTone: '',
+          keyInsights: [],
+          strengths: [],
+          areasForImprovement: [],
+          questionsAsked: [],
+          answersProvided: [],
+          taskReferences: []
+        },
+        
+        // ✅ CANDIDATE SUMMARY
+        candidate_summary: communicationScoreResult.analysis?.candidate_summary || '',
+        
+        // ✅ METHOD USED
+        analysis_method: communicationScoreResult.analysis?.method || 'unknown',
+        
+        // ✅ RAW ANALYSIS (fallback or combined)
+        details: communicationScoreResult.analysis
+        
+      } : {
+        score: 0,
+        message_count: 0,
+        candidate_messages: 0,
+        recruiter_messages: 0,
+        has_chat: false,
+        classifier_analysis: null,
+        groq_analysis: null,
+        combined_insights: {
+          taskDiscussionSummary: '',
+          messageTone: '',
+          keyInsights: [],
+          strengths: [],
+          areasForImprovement: [],
+          questionsAsked: [],
+          answersProvided: [],
+          taskReferences: []
+        },
+        candidate_summary: 'No chat messages available for analysis',
+        analysis_method: 'none',
+        details: { message: 'No chat messages available for analysis' }
       },
       
       scoring_config: {
@@ -3669,7 +4590,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       },
       
       raw_data: {
-        simulation_record_id: session.simulation_record_id,  // ← ADD THIS
+        simulation_record_id: session.simulation_record_id,
         session_started_at: session.started_at,
         session_completed_at: session.completed_at || new Date().toISOString(),
         time_spent_seconds: totalTimeSeconds,
@@ -3682,6 +4603,8 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       generated_at: new Date().toISOString(),
       session_status: session.status
     };
+    
+    console.log('📊 [calculateFullSessionScores] Final Result:', result);
     
     console.log('═══════════════════════════════════════════════════════════════');
     console.log('✅ [calculateFullSessionScores] COMPLETED');
@@ -3699,11 +4622,31 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       qualityScore,
       behavioralScore,
       githubScore,
-      communicationScore,
+      communicationScore: calculatedCommunicationScore,
       collaborationScore,
-      hasGithubAnalysis: !!githubAnalysis
+      hasGithubAnalysis: !!githubAnalysis,
+      hasClassifierAnalysis: !!communicationScoreResult?.classifierAnalysis,
+      hasGroqAnalysis: !!communicationScoreResult?.groqAnalysis
     });
-    
+    console.log('📊 [calculateFullSessionScores] Final Scores:',{
+      sessionId,
+      overallScore,
+      passed,
+      completionRate: `${Math.round(completionRate)}%`,
+      tasksCompleted: `${completedTasks.length}/${templateTasks.length}`,
+      technicalScore,
+      punctualityScore,
+      adaptabilityScore,
+      speedScore,
+      qualityScore,
+      behavioralScore,
+      githubScore,
+      communicationScore: calculatedCommunicationScore,
+      collaborationScore,
+      hasGithubAnalysis: !!githubAnalysis,
+      hasClassifierAnalysis: !!communicationScoreResult?.classifierAnalysis,
+      hasGroqAnalysis: !!communicationScoreResult?.groqAnalysis
+    });
     return result;
     
   } catch (error: any) {
@@ -3711,7 +4654,6 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     throw error;
   }
 }
-
 
 /**
  * Extract GitHub metrics from repository data
@@ -4425,6 +5367,541 @@ private calculateOverallScore(scores: {
   return overall;
 }
 
+
+
+/**
+ * Calculate communication score based on chat messages
+ * Uses BOTH communication classifier API (Python) AND Groq AI for deep analysis
+ * Returns COMPLETE analysis from both sources
+ */
+private async calculateCommunicationScore(sessionId: string, candidateId: string): Promise<{
+  score: number;
+  analysis: any;
+  messageCount: number;
+  candidateMessages: number;
+  recruiterMessages: number;
+  classifierAnalysis: any;      
+  groqAnalysis: any;            
+  combinedInsights: {
+    taskDiscussionSummary: string;
+    messageTone: string;
+    keyInsights: string[];
+    strengths: string[];
+    areasForImprovement: string[];
+    questionsAsked: string[];
+    answersProvided: string[];
+    taskReferences: any[];
+  };
+}> {
+  console.log('📊 [calculateCommunicationScore] STARTED');
+  console.log('📋 Input:', { sessionId, candidateId });
+
+  try {
+    // Get all chat messages for this session
+    const messagesResult = await DatabaseService.query(`
+      SELECT 
+          cm.id,
+          cm.user_id,
+          cm.message,
+          cm.message_type,
+          cm.timestamp,
+          cm.created_at,
+          u.email,
+          u.user_type,
+          cp.first_name,
+          cp.last_name,
+          CASE 
+              WHEN cm.user_id = $2 THEN 'candidate'
+              WHEN u.user_type IN ('recruiter', 'company_admin', 'system_admin') THEN 'recruiter'
+              ELSE 'other'
+          END as sender_type,
+          COALESCE(cp.first_name || ' ' || cp.last_name, u.email, 'User') as sender_name,
+          CASE 
+              WHEN u.user_type = 'recruiter' THEN 'Recruiter'
+              WHEN u.user_type = 'company_admin' THEN 'Company Admin'
+              WHEN u.user_type = 'system_admin' THEN 'System Admin'
+              WHEN u.user_type = 'candidate' THEN 'Candidate'
+              ELSE u.user_type
+          END as sender_role
+      FROM chat_messages cm
+      JOIN users u ON cm.user_id = u.id
+      LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
+      WHERE cm.session_id = $1
+      ORDER BY cm.timestamp ASC
+  `, [sessionId, candidateId]);
+
+    const messages = (messagesResult?.rows || []) as ChatMessageRow[];
+
+    if (!messages || messages.length === 0) {
+      return {
+        score: 0,
+        analysis: { message: 'No chat messages exchanged' },
+        messageCount: 0,
+        candidateMessages: 0,
+        recruiterMessages: 0,
+        classifierAnalysis: null,
+        groqAnalysis: null,
+        combinedInsights: {
+          taskDiscussionSummary: '',
+          messageTone: '',
+          keyInsights: [],
+          strengths: [],
+          areasForImprovement: [],
+          questionsAsked: [],
+          answersProvided: [],
+          taskReferences: []
+        }
+      };
+    }
+
+    const candidateMessages = messages.filter((m: ChatMessageRow) => m?.sender_type === 'candidate').length;
+    const recruiterMessages = messages.filter((m: ChatMessageRow) => m?.sender_type === 'recruiter').length;
+    const totalMessages = messages.length;
+
+    console.log(`📊 Message stats: ${candidateMessages} candidate, ${recruiterMessages} recruiter, ${totalMessages} total`);
+
+    if (candidateMessages === 0) {
+      return {
+        score: 0,
+        analysis: { message: 'Candidate did not send any messages' },
+        messageCount: totalMessages,
+        candidateMessages,
+        recruiterMessages,
+        classifierAnalysis: null,
+        groqAnalysis: null,
+        combinedInsights: {
+          taskDiscussionSummary: '',
+          messageTone: '',
+          keyInsights: [],
+          strengths: [],
+          areasForImprovement: [],
+          questionsAsked: [],
+          answersProvided: [],
+          taskReferences: []
+        }
+      };
+    }
+
+    // ============================================
+    // STEP 1: Get simulation tasks for context
+    // ============================================
+    let simulationTasks: any[] = [];
+    let taskContext = '';
+    
+    try {
+      const sessionResult = await DatabaseService.query(`
+        SELECT ss.simulation_id FROM simulation_sessions ss WHERE ss.id = $1
+      `, [sessionId]);
+      
+      if (sessionResult.rows[0]) {
+        const tasksResult = await DatabaseService.query(`
+          SELECT st.tasks, st.name as simulation_name
+          FROM simulations sim
+          JOIN simulation_templates st ON sim.template_id = st.id
+          WHERE sim.id = $1
+        `, [sessionResult.rows[0].simulation_id]);
+        
+        if (tasksResult.rows[0]?.tasks) {
+          let tasksData = tasksResult.rows[0].tasks;
+          if (typeof tasksData === 'string') tasksData = JSON.parse(tasksData);
+          if (Array.isArray(tasksData)) {
+            simulationTasks = tasksData;
+            taskContext = tasksData.slice(0, 5).map((task: any, idx: number) => {
+              const title = (task.title || task.task_name || `Task ${idx + 1}`).substring(0, 50);
+              const desc = (task.description || '').substring(0, 100);
+              return `${idx + 1}. ${title}: ${desc}`;
+            }).join('\n');
+          }
+        }
+      }
+    } catch (taskError) {
+      console.warn('Could not load simulation tasks:', taskError);
+    }
+
+    // ============================================
+    // STEP 2: Call Communication Classifier API (Python) - FULL RESPONSE
+    // ============================================
+    let classifierAnalysis: any = null;
+    let communicationScore = 0;
+
+    try {
+      classifierAnalysis = await callCommunicationClassifier(messages);
+      if (classifierAnalysis && classifierAnalysis.communication_score) {
+        communicationScore = classifierAnalysis.communication_score;
+      }
+      console.log('✅ Communication classifier API response received:', {
+        score: classifierAnalysis?.communication_score,
+        dominant_style: classifierAnalysis?.dominant_style,
+        style_counts: classifierAnalysis?.style_counts
+      });
+    } catch (apiError: any) {
+      console.error('❌ Communication classifier API error:', apiError.message);
+      classifierAnalysis = { error: apiError.message, fallback: true };
+    }
+
+    // ============================================
+    // STEP 3: Groq AI Deep Analysis - FULL RESPONSE
+    // ============================================
+    let groqAnalysis: any = null;
+    let aiSuggestedScore = communicationScore;
+    let combinedInsights = {
+      taskDiscussionSummary: '',
+      messageTone: '',
+      keyInsights: [] as string[],
+      strengths: [] as string[],
+      areasForImprovement: [] as string[],
+      questionsAsked: [] as string[],
+      answersProvided: [] as string[],
+      taskReferences: [] as any[]
+    };
+
+    try {
+      console.log('🤖 Running Groq AI analysis on chat messages...');
+      
+      // Limit messages to last 15 for prompt size
+      const recentMessages = messages.slice(-15);
+      
+      // Parse and truncate each message
+      const messageTexts = recentMessages.map((msg: ChatMessageRow, idx: number) => {
+        const sender = msg.sender_type === 'candidate' ? 'Candidate' : 'Recruiter';
+        let content = msg.message;
+        try {
+          let parsed = JSON.parse(msg.message);
+          let depth = 0;
+          while (typeof parsed === 'string' && depth < 3) {
+            try {
+              parsed = JSON.parse(parsed);
+              depth++;
+            } catch { break; }
+          }
+          if (parsed && typeof parsed === 'object') {
+            content = parsed.text || parsed.message || msg.message;
+          }
+        } catch { content = msg.message; }
+        
+        content = content.substring(0, 200);
+        return `${sender}: ${content}`;
+      }).join('\n');
+      
+      const prompt = `Analyze these chat messages between candidate and recruiter.
+
+      TASKS:
+      ${taskContext.substring(0, 500) || 'No specific tasks'}
+
+      MESSAGES:
+      ${messageTexts.substring(0, 3500)}
+
+      Return ONLY valid JSON:
+      {
+        "communication_score": 0-100,
+        "message_tone": "professional" or "friendly" or "rushed" or "detailed" or "brief" or "confident" or "hesitant",
+        "task_discussion_summary": "1-2 sentences summarizing what candidate discussed about tasks",
+        "questions_asked": ["question 1", "question 2"],
+        "answers_provided": ["answer 1", "answer 2"],
+        "clarity_level": 0-100,
+        "professionalism_level": 0-100,
+        "engagement_level": 0-100,
+        "key_insights": ["insight 1", "insight 2"],
+        "strengths": ["strength 1", "strength 2"],
+        "areas_for_improvement": ["area 1", "area 2"],
+        "task_references": [
+          {
+            "task_name": "task mentioned",
+            "context": "what candidate said",
+            "understanding_shown": "high/medium/low"
+          }
+        ],
+        "overall_assessment": "brief overall assessment"
+      }`;
+
+      if (prompt.length < 6000) {
+        const completion = await getGroq().chat.completions.create({
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a communication analyst. Return ONLY valid JSON. Be detailed but concise.'
+            },
+            { role: 'user', content: prompt }
+          ],
+          model: 'llama-3.3-70b-versatile',
+          temperature: 0.3,
+          max_tokens: 1200,
+          response_format: { type: 'json_object' }
+        });
+
+        const responseContent = completion.choices[0]?.message?.content;
+        if (responseContent && responseContent.length < 5000) {
+          groqAnalysis = JSON.parse(responseContent);
+          aiSuggestedScore = groqAnalysis.communication_score || communicationScore;
+          
+          // Extract combined insights
+          combinedInsights = {
+            taskDiscussionSummary: groqAnalysis.task_discussion_summary || '',
+            messageTone: groqAnalysis.message_tone || 'unknown',
+            keyInsights: (groqAnalysis.key_insights || []).slice(0, 5),
+            strengths: (groqAnalysis.strengths || []).slice(0, 5),
+            areasForImprovement: (groqAnalysis.areas_for_improvement || []).slice(0, 5),
+            questionsAsked: (groqAnalysis.questions_asked || []).slice(0, 10),
+            answersProvided: (groqAnalysis.answers_provided || []).slice(0, 10),
+            taskReferences: (groqAnalysis.task_references || []).slice(0, 10)
+          };
+          
+          console.log('✅ Groq AI analysis completed:', {
+            score: groqAnalysis.communication_score,
+            tone: groqAnalysis.message_tone,
+            taskReferencesCount: groqAnalysis.task_references?.length || 0,
+            insightsCount: groqAnalysis.key_insights?.length || 0
+          });
+        }
+      } else {
+        console.warn(`⚠️ Prompt too long (${prompt.length} chars), skipping Groq`);
+      }
+    } catch (groqError: any) {
+      console.error('❌ Groq AI analysis failed:', groqError.message);
+      groqAnalysis = { error: groqError.message, fallback: true };
+    }
+
+    // ============================================
+    // STEP 4: Fallback Calculation (if both failed)
+    // ============================================
+    let finalAnalysis: any = {};
+    let finalScore = communicationScore;
+
+    if (!classifierAnalysis?.communication_score && !groqAnalysis?.communication_score) {
+      console.log('📊 Using fallback communication score calculation');
+      
+      // Calculate responsiveness
+      let responsivenessScore = 0;
+      let lastRecruiterMessageTime: Date | null = null;
+      let responseTimes: number[] = [];
+      
+      for (const msg of messages) {
+        if (msg?.sender_type === 'recruiter') {
+          lastRecruiterMessageTime = new Date(msg.timestamp);
+        } else if (msg?.sender_type === 'candidate' && lastRecruiterMessageTime) {
+          const responseTime = (new Date(msg.timestamp).getTime() - lastRecruiterMessageTime.getTime()) / 1000;
+          if (responseTime > 0 && responseTime < 3600) {
+            responseTimes.push(responseTime);
+          }
+          lastRecruiterMessageTime = null;
+        }
+      }
+      
+      if (responseTimes.length > 0) {
+        const avgResponseTime = responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length;
+        responsivenessScore = Math.max(0, Math.min(100, 100 - (avgResponseTime / 1800) * 100));
+      } else {
+        responsivenessScore = candidateMessages > 0 ? 50 : 0;
+      }
+      
+      // Calculate message quality
+      let qualityScore = 0;
+      let totalQuality = 0;
+      
+      for (const msg of messages.filter((m: ChatMessageRow) => m?.sender_type === 'candidate')) {
+        let msgQuality = 0;
+        let parsedMessage = msg?.message || '';
+        
+        try {
+          let parsed = JSON.parse(msg.message);
+          let depth = 0;
+          while (typeof parsed === 'string' && depth < 3) {
+            try {
+              parsed = JSON.parse(parsed);
+              depth++;
+            } catch { break; }
+          }
+          if (parsed && typeof parsed === 'object') {
+            parsedMessage = parsed.text || parsed.message || msg.message;
+          }
+        } catch { parsedMessage = msg.message; }
+        
+        if (parsedMessage && typeof parsedMessage === 'string') {
+          parsedMessage = parsedMessage.substring(0, 500);
+          const length = parsedMessage.length;
+          if (length > 200) msgQuality += 40;
+          else if (length > 100) msgQuality += 30;
+          else if (length > 50) msgQuality += 20;
+          else if (length > 20) msgQuality += 10;
+          else if (length > 0) msgQuality += 5;
+          
+          if (parsedMessage.includes('.') || parsedMessage.includes('?') || parsedMessage.includes('!')) msgQuality += 20;
+          if (!parsedMessage.match(/[A-Z]{5,}/)) msgQuality += 10;
+          if (parsedMessage.includes('?') || parsedMessage.toLowerCase().includes('please')) msgQuality += 10;
+        }
+        
+        totalQuality += Math.min(100, msgQuality);
+      }
+      
+      const avgQuality = candidateMessages > 0 ? totalQuality / candidateMessages : 0;
+      qualityScore = Math.min(100, avgQuality);
+      
+      // Engagement score
+      let firstMessageIsCandidate = false;
+      if (messages.length > 0) {
+        firstMessageIsCandidate = messages[0]?.sender_type === 'candidate';
+      }
+      const engagementScore = firstMessageIsCandidate ? 70 : 50;
+      
+      finalScore = Math.round(
+        (qualityScore * 0.4) + (responsivenessScore * 0.3) + (engagementScore * 0.3)
+      );
+      
+      finalAnalysis = {
+        method: 'fallback',
+        quality_score: Math.round(qualityScore),
+        responsiveness_score: Math.round(responsivenessScore),
+        engagement_score: engagementScore,
+        candidate_messages: candidateMessages,
+        recruiter_messages: recruiterMessages,
+        total_messages: totalMessages,
+        candidate_summary: this.generateCandidateMessageSummary(messages, simulationTasks)
+      };
+    } else {
+      // Combine both analyses
+      finalScore = Math.round((communicationScore * 0.5) + (aiSuggestedScore * 0.5));
+      
+      finalAnalysis = {
+        method: 'combined',
+        // ✅ FULL CLASSIFIER ANALYSIS
+        classifier: classifierAnalysis ? {
+          dominant_style: classifierAnalysis.dominant_style,
+          style_counts: classifierAnalysis.style_counts,
+          total_messages: classifierAnalysis.total_messages,
+          average_confidence: classifierAnalysis.average_confidence,
+          recommendation: classifierAnalysis.recommendation,
+          raw_response: classifierAnalysis
+        } : null,
+        
+        // ✅ FULL GROQ ANALYSIS
+        groq: groqAnalysis ? {
+          message_tone: groqAnalysis.message_tone,
+          clarity_level: groqAnalysis.clarity_level,
+          professionalism_level: groqAnalysis.professionalism_level,
+          engagement_level: groqAnalysis.engagement_level,
+          overall_assessment: groqAnalysis.overall_assessment,
+          task_discussion_summary: groqAnalysis.task_discussion_summary,
+          questions_asked: groqAnalysis.questions_asked || [],
+          answers_provided: groqAnalysis.answers_provided || [],
+          task_references: groqAnalysis.task_references || [],
+          key_insights: groqAnalysis.key_insights || [],
+          strengths: groqAnalysis.strengths || [],
+          areas_for_improvement: groqAnalysis.areas_for_improvement || [],
+          raw_response: groqAnalysis
+        } : null,
+        
+        // ✅ COMBINED INSIGHTS
+        combined_insights: combinedInsights,
+        
+        // Statistics
+        candidate_messages: candidateMessages,
+        recruiter_messages: recruiterMessages,
+        total_messages: totalMessages,
+        candidate_summary: this.generateCandidateMessageSummary(messages, simulationTasks),
+        
+        // Raw messages for reference
+        message_preview: messages.slice(-5).map((m: ChatMessageRow) => ({
+          sender: m.sender_type,
+          preview: (m.message || '').substring(0, 100),
+          timestamp: m.timestamp
+        }))
+      };
+    }
+    
+    finalScore = Math.max(0, Math.min(100, finalScore));
+    
+    console.log('📊 Communication Score Final Result:', {
+      score: finalScore,
+      candidateMessages,
+      recruiterMessages,
+      totalMessages,
+      hasClassifier: !!classifierAnalysis?.communication_score,
+      hasGroq: !!groqAnalysis?.communication_score,
+      method: finalAnalysis.method
+    });
+    
+    return {
+      score: finalScore,
+      analysis: finalAnalysis,
+      messageCount: totalMessages,
+      candidateMessages,
+      recruiterMessages,
+      classifierAnalysis: classifierAnalysis,
+      groqAnalysis: groqAnalysis,
+      combinedInsights: combinedInsights
+    };
+    
+  } catch (error: any) {
+    console.error('❌ Error calculating communication score:', error);
+    return {
+      score: 0,
+      analysis: { error: error.message, message: 'Failed to calculate communication score' },
+      messageCount: 0,
+      candidateMessages: 0,
+      recruiterMessages: 0,
+      classifierAnalysis: null,
+      groqAnalysis: null,
+      combinedInsights: {
+        taskDiscussionSummary: '',
+        messageTone: '',
+        keyInsights: [],
+        strengths: [],
+        areasForImprovement: [],
+        questionsAsked: [],
+        answersProvided: [],
+        taskReferences: []
+      }
+    };
+  }
+}
+
+/**
+ * Generate summary of what the candidate did in messages
+ */
+private generateCandidateMessageSummary(messages: ChatMessageRow[], tasks: any[]): string {
+  const candidateMessages = messages.filter(m => m.sender_type === 'candidate');
+  
+  if (candidateMessages.length === 0) {
+    return 'Candidate sent no messages.';
+  }
+  
+  let questionCount = 0;
+  let codeReferenceCount = 0;
+  let taskReferenceCount = 0;
+  let answerCount = 0;
+  let clarificationCount = 0;
+  
+  for (const msg of candidateMessages) {
+    let content = msg.message;
+    try {
+      let parsed = JSON.parse(msg.message);
+      let depth = 0;
+      while (typeof parsed === 'string' && depth < 3) {
+        try { parsed = JSON.parse(parsed); depth++; } catch { break; }
+      }
+      if (parsed && typeof parsed === 'object') {
+        content = parsed.text || parsed.message || msg.message;
+      }
+    } catch { content = msg.message; }
+    
+    const lowerContent = content.toLowerCase();
+    if (content.includes('?')) questionCount++;
+    if (lowerContent.includes('answer') || lowerContent.includes('solution')) answerCount++;
+    if (lowerContent.includes('```') || lowerContent.includes('code')) codeReferenceCount++;
+    if (lowerContent.includes('task') || lowerContent.includes('problem')) taskReferenceCount++;
+    if (lowerContent.includes('clarify') || lowerContent.includes('explain') || lowerContent.includes('understand')) clarificationCount++;
+  }
+  
+  const parts = [`Sent ${candidateMessages.length} message(s)`];
+  if (questionCount > 0) parts.push(`asked ${questionCount} question(s)`);
+  if (answerCount > 0) parts.push(`provided ${answerCount} answer(s)`);
+  if (codeReferenceCount > 0) parts.push(`shared code ${codeReferenceCount} time(s)`);
+  if (taskReferenceCount > 0) parts.push(`discussed tasks ${taskReferenceCount} time(s)`);
+  if (clarificationCount > 0) parts.push(`sought clarification ${clarificationCount} time(s)`);
+  
+  return parts.join(', ');
+}
+
 // ============================================
 // MAIN SUBMIT SIMULATION FUNCTION
 // ============================================
@@ -4538,7 +6015,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
     }
 
     // ============================================
-    // STEP 5: CALCULATE FULL SCORES using calculateFullSessionScores
+    // STEP 5: CALCULATE FULL SCORES
     // ============================================
     console.log('🔢 [STEP 5] Calculating full session scores...');
     
@@ -4650,7 +6127,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
 
     if (completionRate === 0) {
       if (qualifiesForParticipation) {
-        participationBonus = Math.min(10, Math.floor(totalTimeSeconds / 360));
+        participationBonus = Math.min(0, Math.floor(totalTimeSeconds / 360));
         participationMessage = `Participation marks awarded: +${participationBonus} pts (${Math.floor(totalTimeSeconds / 60)} min in session, minimum 30 min met)`;
       } else {
         participationMessage = `No participation marks: session ended at ${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s — minimum 30 minutes required`;
@@ -4673,7 +6150,7 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
     console.log('📐 Completion Angle:', completionAngle, '°');
     console.log('📦 Data Quantity:', dataQuantityAnalysis);
     console.log('🔍 Data Quality:', { grade: qualityGrade, avgScore: avgAnswerQuality });
-    console.log('⏱️  Session Complete Time:', sessionCompleteTime.formatted, `(${sessionCompleteTime.time_used_percent}% of limit)`);
+    console.log('⏱️ Session Complete Time:', sessionCompleteTime.formatted, `(${sessionCompleteTime.time_used_percent}% of limit)`);
     console.log('🎯 Participation:', { qualifies: qualifiesForParticipation, bonus: participationBonus, message: participationMessage });
     console.log('📊 Final Score:', finalOverallScore, participationBonus > 0 ? `(base ${overallScore} + ${participationBonus} participation)` : '');
     console.log('💬 Submission Message:', submissionMessage);
@@ -4735,14 +6212,21 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       `, [JSON.stringify(mergedAnswers), totalTimeSeconds, finalOverallScore, validSessionId]);
       
       // ============================================
-      // STORE ON BLOCKCHAIN (Optional - fails gracefully)
+      // BLOCKCHAIN STORAGE WITH UNIQUE ADDRESS
+      // Place this inside your transaction after saving scores
       // ============================================
+
+      let blockchainResult = null;
+      let blockchainTxHash = null;
+      let blockchainBlockNumber = null;
+      let credentialHash = null;
+
       try {
-        // Only attempt blockchain storage if configured
         if (process.env.USE_BLOCKCHAIN === 'true') {
-          console.log('🔗 Storing simulation result on blockchain...');
+          console.log('═══════════════════════════════════════════════════════════════');
+          console.log('🔗 Storing simulation result on blockchain with UNIQUE address...');
+          console.log('═══════════════════════════════════════════════════════════════');
           
-          // Import blockchain service dynamically to avoid circular deps
           const { BlockchainService } = await import('../services/blockchain.service.js');
           const fs = await import('fs');
           const path = await import('path');
@@ -4752,7 +6236,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
           const __filename = fileURLToPath(import.meta.url);
           const __dirname = path.dirname(__filename);
           
-          // Load contract artifact
           const artifactPath = path.join(__dirname, '../../../blockchain/artifacts/contracts/LocalSimulation.sol/LocalSimulation.json');
           
           if (fs.existsSync(artifactPath)) {
@@ -4760,20 +6243,20 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
             const blockchain = new BlockchainService();
             await blockchain.initializeContract(artifact.abi);
             
-            // Get candidate's blockchain address (from wallet_addresses table or default)
-            const walletResult = await DatabaseService.query(`
-              SELECT address FROM wallet_addresses 
-              WHERE user_id = $1 AND is_primary = true 
-              LIMIT 1
-            `, [req.user.id]);
-            
-            const candidateAddress = walletResult.rows[0]?.address || 
-                                    '0x90F8bf6A479f320ead074411a4B0e7944Ea8c9C1';
-            
-            // Store on blockchain
-            const result = await blockchain.storeSimulationResult({
+            console.log('📊 Simulation data:', {
               sessionId: validSessionId,
-              candidateAddress: candidateAddress,
+              simulationId: simulationRecordId,
+              candidateId: req.user.id,
+              overallScore: finalOverallScore,
+              technicalScore: technicalScore,
+              punctualityScore: punctualityScore,
+              githubScore: githubScore
+            });
+            
+            const result = await blockchain.storeSimulationResultWithUniqueAddress({
+              sessionId: validSessionId,
+              simulationId: simulationRecordId,
+              candidateId: req.user.id,
               overallScore: finalOverallScore,
               technicalScore: technicalScore,
               punctualityScore: punctualityScore,
@@ -4781,93 +6264,76 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
               githubScore: githubScore
             });
             
+            console.log('✅ Blockchain storage successful!');
+            console.log(`   📍 Address: ${result.address}`);
+            console.log(`   🆕 New: ${result.isNewAddress}`);
+            console.log(`   🔗 TX: ${result.txHash}`);
+            console.log(`   📦 Block: ${result.blockNumber}`);
+            console.log(`   💰 Balance: ${result.balance} ETH`);
+            
             blockchainTxHash = result.txHash;
             blockchainBlockNumber = result.blockNumber;
             
-            // Create credential hash for verifiable credential
             const credentialData = JSON.stringify({
               sessionId: validSessionId,
+              simulationId: simulationRecordId,
               candidateId: req.user.id,
+              walletAddress: result.address,
               overallScore: finalOverallScore,
-              technicalScore,
-              punctualityScore,
-              adaptabilityScore,
-              githubScore,
-              timestamp: new Date().toISOString(),
-              blockchainTxHash
+              technicalScore: technicalScore,
+              punctualityScore: punctualityScore,
+              adaptabilityScore: adaptabilityScore,
+              githubScore: githubScore,
+              txHash: result.txHash,
+              blockNumber: result.blockNumber,
+              blockHash: result.blockHash,
+              timestamp: new Date().toISOString()
             });
             
             credentialHash = crypto.createHash('sha256').update(credentialData).digest('hex');
             
-            // Store in blockchain_records table
             await client.query(`
               INSERT INTO blockchain_records (
-                simulation_id, candidate_id, tx_id, block_hash, data_hash, data
-              ) VALUES ($1, $2, $3, $4, $5, $6)
+                simulation_id, session_id, candidate_id, 
+                tx_id, block_hash, data_hash, data, wallet_address, timestamp
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+              ON CONFLICT (session_id) DO NOTHING
             `, [
-              simulationRecordId,
-              req.user.id,
-              blockchainTxHash,
-              `Block ${blockchainBlockNumber}`,
-              credentialHash,
-              JSON.stringify({
-                sessionId: validSessionId,
-                scores: {
-                  overall: finalOverallScore,
-                  technical: technicalScore,
-                  punctuality: punctualityScore,
-                  adaptability: adaptabilityScore,
-                  github: githubScore
-                },
-                timestamp: new Date().toISOString()
-              })
+              simulationRecordId, validSessionId, req.user.id,
+              result.txHash, result.blockHash, credentialHash, credentialData, result.address
             ]);
             
-            // Store verifiable credential
             await client.query(`
               INSERT INTO verifiable_credentials (
-                simulation_id, candidate_id, credential_data, credential_hash
-              ) VALUES ($1, $2, $3, $4)
+                simulation_id, session_id, candidate_id, 
+                credential_data, credential_hash, issued_at
+              ) VALUES ($1, $2, $3, $4, $5, NOW())
+              ON CONFLICT (session_id) DO NOTHING
             `, [
-              simulationRecordId,
-              req.user.id,
-              JSON.stringify({
-                type: 'SimulationResult',
-                issuer: 'Recruitment Platform',
-                issuanceDate: new Date().toISOString(),
-                credentialSubject: {
-                  id: req.user.id,
-                  sessionId: validSessionId,
-                  score: finalOverallScore,
-                  details: {
-                    technical: technicalScore,
-                    punctuality: punctualityScore,
-                    adaptability: adaptabilityScore,
-                    github: githubScore
-                  }
-                },
-                proof: {
-                  type: 'BlockchainTx',
-                  txHash: blockchainTxHash,
-                  blockNumber: blockchainBlockNumber
-                }
-              }),
-              credentialHash
+              simulationRecordId, validSessionId, req.user.id, credentialData, credentialHash
             ]);
             
-            console.log(`✅ Simulation stored on blockchain!`);
-            console.log(`   TX: ${blockchainTxHash}`);
-            console.log(`   Block: ${blockchainBlockNumber}`);
-            console.log(`   Credential Hash: ${credentialHash}`);
+            blockchainResult = { 
+              txHash: result.txHash, 
+              blockNumber: result.blockNumber, 
+              credentialHash: credentialHash,
+              walletAddress: result.address,
+              isNewAddress: result.isNewAddress,
+              balance: result.balance
+            };
+            
+            console.log('✅ Blockchain records saved to database');
+            console.log('═══════════════════════════════════════════════════════════════');
+            
           } else {
-            console.warn('⚠️ Contract artifact not found at:', artifactPath);
+            console.warn('⚠️ Contract artifact not found, skipping blockchain storage');
           }
         } else {
           console.log('ℹ️ Blockchain storage disabled (USE_BLOCKCHAIN !== "true")');
         }
       } catch (blockchainError: any) {
-        console.error('❌ Blockchain storage failed:', blockchainError?.message);
-        // Continue execution - don't fail submission if blockchain fails
+        console.error('❌ Blockchain storage error:', blockchainError?.message);
+        console.error('   Continuing with submission...');
       }
 
       // 7.2 Update simulation record with blockchain info
@@ -4891,14 +6357,14 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
         const queryParams: any[] = [
           JSON.stringify(mergedAnswers),
           totalTimeSeconds,
-          finalOverallScore,
-          punctualityScore,
-          communicationScore,
-          technicalScore,
-          adaptabilityScore,
-          collaborationScore,
-          punctualityScore,
-          speedScore
+          finalOverallScore,           // DECIMAL(5,2) - keep decimal
+          punctualityScore,            // DECIMAL(5,2) - keep decimal
+          communicationScore,          // DECIMAL(5,2) - keep decimal
+          technicalScore,              // DECIMAL(5,2) - keep decimal
+          adaptabilityScore,           // DECIMAL(5,2) - keep decimal
+          collaborationScore,          // DECIMAL(5,2) - keep decimal
+          Math.round(punctualityScore), // attention_score - INTEGER column
+          Math.round(speedScore)        // initiative_score - INTEGER column
         ];
         
         // Add blockchain fields if available
@@ -4973,7 +6439,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
 
       // 7.4 Insert evaluation sections from task analysis
       if (evaluationId) {
-        // 7.4 Insert evaluation sections from task analysis - already has ON CONFLICT
         for (const task of taskAnalysis) {
           await client.query(`
             INSERT INTO evaluation_sections (
@@ -4997,7 +6462,6 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
           `, [evaluationId, `Task ${task.task_index + 1}: ${task.task_title}`, task.scores.overall, 100, task.scores.overall, task.status === 'completed' ? 1 : 0, 1, JSON.stringify({ task_type: task.task_type, time_taken: task.time_taken_formatted, status: task.status, answer_details: task.answer_details })]);
         }
 
-      
         // 7.5 Insert behavioral metrics with ON CONFLICT
         await client.query(`
           INSERT INTO evaluation_behavioral_metrics (
@@ -6042,125 +7506,139 @@ async startAppliedJobSimulation(req: AuthenticatedRequest, res: Response): Promi
     }
   }
 
-  async getMySimulations(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const { page = '1', limit = '20', status } = req.query;
-      const validPage = Number(page);
-      const validLimit = Math.min(Number(limit), 50);
-      const offset = (validPage - 1) * validLimit;
+ async getMySimulations(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    const { page = '1', limit = '20', status } = req.query;
+    const validPage = Number(page);
+    const validLimit = Math.min(Number(limit), 50);
+    const offset = (validPage - 1) * validLimit;
 
-      let statusFilter = '';
-      const queryParams: any[] = [req.user.id];
+    let statusFilter = '';
+    const queryParams: any[] = [req.user.id];
 
-      if (status && ['not_started', 'in_progress', 'completed'].includes(status as string)) {
-        if (status === 'not_started') {
-          statusFilter = `AND (sim.id IS NULL)`;
-        } else if (status === 'in_progress') {
-          statusFilter = `AND sim.status = 'in_progress'`;
-        } else if (status === 'completed') {
-          statusFilter = `AND sim.status = 'completed'`;
-        }
+    if (status && ['not_started', 'in_progress', 'completed'].includes(status as string)) {
+      if (status === 'not_started') {
+        statusFilter = `AND (sim.id IS NULL)`;
+      } else if (status === 'in_progress') {
+        statusFilter = `AND sim.status = 'in_progress'`;
+      } else if (status === 'completed') {
+        statusFilter = `AND sim.status = 'completed'`;
       }
-
-      const result = await DatabaseService.query(`
-        SELECT 
-          a.id as application_id,
-          a.job_id,
-          a.status as application_status,
-          a.applied_at,
-          a.match_score,
-          j.title as job_title,
-          j.description as job_description,
-          j.job_type,
-          j.work_arrangement,
-          j.locations as job_locations,
-          c.id as company_id,
-          c.name as company_name,
-          c.logo_url,
-          c.description as company_description,
-          st.id as simulation_id,
-          st.name as simulation_name,
-          st.description as simulation_description,
-          st.duration_minutes,
-          st.difficulty,
-          st.type as simulation_type,
-          st.tasks,
-          st.tasks_structure,
-          st.scoring_rubric,
-          st.pass_fail_criteria,
-          st.metadata,
-          sim.id as simulation_record_id,
-          sim.status as simulation_status,
-          sim.overall_score as simulation_score,
-          sim.created_at as simulation_created_at,
-          s.id as session_id,
-          s.status as session_status,
-          s.started_at,
-          s.completed_at,
-          s.score as session_score,
-          s.time_spent,
-          s.current_task,
-          s.github_links
-        FROM applications a
-        INNER JOIN jobs j ON a.job_id = j.id
-        INNER JOIN companies c ON j.company_id = c.id
-        LEFT JOIN simulation_templates st ON st.job_id = j.id AND st.is_active = true
-        LEFT JOIN simulations sim ON sim.template_id = st.id AND sim.application_id = a.id AND sim.user_id = a.user_id
-        LEFT JOIN simulation_sessions s ON s.simulation_id = sim.id AND s.session_type = 'candidate' AND s.status = 'in_progress'
-        WHERE a.user_id = $1
-          AND a.status NOT IN ('rejected', 'withdrawn')
-          AND j.status = 'active'
-          ${statusFilter}
-        ORDER BY a.applied_at DESC, sim.created_at DESC
-      `, queryParams);
-
-      const allSimulations = result.rows.map((row: any) => ({
-        id: row.simulation_id,
-        applicationId: row.application_id,
-        jobId: row.job_id,
-        jobTitle: row.job_title,
-        companyName: row.company_name,
-        companyLogo: row.logo_url,
-        companyDescription: row.company_description,
-        simulationName: row.simulation_name || `${row.job_title} Assessment`,
-        description: row.simulation_description || `Complete this simulation to demonstrate your skills for the ${row.job_title} position.`,
-        duration: row.duration_minutes || 30,
-        difficulty: row.difficulty || 'intermediate',
-        type: row.simulation_type || 'technical',
-        status: row.simulation_status || 'not_started',
-        sessionId: row.session_id,
-        score: row.simulation_score,
-        startedAt: row.started_at,
-        completedAt: row.completed_at,
-        appliedAt: row.applied_at,
-        applicationStatus: row.application_status,
-        matchScore: row.match_score,
-        tasks: row.tasks,
-        tasksStructure: row.tasks_structure,
-        scoringRubric: row.scoring_rubric,
-        passFailCriteria: row.pass_fail_criteria,
-        metadata: row.metadata
-      }));
-
-      const paginatedSimulations = allSimulations.slice(offset, offset + validLimit);
-      const total = allSimulations.length;
-
-      ResponseService.success(res, {
-        data: paginatedSimulations,
-        pagination: {
-          page: validPage,
-          limit: validLimit,
-          total: total,
-          pages: Math.ceil(total / validLimit),
-          has_next: validPage * validLimit < total,
-          has_prev: validPage > 1,
-        }
-      });
-    } catch (error: any) {
-      console.error('Error in getMySimulations:', error);
-      ResponseService.error(res, 'Failed to fetch simulations', 500);
     }
+
+    // ✅ FIXED: Get the LATEST session (not just in_progress)
+    const result = await DatabaseService.query(`
+      SELECT 
+        a.id as application_id,
+        a.job_id,
+        a.status as application_status,
+        a.applied_at,
+        a.match_score,
+        j.title as job_title,
+        j.description as job_description,
+        j.job_type,
+        j.work_arrangement,
+        j.locations as job_locations,
+        c.id as company_id,
+        c.name as company_name,
+        c.logo_url,
+        c.description as company_description,
+        st.id as simulation_id,
+        st.name as simulation_name,
+        st.description as simulation_description,
+        st.duration_minutes,
+        st.difficulty,
+        st.type as simulation_type,
+        st.tasks,
+        st.tasks_structure,
+        st.scoring_rubric,
+        st.pass_fail_criteria,
+        st.metadata,
+        sim.id as simulation_record_id,
+        sim.status as simulation_status,
+        sim.overall_score as simulation_score,
+        sim.created_at as simulation_created_at,
+        -- ✅ FIXED: Get the LATEST session (ordered by created_at DESC, limit 1)
+        s.id as session_id,
+        s.status as session_status,
+        s.started_at,
+        s.completed_at,
+        s.score as session_score,
+        s.time_spent,
+        s.current_task,
+        s.github_links
+      FROM applications a
+      INNER JOIN jobs j ON a.job_id = j.id
+      INNER JOIN companies c ON j.company_id = c.id
+      LEFT JOIN simulation_templates st ON st.job_id = j.id AND st.is_active = true
+      LEFT JOIN simulations sim ON sim.template_id = st.id AND sim.application_id = a.id AND sim.user_id = a.user_id
+      -- ✅ FIXED: Get LATEST session using LATERAL (works in PostgreSQL)
+      LEFT JOIN LATERAL (
+        SELECT s2.* 
+        FROM simulation_sessions s2 
+        WHERE s2.simulation_id = sim.id AND s2.session_type = 'candidate'
+        ORDER BY s2.created_at DESC 
+        LIMIT 1
+      ) s ON true
+      WHERE a.user_id = $1
+        AND a.status NOT IN ('rejected', 'withdrawn')
+        AND j.status = 'active'
+        ${statusFilter}
+      ORDER BY a.applied_at DESC, sim.created_at DESC
+      LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+    `, [...queryParams, validLimit, offset]);
+
+    const allSimulations = result.rows.map((row: any) => ({
+      id: row.simulation_id,
+      applicationId: row.application_id,
+      jobId: row.job_id,
+      jobTitle: row.job_title,
+      companyName: row.company_name,
+      companyLogo: row.logo_url,
+      companyDescription: row.company_description,
+      simulationName: row.simulation_name || `${row.job_title} Assessment`,
+      description: row.simulation_description || `Complete this simulation to demonstrate your skills for the ${row.job_title} position.`,
+      duration: row.duration_minutes || 30,
+      difficulty: row.difficulty || 'intermediate',
+      type: row.simulation_type || 'technical',
+      status: row.simulation_status || 'not_started',
+      sessionId: row.session_id,  // ✅ Now returns sessionId for ALL simulations (completed and in_progress)
+      sessionStatus: row.session_status,
+      score: row.simulation_score,
+      startedAt: row.started_at,
+      completedAt: row.completed_at,
+      appliedAt: row.applied_at,
+      applicationStatus: row.application_status,
+      matchScore: row.match_score,
+      tasks: row.tasks,
+      tasksStructure: row.tasks_structure,
+      scoringRubric: row.scoring_rubric,
+      passFailCriteria: row.pass_fail_criteria,
+      metadata: row.metadata
+    }));
+
+    const paginatedSimulations = allSimulations.slice(offset, offset + validLimit);
+    const total = allSimulations.length;
+
+    console.log(`📊 [getMySimulations] Returning ${paginatedSimulations.length} simulations`);
+    console.log(`📊 Session IDs present: ${paginatedSimulations.filter((sim: any) => sim.sessionId).length}/${paginatedSimulations.length}`);
+
+    ResponseService.success(res, {
+      data: paginatedSimulations,
+      pagination: {
+        page: validPage,
+        limit: validLimit,
+        total: total,
+        pages: Math.ceil(total / validLimit),
+        has_next: validPage * validLimit < total,
+        has_prev: validPage > 1,
+      }
+    });
+  } catch (error: any) {
+    console.error('Error in getMySimulations:', error);
+    ResponseService.error(res, 'Failed to fetch simulations', 500);
   }
+}
 
   async getMySimulationById(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -10252,6 +11730,9 @@ async getSimulationCandidates(req: AuthenticatedRequest, res: Response): Promise
     const isOwner = simulationTemplate.created_by === req.user.id;
     const isCompanyUser = simulationTemplate.company_id === userCompanyId;
     const isAdmin = req.user.user_type === 'system_admin';
+    const isRecruiter = req.user.user_type === 'recruiter' || 
+                        req.user.user_type === 'company_admin' || 
+                        req.user.user_type === 'system_admin';
 
     console.log('🔐 Access check results:', {
       isOwner,
@@ -10262,10 +11743,10 @@ async getSimulationCandidates(req: AuthenticatedRequest, res: Response): Promise
       simulationCompanyId: simulationTemplate.company_id,
       userCompanyId: userCompanyId,
       userType: req.user.user_type,
-      hasAccess: isOwner || isCompanyUser || isAdmin
+      hasAccess: isOwner || isCompanyUser || isAdmin || isRecruiter
     });
 
-    if (!isOwner && !isCompanyUser && !isAdmin) {
+    if (!isCompanyUser && !isRecruiter) {
       console.log('❌ Access denied to simulation template:', id);
       ResponseService.forbidden(res, 'Access denied to this simulation');
       return;
@@ -11153,7 +12634,7 @@ async startSimulationSession(req: AuthenticatedRequest, res: Response): Promise<
  * Get blockchain record for a simulation
  * @route GET /api/v1/simulations/sessions/:sessionId/blockchain
  */
-async getBlockchainRecord(req: AuthenticatedRequest, res: Response): Promise<void> {
+public async getBlockchainRecord(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const { sessionId } = req.params;
 
@@ -11233,7 +12714,7 @@ async getBlockchainRecord(req: AuthenticatedRequest, res: Response): Promise<voi
  * Verify a simulation credential by hash
  * @route GET /api/v1/simulations/verify/:credentialHash
  */
-async verifyCredential(req: AuthenticatedRequest, res: Response): Promise<void> {
+public async verifyCredential(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const { credentialHash } = req.params;
 

@@ -28,17 +28,9 @@ import {
   Github, 
   Layout, 
   X, 
-  RefreshCw, 
   UploadCloud, 
   Download, 
   GitBranch,
-  Activity,
-  GitCommit,
-  Star,
-  GitFork,
-  Users,
-  GitPullRequest,
-  Code,
 } from 'lucide-react';
 
 interface SimulationExecutorProps {
@@ -93,6 +85,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   // Get GitHub repo from context - PER TASK STORAGE!
   const { 
     currentRepo, 
+    loadRepository,
     loadRepositoryFromUrl, 
     isLoading: isRepoLoading,
     hasRepo,
@@ -173,8 +166,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     isLoading: isFileSystemLoading,
   } = useFileSystem(sessionId, currentTask);
   
-  // ✅ FIXED: Timer only updates UI, NO AUTO-SAVE
-    const {
+  // Timer only updates UI, NO AUTO-SAVE
+  const {
     timeSpent,
     timeLimit,
     isRunning: _isRunning,
@@ -184,14 +177,9 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     resumeTimer,
     formatTime,
     getTimeColor,
-    getCurrentTime,  // ✅ Use the correct exported function name
+    getCurrentTime,
   } = useTimer(session, (newTime) => {
-    // ✅ ONLY update UI time, NO auto-save to backend
     if (!isStartingTaskRef.current) {
-      // Just update the local UI time without saving
-      // console.log(`⏱️ Timer tick: ${newTime} seconds (UI only, no save)`);
-      // We still call updateTimeSpent to keep local state in sync,
-      // but the hook's saveProgress should be called manually only
       updateTimeSpent?.(newTime);
     }
   });
@@ -259,13 +247,17 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       
       try {
         await refreshStats();
+        setGithubPushStatus('success');
         setGithubMessage(`✓ Stats refreshed for ${currentRepo.owner}/${currentRepo.repo}`);
         setTimeout(() => setGithubMessage(''), 3000);
       } catch (error) {
+        setGithubPushStatus('error');
         setGithubMessage('✗ Failed to refresh stats');
         setTimeout(() => setGithubMessage(''), 3000);
       } finally {
-        setGithubPushStatus('idle');
+        setTimeout(() => {
+          setGithubPushStatus('idle');
+        }, 2000);
       }
     }
   };
@@ -360,19 +352,17 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     }
   };
 
-  // ✅ FIXED: Manual save with debounce (saves only when user clicks Save button)
+  // Manual save with debounce
   const handleSaveProgress = async () => {
     if (isStartingTaskRef.current) {
       console.log('⚠️ Skipping save progress while starting task');
       return;
     }
     
-    // Clear any pending debounce
     if (saveDebounceRef.current) {
       clearTimeout(saveDebounceRef.current);
     }
     
-    // Debounce to prevent multiple rapid saves
     saveDebounceRef.current = setTimeout(async () => {
       console.log('💾 Manual save triggered by user');
       await saveProgress();
@@ -381,7 +371,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const getMinSubmitMessage = () => {
-    const latestTimeSpent = Math.max(timeSpent, getCurrentTime());  // ✅ Changed from getElapsedTime
+    const latestTimeSpent = Math.max(timeSpent, getCurrentTime());
     const remainingSeconds = Math.max(0, MIN_SUBMIT_SECONDS - latestTimeSpent);
     return `You must spend at least 3 minutes before submitting. ${formatTime(remainingSeconds)} remaining.`;
   };
@@ -399,7 +389,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const handleSubmitSimulation = async () => {
-    const latestTimeSpent = Math.max(timeSpent, getCurrentTime());  // ✅ Changed from getElapsedTime
+    const latestTimeSpent = Math.max(timeSpent, getCurrentTime());
     if (latestTimeSpent < MIN_SUBMIT_SECONDS) {
       const message = getMinSubmitMessage();
       setSubmitError(message);
@@ -474,17 +464,30 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     }
   }, [session?.currentTaskIndex, tasks, setGlobalTaskIndex, loadRepoForTask, setCurrentTask]);
 
+  // Auto-load GitHub repo from session with branch name
   useEffect(() => {
     if (githubRepo?.repoUrl && !currentRepo) {
       console.log('🐙 [SimulationExecutor] Auto-loading GitHub repo from session:', {
         repoUrl: githubRepo.repoUrl,
         branchName: githubRepo.branchName
       });
-      loadRepositoryFromUrl(githubRepo.repoUrl).catch((err) => {
-        console.error('❌ Failed to auto-load GitHub repo from session:', err);
-      });
+      
+      const match = githubRepo.repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
+      if (match) {
+        const owner = match[1];
+        const repo = match[2].replace(/\.git$/, '');
+        const branch = githubRepo.branchName || 'main';
+        
+        loadRepository(owner, repo, githubRepo.repoUrl, branch).catch((err) => {
+          console.error('❌ Failed to auto-load GitHub repo from session:', err);
+        });
+      } else {
+        loadRepositoryFromUrl(githubRepo.repoUrl).catch((err) => {
+          console.error('❌ Failed to auto-load GitHub repo from session:', err);
+        });
+      }
     }
-  }, [githubRepo?.repoUrl, githubRepo?.branchName, currentRepo, loadRepositoryFromUrl]);
+  }, [githubRepo?.repoUrl, githubRepo?.branchName, currentRepo, loadRepository, loadRepositoryFromUrl]);
 
   useEffect(() => {
     if (selectedTaskIndex !== null) {
@@ -569,22 +572,40 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     return <StartDialog session={session} onStart={() => { startTimer(); setShowStartDialog(false); }} onExit={onExit} />;
   }
 
-  if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'completed' || session?.status === 'submitted')) {
-    return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-        <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
-          <div className="text-green-500 mb-4">
-            <svg className="h-16 w-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-white mb-2">Simulation Already Completed</h2>
-          <p className="text-gray-400 mb-6">This simulation has already been submitted.</p>
-          <button onClick={() => window.location.href = `/simulation/results/${sessionId}`} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">View Results</button>
+
+// In SimulationExecutor.tsx - This is the frontend component
+
+// Find this section (around line 380-400) and replace it:
+
+if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'completed' || session?.status === 'submitted')) {
+  return (
+    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+      <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
+        <div className="text-green-500 mb-4">
+          <svg className="h-16 w-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
         </div>
+        <h2 className="text-xl font-bold text-white mb-2">Simulation Already Completed</h2>
+        <p className="text-gray-400 mb-6">This simulation has already been submitted.</p>
+        <button 
+          onClick={() => {
+            // Use session ID to go to session report
+            const currentSessionId = session?.id || sessionId;
+            if (currentSessionId) {
+              window.location.href = `/session-report/${currentSessionId}`;
+            } else {
+              window.location.href = `/session-report/${sessionId}`;
+            }
+          }} 
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+        >
+          View Results
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   const handleCompleteTask = async () => {
     if (selectedTaskIndex === null) return;
@@ -619,6 +640,26 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const handlePostSubmitComplete = () => {
     setShowPostSubmitDialog(false);
     _onComplete({ sessionId, progress, timeSpent, submissionResult });
+  };
+  
+  // FIXED: Handle review results after submission - navigate to session report with SESSION ID
+  const handlePostSubmitReviewResults = () => {
+    console.log('📊 Post-submit review results clicked');
+    console.log('📊 Session object:', session);
+    console.log('📊 Current sessionId:', sessionId);
+    
+    // Use the session ID (not simulation ID) to go to the session report
+    // The route needed in App.jsx: /session-report/:sessionId
+    const currentSessionId = session?.id || sessionId;
+    
+    if (currentSessionId) {
+      console.log('🔍 Navigating to session report with sessionId:', currentSessionId);
+      // Navigate to the session report page
+      window.location.href = `/session-report/${currentSessionId}`;
+    } else {
+      console.warn('No sessionId available');
+      handlePostSubmitComplete();
+    }
   };
 
   const tabs = [
@@ -715,7 +756,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         onOpenChat={openChatFromHeader}
       />
 
-      {/* Tab Navigation Bar WITH SYNC CONTROLS - FIXED TYPES */}
+      {/* Tab Navigation Bar */}
       <div className="bg-gray-800 border-b border-gray-700 px-4 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-1">
           {tabs.map((tab) => (
@@ -739,7 +780,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
           ))}
         </div>
 
-        {/* Sync Controls - WITH TYPE ASSERTIONS */}
+        {/* Sync Controls */}
         <div className="flex items-center gap-2">
           <button
             onClick={pushToLocal}
@@ -763,42 +804,58 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
           <div className="w-px h-5 bg-gray-600 mx-1" />
 
-          {/* Push to GitHub Button - WITH TYPE ASSERTION */}
+          {/* Push to GitHub Button */}
           <button
             onClick={handlePushToGitHub}
             disabled={!currentRepo || isSyncing}
             className={`px-2.5 py-1.5 rounded flex items-center gap-1 text-xs transition-colors border ${
               currentRepo && !isSyncing
-                ? (githubPushStatus as SyncStatus) === 'syncing' 
+                ? githubPushStatus === 'syncing' 
                   ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600'
-                  : (githubPushStatus as SyncStatus) === 'success'
+                  : githubPushStatus === 'success'
                   ? 'bg-green-600/20 text-green-400 border-green-600'
+                  : githubPushStatus === 'error'
+                  ? 'bg-red-600/20 text-red-400 border-red-600'
                   : 'bg-purple-600/20 text-purple-400 border-purple-600 hover:bg-purple-600/30'
                 : 'bg-gray-700/50 text-gray-500 border-gray-600 cursor-not-allowed'
             }`}
             title="Push code to GitHub repository"
           >
             <GitBranch size={13} />
-            {(githubPushStatus as SyncStatus) === 'syncing' ? 'Pushing...' : (githubPushStatus as SyncStatus) === 'success' ? '✓ Pushed!' : 'Push to GitHub'}
+            {githubPushStatus === 'syncing' 
+              ? 'Pushing...' 
+              : githubPushStatus === 'success' 
+              ? '✓ Pushed!' 
+              : githubPushStatus === 'error'
+              ? '✗ Failed'
+              : 'Push to GitHub'}
           </button>
 
-          {/* Pull from GitHub Button - WITH TYPE ASSERTION */}
+          {/* Pull from GitHub Button */}
           <button
             onClick={handlePullFromGitHub}
             disabled={!currentRepo || isSyncing}
             className={`px-2.5 py-1.5 rounded flex items-center gap-1 text-xs transition-colors border ${
               currentRepo && !isSyncing
-                ? (githubPullStatus as SyncStatus) === 'syncing'
+                ? githubPullStatus === 'syncing'
                   ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600'
-                  : (githubPullStatus as SyncStatus) === 'success'
+                  : githubPullStatus === 'success'
                   ? 'bg-green-600/20 text-green-400 border-green-600'
+                  : githubPullStatus === 'error'
+                  ? 'bg-red-600/20 text-red-400 border-red-600'
                   : 'bg-purple-600/20 text-purple-400 border-purple-600 hover:bg-purple-600/30'
                 : 'bg-gray-700/50 text-gray-500 border-gray-600 cursor-not-allowed'
             }`}
             title="Pull latest code from GitHub repository"
           >
             <Download size={13} />
-            {(githubPullStatus as SyncStatus) === 'syncing' ? 'Pulling...' : (githubPullStatus as SyncStatus) === 'success' ? '✓ Pulled!' : 'Pull from GitHub'}
+            {githubPullStatus === 'syncing' 
+              ? 'Pulling...' 
+              : githubPullStatus === 'success' 
+              ? '✓ Pulled!' 
+              : githubPullStatus === 'error'
+              ? '✗ Failed'
+              : 'Pull from GitHub'}
           </button>
 
           {displayMessage && (
@@ -817,7 +874,6 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         {/* WORKSPACE TAB */}
         {activeTab === 'workspace' && (
           <div className="flex flex-col h-full overflow-hidden">
-            {/* Horizontal Task List at the TOP */}
             <TaskList
               tasks={tasks}
               taskProgress={taskProgress}
@@ -829,9 +885,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
               hasGitHubRepoForTask={hasGitHubRepoForTask}
             />
             
-            {/* Main content area */}
             <div className="flex flex-1 overflow-hidden min-h-0">
-              {/* Left Sidebar - File Explorer */}
               {showSidebar && (
                 <FileExplorer
                   files={fileStructure}
@@ -851,7 +905,6 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
                 />
               )}
 
-              {/* Center - Task Content */}
               <div className="flex-1 flex flex-col overflow-y-auto min-h-0">
                 {isLoadingDisplay ? (
                   <div className="flex-1 flex items-center justify-center">
@@ -895,6 +948,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
                   />
                 )}
               </div>
+              
               {showRightSidebar && (
                 <GitHubDetailsSidebar
                   currentRepo={currentRepo}
@@ -1018,7 +1072,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       />
       <PostSubmitDialog
         open={showPostSubmitDialog}
-        onReviewResults={handlePostSubmitComplete}
+        onReviewResults={handlePostSubmitReviewResults}
         onExit={onExit}
         session={session}
         result={submissionResult}

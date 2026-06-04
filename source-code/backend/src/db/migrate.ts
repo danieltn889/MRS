@@ -205,7 +205,7 @@ const executeSchemaWithErrorHandling = async (client: Client, schemaSQL: string)
     }
   }
 
-  console.log(`Found ${createExtensionStatements.length} CREATE EXTENSION, ${createTableStatements.length} CREATE TABLE, ${otherStatements.length} other`);
+  //console.log(`Found ${createExtensionStatements.length} CREATE EXTENSION, ${createTableStatements.length} CREATE TABLE, ${otherStatements.length} other`);
 
   let createdTables = 0;
   let skippedTables = 0;
@@ -255,7 +255,7 @@ const executeSchemaWithErrorHandling = async (client: Client, schemaSQL: string)
     }
   }
 
-  logger.info(`Migration completed: ${createdTables} tables created, ${skippedTables} skipped`);
+  //logger.info(`Migration completed: ${createdTables} tables created, ${skippedTables} skipped`);
 };
 
 const runMigrations = async (): Promise<void> => {
@@ -304,7 +304,7 @@ const runMigrations = async (): Promise<void> => {
     `);
 
     logger.info(`Found ${tablesResult.rows.length} tables`);
-    console.log('Tables created:', tablesResult.rows.map(r => r.table_name).join(', '));
+    //console.log('Tables created:', tablesResult.rows.map(r => r.table_name).join(', '));
 
     await client.end();
   } catch (error) {
