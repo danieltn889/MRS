@@ -2776,11 +2776,38 @@ ALTER TABLE simulations
   ALTER COLUMN initiative_score TYPE DECIMAL(5,2);
   
 ALTER TABLE wallet_addresses 
-ADD COLUMN updated_at TIMESTAMP DEFAULT NOW();
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
 
 ALTER TABLE blockchain_records 
 ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255);
 
+-- =====================================================
+-- ADD SUBMISSION RESULTS COLUMN TO simulation_sessions
+-- =====================================================
+
+ALTER TABLE simulation_sessions 
+ADD COLUMN IF NOT EXISTS submission_results JSONB DEFAULT '{}'::JSONB;
+
+-- Index for faster queries
+CREATE INDEX IF NOT EXISTS idx_simulation_sessions_submission_results 
+ON simulation_sessions USING GIN (submission_results);
+
+-- Generated columns for fast filtering
+ALTER TABLE simulation_sessions 
+ADD COLUMN IF NOT EXISTS submission_score INTEGER 
+GENERATED ALWAYS AS ((submission_results->>'score')::INTEGER) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_simulation_sessions_submission_score 
+ON simulation_sessions(submission_score) 
+WHERE submission_score IS NOT NULL;
+
+ALTER TABLE simulation_sessions 
+ADD COLUMN IF NOT EXISTS submission_passed BOOLEAN 
+GENERATED ALWAYS AS ((submission_results->>'passed')::BOOLEAN) STORED;
+
+CREATE INDEX IF NOT EXISTS idx_simulation_sessions_submission_passed 
+ON simulation_sessions(submission_passed) 
+WHERE submission_passed IS NOT NULL;
 -- =====================================================
 -- END OF SCHEMA
 -- =====================================================

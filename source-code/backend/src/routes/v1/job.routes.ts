@@ -115,60 +115,61 @@ router.post('/', [
   body('description').isString().trim().isLength({ min: 1, max: 10000 }).withMessage('Description must be 1-10000 characters'),
   
   // Locations - array of location objects
-  body('locations').optional().isArray(),
-  body('locations.*.city').optional().isString(),
-  body('locations.*.country').optional().isString(),
-  body('locations.*.state').optional().isString(),
-  body('locations.*.postal_code').optional().isString(),
-  body('locations.*.is_remote').optional().isBoolean(),
+  body('locations').optional({ nullable: true }).isArray(),
+  body('locations.*.city').optional({ nullable: true }).isString(),
+  body('locations.*.country').optional({ nullable: true }).isString(),
+  body('locations.*.state').optional({ nullable: true }).isString(),
+  body('locations.*.postal_code').optional({ nullable: true }).isString(),
+  body('locations.*.is_remote').optional({ nullable: true }).isBoolean(),
   
   // Job details
-  body('jobType').optional().isIn(['full-time', 'part-time', 'contract', 'internship', 'freelance', 'temporary']),
-  body('workArrangement').optional().isIn(['onsite', 'remote', 'hybrid', 'flexible']),
-  body('experienceLevel').optional().isIn(['entry', 'mid', 'senior', 'lead', 'executive']),
-  body('department').optional().isString().trim(),
-  body('team').optional().isString().trim(),
+  body('jobType').optional({ nullable: true }).isIn(['full-time', 'part-time', 'contract', 'internship', 'freelance', 'temporary']),
+  body('workArrangement').optional({ nullable: true }).isIn(['onsite', 'remote', 'hybrid', 'flexible']),
+  body('experienceLevel').optional({ nullable: true }).isIn(['entry', 'mid', 'senior', 'lead', 'executive']),
+  body('department').optional({ nullable: true }).isString().trim(),
+  body('team').optional({ nullable: true }).isString().trim(),
   
   // Dates
-  body('publishedAt').optional().isISO8601(),
-  body('expiresAt').optional().isISO8601(),
-  body('postingDuration').optional().isInt({ min: 1, max: 365 }),
+  body('publishedAt').optional({ nullable: true }).isISO8601(),
+  body('expiresAt').optional({ nullable: true }).isISO8601(),
+  body('postingDuration').optional({ nullable: true }).isInt({ min: 1, max: 365 }),
   
   // Salary
-  body('salaryMin').optional().isFloat({ min: 0 }),
-  body('salaryMax').optional().isFloat({ min: 0 }),
-  body('salaryCurrency').optional().isString().isLength({ min: 3, max: 3 }),
-  body('salaryPeriod').optional().isIn(['hour', 'month', 'year']),
-  body('salaryVisible').optional().isBoolean(),
+  body('salaryMin').optional({ nullable: true }).isFloat({ min: 0 }),
+  body('salaryMax').optional({ nullable: true }).isFloat({ min: 0 }),
+  body('salaryCurrency').optional({ nullable: true }).isString().isLength({ min: 3, max: 3 }),
+  body('salaryPeriod').optional({ nullable: true }).isIn(['hour', 'month', 'year']),
+  body('salaryVisible').optional({ nullable: true }).isBoolean(),
   
   // AI Match Score
-  body('aiMatchRequiredScore').optional().isInt({ min: 0, max: 100 }).withMessage('AI match score must be between 0 and 100'),
+  body('aiMatchRequiredScore').optional({ nullable: true }).isInt({ min: 0, max: 100 }).withMessage('AI match score must be between 0 and 100'),
   
   // Content arrays
-  body('responsibilities').optional().isArray(),
-  body('responsibilities.*').optional().isString(),
-  body('requirements').optional().isArray(),
-  body('requirements.*').optional().isString(),
-  body('benefits').optional().isArray(),
-  body('benefits.*').optional().isString(),
-  body('tags').optional().isArray(),
-  body('tags.*').optional().isString(),
+  body('responsibilities').optional({ nullable: true }).isArray(),
+  body('responsibilities.*').optional({ nullable: true }).isString(),
+  body('requirements').optional({ nullable: true }).isArray(),
+  body('requirements.*').optional({ nullable: true }).isString(),
+  body('benefits').optional({ nullable: true }).isArray(),
+  body('benefits.*').optional({ nullable: true }).isString(),
+  body('tags').optional({ nullable: true }).isArray(),
+  body('tags.*').optional({ nullable: true }).isString(),
   
   // Skills
-  body('requiredSkills').optional().isArray(),
-  body('requiredSkills.*.name').optional().isString(),
-  body('requiredSkills.*.proficiency_level').optional().isInt({ min: 1, max: 5 }),
-  body('requiredSkills.*.is_required').optional().isBoolean(),
-  body('preferredSkills').optional().isArray(),
-  body('preferredSkills.*.name').optional().isString(),
-  body('preferredSkills.*.proficiency_level').optional().isInt({ min: 1, max: 5 }),
-  body('preferredSkills.*.is_required').optional().isBoolean(),
-  body('languageRequirements').optional().isArray(),
-  body('experienceRequirements').optional().isArray(),
+  body('requiredSkills').optional({ nullable: true }).isArray(),
+  body('requiredSkills.*.name').optional({ nullable: true }).isString(),
+  body('requiredSkills.*.proficiency_level').optional({ nullable: true }).isInt({ min: 1, max: 5 }),
+  body('requiredSkills.*.is_required').optional({ nullable: true }).isBoolean(),
+  body('preferredSkills').optional({ nullable: true }).isArray(),
+  body('preferredSkills.*.name').optional({ nullable: true }).isString(),
+  body('preferredSkills.*.proficiency_level').optional({ nullable: true }).isInt({ min: 1, max: 5 }),
+  body('preferredSkills.*.is_required').optional({ nullable: true }).isBoolean(),
+  body('languageRequirements').optional({ nullable: true }).isArray(),
+  body('experienceRequirements').optional({ nullable: true }).isArray(),
   
   // Education requirements - SUPPORTS MULTIPLE FORMATS
-  body('educationLevel').optional().custom(value => {
+  body('educationLevel').optional({ nullable: true }).custom(value => {
     if (!value) return true;
+    if (value === null) return true;
     if (typeof value === 'string') return true;
     if (typeof value === 'object' && !Array.isArray(value)) {
       if (value.minimum_degree && typeof value.minimum_degree !== 'string') {
@@ -189,38 +190,48 @@ router.post('/', [
   }),
   
   // Screening questions
-  body('screeningQuestions').optional().isArray(),
-  body('screeningQuestions.*.question').optional().isString(),
-  body('screeningQuestions.*.type').optional().isIn(['text', 'multiple_choice', 'yes_no', 'number', 'date']),
-  body('screeningQuestions.*.required').optional().isBoolean(),
-  body('screeningQuestions.*.options').optional().isArray(),
+  body('screeningQuestions').optional({ nullable: true }).isArray(),
+  body('screeningQuestions.*.question').optional({ nullable: true }).isString(),
+  body('screeningQuestions.*.type').optional({ nullable: true }).isIn(['text', 'multiple_choice', 'yes_no', 'number', 'date']),
+  body('screeningQuestions.*.required').optional({ nullable: true }).isBoolean(),
+  body('screeningQuestions.*.options').optional({ nullable: true }).isArray(),
   
   // Application settings
-  body('applicationLimit').optional().isInt({ min: 1 }),
-  body('applicationMethod').optional().isString(),
-  body('applicationInstructions').optional().isString(),
-  body('requiredDocuments').optional().isArray(),
-  body('visibility').optional().isIn(['public', 'internal', 'confidential', 'unlisted']),
-  body('status').optional().isIn(['draft', 'active', 'paused', 'closed', 'archived']),
+  body('applicationMethod').optional({ nullable: true }).isString(),
+  body('requiredDocuments').optional({ nullable: true }).isArray(),
+  body('applicationLimit').optional({ nullable: true }).isInt({ min: 1 }),
+  body('applicationInstructions').optional({ nullable: true }).isString(),
+  body('visibility').optional({ nullable: true }).isIn(['public', 'internal', 'confidential', 'unlisted']),
+  body('status').optional({ nullable: true }).isIn(['draft', 'active', 'paused', 'closed', 'archived']),
   
-  // Custom validation
+  // Custom validation with null checks
   body().custom((value) => {
-    if (value.publishedAt && value.expiresAt) {
+    // Only validate dates if both exist and are not null
+    if (value.publishedAt && value.publishedAt !== null && 
+        value.expiresAt && value.expiresAt !== null) {
       const published = new Date(value.publishedAt);
       const expires = new Date(value.expiresAt);
       if (expires <= published) {
         throw new Error('Expiration date must be after published date');
       }
     }
-    if (value.salaryMin && value.salaryMax && value.salaryMin > value.salaryMax) {
+    
+    // Only validate salary comparison if both exist and are not null
+    if (value.salaryMin != null && value.salaryMax != null && 
+        value.salaryMin > value.salaryMax) {
       throw new Error('Minimum salary cannot be greater than maximum salary');
     }
-    if (value.salaryMin && value.salaryMin < 0) {
+    
+    // Validate salary min if provided
+    if (value.salaryMin != null && value.salaryMin < 0) {
       throw new Error('Minimum salary cannot be negative');
     }
-    if (value.salaryMax && value.salaryMax < 0) {
+    
+    // Validate salary max if provided
+    if (value.salaryMax != null && value.salaryMax < 0) {
       throw new Error('Maximum salary cannot be negative');
     }
+    
     return true;
   }),
   
@@ -228,7 +239,6 @@ router.post('/', [
 ], (req: Request, res: Response) => {
   jobController.createJob(req as any, res);
 });
-
 // ============ DRAFT ROUTES ============
 
 // @route   POST /api/v1/jobs/draft
@@ -380,49 +390,143 @@ router.put('/:id', [
   protect,
   authorize('recruiter', 'company_admin'),
   param('id').isUUID().withMessage('Invalid job ID format'),
-  body('title').optional().isString().trim().isLength({ min: 1, max: 255 }),
-  body('description').optional().isString(),
-  body('locations').optional().isArray(),
-  body('jobType').optional().isIn(['full-time', 'part-time', 'contract', 'internship', 'freelance', 'temporary']),
-  body('workArrangement').optional().isIn(['onsite', 'remote', 'hybrid', 'flexible']),
-  body('experienceLevel').optional().isIn(['entry', 'mid', 'senior', 'lead', 'executive']),
-  body('department').optional().isString(),
-  body('salaryMin').optional().isFloat({ min: 0 }),
-  body('salaryMax').optional().isFloat({ min: 0 }),
-  body('salaryCurrency').optional().isString().isLength({ min: 3, max: 3 }),
-  body('salaryVisible').optional().isBoolean(),
-  body('responsibilities').optional().isArray(),
-  body('requirements').optional().isArray(),
-  body('benefits').optional().isArray(),
-  body('requiredSkills').optional().isArray(),
-  body('preferredSkills').optional().isArray(),
-  body('languageRequirements').optional().isArray(),
-  body('experienceRequirements').optional().isArray(),
-  body('tags').optional().isArray(),
-  body('visibility').optional().isIn(['public', 'internal', 'confidential', 'unlisted']),
-  body('status').optional().isIn(['draft', 'active', 'paused', 'closed', 'archived']),
-  body('expiresAt').optional().isISO8601(),
-  body('publishedAt').optional().isISO8601(),
-  body('educationLevel').optional().custom(value => {
+  
+  // Basic job info
+  body('title').optional({ nullable: true }).isString().trim().isLength({ min: 1, max: 255 }),
+  body('description').optional({ nullable: true }).isString(),
+  body('department').optional({ nullable: true }).isString(),
+  body('team').optional({ nullable: true }).isString(),
+  
+  // Locations - array of location objects
+  body('locations').optional({ nullable: true }).isArray(),
+  body('locations.*.city').optional({ nullable: true }).isString(),
+  body('locations.*.country').optional({ nullable: true }).isString(),
+  body('locations.*.state').optional({ nullable: true }).isString(),
+  body('locations.*.postal_code').optional({ nullable: true }).isString(),
+  body('locations.*.is_remote').optional({ nullable: true }).isBoolean(),
+  
+  // Job details
+  body('jobType').optional({ nullable: true }).isIn(['full-time', 'part-time', 'contract', 'internship', 'freelance', 'temporary']),
+  body('workArrangement').optional({ nullable: true }).isIn(['onsite', 'remote', 'hybrid', 'flexible']),
+  body('experienceLevel').optional({ nullable: true }).isIn(['entry', 'mid', 'senior', 'lead', 'executive']),
+  
+  // Salary
+  body('salaryMin').optional({ nullable: true }).isFloat({ min: 0 }),
+  body('salaryMax').optional({ nullable: true }).isFloat({ min: 0 }),
+  body('salaryCurrency').optional({ nullable: true }).isString().isLength({ min: 3, max: 3 }),
+  body('salaryPeriod').optional({ nullable: true }).isIn(['hour', 'month', 'year']),
+  body('salaryVisible').optional({ nullable: true }).isBoolean(),
+  
+  // AI Match Score
+  body('aiMatchRequiredScore').optional({ nullable: true }).isInt({ min: 0, max: 100 }).withMessage('AI match score must be between 0 and 100'),
+  
+  // Content arrays
+  body('responsibilities').optional({ nullable: true }).isArray(),
+  body('responsibilities.*').optional({ nullable: true }).isString(),
+  body('requirements').optional({ nullable: true }).isArray(),
+  body('requirements.*').optional({ nullable: true }).isString(),
+  body('benefits').optional({ nullable: true }).isArray(),
+  body('benefits.*').optional({ nullable: true }).isString(),
+  body('tags').optional({ nullable: true }).isArray(),
+  body('tags.*').optional({ nullable: true }).isString(),
+  
+  // Skills
+  body('requiredSkills').optional({ nullable: true }).isArray(),
+  body('requiredSkills.*.name').optional({ nullable: true }).isString(),
+  body('requiredSkills.*.proficiency_level').optional({ nullable: true }).isInt({ min: 1, max: 5 }),
+  body('requiredSkills.*.is_required').optional({ nullable: true }).isBoolean(),
+  body('preferredSkills').optional({ nullable: true }).isArray(),
+  body('preferredSkills.*.name').optional({ nullable: true }).isString(),
+  body('preferredSkills.*.proficiency_level').optional({ nullable: true }).isInt({ min: 1, max: 5 }),
+  body('preferredSkills.*.is_required').optional({ nullable: true }).isBoolean(),
+  body('languageRequirements').optional({ nullable: true }).isArray(),
+  body('experienceRequirements').optional({ nullable: true }).isArray(),
+  
+  // Education requirements - SUPPORTS MULTIPLE FORMATS
+  body('educationLevel').optional({ nullable: true }).custom(value => {
     if (!value) return true;
+    if (value === null) return true;
     if (typeof value === 'string') return true;
-    if (typeof value === 'object') return true;
-    if (Array.isArray(value)) return true;
-    throw new Error('Invalid education level format');
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      if (value.minimum_degree && typeof value.minimum_degree !== 'string') {
+        throw new Error('minimum_degree must be a string');
+      }
+      if (value.fields_of_study && !Array.isArray(value.fields_of_study)) {
+        throw new Error('fields_of_study must be an array');
+      }
+      if (value.certifications && !Array.isArray(value.certifications)) {
+        throw new Error('certifications must be an array');
+      }
+      return true;
+    }
+    if (Array.isArray(value)) {
+      return value.every(item => typeof item === 'string');
+    }
+    throw new Error('Education level must be a string, object, or array of strings');
   }),
+  
+  // Screening questions
+  body('screeningQuestions').optional({ nullable: true }).isArray(),
+  body('screeningQuestions.*.question').optional({ nullable: true }).isString(),
+  body('screeningQuestions.*.type').optional({ nullable: true }).isIn(['text', 'multiple_choice', 'yes_no', 'number', 'date']),
+  body('screeningQuestions.*.required').optional({ nullable: true }).isBoolean(),
+  body('screeningQuestions.*.options').optional({ nullable: true }).isArray(),
+  
+  // Application settings
+  body('applicationMethod').optional({ nullable: true }).isString(),
+  body('requiredDocuments').optional({ nullable: true }).isArray(),
+  body('applicationLimit').optional({ nullable: true }).isInt({ min: 1 }),
+  body('applicationInstructions').optional({ nullable: true }).isString(),
+  body('visibility').optional({ nullable: true }).isIn(['public', 'internal', 'confidential', 'unlisted']),
+  body('status').optional({ nullable: true }).isIn(['draft', 'active', 'paused', 'closed', 'archived']),
+  
+  // Dates
+  body('publishedAt').optional({ nullable: true }).isISO8601(),
+  body('expiresAt').optional({ nullable: true }).isISO8601(),
+  body('postingDuration').optional({ nullable: true }).isInt({ min: 1, max: 365 }),
+  
+  // Custom validation with null checks
   body().custom((value) => {
-    if (value.salaryMin && value.salaryMax && value.salaryMin > value.salaryMax) {
+    // Only validate salary comparison if both exist and are not null
+    if (value.salaryMin != null && value.salaryMax != null && 
+        value.salaryMin > value.salaryMax) {
       throw new Error('Minimum salary cannot be greater than maximum salary');
     }
-    if (value.publishedAt && value.expiresAt) {
+    
+    // Validate salary min if provided
+    if (value.salaryMin != null && value.salaryMin < 0) {
+      throw new Error('Minimum salary cannot be negative');
+    }
+    
+    // Validate salary max if provided
+    if (value.salaryMax != null && value.salaryMax < 0) {
+      throw new Error('Maximum salary cannot be negative');
+    }
+    
+    // Only validate dates if both exist and are not null
+    if (value.publishedAt != null && value.publishedAt !== '' && 
+        value.expiresAt != null && value.expiresAt !== '') {
       const published = new Date(value.publishedAt);
       const expires = new Date(value.expiresAt);
       if (expires <= published) {
         throw new Error('Expiration date must be after published date');
       }
     }
+    
+    // Validate application limit if provided
+    if (value.applicationLimit != null && value.applicationLimit < 1) {
+      throw new Error('Application limit must be at least 1');
+    }
+    
+    // Validate AI match score if provided
+    if (value.aiMatchRequiredScore != null && 
+        (value.aiMatchRequiredScore < 0 || value.aiMatchRequiredScore > 100)) {
+      throw new Error('AI match score must be between 0 and 100');
+    }
+    
     return true;
   }),
+  
   validateRequest
 ], (req: Request, res: Response) => {
   jobController.updateJob(req as any, res);

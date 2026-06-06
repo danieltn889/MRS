@@ -6586,141 +6586,198 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
       totalTime: sessionCompleteTime.formatted
     });
     
+
     // ============================================
-    // ✅ RETURN COMPLETE RESPONSE WITH ALL DETAILS
+    // DECLARE submissionResults OUTSIDE the try block
     // ============================================
-    ResponseService.success(res, {
-      // Basic submission info
-      sessionId: session.id,
-      simulationId: session.simulation_id,
-      simulationRecordId: simulationRecordId,
-      score: finalOverallScore,
-      passed: finalPassed,
-      passingScore: passingScore,
-      submittedAt: new Date().toISOString(),
-      message: submissionMessage,
+    // ============================================
+    // SAVE ALL SUBMISSION DATA TO simulation_sessions.submission_results
+    // ============================================
 
-      // Completion angle
-      completionAngle: completionAngle,
+    // DECLARE submissionResults OUTSIDE the try block
+    let submissionResults = null;
 
-      // Data quantity and quality
-      dataQuantity: dataQuantityAnalysis,
-      dataQuality: dataQualityAnalysis,
+    try {
+        console.log('💾 Saving ALL submission results to simulation_sessions.submission_results...');
+        
+        // Create the submission results object with ALL response variables
+        submissionResults = {
+            // Basic submission info
+            sessionId: session.id,
+            simulationId: session.simulation_id,
+            simulationRecordId: simulationRecordId,
+            score: finalOverallScore,
+            passed: finalPassed,
+            passingScore: passingScore,
+            submittedAt: new Date().toISOString(),
+            message: submissionMessage,
 
-      // Session complete time
-      sessionCompleteTime: sessionCompleteTime,
+            // Completion angle
+            completionAngle: completionAngle,
 
-      // Participation marks
-      participation: {
-        qualifies: qualifiesForParticipation,
-        bonus: participationBonus,
-        message: participationMessage,
-        min_time_required: '30 minutes',
-        time_spent: sessionCompleteTime.formatted
-      },
+            // Data quantity and quality
+            dataQuantity: dataQuantityAnalysis,
+            dataQuality: dataQualityAnalysis,
 
-      // Score breakdown
-      scoreBreakdown: {
-        overall: finalOverallScore,
-        base_overall: overallScore,
-        participation_bonus: participationBonus,
-        quality: qualityScore,
-        technical: technicalScore,
-        punctuality: punctualityScore,
-        adaptability: adaptabilityScore,
-        speed: speedScore,
-        behavioral: behavioralScore,
-        communication: communicationScore,
-        collaboration: collaborationScore,
-        github: githubScore,
-        completion_rate: completionRate,
-        average_task_score: fullScoreAnalysis.scores.average_task_score,
-        weighted_breakdown: fullScoreAnalysis.scores.weighted_breakdown,
-        quality_breakdown: fullScoreAnalysis.scores.quality_breakdown,
-        behavioral_breakdown: fullScoreAnalysis.scores.behavioral_breakdown,
-        speed_breakdown: fullScoreAnalysis.scores.speed_breakdown,
-        punctuality_breakdown: fullScoreAnalysis.scores.punctuality_breakdown,
-        adaptability_breakdown: fullScoreAnalysis.scores.adaptability_breakdown,
-        technical_breakdown: fullScoreAnalysis.scores.technical_breakdown
-      },
+            // Session complete time
+            sessionCompleteTime: sessionCompleteTime,
 
-      // Task analysis
-      taskAnalysis: taskAnalysis,
+            // Participation marks
+            participation: {
+                qualifies: qualifiesForParticipation,
+                bonus: participationBonus,
+                message: participationMessage,
+                min_time_required: '30 minutes',
+                time_spent: sessionCompleteTime.formatted
+            },
 
-      // Summary statistics
-      summary: {
-        total_tasks: totalTasks,
-        completed_tasks: completedTasksCount,
-        in_progress_tasks: fullScoreAnalysis.summary.in_progress_tasks,
-        not_started_tasks: fullScoreAnalysis.summary.not_started_tasks,
-        completion_rate: completionRate,
-        completion_angle: completionAngle,
-        total_time_seconds: totalTimeSeconds,
-        total_time_formatted: sessionCompleteTime.formatted,
-        time_limit_seconds: timeLimitSeconds,
-        time_limit_formatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
-        time_used_percent: sessionCompleteTime.time_used_percent,
-        time_remaining_seconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
-        time_remaining_formatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
-          ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
-          : 'EXPIRED',
-        passed: finalPassed,
-        passing_score: passingScore
-      },
+            // Score breakdown
+            scoreBreakdown: {
+                overall: finalOverallScore,
+                base_overall: overallScore,
+                participation_bonus: participationBonus,
+                quality: qualityScore,
+                technical: technicalScore,
+                punctuality: punctualityScore,
+                adaptability: adaptabilityScore,
+                speed: speedScore,
+                behavioral: behavioralScore,
+                communication: communicationScore,
+                collaboration: collaborationScore,
+                github: githubScore,
+                completion_rate: completionRate,
+                average_task_score: fullScoreAnalysis.scores.average_task_score,
+                weighted_breakdown: fullScoreAnalysis.scores.weighted_breakdown,
+                quality_breakdown: fullScoreAnalysis.scores.quality_breakdown,
+                behavioral_breakdown: fullScoreAnalysis.scores.behavioral_breakdown,
+                speed_breakdown: fullScoreAnalysis.scores.speed_breakdown,
+                punctuality_breakdown: fullScoreAnalysis.scores.punctuality_breakdown,
+                adaptability_breakdown: fullScoreAnalysis.scores.adaptability_breakdown,
+                technical_breakdown: fullScoreAnalysis.scores.technical_breakdown
+            },
 
-      // Feedback
-      feedback: fullScoreAnalysis.feedback,
+            // Task analysis
+            taskAnalysis: taskAnalysis,
 
-      // GitHub analysis
-      githubAnalysis: fullScoreAnalysis.github_analysis || {
-        has_repo: false,
-        score: 0,
-        repo_info: null,
-        detailed_marks: null,
-        full_analysis: null,
-        message: 'No GitHub repository linked to this simulation'
-      },
+            // Summary statistics
+            summary: {
+                total_tasks: totalTasks,
+                completed_tasks: completedTasksCount,
+                in_progress_tasks: fullScoreAnalysis.summary.in_progress_tasks,
+                not_started_tasks: fullScoreAnalysis.summary.not_started_tasks,
+                completion_rate: completionRate,
+                completion_angle: completionAngle,
+                total_time_seconds: totalTimeSeconds,
+                total_time_formatted: sessionCompleteTime.formatted,
+                time_limit_seconds: timeLimitSeconds,
+                time_limit_formatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
+                time_used_percent: sessionCompleteTime.time_used_percent,
+                time_remaining_seconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
+                time_remaining_formatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
+                    ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
+                    : 'EXPIRED',
+                passed: finalPassed,
+                passing_score: passingScore
+            },
 
-      // Communication analysis
-      communicationAnalysis: communicationAnalysis || null,
+            // Feedback
+            feedback: fullScoreAnalysis.feedback,
 
-      // Scoring configuration
-      scoring_config: fullScoreAnalysis.scoring_config,
+            // GitHub analysis
+            githubAnalysis: fullScoreAnalysis.github_analysis || {
+                has_repo: false,
+                score: 0,
+                repo_info: null,
+                detailed_marks: null,
+                full_analysis: null,
+                message: 'No GitHub repository linked to this simulation'
+            },
 
-      // Raw data
-      raw_data: fullScoreAnalysis.raw_data,
+            // Communication analysis
+            communicationAnalysis: communicationAnalysis || null,
 
-      // Time tracking
-      timeTracking: {
-        sessionStartedAt: session.started_at,
-        sessionCompletedAt: sessionCompleteTime.completed_at,
-        sessionTotalSeconds: totalTimeSeconds,
-        sessionTotalFormatted: sessionCompleteTime.formatted,
-        timeLimitSeconds: timeLimitSeconds,
-        timeLimitFormatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
-        timeUsedPercent: sessionCompleteTime.time_used_percent,
-        remainingSeconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
-        remainingFormatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
-          ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
-          : 'EXPIRED',
-        submittedOnTime: sessionCompleteTime.submitted_on_time
-      },
+            // Scoring configuration
+            scoring_config: fullScoreAnalysis.scoring_config,
 
-      // Full analysis
-      fullAnalysis: fullScoreAnalysis,
-      
-      // Blockchain info
-      blockchain: blockchainTxHash ? {
-        txHash: blockchainTxHash,
-        blockNumber: blockchainBlockNumber,
-        credentialHash: credentialHash,
-        verified: true,
-        message: 'Simulation result stored on blockchain and verifiable credential created'
-      } : null
+            // Raw data
+            raw_data: fullScoreAnalysis.raw_data,
 
-    }, `Simulation ${finalPassed ? 'passed' : 'completed'} successfully`);
+            // Time tracking
+            timeTracking: {
+                sessionStartedAt: session.started_at,
+                sessionCompletedAt: sessionCompleteTime.completed_at,
+                sessionTotalSeconds: totalTimeSeconds,
+                sessionTotalFormatted: sessionCompleteTime.formatted,
+                timeLimitSeconds: timeLimitSeconds,
+                timeLimitFormatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
+                timeUsedPercent: sessionCompleteTime.time_used_percent,
+                remainingSeconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
+                remainingFormatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
+                    ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
+                    : 'EXPIRED',
+                submittedOnTime: sessionCompleteTime.submitted_on_time
+            },
 
-  } catch (error: any) {
+            // Full analysis
+            fullAnalysis: fullScoreAnalysis,
+            
+            // Blockchain info
+            blockchain: blockchainTxHash ? {
+                txHash: blockchainTxHash,
+                blockNumber: blockchainBlockNumber,
+                credentialHash: credentialHash,
+                verified: true,
+                message: 'Simulation result stored on blockchain and verifiable credential created'
+            } : null,
+            
+            // Metadata
+            savedAt: new Date().toISOString(),
+            version: '1.0'
+        };
+        
+        // Save to the submission_results column in simulation_sessions table
+        await DatabaseService.query(`
+            UPDATE simulation_sessions 
+            SET 
+                submission_results = $1::JSONB,
+                score = $2,
+                status = 'completed',
+                completed_at = NOW(),
+                updated_at = NOW()
+            WHERE id = $3
+        `, [
+            JSON.stringify(submissionResults),
+            finalOverallScore,
+            session.id
+        ]);
+        
+        console.log('✅ Submission results saved to simulation_sessions.submission_results');
+        
+    } catch (saveError) {
+        console.error('❌ Error saving submission results:', saveError);
+        // Don't throw - continue to return response
+    }
+
+    // ============================================
+    // ✅ RETURN THE submissionResults OBJECT (NO DUPLICATE CODE)
+    // ============================================
+    if (!submissionResults) {
+        // Fallback: create a minimal response if save failed
+        submissionResults = {
+            sessionId: session.id,
+            simulationId: session.simulation_id,
+            simulationRecordId: simulationRecordId,
+            score: finalOverallScore,
+            passed: finalPassed,
+            passingScore: passingScore,
+            submittedAt: new Date().toISOString(),
+            message: submissionMessage,
+            error: 'Failed to save full results to database'
+        };
+    }
+
+    ResponseService.success(res, submissionResults, `Simulation ${finalPassed ? 'passed' : 'completed'} successfully`);
+    } catch (error: any) {
     const totalDuration = Date.now() - startTime;
     console.error('═══════════════════════════════════════════════════════════════');
     console.error('❌ [submitSimulation] ERROR');
@@ -6738,6 +6795,69 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
     console.error('═══════════════════════════════════════════════════════════════');
     ResponseService.error(res, error.message || 'Failed to submit simulation', 500);
   }
+}
+
+// Method to get submission results from the column
+async getSubmissionResults(req: AuthenticatedRequest, res: Response) {
+    try {
+        const { sessionId } = req.params;
+        
+        if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
+            ResponseService.error(res, 'Invalid session ID', 400);
+            return;
+        }
+        
+        // Check access
+        const sessionCheck = await DatabaseService.query(`
+            SELECT ss.user_id, ss.submission_results, ss.score, ss.status
+            FROM simulation_sessions ss
+            WHERE ss.id = $1
+        `, [sessionId]);
+        
+        if (!sessionCheck.rows[0]) {
+            ResponseService.notFound(res, 'Session not found');
+            return;
+        }
+        
+        const session = sessionCheck.rows[0];
+        const isOwner = session.user_id === req.user.id;
+        const isRecruiter = req.user.user_type === 'recruiter' || 
+                            req.user.user_type === 'company_admin' || 
+                            req.user.user_type === 'system_admin';
+        
+        if (!isOwner && !isRecruiter) {
+            ResponseService.forbidden(res, 'Access denied');
+            return;
+        }
+        
+        // Parse the submission_results JSONB
+        let submissionResults = session.submission_results;
+        if (typeof submissionResults === 'string') {
+            submissionResults = JSON.parse(submissionResults);
+        }
+        
+        // If no submission results, return basic info
+        if (!submissionResults || Object.keys(submissionResults).length === 0) {
+            ResponseService.success(res, {
+                sessionId: sessionId,
+                hasResults: false,
+                score: session.score,
+                status: session.status,
+                message: 'No submission results found for this session'
+            });
+            return;
+        }
+        
+        // Return the exact same structure that was saved
+        ResponseService.success(res, {
+            hasResults: true,
+            ...submissionResults
+        }, 'Submission results retrieved');
+        
+    } catch (error) {
+        console.error('Error retrieving submission results:', error);
+        ResponseService.error(res, 'Failed to retrieve submission results', 500);
+    }
 }
 
 
