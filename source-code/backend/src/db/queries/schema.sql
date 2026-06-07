@@ -2696,6 +2696,152 @@ CREATE TRIGGER trigger_auto_unlock_next_task
     AFTER UPDATE OF status ON session_task_progress
     FOR EACH ROW
     EXECUTE FUNCTION auto_unlock_next_task();
+    
+    
+    
+    
+-- =====================================================
+-- FUNCTION: Extract task duration from tasks JSONB
+-- DEFAULT DELAY: 60 MINUTES
+-- =====================================================
+CREATE OR REPLACE FUNCTION extract_task_durations()
+RETURNS TRIGGER AS $$
+DECLARE
+    task_record JSONB;
+    tasks_array JSONB;
+    task_index INTEGER;
+    task_duration INTEGER;
+    extracted_durations JSONB := '[]'::JSONB;
+BEGIN
+    -- Handle the tasks JSONB array
+    tasks_array := NEW.tasks;
+    
+    -- If tasks is a string (during insert/update from API), parse it
+    IF jsonb_typeof(tasks_array) = 'string' THEN
+        BEGIN
+            tasks_array := tasks_array::JSONB;
+        EXCEPTION WHEN OTHERS THEN
+            tasks_array := NEW.tasks;
+        END;
+    END IF;
+    
+    -- Extract duration from each task
+    IF jsonb_typeof(tasks_array) = 'array' THEN
+        FOR task_index IN 0..jsonb_array_length(tasks_array) - 1 LOOP
+            task_record := tasks_array->task_index;
+            task_duration := (task_record->>'duration')::INTEGER;
+            
+            -- If duration not found, try duration_minutes
+            IF task_duration IS NULL THEN
+                task_duration := (task_record->>'duration_minutes')::INTEGER;
+            END IF;
+            
+            -- If still NULL, use default 60 minutes
+            IF task_duration IS NULL OR task_duration <= 0 THEN
+                task_duration := 60;
+            END IF;
+            
+            -- Build extracted durations JSON
+            extracted_durations := extracted_durations || jsonb_build_object(
+                'task_index', task_index,
+                'duration_minutes', task_duration,
+                'duration_seconds', task_duration * 60
+            );
+        END LOOP;
+        
+        -- Store extracted durations in metadata for quick access
+        NEW.metadata = jsonb_set(
+            COALESCE(NEW.metadata, '{}'::JSONB),
+            '{task_durations}',
+            extracted_durations
+        );
+        
+        -- Store total duration sum
+        NEW.metadata = jsonb_set(
+            NEW.metadata,
+            '{total_duration_minutes}',
+            to_jsonb(
+                (SELECT SUM((value->>'duration_minutes')::INTEGER) 
+                 FROM jsonb_array_elements(extracted_durations))
+            )
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- =====================================================
+-- FUNCTION: Extract task duration from tasks JSONB
+-- DEFAULT DELAY: 60 MINUTES
+-- =====================================================
+CREATE OR REPLACE FUNCTION extract_task_durations()
+RETURNS TRIGGER AS $$
+DECLARE
+    task_record JSONB;
+    tasks_array JSONB;
+    task_index INTEGER;
+    task_duration INTEGER;
+    extracted_durations JSONB := '[]'::JSONB;
+BEGIN
+    -- Handle the tasks JSONB array
+    tasks_array := NEW.tasks;
+    
+    -- If tasks is a string (during insert/update from API), parse it
+    IF jsonb_typeof(tasks_array) = 'string' THEN
+        BEGIN
+            tasks_array := tasks_array::JSONB;
+        EXCEPTION WHEN OTHERS THEN
+            tasks_array := NEW.tasks;
+        END;
+    END IF;
+    
+    -- Extract duration from each task
+    IF jsonb_typeof(tasks_array) = 'array' THEN
+        FOR task_index IN 0..jsonb_array_length(tasks_array) - 1 LOOP
+            task_record := tasks_array->task_index;
+            task_duration := (task_record->>'duration')::INTEGER;
+            
+            -- If duration not found, try duration_minutes
+            IF task_duration IS NULL THEN
+                task_duration := (task_record->>'duration_minutes')::INTEGER;
+            END IF;
+            
+            -- If still NULL, use default 60 minutes
+            IF task_duration IS NULL OR task_duration <= 0 THEN
+                task_duration := 60;
+            END IF;
+            
+            -- Build extracted durations JSON
+            extracted_durations := extracted_durations || jsonb_build_object(
+                'task_index', task_index,
+                'duration_minutes', task_duration,
+                'duration_seconds', task_duration * 60
+            );
+        END LOOP;
+        
+        -- Store extracted durations in metadata for quick access
+        NEW.metadata = jsonb_set(
+            COALESCE(NEW.metadata, '{}'::JSONB),
+            '{task_durations}',
+            extracted_durations
+        );
+        
+        -- Store total duration sum
+        NEW.metadata = jsonb_set(
+            NEW.metadata,
+            '{total_duration_minutes}',
+            to_jsonb(
+                (SELECT SUM((value->>'duration_minutes')::INTEGER) 
+                 FROM jsonb_array_elements(extracted_durations))
+            )
+        );
+    END IF;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
 
 -- =====================================================
 -- SEED DATA

@@ -33,6 +33,33 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
 
   // Use context data
   const fileStructure = hasRepo ? getRepoFileStructure() : [];
+
+  useEffect(() => {
+    if (!currentRepo) {
+      setCurrentFilePath(null);
+      setCurrentFileContent('');
+      setCurrentFileLanguage('javascript');
+      return;
+    }
+
+    const currentContent = currentFilePath ? currentRepo.files[currentFilePath] : undefined;
+    if (currentFilePath && currentContent !== undefined) {
+      setCurrentFileContent(currentContent);
+      setCurrentFileLanguage(getLanguageFromFileName(currentFilePath));
+      return;
+    }
+
+    const firstFile = findFirstFile(currentRepo.fileStructure);
+    if (firstFile) {
+      setCurrentFilePath(firstFile.path);
+      setCurrentFileContent(firstFile.content || currentRepo.files[firstFile.path] || '');
+      setCurrentFileLanguage(firstFile.language || getLanguageFromFileName(firstFile.name));
+    } else {
+      setCurrentFilePath(null);
+      setCurrentFileContent('');
+      setCurrentFileLanguage('javascript');
+    }
+  }, [currentRepo, currentFilePath]);
   
   const getAllFiles = useCallback(() => getAllRepoFiles(), [getAllRepoFiles]);
   
@@ -220,17 +247,6 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
     try {
       await loadRepositoryFromUrl(`https://github.com/${owner}/${repo}`);
       
-      if (currentRepo) {
-        // Auto-select first file
-        const structure = getRepoFileStructure();
-        const firstFile = findFirstFile(structure);
-        if (firstFile) {
-          setCurrentFilePath(firstFile.path);
-          setCurrentFileContent(firstFile.content || '');
-          setCurrentFileLanguage(firstFile.language || getLanguageFromFileName(firstFile.name));
-        }
-      }
-      
       setSyncStatus({ status: 'success', message: `✅ Loaded repository!` });
       setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
     } catch (err) {
@@ -239,12 +255,18 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
     } finally {
       setIsLoading(false);
     }
-  }, [loadRepositoryFromUrl, currentRepo, getRepoFileStructure]);
+  }, [loadRepositoryFromUrl]);
   
   const setCurrentFile = useCallback((path: string, content: string, language?: string) => {
     setCurrentFilePath(path);
     setCurrentFileContent(content);
     setCurrentFileLanguage(language || getLanguageFromFileName(path));
+  }, []);
+
+  const resetCurrentFile = useCallback(() => {
+    setCurrentFilePath(null);
+    setCurrentFileContent('');
+    setCurrentFileLanguage('javascript');
   }, []);
   
   return {
@@ -255,6 +277,7 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
     currentFileLanguage,
     setCurrentFileLanguage,
     setCurrentFile,
+    resetCurrentFile,
     updateFileContent,
     createFile,
     createFolder,

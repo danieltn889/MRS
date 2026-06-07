@@ -2885,147 +2885,470 @@ private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
   }
 }
 
-  async getJobForCandidate(req: Request, res: Response): Promise<void> {
-    try {
-      const { id } = req.params;
+async getJobForCandidate(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
 
-      if (!id || !ValidationService.isValidUUID(id)) {
-        this.sendError(res, 'Invalid job ID format', 400);
-        return;
-      }
-
-      await DatabaseService.execute(
-        'UPDATE jobs SET view_count = view_count + 1 WHERE id = $1',
-        [id]
-      );
-
-      const jobResult = await DatabaseService.execute(`
-        SELECT
-          j.id,
-          j.external_id,
-          j.title,
-          j.slug,
-          j.department,
-          j.team,
-          j.job_type,
-          j.work_arrangement,
-          j.locations,
-          j.description,
-          j.summary,
-          j.responsibilities,
-          j.qualifications,
-          j.preferred_qualifications,
-          j.requirements,
-          j.salary_min,
-          j.salary_max,
-          j.salary_currency,
-          j.salary_period,
-          j.salary_visible,
-          j.benefits,
-          j.skills_required,
-          j.skills_preferred,
-          j.experience_min,
-          j.experience_max,
-          j.experience_level,
-          j.education_required,
-          j.screening_questions,
-          j.application_instructions,
-          j.documents,
-          j.department_info,
-          j.tags,
-          j.application_limit,
-          j.status,
-          j.visibility,
-          j.published_at,
-          j.expires_at,
-          j.paused_at,
-          j.closed_at,
-          j.created_at,
-          j.updated_at,
-          j.created_by,
-          j.approved_by,
-          j.approved_at,
-          j.view_count,
-          j.application_count,
-          j.metadata,
-          c.id as company_id,
-          c.name as company_name,
-          c.logo_url,
-          c.banner_url,
-          c.website,
-          c.description as company_description,
-          c.industry as company_industry,
-          c.size as company_size,
-          c.verification_badge as company_verified
-        FROM jobs j
-        LEFT JOIN companies c ON j.company_id = c.id
-        WHERE j.id = $1 
-          AND j.status = 'active'
-          AND (j.published_at IS NULL OR j.published_at <= NOW())
-          AND (j.expires_at IS NULL OR j.expires_at > NOW())
-          AND j.visibility IN ('public', 'unlisted')
-      `, [id]);
-
-      if (jobResult.rows.length === 0) {
-        this.sendError(res, 'Job not found or no longer active', 404);
-        return;
-      }
-
-      const job = jobResult.rows[0];
-
-      // Parse all JSON fields
-      if (job.locations && typeof job.locations === 'string') {
-        try { job.locations = JSON.parse(job.locations); } catch { job.locations = []; }
-      }
-      if (job.responsibilities && typeof job.responsibilities === 'string') {
-        try { job.responsibilities = JSON.parse(job.responsibilities); } catch { job.responsibilities = []; }
-      }
-      if (job.requirements && typeof job.requirements === 'string') {
-        try { job.requirements = JSON.parse(job.requirements); } catch { job.requirements = []; }
-      }
-      if (job.benefits && typeof job.benefits === 'string') {
-        try { job.benefits = JSON.parse(job.benefits); } catch { job.benefits = []; }
-      }
-      if (job.skills_required && typeof job.skills_required === 'string') {
-        try { job.skills_required = JSON.parse(job.skills_required); } catch { job.skills_required = []; }
-      }
-      if (job.skills_preferred && typeof job.skills_preferred === 'string') {
-        try { job.skills_preferred = JSON.parse(job.skills_preferred); } catch { job.skills_preferred = []; }
-      }
-      if (job.education_required && typeof job.education_required === 'string') {
-        try { job.education_required = JSON.parse(job.education_required); } catch { job.education_required = {}; }
-      }
-      if (job.screening_questions && typeof job.screening_questions === 'string') {
-        try { job.screening_questions = JSON.parse(job.screening_questions); } catch { job.screening_questions = []; }
-      }
-      if (job.documents && typeof job.documents === 'string') {
-        try { job.documents = JSON.parse(job.documents); } catch { job.documents = []; }
-      }
-      if (job.tags && typeof job.tags === 'string') {
-        try { job.tags = JSON.parse(job.tags); } catch { job.tags = []; }
-      }
-      if (job.metadata && typeof job.metadata === 'string') {
-        try { job.metadata = JSON.parse(job.metadata); } catch { job.metadata = {}; }
-      }
-
-      const skills = await DatabaseService.execute(`
-        SELECT s.id, s.name, s.category, js.proficiency_level, js.is_required, js.importance
-        FROM job_skills js
-        JOIN skills s ON js.skill_id = s.id
-        WHERE js.job_id = $1
-        ORDER BY js.is_required DESC, js.importance DESC
-      `, [id]);
-
-      job.skills = skills.rows;
-      job.required_skills = skills.rows.filter((s: any) => s.is_required === true);
-      job.preferred_skills = skills.rows.filter((s: any) => s.is_required === false);
-
-      this.sendSuccess(res, job);
-    } catch (error) {
-      logger.error('Error fetching job for candidate:', error);
-      this.sendError(res, 'Failed to fetch job details', 500, error as Error);
+    if (!id || !ValidationService.isValidUUID(id)) {
+      this.sendError(res, 'Invalid job ID format', 400);
+      return;
     }
+
+    // Increment view count
+    await DatabaseService.execute(
+      'UPDATE jobs SET view_count = view_count + 1 WHERE id = $1',
+      [id]
+    );
+
+    // ✅ COMPLETE SELECT WITH ALL 70+ JOB FIELDS FROM YOUR SCHEMA
+    const jobResult = await DatabaseService.execute(`
+      SELECT 
+        -- Job basic info (13 fields)
+        j.id,
+        j.external_id,
+        j.title,
+        j.slug,
+        j.department,
+        j.team,
+        j.job_type,
+        j.work_arrangement,
+        j.locations,
+        j.description,
+        j.summary,
+        
+        -- Requirements & Responsibilities (5 fields)
+        j.responsibilities,
+        j.qualifications,
+        j.preferred_qualifications,
+        j.requirements,
+        
+        -- Salary info (7 fields)
+        j.salary_min,
+        j.salary_max,
+        j.salary_currency,
+        j.salary_period,
+        j.salary_visible,
+        j.benefits,
+        j.skills_required,
+        j.skills_preferred,
+        
+        -- Experience & Education (8 fields)
+        j.experience_min,
+        j.experience_max,
+        j.experience_level,
+        j.education_required,
+        j.language_requirements,
+        j.experience_requirements,
+        j.education_requirements,
+        j.skill_experience_requirements,
+        
+        -- Application settings (6 fields)
+        j.screening_questions,
+        j.application_instructions,
+        j.documents,
+        j.department_info,
+        j.tags,
+        j.application_limit,
+        
+        -- AI & Matching (2 fields)
+        j.ai_match_required_score,
+        
+        -- Status & Dates (12 fields)
+        j.status,
+        j.visibility,
+        j.published_at,
+        j.expires_at,
+        j.paused_at,
+        j.closed_at,
+        j.created_at,
+        j.updated_at,
+        j.created_by,
+        j.approved_by,
+        j.approved_at,
+        
+        -- Counts & Metadata (4 fields)
+        j.view_count,
+        j.application_count,
+        j.metadata,
+        j.deleted_at,
+        
+        -- Company info (22 fields)
+        c.id as company_id,
+        c.name as company_name,
+        c.legal_name as company_legal_name,
+        c.slug as company_slug,
+        c.industry as company_industry,
+        c.industries as company_industries,
+        c.size as company_size,
+        c.founded_year as company_founded_year,
+        c.headquarters_location as company_headquarters_location,
+        c.website as company_website,
+        c.description as company_description,
+        c.short_description as company_short_description,
+        c.mission as company_mission,
+        c.vision as company_vision,
+        c.values as company_values,
+        c.culture as company_culture,
+        c.logo_url as company_logo_url,
+        c.logo_key as company_logo_key,
+        c.banner_url as company_banner_url,
+        c.banner_key as company_banner_key,
+        c.social_links as company_social_links,
+        c.verification_badge as company_verified,
+        c.verification_status as company_verification_status,
+        c.verification_level as company_verification_level,
+        c.verified_at as company_verified_at,
+        c.domain as company_domain
+        
+      FROM jobs j
+      LEFT JOIN companies c ON j.company_id = c.id
+      WHERE j.id = $1 
+        AND j.status = 'active'
+        AND j.deleted_at IS NULL
+        AND j.visibility IN ('public', 'unlisted')
+    `, [id]);
+
+    if (jobResult.rows.length === 0) {
+      this.sendError(res, 'Job not found', 404);
+      return;
+    }
+
+    const job = jobResult.rows[0];
+    const now = new Date();
+
+    // ✅ CHECK IF JOB IS AVAILABLE FOR APPLICATION
+    const publishedAt = job.published_at ? new Date(job.published_at) : null;
+    const expiresAt = job.expires_at ? new Date(job.expires_at) : null;
+    
+    // Application availability flags
+    const isPublished = publishedAt !== null && publishedAt <= now;
+    const isNotPublishedYet = publishedAt !== null && publishedAt > now;
+    const isExpired = expiresAt !== null && expiresAt < now;
+    const isNotExpiredYet = expiresAt === null || expiresAt > now;
+    const isActive = job.status === 'active';
+    const isPaused = job.status === 'paused';
+    const isClosed = job.status === 'closed';
+    const isArchived = job.status === 'archived';
+    
+    // ✅ MAIN FLAG: Can user apply?
+    const canApply = isActive && isPublished && !isExpired && !isPaused && !isClosed && !isArchived;
+    
+    // ✅ Detailed status messages
+    let applicationStatus: 'available' | 'not_published' | 'expired' | 'paused' | 'closed' | 'archived' | 'unavailable' = 'available';
+    let applicationStatusMessage: string = 'You can apply for this position';
+    
+    if (!isActive) {
+      applicationStatus = 'unavailable';
+      applicationStatusMessage = 'This position is currently unavailable';
+    } else if (isNotPublishedYet) {
+      applicationStatus = 'not_published';
+      const publishDate = publishedAt?.toLocaleDateString();
+      applicationStatusMessage = `Applications open on ${publishDate}`;
+    } else if (isExpired) {
+      applicationStatus = 'expired';
+      applicationStatusMessage = 'Application deadline has passed';
+    } else if (isPaused) {
+      applicationStatus = 'paused';
+      applicationStatusMessage = 'This job posting is temporarily paused';
+    } else if (isClosed) {
+      applicationStatus = 'closed';
+      applicationStatusMessage = 'This position has been closed';
+    } else if (isArchived) {
+      applicationStatus = 'archived';
+      applicationStatusMessage = 'This job has been archived';
+    }
+
+    // ✅ Calculate days until publish (if not published yet)
+    let daysUntilPublish: number | null = null;
+    if (isNotPublishedYet && publishedAt) {
+      daysUntilPublish = Math.ceil((publishedAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    }
+    
+    // ✅ Calculate days remaining (if not expired)
+    let daysRemaining: number | null = null;
+    if (!isExpired && expiresAt) {
+      daysRemaining = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    // ✅ Check application limit
+    const applicationLimit = job.application_limit;
+    let hasReachedApplicationLimit = false;
+    if (applicationLimit && applicationLimit > 0) {
+      const currentApplicationCount = job.application_count || 0;
+      hasReachedApplicationLimit = currentApplicationCount >= applicationLimit;
+    }
+
+    // ✅ PARSE ALL JOB JSONB FIELDS
+    const jobJsonFields = [
+      'locations', 'responsibilities', 'qualifications', 'preferred_qualifications',
+      'requirements', 'benefits', 'skills_required', 'skills_preferred',
+      'education_required', 'screening_questions', 'documents', 'tags',
+      'metadata', 'language_requirements', 'experience_requirements',
+      'education_requirements', 'skill_experience_requirements'
+    ];
+    
+    for (const field of jobJsonFields) {
+      if (job[field]) {
+        if (typeof job[field] === 'string') {
+          try { 
+            job[field] = JSON.parse(job[field]); 
+          } catch { 
+            job[field] = field === 'tags' || field === 'locations' ? [] : {}; 
+          }
+        }
+      } else {
+        if (field === 'tags' || field === 'locations' || field === 'responsibilities' || 
+            field === 'requirements' || field === 'benefits' || field === 'screening_questions' ||
+            field === 'documents' || field === 'skills_required' || field === 'skills_preferred' ||
+            field === 'language_requirements' || field === 'experience_requirements') {
+          job[field] = [];
+        } else {
+          job[field] = {};
+        }
+      }
+    }
+
+    // ✅ PARSE COMPANY JSON FIELDS
+    const companyJsonFields = [
+      'company_headquarters_location', 'company_culture', 'company_values', 
+      'company_industries', 'company_social_links'
+    ];
+    
+    for (const field of companyJsonFields) {
+      if (job[field] && typeof job[field] === 'string') {
+        try { 
+          job[field] = JSON.parse(job[field]); 
+        } catch { 
+          job[field] = {}; 
+        }
+      } else if (!job[field]) {
+        job[field] = {};
+      }
+    }
+
+    // ✅ MAP TO FRONTEND-FRIENDLY FIELD NAMES
+    job.jobType = job.job_type;
+    job.workArrangement = job.work_arrangement;
+    job.experienceLevel = job.experience_level;
+    job.salaryCurrency = job.salary_currency;
+    job.salaryPeriod = job.salary_period;
+    job.salaryVisible = job.salary_visible;
+    job.publishedAt = job.published_at;
+    job.expiresAt = job.expires_at;
+    job.pausedAt = job.paused_at;
+    job.closedAt = job.closed_at;
+    job.createdAt = job.created_at;
+    job.updatedAt = job.updated_at;
+    job.deletedAt = job.deleted_at;
+    job.applicationLimit = job.application_limit;
+    job.screeningQuestions = job.screening_questions;
+    job.applicationInstructions = job.application_instructions;
+    job.requiredDocuments = job.documents;
+    job.aiMatchRequiredScore = job.ai_match_required_score;
+    
+    // ✅ MAP EDUCATION REQUIREMENTS
+    if (job.education_required && Object.keys(job.education_required).length > 0) {
+      job.educationLevel = {
+        minimum_degree: job.education_required.minimum_degree || null,
+        fields_of_study: job.education_required.fields_of_study || [],
+        certifications: job.education_required.certifications || [],
+        languages: job.education_required.languages || [],
+        experience_requirements: job.education_required.experience_requirements || [],
+        age_requirement: job.education_required.age_requirement || '',
+        is_degree_required: job.education_required.is_degree_required !== false,
+        no_experience_needed: job.education_required.no_experience_needed || false,
+        no_languages_needed: job.education_required.no_languages_needed || false,
+        no_certifications_needed: job.education_required.no_certifications_needed || false,
+        no_documents_needed: job.education_required.no_documents_needed || false
+      };
+    } else {
+      job.educationLevel = {
+        minimum_degree: null,
+        fields_of_study: [],
+        certifications: [],
+        languages: [],
+        experience_requirements: [],
+        age_requirement: '',
+        is_degree_required: false,
+        no_experience_needed: false,
+        no_languages_needed: false,
+        no_certifications_needed: false,
+        no_documents_needed: false
+      };
+    }
+
+    // ✅ MAP SKILLS FIELDS
+    job.requiredSkills = Array.isArray(job.skills_required) ? job.skills_required : [];
+    job.preferredSkills = Array.isArray(job.skills_preferred) ? job.skills_preferred : [];
+
+    // ✅ GET SKILLS FROM JOB_SKILLS TABLE
+    const skills = await DatabaseService.execute(`
+      SELECT 
+        s.id as skill_id,
+        s.name as skill_name,
+        s.category,
+        s.skill_type,
+        s.is_verified as skill_verified,
+        js.proficiency_level,
+        js.is_required,
+        js.importance,
+        js.created_at as skill_added_at
+      FROM job_skills js
+      JOIN skills s ON js.skill_id = s.id
+      WHERE js.job_id = $1
+      ORDER BY js.is_required DESC, js.importance DESC, s.name
+    `, [id]);
+
+    if (skills.rows.length > 0) {
+      job.skills = skills.rows;
+      job.skills_required = skills.rows.filter((s: any) => s.is_required === true);
+      job.skills_preferred = skills.rows.filter((s: any) => s.is_required === false);
+      job.requiredSkills = job.skills_required;
+      job.preferredSkills = job.skills_preferred;
+    } else {
+      job.skills = [...(job.requiredSkills || []), ...(job.preferredSkills || [])];
+    }
+
+    // ✅ ENSURE ALL ARRAY FIELDS ARE PROPERLY INITIALIZED
+    if (!job.locations) job.locations = [];
+    if (!job.responsibilities) job.responsibilities = [];
+    if (!job.requirements) job.requirements = [];
+    if (!job.benefits) job.benefits = [];
+    if (!job.tags) job.tags = [];
+    if (!job.screening_questions) job.screening_questions = [];
+    if (!job.documents) job.documents = [];
+    if (!job.language_requirements) job.language_requirements = [];
+    if (!job.experience_requirements) job.experience_requirements = [];
+
+    // ✅ ENSURE ALL OBJECT FIELDS ARE PROPERLY INITIALIZED
+    if (!job.metadata) job.metadata = {};
+    if (!job.education_required) job.education_required = {};
+    if (!job.education_requirements) job.education_requirements = {};
+    if (!job.skill_experience_requirements) job.skill_experience_requirements = {};
+
+    // ✅ ADD COMPANY VERIFICATION STATUS FLAGS
+    job.companyIsVerified = job.company_verification_status === 'verified' || job.company_verified === true;
+    job.companyVerificationLevel = job.company_verification_level || 'basic';
+
+    // ✅ ADD JOB STATUS FLAGS FOR FRONTEND
+    job.isActive = isActive;
+    job.isPublished = isPublished;
+    job.isNotPublishedYet = isNotPublishedYet;
+    job.isExpired = isExpired;
+    job.isPaused = isPaused;
+    job.isClosed = isClosed;
+    job.isArchived = isArchived;
+    job.isRemote = job.work_arrangement === 'remote';
+    job.isHybrid = job.work_arrangement === 'hybrid';
+    job.isOnsite = job.work_arrangement === 'onsite';
+    
+    // ✅ ADD APPLICATION AVAILABILITY FLAGS
+    job.canApply = canApply;
+    job.applicationStatus = applicationStatus;
+    job.applicationStatusMessage = applicationStatusMessage;
+    job.daysUntilPublish = daysUntilPublish;
+    job.daysRemaining = daysRemaining;
+    job.hasReachedApplicationLimit = hasReachedApplicationLimit;
+    job.currentApplicationCount = job.application_count || 0;
+    
+    // ✅ ADD PUBLISH DATE DISPLAY
+    if (isNotPublishedYet && publishedAt) {
+      job.publishDateDisplay = `Opens on ${publishedAt.toLocaleDateString()}`;
+    } else if (isPublished) {
+      job.publishDateDisplay = `Posted on ${publishedAt?.toLocaleDateString() || 'Recently'}`;
+    } else {
+      job.publishDateDisplay = 'Not yet published';
+    }
+    
+    // ✅ ADD EXPIRY DATE DISPLAY
+    if (isExpired) {
+      job.expiryDateDisplay = `Closed on ${expiresAt?.toLocaleDateString()}`;
+    } else if (expiresAt) {
+      job.expiryDateDisplay = `Closes in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} (${expiresAt.toLocaleDateString()})`;
+    } else {
+      job.expiryDateDisplay = 'No deadline';
+    }
+
+    // ✅ ADD SALARY DISPLAY FIELD
+    if (job.salary_min && job.salary_max) {
+      job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()} ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
+    } else if (job.salary_min) {
+      job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()}+ ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
+    } else {
+      job.salaryDisplay = 'Salary not specified';
+    }
+
+    // ✅ ADD EXPERIENCE DISPLAY FIELD
+    if (job.experience_min && job.experience_max) {
+      job.experienceDisplay = `${job.experience_min}-${job.experience_max} years`;
+    } else if (job.experience_min) {
+      job.experienceDisplay = `${job.experience_min}+ years`;
+    } else if (job.experience_max) {
+      job.experienceDisplay = `Up to ${job.experience_max} years`;
+    } else {
+      job.experienceDisplay = 'Experience not specified';
+    }
+
+    // ✅ ADD LOCATION DISPLAY FIELD
+    if (job.locations && job.locations.length > 0) {
+      const locationNames = job.locations.map((loc: any) => {
+        if (typeof loc === 'string') return loc;
+        if (loc.city && loc.country) return `${loc.city}, ${loc.country}`;
+        if (loc.city) return loc.city;
+        if (loc.country) return loc.country;
+        return null;
+      }).filter(Boolean);
+      job.locationDisplay = locationNames.join(', ');
+    } else {
+      job.locationDisplay = 'Location not specified';
+    }
+
+    // ✅ ADD APPLICATION BUTTON LABEL AND STYLES
+    if (!canApply) {
+      if (isNotPublishedYet) {
+        job.applyButtonLabel = `Opens in ${daysUntilPublish} day${daysUntilPublish !== 1 ? 's' : ''}`;
+        job.applyButtonDisabled = true;
+        job.applyButtonVariant = 'gray';
+      } else if (isExpired) {
+        job.applyButtonLabel = 'Expired';
+        job.applyButtonDisabled = true;
+        job.applyButtonVariant = 'gray';
+      } else if (isPaused) {
+        job.applyButtonLabel = 'Temporarily Paused';
+        job.applyButtonDisabled = true;
+        job.applyButtonVariant = 'gray';
+      } else if (isClosed || isArchived) {
+        job.applyButtonLabel = 'Closed';
+        job.applyButtonDisabled = true;
+        job.applyButtonVariant = 'gray';
+      } else if (hasReachedApplicationLimit) {
+        job.applyButtonLabel = 'Application Limit Reached';
+        job.applyButtonDisabled = true;
+        job.applyButtonVariant = 'gray';
+      } else {
+        job.applyButtonLabel = 'Apply Now';
+        job.applyButtonDisabled = true;
+        job.applyButtonVariant = 'gray';
+      }
+    } else {
+      job.applyButtonLabel = 'Apply Now';
+      job.applyButtonDisabled = false;
+      job.applyButtonVariant = 'green';
+    }
+
+    // ✅ ADD COUNTS
+    job.responsibilitiesCount = job.responsibilities?.length || 0;
+    job.benefitsCount = job.benefits?.length || 0;
+    job.screeningQuestionsCount = job.screening_questions?.length || 0;
+    job.requiredSkillsCount = job.requiredSkills?.length || 0;
+    job.preferredSkillsCount = job.preferredSkills?.length || 0;
+
+    this.sendSuccess(res, job);
+  } catch (error) {
+    logger.error('Error fetching job for candidate:', error);
+    this.sendError(res, 'Failed to fetch job details', 500, error as Error);
   }
+}
   
   // =====================================================
 // GET JOB CANDIDATES WITH AI MATCH SCORES

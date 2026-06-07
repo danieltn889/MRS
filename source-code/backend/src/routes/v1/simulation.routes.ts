@@ -926,4 +926,11 @@ router.get('/verify/:credentialHash', [
   return SimulationController.verifyCredential(req as AuthenticatedRequest, res);
 });
 
+
+// Add before the generic routes
+router.get('/sessions/:sessionId/submission-results', protect, [
+  param('sessionId').isUUID().withMessage('Invalid session ID format'),
+  validateRequest
+], authHandler(SimulationController.getSubmissionResults.bind(SimulationController)));
+
 export default router;

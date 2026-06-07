@@ -685,7 +685,7 @@ class Factor3_ExperienceMatcher:
         }
 
 # =====================================================
-# FACTOR 4: PREFERENCES MATCHER (15%) - WITH MISSING DATA HANDLING
+# FACTOR 4: PREFERENCES MATCHER (15%) - FIXED VERSION
 # =====================================================
 
 class Factor4_PreferencesMatcher:
@@ -695,9 +695,15 @@ class Factor4_PreferencesMatcher:
     def extract_candidate_preferences(self, profile_data):
         job_prefs = profile_data.get('profile', {}).get('job_preferences', {})
         
+        # ✅ FIX: Support both field naming conventions
+        job_types = job_prefs.get('job_types', []) or job_prefs.get('preferred_job_types', [])
+        locations = job_prefs.get('locations', []) or job_prefs.get('preferred_locations', [])
+        industries = job_prefs.get('industries', []) or job_prefs.get('preferred_industries', [])
+        languages = job_prefs.get('languages', []) or job_prefs.get('preferred_languages', [])
+        
         # Convert salary to numbers safely
-        salary_min = job_prefs.get('salary_min', 0)
-        salary_max = job_prefs.get('salary_max', 0)
+        salary_min = job_prefs.get('salary_min', 0) or job_prefs.get('expected_salary_min', 0)
+        salary_max = job_prefs.get('salary_max', 0) or job_prefs.get('expected_salary_max', 0)
         
         try:
             salary_min = float(salary_min) if salary_min else 0
@@ -710,11 +716,11 @@ class Factor4_PreferencesMatcher:
             salary_max = 0
         
         prefs = {
-            "job_types": [self.tp.clean(jt) for jt in job_prefs.get('preferred_job_types', [])],
+            "job_types": [self.tp.clean(jt) for jt in job_types],
             "remote_preference": self.tp.clean(job_prefs.get('remote_work_preference', 'flexible')),
-            "locations": [self.tp.clean(loc) for loc in job_prefs.get('preferred_locations', [])],
-            "industries": [self.tp.clean(ind) for ind in job_prefs.get('preferred_industries', [])],
-            "languages": [self.tp.clean(lang) for lang in job_prefs.get('preferred_languages', [])],
+            "locations": [self.tp.clean(loc) for loc in locations],
+            "industries": [self.tp.clean(ind) for ind in industries],
+            "languages": [self.tp.clean(lang) for lang in languages],
             "salary_min": salary_min,
             "salary_max": salary_max
         }
@@ -812,6 +818,8 @@ class Factor4_PreferencesMatcher:
                     type_scores_detail.append({"preference": pt, "job_value": job_type, "similarity": round(sim, 4)})
                     log_match(f"      Job type '{pt}' vs '{job_type}': {sim:.2f}")
                 type_match = max(type_scores) if type_scores else 0.5
+            else:
+                type_match = 0.7
             log_match(f"   Job type match: {type_match:.2f}")
         
         # ============================================
@@ -827,6 +835,8 @@ class Factor4_PreferencesMatcher:
             if candidate_prefs["remote_preference"]:
                 remote_match = self.tp.semantic_similarity(candidate_prefs["remote_preference"], job_remote)
                 log_match(f"      Remote preference '{candidate_prefs['remote_preference']}' vs '{job_remote}': {remote_match:.2f}")
+            else:
+                remote_match = 0.7
             log_match(f"   Remote work match: {remote_match:.2f}")
         
         # ============================================
@@ -854,6 +864,8 @@ class Factor4_PreferencesMatcher:
                 if best_pair:
                     location_match_detail = {"candidate_location": best_pair[0], "job_location": best_pair[1], "similarity": round(location_match, 4)}
                     log_match(f"      Best location match: '{best_pair[0]}' vs '{best_pair[1]}' = {location_match:.2f}")
+            else:
+                location_match = 0.7
             log_match(f"   Location match: {location_match:.2f}")
         
         # ============================================
@@ -875,6 +887,8 @@ class Factor4_PreferencesMatcher:
                     industry_scores_detail.append({"preference": ind, "job_value": job_industry, "similarity": round(sim, 4)})
                     log_match(f"      Industry '{ind}' vs '{job_industry}': {sim:.2f}")
                 industry_match = max(ind_scores) if ind_scores else 0.5
+            else:
+                industry_match = 0.7
             log_match(f"   Industry match: {industry_match:.2f}")
         
         # ============================================
@@ -909,6 +923,12 @@ class Factor4_PreferencesMatcher:
                     diff = job_salary_min - candidate_salary_max
                     salary_match = max(0.3, 1.0 - (diff / candidate_salary_max))
                     log_match(f"      Salary match: Job min ({job_salary_min}) > Candidate max ({candidate_salary_max}) by {diff} → {salary_match:.2f}")
+            elif job_salary_max > 0 and candidate_salary_min > 0:
+                if candidate_salary_min <= job_salary_max:
+                    salary_match = 1.0
+                else:
+                    diff = candidate_salary_min - job_salary_max
+                    salary_match = max(0.3, 1.0 - (diff / candidate_salary_min))
             else:
                 log_match(f"      Salary match: No valid salary data for comparison → 1.00")
             
@@ -948,6 +968,9 @@ class Factor4_PreferencesMatcher:
                         language_matches_detail.append({"required": jl, "matched_with": None, "similarity": 0})
                 language_match = matches / len(job_languages) if job_languages else 1.0
                 log_match(f"      Language match: {matches}/{len(job_languages)} languages matched = {language_match:.2f}")
+            else:
+                language_match = 0.5
+                log_match(f"      No language preferences specified → {language_match:.2f}")
             log_match(f"   Language match: {language_match:.2f}")
         
         # ============================================
@@ -996,10 +1019,13 @@ class Factor4_PreferencesMatcher:
         }
 
 # =====================================================
-# JOB FIELD EXTRACTOR - FROM DATABASE
+# COMPLETE JOB FIELD EXTRACTOR - ALL 70+ FIELDS
 # =====================================================
 
 def extract_all_job_fields(job: Dict) -> Dict:
+    """Extract ALL job fields from the database response - 70+ fields"""
+    
+    # Parse locations
     locations = job.get('locations', [])
     if isinstance(locations, str):
         try:
@@ -1013,9 +1039,14 @@ def extract_all_job_fields(job: Dict) -> Dict:
             location_details.append({
                 "city": loc.get('city', ''),
                 "country": loc.get('country', ''),
+                "state": loc.get('state', ''),
+                "postal_code": loc.get('postal_code', ''),
                 "is_remote": loc.get('is_remote', False),
             })
+        elif isinstance(loc, str):
+            location_details.append({"city": loc, "country": "", "is_remote": False})
     
+    # Parse skills arrays
     skills_required = job.get('skills_required', [])
     if isinstance(skills_required, str):
         try:
@@ -1023,27 +1054,415 @@ def extract_all_job_fields(job: Dict) -> Dict:
         except:
             skills_required = []
     
+    skills_preferred = job.get('skills_preferred', [])
+    if isinstance(skills_preferred, str):
+        try:
+            skills_preferred = json.loads(skills_preferred)
+        except:
+            skills_preferred = []
+    
+    # Parse education required
+    education_required = job.get('education_required', {})
+    if isinstance(education_required, str):
+        try:
+            education_required = json.loads(education_required)
+        except:
+            education_required = {}
+    
+    # Parse benefits
+    benefits = job.get('benefits', [])
+    if isinstance(benefits, str):
+        try:
+            benefits = json.loads(benefits)
+        except:
+            benefits = []
+    
+    # Parse responsibilities
+    responsibilities = job.get('responsibilities', [])
+    if isinstance(responsibilities, str):
+        try:
+            responsibilities = json.loads(responsibilities)
+        except:
+            responsibilities = []
+    
+    # Parse requirements
+    requirements = job.get('requirements', [])
+    if isinstance(requirements, str):
+        try:
+            requirements = json.loads(requirements)
+        except:
+            requirements = []
+    
+    # Parse screening questions
+    screening_questions = job.get('screening_questions', [])
+    if isinstance(screening_questions, str):
+        try:
+            screening_questions = json.loads(screening_questions)
+        except:
+            screening_questions = []
+    
+    # Parse language requirements
+    language_requirements = job.get('language_requirements', [])
+    if isinstance(language_requirements, str):
+        try:
+            language_requirements = json.loads(language_requirements)
+        except:
+            language_requirements = []
+    
+    # Parse tags
+    tags = job.get('tags', [])
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except:
+            tags = []
+    
+    # Parse documents
+    documents = job.get('documents', [])
+    if isinstance(documents, str):
+        try:
+            documents = json.loads(documents)
+        except:
+            documents = []
+    
+    # Parse metadata
+    metadata = job.get('metadata', {})
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except:
+            metadata = {}
+    
+    # Parse experience requirements
+    experience_requirements = job.get('experience_requirements', [])
+    if isinstance(experience_requirements, str):
+        try:
+            experience_requirements = json.loads(experience_requirements)
+        except:
+            experience_requirements = []
+    
+    # Parse education requirements
+    education_requirements = job.get('education_requirements', {})
+    if isinstance(education_requirements, str):
+        try:
+            education_requirements = json.loads(education_requirements)
+        except:
+            education_requirements = {}
+    
+    # Parse skill experience requirements
+    skill_experience_requirements = job.get('skill_experience_requirements', {})
+    if isinstance(skill_experience_requirements, str):
+        try:
+            skill_experience_requirements = json.loads(skill_experience_requirements)
+        except:
+            skill_experience_requirements = {}
+    
+    # Parse company industries
+    company_industries = job.get('company_industries', [])
+    if isinstance(company_industries, str):
+        try:
+            company_industries = json.loads(company_industries)
+        except:
+            company_industries = []
+    
+    # Parse company headquarters
+    headquarters = job.get('company_headquarters_location', {})
+    if isinstance(headquarters, str):
+        try:
+            headquarters = json.loads(headquarters)
+        except:
+            headquarters = {}
+    
+    # Parse company culture
+    company_culture = job.get('company_culture', {})
+    if isinstance(company_culture, str):
+        try:
+            company_culture = json.loads(company_culture)
+        except:
+            company_culture = {}
+    
+    # Parse company values
+    company_values = job.get('company_values', [])
+    if isinstance(company_values, str):
+        try:
+            company_values = json.loads(company_values)
+        except:
+            company_values = []
+    
+    # Parse company social links
+    company_social_links = job.get('company_social_links', {})
+    if isinstance(company_social_links, str):
+        try:
+            company_social_links = json.loads(company_social_links)
+        except:
+            company_social_links = {}
+    
+    # Return COMPLETE job object with ALL fields
     return {
+        # ========== BASIC JOB INFO (15 fields) ==========
         "id": job.get('id', ''),
+        "external_id": job.get('external_id', ''),
         "title": job.get('title', 'Unknown'),
-        "company_name": job.get('company_name', 'Unknown'),
+        "slug": job.get('slug', ''),
+        "department": job.get('department', ''),
+        "team": job.get('team', ''),
         "job_type": job.get('job_type', 'full-time'),
         "work_arrangement": job.get('work_arrangement', ''),
         "locations": location_details,
         "description": job.get('description', ''),
-        "skills_required": skills_required,
-        "experience_min": int(job.get('experience_min', 0)) if job.get('experience_min') else 0,
-        "education_required": job.get('education_required', {}),
-        "company_industry": job.get('company_industry', ''),
+        "summary": job.get('summary', ''),
+        
+        # ========== REQUIREMENTS & RESPONSIBILITIES (5 fields) ==========
+        "responsibilities": responsibilities,
+        "qualifications": job.get('qualifications', ''),
+        "preferred_qualifications": job.get('preferred_qualifications', ''),
+        "requirements": requirements,
+        
+        # ========== COMPENSATION (7 fields) ==========
         "salary_min": float(job.get('salary_min', 0)) if job.get('salary_min') else 0,
         "salary_max": float(job.get('salary_max', 0)) if job.get('salary_max') else 0,
-        "language_requirements": job.get('language_requirements', []),
+        "salary_currency": job.get('salary_currency', 'Rwf'),
+        "salary_period": job.get('salary_period', 'month'),
+        "salary_visible": job.get('salary_visible', True),
+        "benefits": benefits,
+        
+        # ========== SKILLS (2 fields) ==========
+        "skills_required": skills_required,
+        "skills_preferred": skills_preferred,
+        
+        # ========== EXPERIENCE (5 fields) ==========
+        "experience_min": int(job.get('experience_min', 0)) if job.get('experience_min') else 0,
+        "experience_max": int(job.get('experience_max', 0)) if job.get('experience_max') else 0,
+        "experience_level": job.get('experience_level', 'entry'),
+        "experience_requirements": experience_requirements,
+        
+        # ========== EDUCATION (3 fields) ==========
+        "education_required": education_required,
+        "education_requirements": education_requirements,
+        "language_requirements": language_requirements,
+        
+        # ========== SKILL EXPERIENCE (1 field) ==========
+        "skill_experience_requirements": skill_experience_requirements,
+        
+        # ========== APPLICATION SETTINGS (7 fields) ==========
+        "screening_questions": screening_questions,
+        "application_instructions": job.get('application_instructions', ''),
+        "documents": documents,
+        "department_info": job.get('department_info', ''),
+        "tags": tags,
+        "application_limit": int(job.get('application_limit', 0)) if job.get('application_limit') else 0,
+        
+        # ========== AI & MATCHING (2 fields) ==========
+        "ai_match_required_score": int(job.get('ai_match_required_score', 70)) if job.get('ai_match_required_score') else 70,
+        "ai_score": job.get('ai_score', {}),
+        
+        # ========== STATUS & DATES (12 fields) ==========
+        "status": job.get('status', 'active'),
+        "visibility": job.get('visibility', 'public'),
+        "published_at": job.get('published_at'),
+        "expires_at": job.get('expires_at'),
+        "paused_at": job.get('paused_at'),
+        "closed_at": job.get('closed_at'),
+        "created_at": job.get('created_at'),
+        "updated_at": job.get('updated_at'),
+        "created_by": job.get('created_by'),
+        "approved_by": job.get('approved_by'),
+        "approved_at": job.get('approved_at'),
+        
+        # ========== COUNTS & METADATA (4 fields) ==========
+        "view_count": int(job.get('view_count', 0)) if job.get('view_count') else 0,
+        "application_count": int(job.get('application_count', 0)) if job.get('application_count') else 0,
+        "metadata": metadata,
+        "deleted_at": job.get('deleted_at'),
+        
+        # ========== COMPANY INFO (25+ fields) ==========
         "company": {
             "id": job.get('company_id', ''),
             "name": job.get('company_name', 'Unknown'),
+            "legal_name": job.get('company_legal_name', ''),
+            "slug": job.get('company_slug', ''),
             "industry": job.get('company_industry', ''),
+            "industries": company_industries,
+            "size": job.get('company_size', ''),
+            "founded_year": job.get('company_founded_year'),
+            "headquarters": headquarters,
+            "website": job.get('company_website', ''),
+            "description": job.get('company_description', ''),
+            "short_description": job.get('company_short_description', ''),
+            "mission": job.get('company_mission', ''),
+            "vision": job.get('company_vision', ''),
+            "values": company_values,
+            "culture": company_culture,
             "logo_url": job.get('company_logo_url', ''),
+            "logo_key": job.get('company_logo_key', ''),
+            "banner_url": job.get('company_banner_url', ''),
+            "banner_key": job.get('company_banner_key', ''),
+            "social_links": company_social_links,
+            "verified": job.get('company_verified', False),
+            "verification_status": job.get('company_verification_status', ''),
+            "verification_level": job.get('company_verification_level', ''),
+            "verified_at": job.get('company_verified_at'),
+            "domain": job.get('company_domain', ''),
+            "tax_id": job.get('company_tax_id', ''),
+            "registration_number": job.get('company_registration_number', '')
         }
+    }
+
+# =====================================================
+# EXTRACT COMPLETE CANDIDATE DATA FOR FRONTEND
+# =====================================================
+
+def extract_complete_candidate_data(profile_data: Dict) -> Dict:
+    """Extract ALL candidate fields for frontend display"""
+    
+    profile = profile_data.get('profile', {})
+    personal_info = profile.get('personal_info', {})
+    links = profile.get('links', {})
+    work_prefs = profile.get('work_preferences', {})
+    statistics = profile_data.get('statistics', {})
+    applications_summary = profile_data.get('applications_summary', {})
+    simulations_summary = profile_data.get('simulations_summary', {})
+    
+    # Get job preferences with both naming conventions
+    job_prefs = profile.get('job_preferences', {})
+    
+    return {
+        # Personal Information
+        "id": personal_info.get('user_id', ''),
+        "email": personal_info.get('email', ''),
+        "full_name": personal_info.get('full_name', 'Unknown'),
+        "first_name": personal_info.get('first_name', ''),
+        "last_name": personal_info.get('last_name', ''),
+        "headline": personal_info.get('headline', ''),
+        "summary": personal_info.get('summary', ''),
+        "phone": personal_info.get('phone', ''),
+        "date_of_birth": personal_info.get('date_of_birth'),
+        "gender": personal_info.get('gender'),
+        "profile_photo_url": personal_info.get('profile_photo_url', ''),
+        "joined_date": personal_info.get('joined_date'),
+        "last_login": personal_info.get('last_login'),
+        "user_status": personal_info.get('user_status'),
+        "user_type": personal_info.get('user_type'),
+        "two_factor_enabled": personal_info.get('two_factor_enabled'),
+        "terms_accepted_at": personal_info.get('terms_accepted_at'),
+        "terms_version": personal_info.get('terms_version'),
+        
+        # Location
+        "location": {
+            "country": personal_info.get('country', ''),
+            "city": personal_info.get('city', ''),
+            "timezone": personal_info.get('timezone', '')
+        },
+        
+        # Social Links
+        "social_links": {
+            "linkedin": links.get('linkedin', ''),
+            "github": links.get('github', ''),
+            "portfolio": links.get('portfolio', ''),
+            "website": links.get('website', '')
+        },
+        
+        # Work Preferences
+        "work_preferences": {
+            "willing_to_relocate": work_prefs.get('willing_to_relocate', False),
+            "willing_to_travel": work_prefs.get('willing_to_travel', False),
+            "notice_period_days": work_prefs.get('notice_period_days', 0),
+            "expected_salary": work_prefs.get('expected_salary', {}),
+            "current_salary": work_prefs.get('current_salary', {}),
+            "currency": work_prefs.get('currency', 'USD')
+        },
+        
+        # Languages
+        "languages": profile.get('languages', []),
+        
+        # Privacy Settings
+        "privacy_settings": profile.get('privacy_settings', {}),
+        
+        # Job Preferences - FIXED to include both naming conventions
+        "job_preferences": {
+            "job_types": job_prefs.get('job_types', []) or job_prefs.get('preferred_job_types', []),
+            "preferred_job_types": job_prefs.get('preferred_job_types', []) or job_prefs.get('job_types', []),
+            "locations": job_prefs.get('locations', []) or job_prefs.get('preferred_locations', []),
+            "preferred_locations": job_prefs.get('preferred_locations', []) or job_prefs.get('locations', []),
+            "industries": job_prefs.get('industries', []) or job_prefs.get('preferred_industries', []),
+            "preferred_industries": job_prefs.get('preferred_industries', []) or job_prefs.get('industries', []),
+            "languages": job_prefs.get('languages', []) or job_prefs.get('preferred_languages', []),
+            "preferred_languages": job_prefs.get('preferred_languages', []) or job_prefs.get('languages', []),
+            "remote_work_preference": job_prefs.get('remote_work_preference', 'flexible'),
+            "salary_min": job_prefs.get('salary_min', 0) or job_prefs.get('expected_salary_min', 0),
+            "salary_max": job_prefs.get('salary_max', 0) or job_prefs.get('expected_salary_max', 0),
+            "salary_currency": job_prefs.get('salary_currency', 'Rwf'),
+            "availability_status": job_prefs.get('availability_status', 'actively_looking'),
+            "availability_date": job_prefs.get('availability_date'),
+            "keywords": job_prefs.get('keywords', ''),
+            "job_level": job_prefs.get('job_level', 'entry')
+        },
+        
+        # Availability
+        "availability": profile.get('availability', {}),
+        
+        # Metadata
+        "metadata": profile.get('metadata', {}),
+        
+        # Timestamps
+        "timestamps": {
+            "profile_created": profile.get('created_at'),
+            "profile_updated": profile.get('updated_at')
+        },
+        
+        # Statistics
+        "statistics": {
+            "total_years_experience": statistics.get('total_years_experience', 0),
+            "current_job_years": statistics.get('current_job_years', 0),
+            "most_recent_job": statistics.get('most_recent_job'),
+            "total_skills": statistics.get('total_skills', 0),
+            "total_education": statistics.get('total_education_entries', 0),
+            "total_work_experience": statistics.get('total_work_experience', 0),
+            "total_certifications": statistics.get('total_certifications', 0),
+            "total_portfolio_links": statistics.get('total_portfolio_links', 0),
+            "total_resumes": statistics.get('total_resumes', 0),
+            "top_skills": statistics.get('top_skills', []),
+            "skill_distribution": statistics.get('skill_distribution', {}),
+            "saved_jobs_count": statistics.get('saved_jobs_count', 0),
+            "profile_completion": statistics.get('profile_completion', {})
+        },
+        
+        # Applications Summary
+        "applications_summary": {
+            "total": applications_summary.get('total', 0),
+            "submitted": applications_summary.get('submitted', 0),
+            "under_review": applications_summary.get('under_review', 0),
+            "interviewing": applications_summary.get('interviewing', 0),
+            "offers": applications_summary.get('offers', 0),
+            "hired": applications_summary.get('hired', 0),
+            "rejected": applications_summary.get('rejected', 0)
+        },
+        
+        # Simulations Summary
+        "simulations_summary": {
+            "total": simulations_summary.get('total', 0),
+            "completed": simulations_summary.get('completed', 0),
+            "in_progress": simulations_summary.get('in_progress', 0),
+            "average_score": simulations_summary.get('average_score', 0)
+        },
+        
+        # Education (full details)
+        "education": profile_data.get('education', []),
+        
+        # Work Experience (full details)
+        "work_experience": profile_data.get('work_experience', []),
+        
+        # Skills (full details with proficiency)
+        "skills": profile_data.get('skills', []),
+        
+        # Certifications
+        "certifications": profile_data.get('certifications', []),
+        
+        # Portfolio Links
+        "portfolio_links": profile_data.get('portfolio_links', []),
+        
+        # Resumes
+        "resumes": profile_data.get('resumes', [])
     }
 
 # =====================================================
@@ -1089,7 +1508,11 @@ class BackendClient:
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("success") and data.get("data"):
-                    return data["data"].get("data", [])
+                    jobs_data = data["data"]
+                    if isinstance(jobs_data, dict) and jobs_data.get("data"):
+                        return jobs_data["data"]
+                    elif isinstance(jobs_data, list):
+                        return jobs_data
             return []
         except Exception as e:
             log_error(f"Jobs error: {e}")
@@ -1099,7 +1522,7 @@ class BackendClient:
 # FASTAPI APP
 # =====================================================
 
-app = FastAPI(title="Database-Driven Job Matching API")
+app = FastAPI(title="Complete Database-Driven Job Matching API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -1168,6 +1591,15 @@ async def match_candidate(request: Request):
         
         log_candidate(f"Name: {candidate_name}")
         log_candidate(f"Skills from DB ({len(candidate_skills)}): {', '.join(candidate_skills[:10])}")
+        log_candidate(f"Education entries: {len(profile_data.get('education', []))}")
+        log_candidate(f"Work experience: {len(profile_data.get('work_experience', []))}")
+        log_candidate(f"Certifications: {len(profile_data.get('certifications', []))}")
+        
+        # Log candidate preferences for debugging
+        log_candidate(f"Job types from DB: {candidate_prefs.get('job_types', [])}")
+        log_candidate(f"Locations from DB: {candidate_prefs.get('locations', [])}")
+        log_candidate(f"Industries from DB: {candidate_prefs.get('industries', [])}")
+        log_candidate(f"Languages from DB: {candidate_prefs.get('languages', [])}")
         
         jobs = backend.get_jobs()
         log_info(f"📊 Jobs from database: {len(jobs)}")
@@ -1181,6 +1613,7 @@ async def match_candidate(request: Request):
             log_job(f"JOB {idx+1}: {job_title}")
             log_job("="*60)
             
+            # Extract ALL job fields (70+ fields)
             job_details = extract_all_job_fields(job)
             job_skills = factor1.extract_job_skills(job)
             job_quals = factor2.extract_job_qualifications(job)
@@ -1222,6 +1655,14 @@ async def match_candidate(request: Request):
                 match_level = "Partial Match ⚠️"
             else:
                 match_level = "Poor Match ❌"
+            
+            # Get candidate preferences for response
+            candidate_job_types = candidate_prefs.get("job_types", [])
+            candidate_locations = candidate_prefs.get("locations", [])
+            candidate_industries = candidate_prefs.get("industries", [])
+            candidate_languages = candidate_prefs.get("languages", [])
+            candidate_salary_min = candidate_prefs.get("salary_min", 0)
+            candidate_salary_max = candidate_prefs.get("salary_max", 0)
             
             results.append({
                 "match_score": total_score,
@@ -1277,7 +1718,15 @@ async def match_candidate(request: Request):
                     "salary_match_note": p.get("salary_match_note"),
                     "language_match": p.get("language_match", 0),
                     "language_match_details": p.get("language_match_details", []),
-                    "language_match_note": p.get("language_match_note")
+                    "language_match_note": p.get("language_match_note"),
+                    # ✅ ADD CANDIDATE PREFERENCES FOR FRONTEND
+                    "candidate_job_types": candidate_job_types,
+                    "candidate_locations": candidate_locations,
+                    "candidate_industries": candidate_industries,
+                    "candidate_languages": candidate_languages,
+                    "candidate_salary_min": candidate_salary_min,
+                    "candidate_salary_max": candidate_salary_max,
+                    "candidate_remote_preference": candidate_prefs.get("remote_preference", "flexible")
                 },
                 "job": job_details
             })
@@ -1291,16 +1740,23 @@ async def match_candidate(request: Request):
         
         cache_stats = tp.get_cache_stats()
         
+        # Extract complete candidate data for frontend
+        complete_candidate_data = extract_complete_candidate_data(profile_data)
+        
         return {
             "success": True,
             "candidate": {
+                # Basic candidate info
                 "id": candidate_id,
                 "name": candidate_name,
+                "email": complete_candidate_data.get('email'),
                 "skills_count": len(candidate_skills),
                 "skills": candidate_skills[:20],
                 "degrees": [d["raw"] for d in candidate_quals["degrees"]],
                 "fields": [f["raw"] for f in candidate_quals["fields"]],
-                "combined_qualifications": [c["raw"] for c in candidate_quals["combined"]]
+                "combined_qualifications": [c["raw"] for c in candidate_quals["combined"]],
+                # COMPLETE candidate profile data
+                "complete_profile": complete_candidate_data
             },
             "total_jobs_matched": len(results),
             "matches": results,
@@ -1322,13 +1778,13 @@ async def match_candidate(request: Request):
 @app.get("/")
 async def root():
     return {
-        "api": "Database-Driven Job Matching API",
-        "version": "14.0.0",
+        "api": "Complete Database-Driven Job Matching API",
+        "version": "18.0.0",
         "status": "running",
         "matching_type": "100% database-driven - NO hardcoded values",
         "data_sources": {
-            "candidate": "Users, Candidate Profiles, Education, Work Experience, Skills, Job Preferences from database",
-            "jobs": "Jobs, Skills Required, Education Required, Experience Requirements from database"
+            "candidate": "Users, Candidate Profiles, Education, Work Experience, Skills, Certifications, Job Preferences, Portfolio, Resumes from database",
+            "jobs": "ALL 70+ job fields from jobs table including skills_required, skills_preferred, education_required, experience_requirements, language_requirements, screening_questions, benefits, responsibilities, requirements, tags, metadata, and company information"
         },
         "factors": {
             "skills": {"weight": "40%", "source": "skills table + user_skills table"},
@@ -1339,6 +1795,28 @@ async def root():
         "missing_data_handling": {
             "description": "When job data is missing (e.g., no location, no salary), that factor automatically scores 100%",
             "tracked_fields": ["job_type", "work_arrangement", "industry", "locations", "languages", "salary"]
+        },
+        "candidate_data_returned": {
+            "personal_info": "Name, email, location, headline, summary, social links, date of birth, gender",
+            "statistics": "Experience years, skills count, education count, certifications, profile completion, saved jobs",
+            "applications": "Total, submitted, under_review, interviewing, offers, hired, rejected",
+            "simulations": "Total, completed, in_progress, average_score",
+            "education": "All education entries with degrees, fields, dates, institutions",
+            "work_experience": "All work experience with titles, companies, dates, skills, achievements",
+            "skills": "All skills with proficiency levels, years experience, verification",
+            "certifications": "All certifications with issuers, dates, verification",
+            "portfolio_links": "Portfolio URLs and metadata",
+            "resumes": "Resume files with parsed data"
+        },
+        "job_fields_returned": {
+            "basic": "id, title, slug, department, team, job_type, work_arrangement, locations, description",
+            "compensation": "salary_min, salary_max, salary_currency, salary_period, benefits",
+            "skills": "skills_required, skills_preferred",
+            "experience": "experience_min, experience_max, experience_level, experience_requirements",
+            "education": "education_required, education_requirements, language_requirements",
+            "application": "screening_questions, application_instructions, documents, tags",
+            "status": "status, visibility, published_at, expires_at, created_at, updated_at",
+            "company": "name, industry, size, logo, website, description, mission, vision, values, culture, verification"
         }
     }
 
@@ -1353,7 +1831,7 @@ async def get_stats():
         "success": True,
         "cache_stats": cache_stats,
         "log_directory": str(LOG_DIR),
-        "note": "100% database-driven - NO hardcoded values"
+        "note": "100% database-driven - ALL 70+ job fields and ALL candidate fields extracted from database"
     }
 
 @app.get("/logs/{log_type}")
@@ -1379,21 +1857,25 @@ async def view_log(log_type: str, lines: int = 100):
 
 if __name__ == "__main__":
     print("\n" + "="*70)
-    print("🚀 DATABASE-DRIVEN JOB MATCHING API")
+    print("🚀 COMPLETE DATABASE-DRIVEN JOB MATCHING API")
     print("="*70)
+    print("✅ ALL 70+ JOB FIELDS RETURNED IN RESPONSE")
+    print("✅ ALL CANDIDATE FIELDS RETURNED IN RESPONSE")
+    print("✅ FIXED: Candidate preferences now properly extracted")
     print("✅ NO HARDCODED VALUES - EVERYTHING FROM DATABASE")
-    print("✅ Skills from skills table")
+    print("✅ Skills from skills table + user_skills table")
     print("✅ Degrees from education table")
     print("✅ Experience from work_experience table")
-    print("✅ Job specific requirements from education_required.experience_requirements")
-    print("✅ Preferences from job_preferences JSONB")
-    print("✅ MISSING JOB DATA HANDLING - Auto 100% when job doesn't specify requirements")
-    print("✅ Pure semantic similarity matching")
+    print("✅ Job specific requirements from education_required JSONB")
+    print("✅ Preferences from job_preferences JSONB (6 sub-factors)")
+    print("✅ MISSING JOB DATA HANDLING - Auto 100% when job doesn't specify")
+    print("✅ Pure semantic similarity matching with NLTK + Sentence Transformers")
     print("="*70)
     print("\n🌐 Server: http://localhost:8000")
     print("📤 POST to /match with:")
     print('{"candidate_id": "17296b7f-7843-42ed-a074-3a69732f0f07"}')
     print("\n📊 View logs: GET /logs/candidate, /logs/job, /logs/match")
+    print("📈 Get stats: GET /stats")
     print("="*70 + "\n")
     
     uvicorn.run(app, host="0.0.0.0", port=8000)

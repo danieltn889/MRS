@@ -3294,9 +3294,8 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
   
   const detectedFeatures: string[] = [];
   
-  // Language-specific patterns
+  // Language-specific patterns (keeping your existing patterns)
   const patterns: Record<string, any> = {
-    // Functions/Methods
     functions: {
       python: /\bdef\s+\w+\s*\(/,
       javascript: /\bfunction\s+\w+\s*\(|\w+\s*=\s*\([^)]*\)\s*=>/,
@@ -3311,7 +3310,6 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
       swift: /\bfunc\s+\w+\s*\(/,
       kotlin: /\bfun\s+\w+\s*\(/
     },
-    // Variables
     variables: {
       python: /\b\w+\s*=/,
       javascript: /\b(const|let|var)\s+\w+/,
@@ -3326,7 +3324,6 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
       swift: /\b(var|let)\s+\w+/,
       kotlin: /\b(var|val)\s+\w+/
     },
-    // Conditionals
     conditionals: {
       python: /\bif\s+|elif\s+|else\s*:/,
       javascript: /\bif\s*\(|else\s+if|else\s*\{/,
@@ -3341,7 +3338,6 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
       swift: /\bif\s+|else\s+if|else\s*\{/,
       kotlin: /\bif\s*\(|else\s+if|else\s*\{/
     },
-    // Loops
     loops: {
       python: /\bfor\s+\w+\s+in|while\s+/,
       javascript: /\bfor\s*\(|while\s*\(|do\s*\{/,
@@ -3356,7 +3352,6 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
       swift: /\bfor\s+\w+\s+in|while\s+/,
       kotlin: /\bfor\s*\(|while\s*\(/
     },
-    // Returns
     returns: {
       python: /\breturn\s+/,
       javascript: /\breturn\s+/,
@@ -3371,7 +3366,6 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
       swift: /\breturn\s+/,
       kotlin: /\breturn\s+/
     },
-    // Error handling
     errorHandling: {
       python: /\btry\s*:|except\s+|finally\s*:/,
       javascript: /\btry\s*\{|catch\s*\(|finally\s*\{/,
@@ -3386,7 +3380,6 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
       swift: /\bdo\s*\{|catch\s+|try!/,
       kotlin: /\btry\s*\{|catch\s*\(|finally\s*\{/
     },
-    // Classes/OOP
     classes: {
       python: /\bclass\s+\w+/,
       javascript: /\bclass\s+\w+\s*\{/,
@@ -3401,7 +3394,6 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
       swift: /\bclass\s+\w+|struct\s+\w+/,
       kotlin: /\bclass\s+\w+|interface\s+\w+/
     },
-    // Imports/Includes
     imports: {
       python: /^(import|from)\s+/m,
       javascript: /^(import|require\()/m,
@@ -3421,21 +3413,15 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
   // Detect features
   const langLower = detectedLanguage.toLowerCase();
   
-  // Helper function to check pattern for current language
   const checkFeature = (feature: string): boolean => {
     const patternSet = patterns[feature];
     if (!patternSet) return false;
-    
-    // Try exact language match
     if (patternSet[langLower]) {
       return patternSet[langLower].test(code);
     }
-    
-    // Try default patterns (JavaScript-based for unknown languages)
     if (patternSet.javascript) {
       return patternSet.javascript.test(code);
     }
-    
     return false;
   };
   
@@ -3457,27 +3443,106 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
   if (hasClasses) detectedFeatures.push('classes');
   if (hasImports) detectedFeatures.push('imports');
   
-  // Calculate score (max 100 points)
+  // ============================================
+  // CALCULATE SCORE WITH DETAILED LOGGING
+  // ============================================
+  console.log('\n📊 [detectCodeQuality] SCORE BREAKDOWN:');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log(`📝 Language: ${detectedLanguage}`);
+  console.log(`📄 Lines of code: ${linesOfCode}`);
+  console.log(`📏 Code length: ${code.length} chars`);
+  console.log(`🔍 Detected features: ${detectedFeatures.join(', ') || 'none'}`);
+  console.log('───────────────────────────────────────────────────────────────');
+  
   let score = 0;
   
   // Core features (50 points)
-  if (hasFunctions) score += 15;
-  if (hasVariables) score += 10;
-  if (hasConditionals) score += 10;
-  if (hasReturns) score += 15;
+  console.log('\n📌 CORE FEATURES (max 50 points):');
+  if (hasFunctions) {
+    score += 15;
+    console.log(`   ✅ Functions/Methods: +15 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Functions/Methods: +0 points (total: ${score})`);
+  }
+  
+  if (hasVariables) {
+    score += 10;
+    console.log(`   ✅ Variables: +10 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Variables: +0 points (total: ${score})`);
+  }
+  
+  if (hasConditionals) {
+    score += 10;
+    console.log(`   ✅ Conditionals (if/else): +10 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Conditionals (if/else): +0 points (total: ${score})`);
+  }
+  
+  if (hasReturns) {
+    score += 15;
+    console.log(`   ✅ Return statements: +15 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Return statements: +0 points (total: ${score})`);
+  }
   
   // Advanced features (30 points)
-  if (hasLoops) score += 10;
-  if (hasErrorHandling) score += 10;
-  if (hasClasses) score += 10;
+  console.log('\n📌 ADVANCED FEATURES (max 30 points):');
+  if (hasLoops) {
+    score += 10;
+    console.log(`   ✅ Loops (for/while): +10 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Loops (for/while): +0 points (total: ${score})`);
+  }
+  
+  if (hasErrorHandling) {
+    score += 10;
+    console.log(`   ✅ Error handling (try/catch): +10 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Error handling (try/catch): +0 points (total: ${score})`);
+  }
+  
+  if (hasClasses) {
+    score += 10;
+    console.log(`   ✅ Classes/OOP: +10 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Classes/OOP: +0 points (total: ${score})`);
+  }
   
   // Project structure (20 points)
-  if (hasImports) score += 10;
-  if (linesOfCode > 10) score += 5;
-  if (code.length > 500) score += 5;
+  console.log('\n📌 PROJECT STRUCTURE (max 20 points):');
+  if (hasImports) {
+    score += 10;
+    console.log(`   ✅ Imports/Includes: +10 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Imports/Includes: +0 points (total: ${score})`);
+  }
+  
+  if (linesOfCode > 10) {
+    score += 5;
+    console.log(`   ✅ Lines of code > 10: +5 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Lines of code > 10: +0 points (total: ${score})`);
+  }
+  
+  if (code.length > 500) {
+    score += 5;
+    console.log(`   ✅ Code length > 500 chars: +5 points (total: ${score})`);
+  } else {
+    console.log(`   ❌ Code length > 500 chars: +0 points (total: ${score})`);
+  }
   
   // Cap at 100
+  const originalScore = score;
   score = Math.min(100, score);
+  
+  console.log('\n───────────────────────────────────────────────────────────────');
+  console.log(`📊 RAW SCORE: ${originalScore}/100`);
+  if (originalScore > 100) {
+    console.log(`⚠️  Capped at 100 (max score)`);
+  }
+  console.log(`✅ FINAL SCORE: ${score}%`);
+  console.log('═══════════════════════════════════════════════════════════════\n');
   
   return {
     score,
@@ -3500,55 +3565,187 @@ private detectCodeQuality = (code: string, language?: string): CodeQualityResult
 };
 
 /**
-   * Calculate answer quality for a task
-   */
-  private calculateAnswerQuality(answer: any): {
-    score: number;
-    codeQuality: number;
-    essayQuality: number;
-    completeness: number;
-    details: any;
-  } {
-    let codeQuality = 0;
-    let essayQuality = 0;
-    let completeness = 0;
-    let codeQualityDetails = null;
-    
+ * Calculate answer quality for a task
+ * Uses GitHub repository code when available, falls back to inline code
+ */
+private async calculateAnswerQuality(answer: any): Promise<{
+  score: number;
+  codeQuality: number;
+  essayQuality: number;
+  completeness: number;
+  githubScore?: number;
+  githubAnalysis?: any;
+  details: any;
+}> {
+  let codeQuality = 0;
+  let essayQuality = 0;
+  let completeness = 0;
+  let codeQualityDetails = null;
+  let githubScore = 0;
+  let githubAnalysis = null;
+  
+  const gitRepositoryUrl = answer.githubCommitUrl;
+  
+  // Fetch code from GitHub repository if URL is provided
+  if (gitRepositoryUrl) {
+    try {
+      // Parse owner and repo from URL
+      const parsed = githubController.parseGitHubUrl(gitRepositoryUrl);
+      
+      if (parsed) {
+        const { owner, repo } = parsed;
+        
+        // ✅ METHOD 1: Call getEverything directly (as you were trying)
+        // But we need to capture the response properly
+        const mockReq = {
+          params: { owner, repo },
+          query: { includeContent: 'true', maxFiles: '50' }  // Limit files for performance
+        } as any;
+        
+        let responseData: any = null;
+        const mockRes: any = {
+          json: (data: any) => { 
+            responseData = data; 
+            return mockRes; 
+          },
+          status: (_code: number) => mockRes
+        };
+        
+        // Call getEverything
+        await githubController.getEverything(mockReq, mockRes);
+        
+        if (responseData?.data) {
+          const repoData = responseData.data;
+          
+          // Extract code files from the response
+          const files = repoData.code?.files || [];
+          
+          // Find all code files
+          const codeFiles = files.filter((file: any) => 
+            file.name?.match(/\.(js|ts|py|java|go|rs|cpp|c|html|css|json|jsx|tsx)$/i)
+          );
+          
+          // ✅ ANALYZE CODE QUALITY FROM GITHUB REPOSITORY
+          // Combine all code files content for quality analysis
+          let combinedCode = '';
+          for (const file of codeFiles) {
+            if (file.content) {
+              combinedCode += `\n// File: ${file.name}\n${file.content}\n`;
+            }
+          }
+          
+          // ✅ Use detectCodeQuality on the GitHub repository code
+          if (combinedCode.trim().length > 0) {
+            const primaryLanguage = repoData.languages?.primary || 
+                                    repoData.repository?.language || 
+                                    'Unknown';
+            const qualityResult = this.detectCodeQuality(combinedCode, primaryLanguage);
+            codeQuality = qualityResult.score;
+            codeQualityDetails = qualityResult.details;
+            console.log(`✅ Code quality analysis from GitHub repo: ${codeQuality}% (${codeFiles.length} files, ${combinedCode.length} chars)`);
+          } else {
+            // Fallback to inline code if no code files found
+            if (answer.code) {
+              console.log('⚠️ No code files in GitHub repo, falling back to inline code');
+              const qualityResult = this.detectCodeQuality(answer.code, answer.language);
+              codeQuality = qualityResult.score;
+              codeQualityDetails = qualityResult.details;
+            }
+          }
+          
+          // Build GitHub analysis object
+          githubAnalysis = {
+            hasRepo: true,
+            owner,
+            repo,
+            totalFiles: files.length,
+            codeFilesCount: codeFiles.length,
+            languages: repoData.languages?.breakdown || [],
+            primaryLanguage: repoData.languages?.primary || 'Unknown',
+            codePreview: combinedCode.substring(0, 2000),
+            fileStructure: files.slice(0, 20).map((f: any) => f.name || f.path),
+            hasReadme: !!repoData.community?.hasReadme,
+            hasConfigFile: codeFiles.some((f: any) => 
+              f.name === 'package.json' || f.name === 'requirements.txt' || 
+              f.name === 'go.mod' || f.name === 'Cargo.toml'
+            ),
+            codeFiles: codeFiles.map((f: any) => ({
+              name: f.name,
+              size: f.size,
+              language: f.name?.split('.').pop()?.toLowerCase()
+            }))
+          };
+          
+          // Calculate GitHub score based on code quality metrics
+          githubScore = Math.min(100, 
+            (codeFiles.length * 5) + 
+            ((repoData.languages?.breakdown?.length || 0) * 10) + 
+            (githubAnalysis.hasReadme ? 15 : 0) +
+            (githubAnalysis.hasConfigFile ? 10 : 0)
+          );
+          
+          console.log(`✅ GitHub analysis completed for ${owner}/${repo}:`, {
+            codeFilesCount: codeFiles.length,
+            codeQualityScore: codeQuality,
+            githubScore: githubScore
+          });
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ GitHub analysis failed:', error.message);
+      githubAnalysis = { error: error.message, hasRepo: false };
+      
+      // ✅ FALLBACK: Use inline code if GitHub fetch fails
+      if (answer.code) {
+        console.log('⚠️ Falling back to inline code analysis');
+        const qualityResult = this.detectCodeQuality(answer.code, answer.language);
+        codeQuality = qualityResult.score;
+        codeQualityDetails = qualityResult.details;
+      }
+    }
+  } else {
+    // ✅ No GitHub URL - use inline code if provided
     if (answer.code) {
+      console.log('📝 Using inline code for quality analysis');
       const qualityResult = this.detectCodeQuality(answer.code, answer.language);
       codeQuality = qualityResult.score;
       codeQualityDetails = qualityResult.details;
     }
-    
-    if (answer.essay) {
-      essayQuality = Math.min(50,
-        (answer.essay.length > 100 ? 15 : 0) +
-        (answer.essay.split(' ').length > 50 ? 15 : 0) +
-        (answer.essay.includes('.') ? 10 : 0) +
-        (answer.essay.includes('\n') ? 10 : 0)
-      );
-    }
-    
-    completeness = answer.completed ? 30 : 0;
-    
-    const totalScore = Math.min(100, codeQuality + essayQuality + completeness);
-    
-    return {
-      score: totalScore,
-      codeQuality,
-      essayQuality,
-      completeness,
-      details: {
-        codeQualityDetails,
-        essayLength: answer.essay?.length || 0,
-        essayWords: answer.essay?.split(' ').length || 0,
-        hasCode: !!answer.code,
-        hasEssay: !!answer.essay,
-        hasComment: !!answer.comment,
-        markedCompleted: answer.completed || false
-      }
-    };
   }
+  
+  // Essay quality analysis
+  if (answer.essay) {
+    essayQuality = Math.min(50,
+      (answer.essay.length > 100 ? 15 : 0) +
+      (answer.essay.split(' ').length > 50 ? 15 : 0) +
+      (answer.essay.includes('.') ? 10 : 0) +
+      (answer.essay.includes('\n') ? 10 : 0)
+    );
+  }
+  
+  completeness = answer.completed ? 30 : 0;
+  
+  const totalScore = Math.min(100, codeQuality + essayQuality + completeness);
+  
+  return {
+    score: totalScore,
+    codeQuality,
+    essayQuality,
+    completeness,
+    githubScore,
+    githubAnalysis,
+    details: {
+      codeQualityDetails,
+      essayLength: answer.essay?.length || 0,
+      essayWords: answer.essay?.split(' ').length || 0,
+      hasCode: !!answer.code,
+      hasEssay: !!answer.essay,
+      hasComment: !!answer.comment,
+      markedCompleted: answer.completed || false,
+      githubAnalysis
+    }
+  };
+}
 
 
 /**
@@ -3739,7 +3936,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
     // ============================================
     // 4. Task Completion Analysis (per task with detailed marks)
     // ============================================
-    const taskCompletionAnalysis = templateTasks.map((task: any, idx: number) => {
+    const taskCompletionAnalysis = await Promise.all(templateTasks.map(async (task: any, idx: number) => {
       const progress = taskProgress.find((tp: any) => tp.task_index === idx);
       const isCompleted = progress?.status === 'completed';
       const isInProgress = progress?.status === 'in_progress';
@@ -3778,7 +3975,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       };
       
       if (progress?.answer) {
-        const qualityResult = this.calculateAnswerQuality(progress.answer);
+        const qualityResult = await this.calculateAnswerQuality(progress.answer);
         answerQualityScore = qualityResult.score;
         
         const code = progress.answer.code || '';
@@ -3868,7 +4065,7 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         github_commit_url: progress?.github_commit_url,
         answer_details: answerDetails
       };
-    });
+    }));
 
     // ============================================
     // 5. Overall Metrics
@@ -3964,140 +4161,138 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
       : Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
 
     // ============================================
-    // 7. Adaptability Score (ENHANCED)
+    // 7. Adaptability Score
     // ============================================
-    let responseQualitySum = 0;
-    let responseSpeedSum = 0;
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log('🔄 [ADAPTABILITY SCORE] CALCULATION STARTED');
+    console.log('═══════════════════════════════════════════════════════════════');
+
+    let qualitySum = 0;
+    let speedSum = 0;
     let unexpectedEventsCount = 0;
-    let abandonedUnexpectedCount = 0;
-    let creativeSolutionsCount = 0;
+    let abandonedCount = 0;
+    let creativeCount = 0;
     const adaptabilityBreakdown: any[] = [];
 
     for (let i = 0; i < templateTasks.length; i++) {
       const task = templateTasks[i];
-      const isUnexpected = task.type === 'emergency' || task.type === 'change_request' || task.unexpected === true;
-      const taskImportance = task.importance || task.priority || (task.type === 'emergency' ? 1.5 : 1.0);
+      
+      // Detect unexpected tasks
+      const isUnexpected = task.type === 'technical' || 
+                          task.type === 'emergency' || 
+                          task.type === 'change_request';
       
       if (isUnexpected) {
         unexpectedEventsCount++;
         const progress = taskProgress.find((tp: any) => tp.task_index === i);
-        let qualityScore = 0;
-        let speedScore = 0;
-        let creativityBonus = 0;
-        let abandonedPenalty = 0;
         
-        if (progress?.status === 'cancelled' || (progress?.status === 'not_started' && unexpectedEventsCount > 0)) {
-          abandonedUnexpectedCount++;
-          abandonedPenalty = -30;
+        // ✅ USE YOUR EXISTING CODE QUALITY SCORE
+        let qualityScore = 0;
+        if (progress?.answer) {
+          const qualityResult = await this.calculateAnswerQuality(progress.answer);
+          qualityScore = qualityResult.codeQuality;
+        }
+        
+        // ✅ SPEED SCORE: Use task.duration from template (180 minutes)
+        let speedScore = 0;
+        let isLate = false;
+        let minutes = 0;
+        
+        if (progress?.completed_at && progress?.started_at) {
+          minutes = (new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000 / 60;
+          
+          // ✅ FIXED: Use task.duration from template instead of hardcoded 30
+          const timeLimitMinutes = task.duration || task.duration_minutes || 30;
+          
+          if (minutes <= timeLimitMinutes) {
+            speedScore = 100;
+            console.log(`   ✅ Task ${i + 1}: ON TIME (${minutes.toFixed(1)} min ≤ ${timeLimitMinutes} min) → Speed: 100`);
+          } else {
+            speedScore = 0;
+            isLate = true;
+            console.log(`   ❌ Task ${i + 1}: LATE (${minutes.toFixed(1)} min > ${timeLimitMinutes} min) → Speed: 0`);
+          }
+        } else if (progress?.status === 'completed') {
+          speedScore = 0;
+          console.log(`   ⚠️ Task ${i + 1}: Completed but no timing → Speed: 0`);
+        }
+        
+        // Check for abandonment
+        if (progress?.status === 'cancelled' || progress?.status === 'not_started') {
+          abandonedCount++;
           qualityScore = 0;
           speedScore = 0;
-        } else {
-          if (progress?.score) {
-            qualityScore = progress.score;
-          } else if (progress?.answer) {
-            let qScore = 0;  // ✅ Start at 0 - NO FREE MARKS
-            const answer = progress.answer;
-            
-            // CODE QUALITY (max 40 points)
-            if (answer.code?.trim().length > 0) {
-                qScore += 15;  // Has code
-                
-                // Actual code quality indicators
-                const code = answer.code;
-                if (code.includes('function') || code.includes('def') || code.includes('class')) qScore += 10;
-                if (code.includes('return')) qScore += 5;
-                if (code.includes('if') || code.includes('else')) qScore += 5;
-                if (code.includes('for') || code.includes('while')) qScore += 5;
-                if (code.length > 200) qScore += 5;  // Substantial implementation
-            }
-            
-            // ESSAY QUALITY (max 30 points)
-            if (answer.essay?.trim().length > 0) {
-                qScore += 10;  // Has explanation
-                
-                const essay = answer.essay;
-                if (essay.length > 100) qScore += 10;  // Detailed
-                if (essay.includes('because') || essay.includes('therefore')) qScore += 5;  // Reasoning
-                if (essay.includes('.') && essay.split('.').length >= 3) qScore += 5;  // Multiple sentences
-            }
-            
-            // COMMENT QUALITY (max 15 points)
-            if (answer.comment?.trim().length > 0) {
-                qScore += 5;  // Has comment
-                if (answer.comment.length > 100) qScore += 10;  // Thoughtful comment
-            }
-            
-            // COMPLETION (max 15 points)
-            if (answer.completed === true) qScore += 15;
-            
-            qualityScore = Math.min(100, qScore);
+          console.log(`   ❌ Task ${i + 1}: ABANDONED → Quality: 0, Speed: 0`);
         }
-          
-          if (progress?.answer) {
-            const answerText = JSON.stringify(progress.answer).toLowerCase();
-            if (answerText.includes('alternative') || answerText.includes('creative') || 
-                answerText.includes('innovative') || answerText.includes('workaround')) {
-              creativityBonus += 15;
-              creativeSolutionsCount++;
-            }
-            if (answerText.includes('research') || answerText.includes('documentation') || 
-                answerText.includes('stack overflow') || answerText.includes('example')) {
-              creativityBonus += 10;
-            }
-            if (progress.answer.comment && (progress.answer.comment.includes('?') || 
-                progress.answer.comment.toLowerCase().includes('clarify'))) {
-              creativityBonus += 5;
-            }
-            creativityBonus = Math.min(30, creativityBonus);
-          }
-          
-          if (progress?.completed_at && progress?.started_at) {
-            const responseTimeSeconds = (new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000;
-            const expectedResponseTime = (task.expected_response_time || 300);
-            speedScore = Math.max(0, Math.min(100, (1 - (responseTimeSeconds / expectedResponseTime)) * 100));
-            if (responseTimeSeconds < expectedResponseTime * 0.3) {
-              speedScore = Math.min(100, speedScore + 10);
-            }
-            responseSpeedSum += speedScore;
-          } else if (progress?.status === 'completed') {
-            speedScore = 50;
-            responseSpeedSum += 50;
+        
+        // Check for creativity
+        if (progress?.answer) {
+          const answerText = JSON.stringify(progress.answer).toLowerCase();
+          if (answerText.includes('alternative') || answerText.includes('creative')) {
+            creativeCount++;
+            console.log(`   💡 Task ${i + 1}: CREATIVE SOLUTION!`);
           }
         }
         
-        responseQualitySum += qualityScore * taskImportance;
-        responseSpeedSum += speedScore * taskImportance;
+        qualitySum += qualityScore;
+        speedSum += speedScore;
         
+        console.log(`   📊 Task ${i + 1}: Quality=${qualityScore}, Speed=${speedScore} (Limit: ${task.duration || task.duration_minutes || 30} min)`);
+        
+        // ✅ PUSH TO adaptabilityBreakdown
         adaptabilityBreakdown.push({
           task_index: i,
           task_title: task.title || task.task_name || `Task ${i + 1}`,
           task_type: 'unexpected',
-          importance: taskImportance,
+          time_limit_minutes: task.duration || task.duration_minutes || 30,
+          time_taken_minutes: minutes,
           quality_score: Math.round(qualityScore),
           speed_score: Math.round(speedScore),
-          creativity_bonus: creativityBonus,
-          abandoned_penalty: abandonedPenalty,
           completed: progress?.status === 'completed',
-          was_abandoned: abandonedPenalty < 0,
-          was_creative: creativityBonus > 0
+          was_abandoned: progress?.status === 'cancelled' || progress?.status === 'not_started',
+          was_creative: progress?.answer && JSON.stringify(progress.answer).toLowerCase().includes('alternative'),
+          completed_late: isLate,
+          completion_time_minutes: minutes
         });
       }
     }
 
-    let avgResponseQuality = 0;
-    let avgResponseSpeed = 0;
+    console.log('\n───────────────────────────────────────────────────────────────');
+    console.log('📊 ADAPTABILITY SCORE SUMMARY:');
+    console.log(`   Unexpected events: ${unexpectedEventsCount}`);
+    console.log(`   Abandoned tasks: ${abandonedCount}`);
+    console.log(`   Creative solutions: ${creativeCount}`);
+    console.log('───────────────────────────────────────────────────────────────');
+
+    // Calculate averages
+    let avgQuality = 0;
+    let avgSpeed = 0;
     if (unexpectedEventsCount > 0) {
-      avgResponseQuality = responseQualitySum / unexpectedEventsCount;
-      avgResponseSpeed = responseSpeedSum / unexpectedEventsCount;
+      avgQuality = qualitySum / unexpectedEventsCount;
+      avgSpeed = speedSum / unexpectedEventsCount;
+      console.log(`\n📈 Averages:`);
+      console.log(`   Average Quality: ${avgQuality.toFixed(1)}`);
+      console.log(`   Average Speed: ${avgSpeed.toFixed(1)}`);
     }
 
-    const abandonmentRate = unexpectedEventsCount > 0 ? abandonedUnexpectedCount / unexpectedEventsCount : 0;
+    // Calculate penalties and bonuses
+    const abandonmentRate = unexpectedEventsCount > 0 ? abandonedCount / unexpectedEventsCount : 0;
     const abandonmentPenalty = abandonmentRate * 30;
-    const creativityRate = unexpectedEventsCount > 0 ? creativeSolutionsCount / unexpectedEventsCount : 0;
-    const creativityBonusTotal = creativityRate * 15;
-    
-    let baseAdaptabilityScore = Math.round((avgResponseQuality * 0.5) + (avgResponseSpeed * 0.5));
-    let adaptabilityScore = Math.max(0, Math.min(100, baseAdaptabilityScore - abandonmentPenalty + creativityBonusTotal));
+    const creativityRate = unexpectedEventsCount > 0 ? creativeCount / unexpectedEventsCount : 0;
+    const creativityBonus = creativityRate * 15;
+
+    console.log(`\n📐 Adjustments:`);
+    console.log(`   Abandonment rate: ${(abandonmentRate * 100).toFixed(1)}% → Penalty: -${abandonmentPenalty.toFixed(1)}`);
+    console.log(`   Creativity rate: ${(creativityRate * 100).toFixed(1)}% → Bonus: +${creativityBonus.toFixed(1)}`);
+
+    // Calculate base score (50% quality + 50% speed)
+    let baseScore = Math.round((avgQuality * 0.5) + (avgSpeed * 0.5));
+    console.log(`\n📊 Base Score: (${avgQuality.toFixed(1)} × 0.5) + (${avgSpeed.toFixed(1)} × 0.5) = ${baseScore}`);
+
+    // Final score
+    let adaptabilityScore = Math.max(0, Math.min(100, baseScore - abandonmentPenalty + creativityBonus));
+    console.log(`\n🎯 Final Adaptability Score: ${baseScore} - ${abandonmentPenalty.toFixed(1)} + ${creativityBonus.toFixed(1)} = ${adaptabilityScore}`);
+    console.log('═══════════════════════════════════════════════════════════════\n');
 
     // ============================================
     // 8. Technical Score
@@ -4116,26 +4311,43 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
         let techScore = 0;
         let techCodeAnalysis: any = null;
         
-        if (progress?.score) {
-          techScore = progress.score;
-        } else if (progress?.answer?.code) {
-          const codeQualityResult = this.detectCodeQuality(progress.answer.code, progress.answer.language);
-          techScore = codeQualityResult.score;
+        if (progress?.answer) {
+          // ✅ FIXED: Await the async method and use the result
+          console.log(`📊 [Task ${i}] Calculating answer quality...`);
+          console.log(`   - Has githubCommitUrl: ${!!progress.answer.githubCommitUrl}`);
+          console.log(`   - Has inline code: ${!!progress.answer.code}`);
+          console.log(`   - Has essay: ${!!progress.answer.essay}`);
+          
+          const qualityResult = await this.calculateAnswerQuality(progress.answer);
+          
+          // ✅ Debug: Log what we got back
+          console.log(`   - Result codeQuality: ${qualityResult.codeQuality}`);
+          console.log(`   - Result essayQuality: ${qualityResult.essayQuality}`);
+          console.log(`   - Result completeness: ${qualityResult.completeness}`);
+          console.log(`   - Result score: ${qualityResult.score}`);
+          console.log(`   - Has githubAnalysis: ${!!qualityResult.githubAnalysis}`);
+          console.log(`   - GitHub score: ${qualityResult.githubScore || 0}`);
+          
+          // ✅ Use codeQuality (which should come from either GitHub or inline code)
+          techScore = qualityResult.codeQuality;
+          
           techCodeAnalysis = {
-            hasFunctions: codeQualityResult.details.hasFunctions,
-            hasConditionals: codeQualityResult.details.hasConditionals,
-            hasReturns: codeQualityResult.details.hasReturns,
-            hasErrorHandling: codeQualityResult.details.hasErrorHandling,
-            hasLoops: codeQualityResult.details.hasLoops,
-            hasClasses: codeQualityResult.details.hasClasses,
-            hasVariables: codeQualityResult.details.hasVariables,
-            hasImports: codeQualityResult.details.hasImports,
-            linesOfCode: codeQualityResult.details.linesOfCode,
-            codeLength: codeQualityResult.details.codeLength,
-            language: codeQualityResult.details.language,
-            detectedFeatures: codeQualityResult.details.detectedFeatures,
+            hasFunctions: qualityResult.details.codeQualityDetails?.hasFunctions || false,
+            hasConditionals: qualityResult.details.codeQualityDetails?.hasConditionals || false,
+            hasReturns: qualityResult.details.codeQualityDetails?.hasReturns || false,
+            hasErrorHandling: qualityResult.details.codeQualityDetails?.hasErrorHandling || false,
+            hasLoops: qualityResult.details.codeQualityDetails?.hasLoops || false,
+            hasClasses: qualityResult.details.codeQualityDetails?.hasClasses || false,
+            hasVariables: qualityResult.details.codeQualityDetails?.hasVariables || false,
+            hasImports: qualityResult.details.codeQualityDetails?.hasImports || false,
+            linesOfCode: qualityResult.details.codeQualityDetails?.linesOfCode || 0,
+            codeLength: qualityResult.details.codeQualityDetails?.codeLength || 0,
+            language: qualityResult.details.codeQualityDetails?.language || 'unknown',
+            detectedFeatures: qualityResult.details.codeQualityDetails?.detectedFeatures || [],
             completed: progress.answer.completed === true
           };
+          
+          console.log(`   ✅ Final techScore: ${techScore}`);
         }
         
         technicalScoreSum += techScore;
@@ -4152,97 +4364,112 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
 
     const technicalScore = technicalTasksCount > 0 ? Math.round(technicalScoreSum / technicalTasksCount) : 50;
 
-    // ============================================
-    // 9. Speed Score
-    // ============================================
-    let totalSpeedScoreSum = 0;
-    let tasksWithTimeData = 0;
-    let totalTasksForSpeed = 0;
-    const speedTaskBreakdown: any[] = [];
+  // ============================================
+  // 9. Speed Score
+  // ============================================
+  let totalSpeedScoreSum = 0;
+  let tasksWithTimeData = 0;
+  let totalTasksForSpeed = 0;
+  const speedTaskBreakdown: any[] = [];
 
-    for (let i = 0; i < templateTasks.length; i++) {
-      const task = templateTasks[i];
-      const taskWeight = task.evaluation?.weight || task.priority || 1;
-      const progress = taskProgress.find((tp: any) => tp.task_index === i);
-      
-      let taskSpeedScore = 0;
-      let taskTimeSpent = 0;
-      let taskTimeLimit = (task.duration || task.duration_minutes || 30) * 60;
-      let scoringMethod = 'not_completed';
-      
-      totalTasksForSpeed += taskWeight;
-      
-      if (progress?.status === 'completed') {
-        if (progress?.started_at && progress?.completed_at) {
-          taskTimeSpent = Math.floor((new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000);
-          
-          if (taskTimeSpent <= taskTimeLimit) {
-            const speedPercentage = (1 - (taskTimeSpent / taskTimeLimit)) * 100;
-            taskSpeedScore = Math.max(60, Math.min(100, speedPercentage));
-            scoringMethod = 'on_time';
-          } else {
-            const overtimeRatio = Math.min(2, (taskTimeSpent - taskTimeLimit) / taskTimeLimit);
-            taskSpeedScore = Math.max(20, 100 * Math.exp(-1.5 * overtimeRatio));
-            scoringMethod = 'late';
-          }
-          totalSpeedScoreSum += taskSpeedScore * taskWeight;
-          tasksWithTimeData++;
-        } else if (progress?.completed_at && !progress?.started_at) {
-          taskSpeedScore = 50;
-          totalSpeedScoreSum += taskSpeedScore * taskWeight;
-          scoringMethod = 'partial_data';
+  for (let i = 0; i < templateTasks.length; i++) {
+    const task = templateTasks[i];
+    const taskWeight = task.evaluation?.weight || task.priority || 1;
+    const progress = taskProgress.find((tp: any) => tp.task_index === i);
+    
+    let taskSpeedScore = 0;
+    let taskTimeSpent = 0;
+    
+    // ✅ FIXED: Get duration from task object (stored in templateTasks JSON)
+    // The task.duration is in MINUTES (from your template: 180)
+    // Convert to seconds for comparison
+    const taskDurationMinutes = task.duration || task.duration_minutes || 30;
+    let taskTimeLimit = taskDurationMinutes * 60;  // Convert to seconds
+    
+    let scoringMethod = 'not_completed';
+    
+    totalTasksForSpeed += taskWeight;
+    
+    if (progress?.status === 'completed') {
+      if (progress?.started_at && progress?.completed_at) {
+        taskTimeSpent = Math.floor((new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000);
+        
+        // ✅ BINARY SCORING: ON TIME = 100, LATE = 0
+        if (taskTimeSpent <= taskTimeLimit) {
+          taskSpeedScore = 100;
+          scoringMethod = 'on_time';
+          console.log(`   ✅ Task ${i + 1}: ON TIME (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s ≤ ${taskDurationMinutes}m) → Speed: 100`);
         } else {
-          taskSpeedScore = 40;
-          totalSpeedScoreSum += taskSpeedScore * taskWeight;
-          scoringMethod = 'no_time_data';
+          taskSpeedScore = 0;
+          scoringMethod = 'late';
+          console.log(`   ❌ Task ${i + 1}: LATE (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s > ${taskDurationMinutes}m) → Speed: 0`);
         }
-      } else if (progress?.status === 'in_progress') {
-        taskSpeedScore = 25;
         totalSpeedScoreSum += taskSpeedScore * taskWeight;
-        scoringMethod = 'in_progress';
+        tasksWithTimeData++;
+      } else if (progress?.completed_at && !progress?.started_at) {
+        taskSpeedScore = 50;
+        totalSpeedScoreSum += taskSpeedScore * taskWeight;
+        scoringMethod = 'partial_data';
+        console.log(`   ⚠️ Task ${i + 1}: Completed but no start time → Speed: 50`);
       } else {
-        taskSpeedScore = 0;
-        scoringMethod = 'not_started';
+        taskSpeedScore = 40;
+        totalSpeedScoreSum += taskSpeedScore * taskWeight;
+        scoringMethod = 'no_time_data';
+        console.log(`   ⚠️ Task ${i + 1}: Completed but no timing → Speed: 40`);
       }
-      
-      speedTaskBreakdown.push({
-        task_index: i,
-        task_title: task.title || task.task_name || `Task ${i + 1}`,
-        weight: taskWeight,
-        status: progress?.status || 'not_started',
-        time_spent_seconds: taskTimeSpent,
-        time_spent_formatted: taskTimeSpent > 0 ? `${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s` : 'N/A',
-        time_limit_seconds: taskTimeLimit,
-        time_limit_formatted: `${Math.floor(taskTimeLimit / 60)}m ${taskTimeLimit % 60}s`,
-        speed_score: Math.round(taskSpeedScore),
-        weighted_contribution: (taskSpeedScore * taskWeight).toFixed(2),
-        scoring_method: scoringMethod
-      });
+    } else if (progress?.status === 'in_progress') {
+      taskSpeedScore = 25;
+      totalSpeedScoreSum += taskSpeedScore * taskWeight;
+      scoringMethod = 'in_progress';
+      console.log(`   🕐 Task ${i + 1}: IN PROGRESS → Speed: 25`);
+    } else {
+      taskSpeedScore = 0;
+      scoringMethod = 'not_started';
+      console.log(`   ⏸️ Task ${i + 1}: NOT STARTED → Speed: 0`);
     }
+    
+    speedTaskBreakdown.push({
+      task_index: i,
+      task_title: task.title || task.task_name || `Task ${i + 1}`,
+      weight: taskWeight,
+      status: progress?.status || 'not_started',
+      duration_minutes: taskDurationMinutes,
+      time_spent_seconds: taskTimeSpent,
+      time_spent_formatted: taskTimeSpent > 0 ? `${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s` : 'N/A',
+      time_limit_seconds: taskTimeLimit,
+      time_limit_formatted: `${taskDurationMinutes}m`,
+      speed_score: Math.round(taskSpeedScore),
+      weighted_contribution: (taskSpeedScore * taskWeight).toFixed(2),
+      scoring_method: scoringMethod
+    });
+  }
 
-    let weightedSpeedScore = 0;
-    if (totalTasksForSpeed > 0) weightedSpeedScore = Math.round(totalSpeedScoreSum / totalTasksForSpeed);
-    const sessionSpeedScore = Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
-    const speedScore = tasksWithTimeData > 0 ? weightedSpeedScore : sessionSpeedScore;
+  let weightedSpeedScore = 0;
+  if (totalTasksForSpeed > 0) {
+    weightedSpeedScore = Math.round(totalSpeedScoreSum / totalTasksForSpeed);
+    console.log(`\n📊 Weighted Speed Score: ${weightedSpeedScore}%`);
+  }
 
-    const speedBreakdown = {
-      total_time_seconds: totalTimeSeconds,
-      total_time_formatted: `${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s`,
-      time_limit_seconds: timeLimitSeconds,
-      time_limit_formatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
-      time_remaining_seconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
-      time_remaining_formatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0 
-        ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s` : 'EXPIRED',
-      percentage_used: Math.min(100, Math.round((totalTimeSeconds / timeLimitSeconds) * 100)),
-      speed_score: speedScore,
-      weighted_speed_score: weightedSpeedScore,
-      session_speed_score: sessionSpeedScore,
-      tasks_with_time_data: tasksWithTimeData,
-      total_tasks_weighted: totalTasksForSpeed,
-      per_task_speed: speedTaskBreakdown,
-      calculation_method: tasksWithTimeData > 0 ? 'weighted_per_task' : 'session_based'
-    };
+  const sessionSpeedScore = Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
+  const speedScore = tasksWithTimeData > 0 ? weightedSpeedScore : sessionSpeedScore;
 
+  const speedBreakdown = {
+    total_time_seconds: totalTimeSeconds,
+    total_time_formatted: `${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s`,
+    time_limit_seconds: timeLimitSeconds,
+    time_limit_formatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
+    time_remaining_seconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
+    time_remaining_formatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0 
+      ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s` : 'EXPIRED',
+    percentage_used: Math.min(100, Math.round((totalTimeSeconds / timeLimitSeconds) * 100)),
+    speed_score: speedScore,
+    weighted_speed_score: weightedSpeedScore,
+    session_speed_score: sessionSpeedScore,
+    tasks_with_time_data: tasksWithTimeData,
+    total_tasks_weighted: totalTasksForSpeed,
+    per_task_speed: speedTaskBreakdown,
+    calculation_method: tasksWithTimeData > 0 ? 'weighted_per_task' : 'session_based'
+  };
     // ============================================
     // 10. Quality Score
     // ============================================
@@ -4442,28 +4669,28 @@ async calculateFullSessionScores(sessionId: string, userId: string): Promise<any
           tasks: punctualityBreakdown 
         },
         adaptability_breakdown: { 
-          events_count: unexpectedEventsCount, 
-          abandoned_count: abandonedUnexpectedCount,
-          creative_solutions_count: creativeSolutionsCount,
-          abandonment_rate: Math.round(abandonmentRate * 100),
-          creativity_rate: Math.round(creativityRate * 100),
-          base_score: baseAdaptabilityScore,
-          abandonment_penalty: Math.round(abandonmentPenalty),
-          creativity_bonus: Math.round(creativityBonusTotal),
-          avg_response_quality: Math.round(avgResponseQuality), 
-          avg_response_speed: Math.round(avgResponseSpeed), 
-          score: adaptabilityScore,
-          assessment: (() => {
-            if (unexpectedEventsCount === 0) return 'No unexpected events to assess';
-            if (abandonmentRate > 0.5) return 'Poor - abandoned most unexpected tasks';
-            if (abandonmentRate > 0.3) return 'Needs improvement - gave up on several challenges';
-            if (creativityRate > 0.7 && adaptabilityScore >= 80) return 'Excellent - highly adaptable and creative';
-            if (creativityRate > 0.5 && adaptabilityScore >= 70) return 'Good - handled unexpected challenges well';
-            if (adaptabilityScore >= 60) return 'Satisfactory - managed unexpected tasks adequately';
-            return 'Needs improvement - struggled with unexpected changes';
-          })(),
-          tasks: adaptabilityBreakdown 
-        },
+  events_count: unexpectedEventsCount, 
+  abandoned_count: abandonedCount,
+  creative_solutions_count: creativeCount,
+  abandonment_rate: Math.round(abandonmentRate * 100),
+  creativity_rate: Math.round(creativityRate * 100),
+  base_score: baseScore,
+  abandonment_penalty: Math.round(abandonmentPenalty),
+  creativity_bonus: Math.round(creativityBonus),
+  avg_response_quality: Math.round(avgQuality),
+  avg_response_speed: Math.round(avgSpeed),
+  score: adaptabilityScore,
+  assessment: (() => {
+    if (unexpectedEventsCount === 0) return 'No unexpected events to assess';
+    if (abandonmentRate > 0.5) return 'Poor - abandoned most unexpected tasks';
+    if (abandonmentRate > 0.3) return 'Needs improvement - gave up on several challenges';
+    if (creativityRate > 0.7 && adaptabilityScore >= 80) return 'Excellent - highly adaptable and creative';
+    if (creativityRate > 0.5 && adaptabilityScore >= 70) return 'Good - handled unexpected challenges well';
+    if (adaptabilityScore >= 60) return 'Satisfactory - managed unexpected tasks adequately';
+    return 'Needs improvement - struggled with unexpected changes';
+  })(),
+  tasks: adaptabilityBreakdown
+},
         technical_breakdown: { 
           tasks_count: technicalTasksCount, 
           total_score: technicalScoreSum, 
@@ -5183,7 +5410,14 @@ private calculateAdaptabilityScore(tasks: any[], taskProgress: any[], chatMessag
   
   // Check unexpected tasks
   for (const task of tasks) {
-    const isUnexpected = task.type === 'emergency' || task.type === 'change_request' || task.unexpected === true;
+    console.log(`   Evaluating Task ${task.order || task.task_index}: ${task.name} (type: ${task.type || task.task_type})`);
+    // In calculateFullSessionScores, find the adaptability section and change:
+    const isUnexpected = task.task_type === 'technical' || 
+                        task.task_type === 'emergency' || 
+                        task.task_type === 'change_request' ||
+                        task.type === 'technical' || 
+                        task.type === 'emergency' || 
+                        task.type === 'change_request';
     if (isUnexpected) {
       eventCount++;
       console.log(`   Unexpected Event ${eventCount}: Task ${task.order || task.task_index} - ${task.name}`);
@@ -6587,196 +6821,192 @@ async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> 
     });
     
 
-    // ============================================
-    // DECLARE submissionResults OUTSIDE the try block
-    // ============================================
-    // ============================================
-    // SAVE ALL SUBMISSION DATA TO simulation_sessions.submission_results
-    // ============================================
+      // SAVE ALL SUBMISSION DATA TO simulation_sessions.submission_results
+      // ============================================
 
-    // DECLARE submissionResults OUTSIDE the try block
-    let submissionResults = null;
+      // DECLARE submissionResults OUTSIDE the try block
+      let submissionResults = null;
 
-    try {
-        console.log('💾 Saving ALL submission results to simulation_sessions.submission_results...');
-        
-        // Create the submission results object with ALL response variables
-        submissionResults = {
-            // Basic submission info
-            sessionId: session.id,
-            simulationId: session.simulation_id,
-            simulationRecordId: simulationRecordId,
-            score: finalOverallScore,
-            passed: finalPassed,
-            passingScore: passingScore,
-            submittedAt: new Date().toISOString(),
-            message: submissionMessage,
+      try {
+          console.log('💾 Saving ALL submission results to simulation_sessions.submission_results...');
+          
+          // Create the submission results object with ALL response variables
+          submissionResults = {
+              // Basic submission info
+              sessionId: session.id,
+              simulationId: session.simulation_id,
+              simulationRecordId: simulationRecordId,
+              score: finalOverallScore,
+              passed: finalPassed,
+              passingScore: passingScore,
+              submittedAt: new Date().toISOString(),
+              message: submissionMessage,
 
-            // Completion angle
-            completionAngle: completionAngle,
+              // Completion angle
+              completionAngle: completionAngle,
 
-            // Data quantity and quality
-            dataQuantity: dataQuantityAnalysis,
-            dataQuality: dataQualityAnalysis,
+              // Data quantity and quality
+              dataQuantity: dataQuantityAnalysis,
+              dataQuality: dataQualityAnalysis,
 
-            // Session complete time
-            sessionCompleteTime: sessionCompleteTime,
+              // Session complete time
+              sessionCompleteTime: sessionCompleteTime,
 
-            // Participation marks
-            participation: {
-                qualifies: qualifiesForParticipation,
-                bonus: participationBonus,
-                message: participationMessage,
-                min_time_required: '30 minutes',
-                time_spent: sessionCompleteTime.formatted
-            },
+              // Participation marks
+              participation: {
+                  qualifies: qualifiesForParticipation,
+                  bonus: participationBonus,
+                  message: participationMessage,
+                  min_time_required: '30 minutes',
+                  time_spent: sessionCompleteTime.formatted
+              },
 
-            // Score breakdown
-            scoreBreakdown: {
-                overall: finalOverallScore,
-                base_overall: overallScore,
-                participation_bonus: participationBonus,
-                quality: qualityScore,
-                technical: technicalScore,
-                punctuality: punctualityScore,
-                adaptability: adaptabilityScore,
-                speed: speedScore,
-                behavioral: behavioralScore,
-                communication: communicationScore,
-                collaboration: collaborationScore,
-                github: githubScore,
-                completion_rate: completionRate,
-                average_task_score: fullScoreAnalysis.scores.average_task_score,
-                weighted_breakdown: fullScoreAnalysis.scores.weighted_breakdown,
-                quality_breakdown: fullScoreAnalysis.scores.quality_breakdown,
-                behavioral_breakdown: fullScoreAnalysis.scores.behavioral_breakdown,
-                speed_breakdown: fullScoreAnalysis.scores.speed_breakdown,
-                punctuality_breakdown: fullScoreAnalysis.scores.punctuality_breakdown,
-                adaptability_breakdown: fullScoreAnalysis.scores.adaptability_breakdown,
-                technical_breakdown: fullScoreAnalysis.scores.technical_breakdown
-            },
+              // Score breakdown
+              scoreBreakdown: {
+                  overall: finalOverallScore,
+                  base_overall: overallScore,
+                  participation_bonus: participationBonus,
+                  quality: qualityScore,
+                  technical: technicalScore,
+                  punctuality: punctualityScore,
+                  adaptability: adaptabilityScore,
+                  speed: speedScore,
+                  behavioral: behavioralScore,
+                  communication: communicationScore,
+                  collaboration: collaborationScore,
+                  github: githubScore,
+                  completion_rate: completionRate,
+                  average_task_score: fullScoreAnalysis.scores.average_task_score,
+                  weighted_breakdown: fullScoreAnalysis.scores.weighted_breakdown,
+                  quality_breakdown: fullScoreAnalysis.scores.quality_breakdown,
+                  behavioral_breakdown: fullScoreAnalysis.scores.behavioral_breakdown,
+                  speed_breakdown: fullScoreAnalysis.scores.speed_breakdown,
+                  punctuality_breakdown: fullScoreAnalysis.scores.punctuality_breakdown,
+                  adaptability_breakdown: fullScoreAnalysis.scores.adaptability_breakdown,
+                  technical_breakdown: fullScoreAnalysis.scores.technical_breakdown
+              },
 
-            // Task analysis
-            taskAnalysis: taskAnalysis,
+              // Task analysis
+              taskAnalysis: taskAnalysis,
 
-            // Summary statistics
-            summary: {
-                total_tasks: totalTasks,
-                completed_tasks: completedTasksCount,
-                in_progress_tasks: fullScoreAnalysis.summary.in_progress_tasks,
-                not_started_tasks: fullScoreAnalysis.summary.not_started_tasks,
-                completion_rate: completionRate,
-                completion_angle: completionAngle,
-                total_time_seconds: totalTimeSeconds,
-                total_time_formatted: sessionCompleteTime.formatted,
-                time_limit_seconds: timeLimitSeconds,
-                time_limit_formatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
-                time_used_percent: sessionCompleteTime.time_used_percent,
-                time_remaining_seconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
-                time_remaining_formatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
-                    ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
-                    : 'EXPIRED',
-                passed: finalPassed,
-                passing_score: passingScore
-            },
+              // Summary statistics
+              summary: {
+                  total_tasks: totalTasks,
+                  completed_tasks: completedTasksCount,
+                  in_progress_tasks: fullScoreAnalysis.summary.in_progress_tasks,
+                  not_started_tasks: fullScoreAnalysis.summary.not_started_tasks,
+                  completion_rate: completionRate,
+                  completion_angle: completionAngle,
+                  total_time_seconds: totalTimeSeconds,
+                  total_time_formatted: sessionCompleteTime.formatted,
+                  time_limit_seconds: timeLimitSeconds,
+                  time_limit_formatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
+                  time_used_percent: sessionCompleteTime.time_used_percent,
+                  time_remaining_seconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
+                  time_remaining_formatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
+                      ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
+                      : 'EXPIRED',
+                  passed: finalPassed,
+                  passing_score: passingScore
+              },
 
-            // Feedback
-            feedback: fullScoreAnalysis.feedback,
+              // Feedback
+              feedback: fullScoreAnalysis.feedback,
 
-            // GitHub analysis
-            githubAnalysis: fullScoreAnalysis.github_analysis || {
-                has_repo: false,
-                score: 0,
-                repo_info: null,
-                detailed_marks: null,
-                full_analysis: null,
-                message: 'No GitHub repository linked to this simulation'
-            },
+              // GitHub analysis
+              githubAnalysis: fullScoreAnalysis.github_analysis || {
+                  has_repo: false,
+                  score: 0,
+                  repo_info: null,
+                  detailed_marks: null,
+                  full_analysis: null,
+                  message: 'No GitHub repository linked to this simulation'
+              },
 
-            // Communication analysis
-            communicationAnalysis: communicationAnalysis || null,
+              // Communication analysis
+              communicationAnalysis: communicationAnalysis || null,
 
-            // Scoring configuration
-            scoring_config: fullScoreAnalysis.scoring_config,
+              // Scoring configuration
+              scoring_config: fullScoreAnalysis.scoring_config,
 
-            // Raw data
-            raw_data: fullScoreAnalysis.raw_data,
+              // Raw data
+              raw_data: fullScoreAnalysis.raw_data,
 
-            // Time tracking
-            timeTracking: {
-                sessionStartedAt: session.started_at,
-                sessionCompletedAt: sessionCompleteTime.completed_at,
-                sessionTotalSeconds: totalTimeSeconds,
-                sessionTotalFormatted: sessionCompleteTime.formatted,
-                timeLimitSeconds: timeLimitSeconds,
-                timeLimitFormatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
-                timeUsedPercent: sessionCompleteTime.time_used_percent,
-                remainingSeconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
-                remainingFormatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
-                    ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
-                    : 'EXPIRED',
-                submittedOnTime: sessionCompleteTime.submitted_on_time
-            },
+              // Time tracking
+              timeTracking: {
+                  sessionStartedAt: session.started_at,
+                  sessionCompletedAt: sessionCompleteTime.completed_at,
+                  sessionTotalSeconds: totalTimeSeconds,
+                  sessionTotalFormatted: sessionCompleteTime.formatted,
+                  timeLimitSeconds: timeLimitSeconds,
+                  timeLimitFormatted: `${Math.floor(timeLimitSeconds / 60)}m ${timeLimitSeconds % 60}s`,
+                  timeUsedPercent: sessionCompleteTime.time_used_percent,
+                  remainingSeconds: Math.max(0, timeLimitSeconds - totalTimeSeconds),
+                  remainingFormatted: Math.max(0, timeLimitSeconds - totalTimeSeconds) > 0
+                      ? `${Math.floor((timeLimitSeconds - totalTimeSeconds) / 60)}m ${(timeLimitSeconds - totalTimeSeconds) % 60}s`
+                      : 'EXPIRED',
+                  submittedOnTime: sessionCompleteTime.submitted_on_time
+              },
 
-            // Full analysis
-            fullAnalysis: fullScoreAnalysis,
-            
-            // Blockchain info
-            blockchain: blockchainTxHash ? {
-                txHash: blockchainTxHash,
-                blockNumber: blockchainBlockNumber,
-                credentialHash: credentialHash,
-                verified: true,
-                message: 'Simulation result stored on blockchain and verifiable credential created'
-            } : null,
-            
-            // Metadata
-            savedAt: new Date().toISOString(),
-            version: '1.0'
-        };
-        
-        // Save to the submission_results column in simulation_sessions table
-        await DatabaseService.query(`
-            UPDATE simulation_sessions 
-            SET 
-                submission_results = $1::JSONB,
-                score = $2,
-                status = 'completed',
-                completed_at = NOW(),
-                updated_at = NOW()
-            WHERE id = $3
-        `, [
-            JSON.stringify(submissionResults),
-            finalOverallScore,
-            session.id
-        ]);
-        
-        console.log('✅ Submission results saved to simulation_sessions.submission_results');
-        
-    } catch (saveError) {
-        console.error('❌ Error saving submission results:', saveError);
-        // Don't throw - continue to return response
-    }
+              // Full analysis
+              fullAnalysis: fullScoreAnalysis,
+              
+              // Blockchain info
+              blockchain: blockchainTxHash ? {
+                  txHash: blockchainTxHash,
+                  blockNumber: blockchainBlockNumber,
+                  credentialHash: credentialHash,
+                  verified: true,
+                  message: 'Simulation result stored on blockchain and verifiable credential created'
+              } : null,
+              
+              // Metadata
+              savedAt: new Date().toISOString(),
+              version: '1.0'
+          };
+          
+          // Save to the submission_results column in simulation_sessions table
+          await DatabaseService.query(`
+              UPDATE simulation_sessions 
+              SET 
+                  submission_results = $1::JSONB,
+                  score = $2,
+                  status = 'completed',
+                  completed_at = NOW(),
+                  updated_at = NOW()
+              WHERE id = $3
+          `, [
+              JSON.stringify(submissionResults),
+              finalOverallScore,
+              session.id
+          ]);
+          
+          console.log('✅ Submission results saved to simulation_sessions.submission_results');
+          
+      } catch (saveError) {
+          console.error('❌ Error saving submission results:', saveError);
+          // Don't throw - continue to return response
+      }
 
-    // ============================================
-    // ✅ RETURN THE submissionResults OBJECT (NO DUPLICATE CODE)
-    // ============================================
-    if (!submissionResults) {
-        // Fallback: create a minimal response if save failed
-        submissionResults = {
-            sessionId: session.id,
-            simulationId: session.simulation_id,
-            simulationRecordId: simulationRecordId,
-            score: finalOverallScore,
-            passed: finalPassed,
-            passingScore: passingScore,
-            submittedAt: new Date().toISOString(),
-            message: submissionMessage,
-            error: 'Failed to save full results to database'
-        };
-    }
+      // ============================================
+      // ✅ RETURN THE submissionResults OBJECT (NO DUPLICATE CODE)
+      // ============================================
+      if (!submissionResults) {
+          // Fallback: create a minimal response if save failed
+          submissionResults = {
+              sessionId: session.id,
+              simulationId: session.simulation_id,
+              simulationRecordId: simulationRecordId,
+              score: finalOverallScore,
+              passed: finalPassed,
+              passingScore: passingScore,
+              submittedAt: new Date().toISOString(),
+              message: submissionMessage,
+              error: 'Failed to save full results to database'
+          };
+      }
 
-    ResponseService.success(res, submissionResults, `Simulation ${finalPassed ? 'passed' : 'completed'} successfully`);
+      ResponseService.success(res, submissionResults, `Simulation ${finalPassed ? 'passed' : 'completed'} successfully`);
     } catch (error: any) {
     const totalDuration = Date.now() - startTime;
     console.error('═══════════════════════════════════════════════════════════════');
@@ -10989,6 +11219,7 @@ async getSimulationSessionById(req: AuthenticatedRequest, res: Response): Promis
         ss.github_links,
         ss.created_at as session_created_at,
         ss.updated_at as session_updated_at,
+        ss.submission_results,
         
         -- Simulation Record columns (from simulations table)
         sim.id as simulation_record_id,
@@ -11623,6 +11854,8 @@ async getSimulationSessionById(req: AuthenticatedRequest, res: Response): Promis
         salary_max: row.salary_max,
         experience_level: row.experience_level
       } : null,
+      
+      submission_results: row.submission_results ? (typeof row.submission_results === 'string' ? JSON.parse(row.submission_results) : row.submission_results) : null,
       
       // Company Info
       company: row.company_id ? {

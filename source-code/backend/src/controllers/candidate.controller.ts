@@ -1961,9 +1961,13 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
         cp.created_at,
         cp.updated_at,
         u.email,
+        u.user_type,
         u.status as user_status,
         u.created_at as joined_date,
-        u.last_login_at
+        u.last_login_at,
+        u.two_factor_enabled,
+        u.terms_accepted_at,
+        u.terms_version
       FROM candidate_profiles cp
       JOIN users u ON cp.user_id = u.id
       WHERE cp.user_id = $1
@@ -1978,6 +1982,22 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
     }
 
     const profile = profileResult.rows[0];
+
+    // Parse JSON fields from profile
+    profile.current_salary = profile.current_salary ? 
+      (typeof profile.current_salary === 'string' ? JSON.parse(profile.current_salary) : profile.current_salary) : null;
+    profile.expected_salary = profile.expected_salary ? 
+      (typeof profile.expected_salary === 'string' ? JSON.parse(profile.expected_salary) : profile.expected_salary) : null;
+    profile.languages = profile.languages ? 
+      (typeof profile.languages === 'string' ? JSON.parse(profile.languages) : profile.languages) : [];
+    profile.privacy_settings = profile.privacy_settings ? 
+      (typeof profile.privacy_settings === 'string' ? JSON.parse(profile.privacy_settings) : profile.privacy_settings) : {};
+    profile.job_preferences = profile.job_preferences ? 
+      (typeof profile.job_preferences === 'string' ? JSON.parse(profile.job_preferences) : profile.job_preferences) : {};
+    profile.availability = profile.availability ? 
+      (typeof profile.availability === 'string' ? JSON.parse(profile.availability) : profile.availability) : {};
+    profile.metadata = profile.metadata ? 
+      (typeof profile.metadata === 'string' ? JSON.parse(profile.metadata) : profile.metadata) : {};
 
     // Get education
     const educationResult = await query(`
@@ -2006,6 +2026,14 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       WHERE user_id = $1
       ORDER BY is_current DESC, start_date DESC, end_date DESC NULLS FIRST, display_order ASC
     `, [userId]);
+
+    // Parse JSON fields in education
+    const parsedEducation = educationResult.rows.map((edu: any) => ({
+      ...edu,
+      skills: edu.skills || [],
+      attachments: edu.attachments ? 
+        (typeof edu.attachments === 'string' ? JSON.parse(edu.attachments) : edu.attachments) : []
+    }));
 
     // Get work experience
     const workExperienceResult = await query(`
@@ -2038,6 +2066,13 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY is_current DESC, start_date DESC, end_date DESC NULLS FIRST, display_order ASC
     `, [userId]);
 
+    // Parse JSON fields in work experience
+    const parsedWorkExperience = workExperienceResult.rows.map((work: any) => ({
+      ...work,
+      achievements: work.achievements || [],
+      skills: work.skills || []
+    }));
+
     // Get skills with full details
     const skillsResult = await query(`
       SELECT 
@@ -2055,16 +2090,28 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
         us.endorsement_count,
         us.created_at,
         us.updated_at,
+        s.id as skill_id,
         s.name as skill_name,
         s.category,
         s.subcategory,
         s.skill_type,
-        s.is_verified as skill_verified
+        s.is_verified as skill_verified,
+        s.verification_source,
+        s.metadata as skill_metadata
       FROM user_skills us
       LEFT JOIN skills s ON us.skill_id = s.id
       WHERE us.user_id = $1
       ORDER BY us.is_primary DESC, us.proficiency_level DESC, s.name ASC
     `, [userId]);
+
+    // Parse verification evidence
+    const parsedSkills = skillsResult.rows.map((skill: any) => ({
+      ...skill,
+      verification_evidence: skill.verification_evidence ? 
+        (typeof skill.verification_evidence === 'string' ? JSON.parse(skill.verification_evidence) : skill.verification_evidence) : null,
+      skill_metadata: skill.skill_metadata ? 
+        (typeof skill.skill_metadata === 'string' ? JSON.parse(skill.skill_metadata) : skill.skill_metadata) : {}
+    }));
 
     // Get portfolio links
     const portfolioResult = await query(`
@@ -2086,6 +2133,13 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY display_order ASC, created_at ASC
     `, [userId]);
 
+    // Parse portfolio metadata
+    const parsedPortfolio = portfolioResult.rows.map((portfolio: any) => ({
+      ...portfolio,
+      metadata: portfolio.metadata ? 
+        (typeof portfolio.metadata === 'string' ? JSON.parse(portfolio.metadata) : portfolio.metadata) : {}
+    }));
+
     // Get resumes
     const resumesResult = await query(`
       SELECT 
@@ -2106,7 +2160,7 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY is_primary DESC, created_at DESC
     `, [userId]);
 
-    // Transform resumes to include file_url
+    // Transform resumes to include file_url and parse parsed_data
     const resumesWithUrl = resumesResult.rows.map((resume: any) => ({
       id: resume.id,
       file_name: resume.file_name,
@@ -2116,14 +2170,49 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       mime_type: resume.mime_type,
       is_primary: resume.is_primary,
       version: resume.version,
-      parsed_data: resume.parsed_data,
+      parsed_data: resume.parsed_data ? 
+        (typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data) : null,
       parsing_confidence: resume.parsing_confidence,
-      skills_extracted: resume.skills_extracted,
-      uploaded_at: resume.uploaded_at
+      skills_extracted: resume.skills_extracted || [],
+      uploaded_at: resume.uploaded_at,
+      updated_at: resume.updated_at
+    }));
+
+    // Get certifications
+    const certificationsResult = await query(`
+      SELECT 
+        id,
+        name,
+        issuer,
+        credential_id,
+        credential_url,
+        issue_date,
+        expiry_date,
+        is_expired,
+        description,
+        skills,
+        attachments,
+        verified,
+        verification_method,
+        verification_date,
+        display_order,
+        created_at,
+        updated_at
+      FROM certifications
+      WHERE user_id = $1
+      ORDER BY issue_date DESC, display_order ASC
+    `, [userId]);
+
+    // Parse certifications JSON fields
+    const parsedCertifications = certificationsResult.rows.map((cert: any) => ({
+      ...cert,
+      skills: cert.skills || [],
+      attachments: cert.attachments ? 
+        (typeof cert.attachments === 'string' ? JSON.parse(cert.attachments) : cert.attachments) : []
     }));
 
     // Calculate profile completion statistics
-    const totalSections = 6;
+    const totalSections = 8; // Basic Info, Education, Experience, Skills, Resume, Portfolio, Certifications, Preferences
     let completedSections = 0;
     
     const hasBasicInfo = !!(profile.first_name && profile.last_name && profile.headline);
@@ -2132,6 +2221,8 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
     const hasSkills = skillsResult.rows.length > 0;
     const hasResume = resumesResult.rows.length > 0;
     const hasPortfolio = portfolioResult.rows.length > 0;
+    const hasCertifications = certificationsResult.rows.length > 0;
+    const hasPreferences = profile.job_preferences && Object.keys(profile.job_preferences).length > 0;
     
     if (hasBasicInfo) completedSections++;
     if (hasEducation) completedSections++;
@@ -2139,22 +2230,75 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
     if (hasSkills) completedSections++;
     if (hasResume) completedSections++;
     if (hasPortfolio) completedSections++;
+    if (hasCertifications) completedSections++;
+    if (hasPreferences) completedSections++;
     
     const completionPercentage = Math.round((completedSections / totalSections) * 100);
 
     // Calculate total years of experience
     let totalYearsExperience = 0;
+    let currentJobYears = 0;
+    let mostRecentJob = null;
+    
     workExperienceResult.rows.forEach((exp: any) => {
       const start = new Date(exp.start_date);
-      const end = exp.is_current ? new Date() : new Date(exp.end_date);
+      const end = exp.is_current ? new Date() : (exp.end_date ? new Date(exp.end_date) : start);
       const years = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
       totalYearsExperience += years;
+      if (exp.is_current) {
+        currentJobYears = years;
+        mostRecentJob = {
+          company: exp.company,
+          title: exp.title,
+          years: Math.round(years * 10) / 10
+        };
+      }
     });
 
     // Get top skills (proficiency level 4 or 5)
     const topSkills = skillsResult.rows
       .filter((skill: any) => skill.proficiency_level >= 4)
       .map((skill: any) => skill.skill_name);
+
+    // Calculate skill distribution
+    const skillDistribution = {
+      expert: skillsResult.rows.filter((s: any) => s.proficiency_level === 5).length,
+      advanced: skillsResult.rows.filter((s: any) => s.proficiency_level === 4).length,
+      intermediate: skillsResult.rows.filter((s: any) => s.proficiency_level === 3).length,
+      beginner: skillsResult.rows.filter((s: any) => s.proficiency_level <= 2).length
+    };
+
+    // Get saved jobs count
+    const savedJobsResult = await query(`
+      SELECT COUNT(*) as saved_count
+      FROM saved_jobs
+      WHERE user_id = $1
+    `, [userId]);
+
+    // Get applications summary
+    const applicationsSummary = await query(`
+      SELECT 
+        COUNT(*) as total_applications,
+        COUNT(CASE WHEN status = 'submitted' THEN 1 END) as submitted,
+        COUNT(CASE WHEN status = 'under_review' THEN 1 END) as under_review,
+        COUNT(CASE WHEN status = 'interview' THEN 1 END) as interviewing,
+        COUNT(CASE WHEN status = 'offer' THEN 1 END) as offers,
+        COUNT(CASE WHEN status = 'hired' THEN 1 END) as hired,
+        COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected
+      FROM applications
+      WHERE user_id = $1 AND deleted_at IS NULL
+    `, [userId]);
+
+    // Get simulations summary
+    const simulationsSummary = await query(`
+      SELECT 
+        COUNT(*) as total_simulations,
+        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+        COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress,
+        AVG(overall_score) as avg_score
+      FROM simulations
+      WHERE user_id = $1
+    `, [userId]);
 
     res.json({
       success: true,
@@ -2173,11 +2317,16 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
             date_of_birth: profile.date_of_birth,
             gender: profile.gender,
             profile_photo_url: profile.profile_photo_url,
+            profile_photo_key: profile.profile_photo_key,
             headline: profile.headline,
             summary: profile.summary,
             joined_date: profile.joined_date,
             last_login: profile.last_login_at,
-            user_status: profile.user_status
+            user_status: profile.user_status,
+            user_type: profile.user_type,
+            two_factor_enabled: profile.two_factor_enabled,
+            terms_accepted_at: profile.terms_accepted_at,
+            terms_version: profile.terms_version
           },
           links: {
             linkedin: profile.linkedin_url,
@@ -2205,12 +2354,17 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
         },
         statistics: {
           total_years_experience: Math.round(totalYearsExperience * 10) / 10,
+          current_job_years: Math.round(currentJobYears * 10) / 10,
+          most_recent_job: mostRecentJob,
           total_education_entries: educationResult.rows.length,
           total_work_experience: workExperienceResult.rows.length,
           total_skills: skillsResult.rows.length,
           total_portfolio_links: portfolioResult.rows.length,
           total_resumes: resumesResult.rows.length,
+          total_certifications: certificationsResult.rows.length,
           top_skills: topSkills,
+          skill_distribution: skillDistribution,
+          saved_jobs_count: parseInt(savedJobsResult.rows[0]?.saved_count || '0'),
           profile_completion: {
             percentage: completionPercentage,
             completed_sections: completedSections,
@@ -2221,7 +2375,9 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
               work_experience: hasExperience,
               skills: hasSkills,
               resume: hasResume,
-              portfolio: hasPortfolio
+              portfolio: hasPortfolio,
+              certifications: hasCertifications,
+              preferences: hasPreferences
             },
             missing_sections: [
               !hasBasicInfo && 'basic_info',
@@ -2229,15 +2385,33 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
               !hasExperience && 'work_experience',
               !hasSkills && 'skills',
               !hasResume && 'resume',
-              !hasPortfolio && 'portfolio'
+              !hasPortfolio && 'portfolio',
+              !hasCertifications && 'certifications',
+              !hasPreferences && 'preferences'
             ].filter(Boolean)
           }
         },
-        education: educationResult.rows,
-        work_experience: workExperienceResult.rows,
-        skills: skillsResult.rows,
-        portfolio_links: portfolioResult.rows,
-        resumes: resumesWithUrl
+        applications_summary: {
+          total: parseInt(applicationsSummary.rows[0]?.total_applications || '0'),
+          submitted: parseInt(applicationsSummary.rows[0]?.submitted || '0'),
+          under_review: parseInt(applicationsSummary.rows[0]?.under_review || '0'),
+          interviewing: parseInt(applicationsSummary.rows[0]?.interviewing || '0'),
+          offers: parseInt(applicationsSummary.rows[0]?.offers || '0'),
+          hired: parseInt(applicationsSummary.rows[0]?.hired || '0'),
+          rejected: parseInt(applicationsSummary.rows[0]?.rejected || '0')
+        },
+        simulations_summary: {
+          total: parseInt(simulationsSummary.rows[0]?.total_simulations || '0'),
+          completed: parseInt(simulationsSummary.rows[0]?.completed || '0'),
+          in_progress: parseInt(simulationsSummary.rows[0]?.in_progress || '0'),
+          average_score: Math.round(parseFloat(simulationsSummary.rows[0]?.avg_score || '0') * 10) / 10
+        },
+        education: parsedEducation,
+        work_experience: parsedWorkExperience,
+        skills: parsedSkills,
+        portfolio_links: parsedPortfolio,
+        resumes: resumesWithUrl,
+        certifications: parsedCertifications
       }
     });
 

@@ -80,6 +80,10 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     const url = new URL(window.location.href);
     url.searchParams.set('tab', tab);
     window.history.replaceState(null, '', url.toString());
+
+    if (tab === 'workspace' || tab === 'github') {
+      void refreshCurrentRepoFromGitHub();
+    }
   };
   
   // Get GitHub repo from context - PER TASK STORAGE!
@@ -150,6 +154,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     setCurrentFileContent,
     currentFileLanguage,
     setCurrentFile,
+    resetCurrentFile,
     updateFileContent: _updateFileContent,
     createFile,
     createFolder,
@@ -239,13 +244,67 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       saveCurrentRepoForTask();
     }, 500);
   };
+
+  const refreshCurrentRepoFromGitHub = async () => {
+    const selectedIndex = selectedTaskIndex ?? session?.currentTaskIndex ?? 0;
+    setGlobalTaskIndex(selectedIndex);
+
+    if (currentRepo) {
+      await loadRepository(
+        currentRepo.owner,
+        currentRepo.repo,
+        currentRepo.repoUrl,
+        currentRepo.branchName || githubRepo?.branchName || 'main'
+      );
+      refreshFiles();
+      return;
+    }
+
+    if (githubRepo?.repoUrl) {
+      const match = githubRepo.repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
+      if (match) {
+        const owner = match[1];
+        const repo = match[2].replace(/\.git$/, '').replace(/[?#].*$/, '');
+        await loadRepository(owner, repo, githubRepo.repoUrl, githubRepo.branchName || 'main');
+      } else {
+        await loadRepositoryFromUrl(githubRepo.repoUrl);
+      }
+      refreshFiles();
+      return;
+    }
+
+    loadRepoForTask(selectedIndex);
+  };
   
   const handleRefreshGitHubStats = async () => {
-    if (currentRepo && refreshStats) {
+    if ((currentRepo || githubRepo?.repoUrl) && refreshStats) {
+      if (!currentRepo) {
+        setGithubPushStatus('syncing');
+        setGithubMessage('Refreshing repository...');
+
+        try {
+          await refreshCurrentRepoFromGitHub();
+          await refreshStats();
+          setGithubPushStatus('success');
+          setGithubMessage('Repository refreshed');
+          setTimeout(() => setGithubMessage(''), 3000);
+        } catch (error) {
+          setGithubPushStatus('error');
+          setGithubMessage('Failed to refresh repository');
+          setTimeout(() => setGithubMessage(''), 3000);
+        } finally {
+          setTimeout(() => {
+            setGithubPushStatus('idle');
+          }, 2000);
+        }
+        return;
+      }
+
       setGithubPushStatus('syncing');
       setGithubMessage(`Refreshing stats for ${currentRepo.owner}/${currentRepo.repo}...`);
       
       try {
+        await refreshCurrentRepoFromGitHub();
         await refreshStats();
         setGithubPushStatus('success');
         setGithubMessage(`✓ Stats refreshed for ${currentRepo.owner}/${currentRepo.repo}`);
@@ -292,18 +351,41 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
   
   const handlePullFromGitHub = async () => {
-    if (!currentRepo) {
+    if (!currentRepo && !githubRepo?.repoUrl) {
       setGithubMessage('No repository loaded');
       setGithubPullStatus('error');
       setTimeout(() => setGithubPullStatus('idle'), 3000);
       return;
     }
+
+    if (!currentRepo) {
+      setGithubPullStatus('syncing');
+      setGithubMessage('Pulling from GitHub...');
+
+      try {
+        await refreshCurrentRepoFromGitHub();
+        setGithubPullStatus('success');
+        setGithubMessage('Successfully pulled from GitHub');
+        setTimeout(() => {
+          setGithubPullStatus('idle');
+          setGithubMessage('');
+        }, 3000);
+      } catch (error) {
+        setGithubPullStatus('error');
+        setGithubMessage('Failed to pull from GitHub');
+        setTimeout(() => {
+          setGithubPullStatus('idle');
+          setGithubMessage('');
+        }, 3000);
+      }
+      return;
+    }
     
     setGithubPullStatus('syncing');
-    setGithubMessage(`Pulling from ${currentRepo.owner}/${currentRepo.repo}...`);
+    setGithubMessage(currentRepo ? `Pulling from ${currentRepo.owner}/${currentRepo.repo}...` : 'Pulling from GitHub...');
     
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await refreshCurrentRepoFromGitHub();
       setGithubPullStatus('success');
       setGithubMessage(`✓ Successfully pulled from ${currentRepo.owner}/${currentRepo.repo}`);
       setTimeout(() => {
@@ -695,14 +777,39 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
     }
   };
 
-  const handleSelectTask = (idx: number) => {
+  const handleSelectTask = async (idx: number) => {
     console.log('📌 Task clicked - index:', idx);
     console.log('📌 Task title:', tasks[idx]?.title);
     
     setSelectedTaskIndex(idx);
     setCurrentTask(tasks[idx]);
     setGlobalTaskIndex(idx);
-    loadRepoForTask(idx);
+    resetCurrentFile();
+    const cachedRepo = loadRepoForTask(idx);
+
+    try {
+      if (cachedRepo) {
+        await loadRepository(
+          cachedRepo.owner,
+          cachedRepo.repo,
+          cachedRepo.repoUrl,
+          cachedRepo.branchName || githubRepo?.branchName || 'main',
+          idx
+        );
+        return;
+      }
+
+      if (githubRepo?.repoUrl) {
+        const match = githubRepo.repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
+        if (match) {
+          const owner = match[1];
+          const repo = match[2].replace(/\.git$/, '').replace(/[?#].*$/, '');
+          await loadRepository(owner, repo, githubRepo.repoUrl, githubRepo.branchName || 'main', idx);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to refresh repository after task change:', error);
+    }
   };
 
   const handleOpenCompletion = (idx: number) => {
@@ -1104,8 +1211,11 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
 
 // Wrap with provider
 export const SimulationExecutor: React.FC<SimulationExecutorProps> = (props) => {
+  const { sessionId: urlSessionId } = useParams<{ sessionId: string | undefined }>();
+  const providerSessionId = props.simulationId || urlSessionId || null;
+
   return (
-    <GitHubRepoProvider>
+    <GitHubRepoProvider sessionId={providerSessionId}>
       <SimulationExecutorInner {...props} />
     </GitHubRepoProvider>
   );

@@ -98,7 +98,7 @@ interface GitHubRepoContextValue {
   currentRepo: GitHubRepoState | null;
   currentTaskIndex: number;
   setCurrentTaskIndex: (index: number) => void;
-  loadRepository: (owner: string, repo: string, repoUrl?: string, branchName?: string) => Promise<void>;
+  loadRepository: (owner: string, repo: string, repoUrl?: string, branchName?: string, taskIndex?: number) => Promise<void>;
   loadRepositoryFromUrl: (url: string) => Promise<void>;
   clearRepository: () => void;
   getFileContent: (path: string) => string | undefined;
@@ -114,7 +114,7 @@ interface GitHubRepoContextValue {
   hasRepo: boolean;
   refreshStats: () => Promise<void>;
   saveCurrentRepoForTask: () => void;
-  loadRepoForTask: (taskIndex: number) => void;
+  loadRepoForTask: (taskIndex: number) => GitHubRepoState | null;
   getReposForAllTasks: () => Record<number, TaskRepository>;
   clearAllTaskRepos: () => void;
   loadSessionGitHubRepo: (repoUrl: string, branchName?: string) => Promise<void>;
@@ -276,9 +276,10 @@ const saveTaskReposToStorage = (repos: Record<string, Record<number, TaskReposit
 
 interface GitHubRepoProviderProps {
   children: ReactNode;
+  sessionId?: string | null;
 }
 
-export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children }) => {
+export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children, sessionId: providedSessionId }) => {
   const [currentRepo, setCurrentRepo] = useState<GitHubRepoState | null>(null);
   const [currentTaskIndex, setCurrentTaskIndex] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -287,13 +288,18 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
   
   const [taskRepos, setTaskRepos] = useState<Record<string, Record<number, TaskRepository>>>(() => loadTaskReposFromStorage());
   
-  const sessionId = 'current-session';
+  const sessionId = providedSessionId || 'current-session';
   
   console.log('📦 [GitHubRepoProvider] Initialized');
 
   useEffect(() => {
     saveTaskReposToStorage(taskRepos);
   }, [taskRepos]);
+
+  useEffect(() => {
+    setCurrentRepo(null);
+    setCurrentTaskIndex(0);
+  }, [sessionId]);
 
   const saveCurrentRepoForTask = useCallback(() => {
     if (!currentRepo) return;
@@ -347,9 +353,11 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       };
       
       setCurrentRepo(repoState);
+      return repoState;
     } else {
       console.log(`📁 No saved repository for Task ${taskIndex}`);
       setCurrentRepo(null);
+      return null;
     }
   }, [taskRepos, sessionId]);
 
@@ -406,12 +414,13 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
   }, [currentRepo, fetchAllStats]);
 
   // ✅ FIXED: loadRepository with correct branch handling
-  const loadRepository = useCallback(async (owner: string, repo: string, repoUrl?: string, branchName?: string) => {
+  const loadRepository = useCallback(async (owner: string, repo: string, repoUrl?: string, branchName?: string, taskIndex?: number) => {
     setIsLoading(true);
     setError(null);
     
     // ✅ FIX: Define effectiveBranch before using it
     const effectiveBranch = branchName || 'main';
+    const targetTaskIndex = taskIndex ?? currentTaskIndex;
     
     try {
       console.log(`Loading GitHub repo: ${owner}/${repo}`, { branchName: effectiveBranch });
@@ -441,7 +450,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
             content = safeBase64Decode(file.content);
           } else {
             try {
-              const contentResponse = await githubAPI.getFileContent(owner, repo, file.path);
+              const contentResponse = await githubAPI.getFileContent(owner, repo, file.path, effectiveBranch);
               if (contentResponse?.data?.content) {
                 content = safeBase64Decode(contentResponse.data.content);
               } else if (contentResponse?.content) {
@@ -485,9 +494,24 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       
       await fetchAllStats(owner, repo);
       
-      setTimeout(() => {
-        saveCurrentRepoForTask();
-      }, 500);
+      const taskRepo: TaskRepository = {
+        owner: newRepo.owner,
+        repo: newRepo.repo,
+        repoUrl: newRepo.repoUrl,
+        branchName: newRepo.branchName,
+        fileStructure: newRepo.fileStructure,
+        files: newRepo.files,
+        fullStats: newRepo.fullStats,
+        lastLoaded: new Date(),
+      };
+
+      setTaskRepos(prev => ({
+        ...prev,
+        [sessionId]: {
+          ...(prev[sessionId] || {}),
+          [targetTaskIndex]: taskRepo
+        }
+      }));
       
     } catch (err: any) {
       console.error('Failed to load repository:', err);
@@ -496,7 +520,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [fetchAllStats, saveCurrentRepoForTask]);
+  }, [currentTaskIndex, fetchAllStats, sessionId]);
 
   const loadRepositoryFromUrl = useCallback(async (url: string) => {
     const parsed = parseGitHubUrl(url);

@@ -1244,6 +1244,18 @@ export const verifyGitHubUser = async (username: string) => {
   return handleResponse(response);
 };
 
+// Add to simulationAPI.ts
+export const getSubmissionResults = async (sessionId: string) => {
+  const response = await fetch(
+    `${API_BASE_URL}/simulations/sessions/${sessionId}/submission-results`,
+    {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    }
+  );
+  return handleResponse(response);
+};
+
 // ════════════════════════════════════════════════════════════════════════════
 // DEFAULT EXPORT
 // ════════════════════════════════════════════════════════════════════════════
@@ -1351,4 +1363,5 @@ export default {
   getUserProfileStats,
   calculateGitHubScoreForRepo,
   verifyGitHubUser,
+  getSubmissionResults,
 };

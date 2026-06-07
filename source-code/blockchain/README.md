@@ -52,6 +52,30 @@ Open a new terminal and run:
 bash
 cd blockchain
 npx hardhat run scripts/deploy.js --network localhost
+
+# Start local node
+npx hardhat node
+
+# Deploy to localhost
+npx hardhat run scripts/deploy.js --network localhost
+
+# Deploy to Sepolia testnet
+npx hardhat run scripts/deploy.js --network sepolia
+
+# Deploy to Polygon Mumbai testnet
+npx hardhat run scripts/deploy.js --network mumbai
+
+# Deploy to BSC Testnet
+npx hardhat run scripts/deploy.js --network bscTestnet
+
+# Verify contract on Etherscan
+npx hardhat verify --network sepolia <CONTRACT_ADDRESS>
+
+# Clean artifacts
+npx hardhat clean
+
+# Compile contracts
+npx hardhat compile
 You should see:
 
 text
