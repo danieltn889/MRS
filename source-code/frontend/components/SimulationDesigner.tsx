@@ -171,13 +171,17 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
     }
   }, [simulationId]);
 
+  // ✅ FIXED: fetchSuggestions - API returns { objectives: [], taskTitles: [] } directly
   const fetchSuggestions = async () => {
     try {
       const result = await simulationAPI.getSuggestions();
-      const data = result?.data || result;
-      if (data?.objectives?.length)  setObjectiveSuggestions(data.objectives);
-      if (data?.taskTitles?.length)  setTaskSuggestions(data.taskTitles);
-    } catch { /* use static fallbacks in step components */ }
+      // The API returns { objectives: [], taskTitles: [] } directly
+      if (result?.objectives?.length) setObjectiveSuggestions(result.objectives);
+      if (result?.taskTitles?.length) setTaskSuggestions(result.taskTitles);
+    } catch (error) {
+      console.error('Error fetching suggestions:', error);
+      // use static fallbacks in step components
+    }
   };
 
   // ── helpers ───────────────────────────────────────────────────────────────
@@ -210,7 +214,9 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       else if (response?.data?.jobs && Array.isArray(response.data.jobs))    arr = response.data.jobs;
       else if (Array.isArray(response))                                       arr = response;
       setJobs(arr);
-    } catch { setJobs([]); }
+    } catch { 
+      setJobs([]); 
+    }
   };
 
   const loadSimulation = async (id: string) => {
@@ -224,7 +230,9 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
         try {
           const jr = await jobAPI.getJob(data.job_id);
           jobTitle = jr?.data?.title || jr?.title || '';
-        } catch { /* ignore */ }
+        } catch { 
+          /* ignore */ 
+        }
       }
 
       const availabilityFromAPI =
@@ -266,7 +274,8 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       };
 
       setSimulation(loaded);
-    } catch {
+    } catch (error) {
+      console.error('Error loading simulation:', error);
       initializeNew();
     } finally {
       setLoading(false);

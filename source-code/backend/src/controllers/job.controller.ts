@@ -4286,6 +4286,108 @@ async getSuggestions(req: Request, res: Response): Promise<void> {
   }
 }
 
+
+async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+  try {
+    // Get company ID from the authenticated user
+    let companyId: string | null = null;
+    console.log('========== GET COMPANY DASHBOARD STATS CALLED ==========');
+    console.log('User:', { 
+      id: req.user.id, 
+      type: req.user.user_type, 
+      company_id: req.user.company_id 
+    });
+    console.log('Headers:', req.headers.authorization?.substring(0, 50) + '...');
+    
+    if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      const teamResult = await DatabaseService.execute(
+        'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
+        [req.user.id]
+      );
+      if (teamResult.rows.length > 0) {
+        companyId = teamResult.rows[0].company_id;
+      } else {
+        companyId = req.user.company_id ? String(req.user.company_id) : null;
+      }
+    }
+
+    if (!companyId) {
+      this.sendError(res, 'Company not found for this user', 404);
+      return;
+    }
+
+    // Get Active Jobs count
+    const activeJobsResult = await DatabaseService.execute(`
+      SELECT COUNT(*) as count
+      FROM jobs
+      WHERE company_id = $1 
+        AND status = 'active'
+        AND deleted_at IS NULL
+        AND (expires_at IS NULL OR expires_at > NOW())
+    `, [companyId]);
+
+    // Get Total Applications count
+    const totalApplicationsResult = await DatabaseService.execute(`
+      SELECT COUNT(*) as count
+      FROM applications a
+      JOIN jobs j ON a.job_id = j.id
+      WHERE j.company_id = $1
+        AND a.deleted_at IS NULL
+    `, [companyId]);
+
+    // Get Qualified Candidates count (match_score >= 70)
+    const qualifiedCandidatesResult = await DatabaseService.execute(`
+      SELECT COUNT(DISTINCT a.user_id) as count
+      FROM applications a
+      JOIN jobs j ON a.job_id = j.id
+      WHERE j.company_id = $1
+        AND a.deleted_at IS NULL
+        AND a.match_score >= 70
+    `, [companyId]);
+
+    // Get Interviews Scheduled count
+    const interviewsScheduledResult = await DatabaseService.execute(`
+      SELECT COUNT(*) as count
+      FROM applications a
+      JOIN jobs j ON a.job_id = j.id
+      WHERE j.company_id = $1
+        AND a.deleted_at IS NULL
+        AND a.status = 'interview'
+    `, [companyId]);
+
+    // Optional: Get additional stats for more insights
+    const additionalStats = await DatabaseService.execute(`
+      SELECT 
+        COUNT(CASE WHEN j.status = 'active' THEN 1 END) as active_jobs,
+        COUNT(CASE WHEN j.status = 'draft' THEN 1 END) as draft_jobs,
+        COUNT(CASE WHEN j.status = 'paused' THEN 1 END) as paused_jobs,
+        COUNT(CASE WHEN j.status = 'closed' THEN 1 END) as closed_jobs,
+        COUNT(CASE WHEN j.status = 'expired' THEN 1 END) as expired_jobs,
+        COUNT(CASE WHEN a.status = 'submitted' THEN 1 END) as pending_applications,
+        COUNT(CASE WHEN a.status = 'under_review' THEN 1 END) as under_review,
+        COUNT(CASE WHEN a.status = 'shortlisted' THEN 1 END) as shortlisted,
+        COUNT(CASE WHEN a.status = 'interview' THEN 1 END) as interviews,
+        COUNT(CASE WHEN a.status = 'offer' THEN 1 END) as offers,
+        COUNT(CASE WHEN a.status = 'hired' THEN 1 END) as hired,
+        COUNT(CASE WHEN a.status = 'rejected' THEN 1 END) as rejected
+      FROM jobs j
+      LEFT JOIN applications a ON j.id = a.job_id AND a.deleted_at IS NULL
+      WHERE j.company_id = $1 AND j.deleted_at IS NULL
+    `, [companyId]);
+
+    this.sendSuccess(res, {
+      active_jobs: parseInt(activeJobsResult.rows[0]?.count || '0'),
+      total_applications: parseInt(totalApplicationsResult.rows[0]?.count || '0'),
+      qualified_candidates: parseInt(qualifiedCandidatesResult.rows[0]?.count || '0'),
+      interviews_scheduled: parseInt(interviewsScheduledResult.rows[0]?.count || '0'),
+      additional: additionalStats.rows[0] || {}
+    });
+  } catch (error) {
+    logger.error('Error getting company dashboard stats:', error);
+    this.sendError(res, 'Failed to fetch dashboard statistics', 500, error as Error);
+  }
+}
+
 }
 
 export default new JobController();

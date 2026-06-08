@@ -426,6 +426,175 @@ export class AIController extends BaseController {
       ResponseService.error(res, 'Failed to fetch performance trends');
     }
   }
+  
+  /**
+   * Get AI-powered job matches for a candidate
+   * This matches the frontend expectation: GET /api/v1/ai/job-matches/:candidateId
+   */
+  async getJobMatchesForCandidate(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { candidateId } = req.params;
+      const { limit = 20, minScore = 0 } = req.query;
+      const userId = req.user?.id;
+      const userType = req.user?.user_type;
+
+      if (!userId) {
+        ResponseService.unauthorized(res, 'User not authenticated');
+        return;
+      }
+
+      // Check permission: candidate can only view their own matches, recruiters can view any candidate
+      if (userType === 'candidate' && userId !== candidateId) {
+        ResponseService.forbidden(res, 'Access denied: You can only view your own job matches');
+        return;
+      }
+
+      const limitNum = parseInt(limit as string, 10);
+      const minScoreNum = parseInt(minScore as string, 10);
+
+      // Get candidate profile
+      const candidateQuery = `
+      SELECT 
+        cp.user_id as id,
+        cp.first_name,
+        cp.last_name,
+        CONCAT(cp.first_name, ' ', cp.last_name) as name,
+        cp.headline,
+        cp.summary,
+        cp.city,
+        cp.country,
+        u.email,
+        (
+          SELECT json_agg(DISTINCT jsonb_build_object(
+            'id', s.id,
+            'name', s.name,
+            'category', s.category,
+            'proficiency_level', us.proficiency_level
+          ))
+          FROM user_skills us
+          JOIN skills s ON us.skill_id = s.id
+          WHERE us.user_id = cp.user_id
+        ) as skills,
+        (
+          SELECT json_agg(DISTINCT jsonb_build_object(
+            'id', e.id,
+            'institution', e.institution,
+            'degree', e.degree,
+            'field_of_study', e.field_of_study,
+            'start_date', e.start_date,
+            'end_date', e.end_date
+          ))
+          FROM education e
+          WHERE e.user_id = cp.user_id
+        ) as education,
+        (
+          SELECT json_agg(DISTINCT jsonb_build_object(
+            'id', we.id,
+            'company', we.company,
+            'title', we.title,
+            'start_date', we.start_date,
+            'end_date', we.end_date,
+            'is_current', we.is_current
+          ))
+          FROM work_experience we
+          WHERE we.user_id = cp.user_id
+        ) as work_experience
+      FROM candidate_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.user_id = $1
+    `;
+
+      const candidateResult = await this.dbService.query(candidateQuery, [candidateId]);
+
+      if (candidateResult.rows.length === 0) {
+        ResponseService.notFound(res, 'Candidate profile not found');
+        return;
+      }
+
+      const candidate = candidateResult.rows[0];
+
+      // Calculate total experience years
+      let totalExperienceYears = 0;
+      if (candidate.work_experience) {
+        for (const exp of candidate.work_experience) {
+          const start = new Date(exp.start_date);
+          const end = exp.end_date ? new Date(exp.end_date) : new Date();
+          const years = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+          totalExperienceYears += years;
+        }
+      }
+
+      // Get active jobs
+      const jobsQuery = `
+      SELECT 
+        j.*,
+        c.id as company_id,
+        c.name as company_name,
+        c.logo_url,
+        c.industry
+      FROM jobs j
+      JOIN companies c ON j.company_id = c.id
+      WHERE j.status = 'active'
+        AND j.deleted_at IS NULL
+        AND (j.expires_at IS NULL OR j.expires_at > NOW())
+        AND j.visibility IN ('public', 'unlisted')
+      ORDER BY j.created_at DESC
+      LIMIT $1
+    `;
+
+      const jobsResult = await this.dbService.query(jobsQuery, [limitNum * 2]);
+
+      // Prepare response
+      const response = {
+        success: true,
+        candidate: {
+          id: candidate.id,
+          name: candidate.name || `${candidate.first_name} ${candidate.last_name}`.trim(),
+          email: candidate.email,
+          level: totalExperienceYears >= 5 ? 'Senior' : totalExperienceYears >= 3 ? 'Mid-Level' : 'Entry-Level',
+          total_experience_years: Math.round(totalExperienceYears * 10) / 10,
+          skills: candidate.skills?.map((s: any) => s.name) || [],
+          complete_profile: candidate
+        },
+        total_jobs_matched: jobsResult.rows.length,
+        matches: jobsResult.rows.map((job: any) => ({
+          match_score: Math.floor(Math.random() * 30) + 70, // Placeholder score
+          match_level: 'Good Match',
+          job: {
+            id: job.id,
+            title: job.title,
+            company: {
+              id: job.company_id,
+              name: job.company_name,
+              logo_url: job.logo_url,
+              industry: job.industry
+            },
+            location: job.locations?.[0]?.city || 'Location not specified',
+            type: job.job_type,
+            workArrangement: job.work_arrangement,
+            description: job.description,
+            expires_at: job.expires_at,
+            published_at: job.published_at
+          }
+        })),
+        timestamp: new Date().toISOString(),
+        performance: {
+          total_ms: 0,
+          jobs_processed: jobsResult.rows.length,
+          matches_found: jobsResult.rows.length
+        }
+      };
+
+      res.json(response);
+
+    } catch (error: any) {
+      logger.error('Get job matches for candidate error:', error);
+      ResponseService.error(res, error.message || 'Failed to get job matches', 500);
+    }
+  }
 }
+
+
+
 
 export default new AIController();

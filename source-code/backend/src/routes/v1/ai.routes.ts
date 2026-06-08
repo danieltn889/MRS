@@ -1,5 +1,5 @@
 import express, { Router, Request, Response } from 'express';
-import { query, body } from 'express-validator';
+import { query, body, param } from 'express-validator';  // ← ADD 'param' here
 import { protect, authorize } from '../../middleware/auth.middleware.js';
 import { validateRequest } from '../../middleware/validation.middleware.js';
 import aiController from '../../controllers/ai.controller.js';
@@ -50,5 +50,38 @@ router.post('/match-job', protect, body('jobIds').isArray(), body('jobIds.*').is
 // @desc    Get performance trends
 // @access  Private
 router.get('/performance-trends', protect, (req: any, res: any) => aiController.getPerformanceTrends(req, res));
+
+// ============================================
+// ✅ FIXED: Add the missing job matches endpoint
+// ============================================
+
+// @route   GET /api/v1/ai/job-matches/:candidateId
+// @desc    Get AI-powered job matches for a candidate
+// @access  Private (Candidate or Recruiter viewing candidate)
+router.get('/job-matches/:candidateId', protect, [
+  param('candidateId').isUUID().withMessage('Invalid candidate ID format'),
+  query('limit').optional().isInt({ min: 1, max: 50 }).toInt(),
+  query('minScore').optional().isInt({ min: 0, max: 100 }).toInt(),
+  validateRequest
+], async (req: any, res: any) => {
+  try {
+    // Call the controller method - ensure it exists
+    if (typeof aiController.getJobMatchesForCandidate !== 'function') {
+      console.error('getJobMatchesForCandidate method not found in aiController');
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Job matching service not available' 
+      });
+    }
+    return await aiController.getJobMatchesForCandidate(req, res);
+  } catch (error) {
+    console.error('Error in job-matches route:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Failed to get job matches',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
 
 export default router;

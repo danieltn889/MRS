@@ -149,28 +149,89 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
   try {
     const { id } = req.params;
 
-    // Get application with all related data - REMOVED cp.bio
+    console.log('🔍 [Get Application] Starting request for application:', id);
+    console.log('👤 Current user:', {
+      id: authReq.user?.id,
+      email: authReq.user?.email,
+      user_type: authReq.user?.user_type
+    });
+
+    // Get application with all related data
     const applicationQuery = `
       SELECT
         a.*,
-        j.id as job_id, j.title as job_title,
+        j.id as job_id, 
+        j.title as job_title,
+        j.department as job_department,
+        j.job_type, 
+        j.experience_level, 
+        j.description as job_description,
+        j.requirements as job_requirements, 
+        j.benefits as job_benefits,
+        j.salary_min, j.salary_max, j.salary_currency,
+        j.work_arrangement,
+        j.created_by as job_created_by,
         COALESCE(
           (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
           'Remote'
         ) as job_location,
-        j.job_type, j.experience_level, j.description as job_description,
-        j.requirements as job_requirements, j.benefits as job_benefits,
-        c.name as company_name, c.logo_url as company_logo, c.website,
+        c.id as company_id,
+        c.name as company_name, 
+        c.logo_url as company_logo, 
+        c.website as company_website,
         c.description as company_description,
+        c.industry as company_industry,
+        c.size as company_size,
+        c.created_by as company_created_by,
+        u.id as candidate_id,
         u.email as candidate_email,
-        cp.first_name, cp.last_name, cp.phone,
+        u.user_type as candidate_user_type,
+        u.created_at as candidate_registered_at,
+        cp.first_name, 
+        cp.last_name, 
+        cp.phone,
         COALESCE(TRIM(CONCAT_WS(', ', cp.city, cp.country)), 'Not specified') as candidate_location,
-        cp.headline, cp.profile_photo_url,
-        cp.portfolio_url as candidate_portfolio, cp.linkedin_url as candidate_linkedin,
+        cp.headline, 
+        cp.profile_photo_url,
+        cp.portfolio_url as candidate_portfolio, 
+        cp.linkedin_url as candidate_linkedin,
         cp.github_url as candidate_github,
-        cp.current_salary, cp.expected_salary as candidate_expected_salary,
-        cp.languages, cp.availability,
-        cp.summary
+        cp.current_salary, 
+        cp.expected_salary as candidate_expected_salary,
+        cp.languages, 
+        cp.availability,
+        cp.summary as candidate_summary,
+        (SELECT COALESCE(jsonb_agg(DISTINCT s.name), '[]'::jsonb)
+         FROM user_skills us
+         JOIN skills s ON us.skill_id = s.id
+         WHERE us.user_id = u.id
+        ) as candidate_skills,
+        (SELECT jsonb_agg(
+            jsonb_build_object(
+              'company', we.company,
+              'title', we.title,
+              'start_date', we.start_date,
+              'end_date', we.end_date,
+              'is_current', we.is_current,
+              'description', we.description
+            ) ORDER BY we.start_date DESC
+         )
+         FROM work_experience we
+         WHERE we.user_id = u.id
+        ) as candidate_experience,
+        (SELECT jsonb_agg(
+            jsonb_build_object(
+              'institution', e.institution,
+              'degree', e.degree,
+              'field_of_study', e.field_of_study,
+              'start_date', e.start_date,
+              'end_date', e.end_date,
+              'is_current', e.is_current
+            ) ORDER BY e.start_date DESC
+         )
+         FROM education e
+         WHERE e.user_id = u.id
+        ) as candidate_education
       FROM applications a
       JOIN jobs j ON a.job_id = j.id
       JOIN companies c ON j.company_id = c.id
@@ -182,6 +243,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     const applicationResult = await dbQuery(applicationQuery, [id]);
 
     if (applicationResult.rows.length === 0) {
+      console.log('❌ Application not found:', id);
       return res.status(404).json({
         success: false,
         message: 'Application not found'
@@ -189,28 +251,91 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     }
 
     const application = applicationResult.rows[0];
+    
+    console.log('📋 Application found:', {
+      id: application.id,
+      candidate_id: application.candidate_id,
+      job_id: application.job_id,
+      job_created_by: application.job_created_by,
+      company_id: application.company_id,
+      company_created_by: application.company_created_by
+    });
 
     // Check permissions
     let hasPermission = false;
+    let permissionReason = '';
 
     if (authReq.user!.user_type === 'candidate') {
-      hasPermission = application.user_id === authReq.user!.id;
-    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
-      // Check if user has access to the job/company
-      const jobAccessQuery = authReq.user!.user_type === 'company_admin'
-        ? `SELECT j.id FROM jobs j JOIN companies c ON j.company_id = c.id WHERE j.id = $1 AND c.created_by = $2`
-        : `SELECT j.id FROM jobs j WHERE j.id = $1 AND j.created_by = $2 UNION SELECT j.id FROM jobs j JOIN company_team ct ON j.company_id = ct.company_id WHERE j.id = $1 AND ct.user_id = $2`;
+      // Candidates can only view their own applications
+      const isOwner = application.candidate_id === authReq.user!.id;
+      hasPermission = isOwner;
+      permissionReason = isOwner ? 'Candidate is owner' : 'Candidate is not the application owner';
+      console.log(`🔐 Candidate permission check: ${permissionReason}`);
 
-      const accessResult = await dbQuery(jobAccessQuery, [application.job_id, authReq.user!.id]);
-      hasPermission = accessResult.rows.length > 0;
+    } else if (authReq.user!.user_type === 'company_admin') {
+      // Company admin can view if they own the company that posted the job
+      const isCompanyOwner = application.company_created_by === authReq.user!.id;
+      const isJobCreator = application.job_created_by === authReq.user!.id;
+      const isCandidate = application.candidate_id === authReq.user!.id;
+      
+      hasPermission = isCompanyOwner || isJobCreator || isCandidate;
+      permissionReason = `Company owner: ${isCompanyOwner}, Job creator: ${isJobCreator}, Is candidate: ${isCandidate}`;
+      console.log(`🔐 Company Admin permission check: ${permissionReason}`);
+
+    } else if (authReq.user!.user_type === 'recruiter') {
+      // Check if recruiter is on the company team
+      const recruiterAccessQuery = `
+        SELECT 1 FROM company_team ct
+        WHERE ct.company_id = $1 AND ct.user_id = $2
+        UNION
+        SELECT 1 FROM jobs j
+        WHERE j.id = $3 AND j.created_by = $2
+      `;
+      const accessResult = await dbQuery(recruiterAccessQuery, [
+        application.company_id, 
+        authReq.user!.id,
+        application.job_id
+      ]);
+      
+      const isOnTeam = accessResult.rows.length > 0;
+      const isJobCreator = application.job_created_by === authReq.user!.id;
+      const isCandidate = application.candidate_id === authReq.user!.id;
+      
+      hasPermission = isOnTeam || isJobCreator || isCandidate;
+      permissionReason = `On team: ${isOnTeam}, Job creator: ${isJobCreator}, Is candidate: ${isCandidate}`;
+      console.log(`🔐 Recruiter permission check: ${permissionReason}`);
+
+    } else if (authReq.user!.user_type === 'system_admin') {
+      hasPermission = true;
+      permissionReason = 'System admin has full access';
+      console.log(`🔐 System Admin permission check: ${permissionReason}`);
     }
+
+    console.log(`📊 Final permission result: ${hasPermission} - ${permissionReason}`);
 
     if (!hasPermission) {
+      console.log('❌ Access denied for user:', {
+        userId: authReq.user!.id,
+        userType: authReq.user!.user_type,
+        applicationId: id,
+        reason: permissionReason
+      });
+      
       return res.status(403).json({
         success: false,
-        message: 'You do not have permission to view this application'
+        message: 'You do not have permission to view this application',
+        debug: process.env.NODE_ENV === 'development' ? {
+          userType: authReq.user!.user_type,
+          userId: authReq.user!.id,
+          applicationCandidateId: application.candidate_id,
+          applicationJobCreatedBy: application.job_created_by,
+          applicationCompanyCreatedBy: application.company_created_by,
+          reason: permissionReason
+        } : undefined
       });
     }
+
+    console.log('✅ Permission granted, fetching timeline...');
 
     // Get application timeline
     const timelineQuery = `
@@ -230,60 +355,170 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
 
     const timelineResult = await dbQuery(timelineQuery, [id]);
 
-    // Parse JSON fields safely
-    if (application.submitted_data && typeof application.submitted_data === 'string') {
-      try { application.submitted_data = JSON.parse(application.submitted_data); } catch { application.submitted_data = {}; }
-    }
-    if (application.screening_answers && typeof application.screening_answers === 'string') {
-      try { application.screening_answers = JSON.parse(application.screening_answers); } catch { application.screening_answers = []; }
-    }
-    if (application.documents && typeof application.documents === 'string') {
-      try { application.documents = JSON.parse(application.documents); } catch { application.documents = []; }
-    }
-    if (application.notes && typeof application.notes === 'string') {
-      try { application.notes = JSON.parse(application.notes); } catch { application.notes = []; }
-    }
-    if (application.internal_notes && typeof application.internal_notes === 'string') {
-      try { application.internal_notes = JSON.parse(application.internal_notes); } catch { application.internal_notes = []; }
-    }
-    if (application.tags && typeof application.tags === 'string') {
-      try { application.tags = JSON.parse(application.tags); } catch { application.tags = []; }
-    }
-    if (application.match_details && typeof application.match_details === 'string') {
-      try { application.match_details = JSON.parse(application.match_details); } catch { application.match_details = {}; }
-    }
-    if (application.metadata && typeof application.metadata === 'string') {
-      try { application.metadata = JSON.parse(application.metadata); } catch { application.metadata = {}; }
-    }
-    if (application.job_requirements && typeof application.job_requirements === 'string') {
-      try { application.job_requirements = JSON.parse(application.job_requirements); } catch { application.job_requirements = []; }
-    }
-    if (application.job_benefits && typeof application.job_benefits === 'string') {
-      try { application.job_benefits = JSON.parse(application.job_benefits); } catch { application.job_benefits = []; }
-    }
-    if (application.languages && typeof application.languages === 'string') {
-      try { application.languages = JSON.parse(application.languages); } catch { application.languages = []; }
-    }
-    if (application.current_salary && typeof application.current_salary === 'string') {
-      try { application.current_salary = JSON.parse(application.current_salary); } catch { application.current_salary = {}; }
-    }
-    if (application.availability && typeof application.availability === 'string') {
-      try { application.availability = JSON.parse(application.availability); } catch { application.availability = {}; }
-    }
+    // Helper function to safely parse JSON arrays and objects
+    const safeParseJSON = (data: any, defaultValue: any = null) => {
+      if (!data) return defaultValue;
+      if (typeof data === 'object') return data;
+      if (typeof data === 'string') {
+        try {
+          const parsed = JSON.parse(data);
+          return parsed;
+        } catch (e) {
+          console.warn('Failed to parse JSON:', data);
+          return defaultValue;
+        }
+      }
+      return defaultValue;
+    };
 
+    // Helper function to safely extract text from objects or arrays
+    const extractTextFromArray = (items: any[]): string[] => {
+      if (!items || !Array.isArray(items)) return [];
+      return items.map(item => {
+        if (typeof item === 'string') return item;
+        if (typeof item === 'object') {
+          if (item.name) return item.name;
+          if (item.title) return `${item.title}${item.years ? ` (${item.years} years)` : ''}`;
+          if (item.description) return item.description;
+          return JSON.stringify(item);
+        }
+        return String(item);
+      }).filter(Boolean);
+    };
+
+    // Parse all JSON fields
+    application.submitted_data = safeParseJSON(application.submitted_data, {});
+    application.screening_answers = safeParseJSON(application.screening_answers, []);
+    application.documents = safeParseJSON(application.documents, []);
+    application.notes = safeParseJSON(application.notes, []);
+    application.internal_notes = safeParseJSON(application.internal_notes, []);
+    application.tags = safeParseJSON(application.tags, []);
+    application.match_details = safeParseJSON(application.match_details, {});
+    application.metadata = safeParseJSON(application.metadata, {});
+
+    // Parse job requirements and benefits
+    const jobRequirements = safeParseJSON(application.job_requirements, []);
+    const jobBenefits = safeParseJSON(application.job_benefits, []);
+    
+    application.job_requirements = extractTextFromArray(jobRequirements);
+    application.job_benefits = extractTextFromArray(jobBenefits);
+
+    // Parse candidate data
+    const candidateSkills = safeParseJSON(application.candidate_skills, []);
+    const candidateExperience = safeParseJSON(application.candidate_experience, []);
+    const candidateEducation = safeParseJSON(application.candidate_education, []);
+    const candidateLanguages = safeParseJSON(application.languages, []);
+    
+    application.candidate_skills = extractTextFromArray(candidateSkills);
+    application.candidate_experience = candidateExperience;
+    application.candidate_education = candidateEducation;
+    application.candidate_languages = extractTextFromArray(candidateLanguages);
+
+    // Parse salary objects
+    application.current_salary = safeParseJSON(application.current_salary, {});
+    application.availability = safeParseJSON(application.availability, {});
+
+    // Build the response
+    const responseData = {
+      application: {
+        id: application.id,
+        job_id: application.job_id,
+        user_id: application.candidate_id,
+        status: application.status,
+        applied_at: application.applied_at,
+        updated_at: application.updated_at,
+        match_score: application.match_score,
+        rating: application.rating,
+        
+        submitted_data: application.submitted_data,
+        screening_answers: application.screening_answers,
+        documents: application.documents,
+        notes: application.notes,
+        internal_notes: application.internal_notes,
+        tags: application.tags,
+        match_details: application.match_details,
+        metadata: application.metadata,
+        
+        job: {
+          id: application.job_id,
+          title: application.job_title,
+          department: application.job_department,
+          type: application.job_type,
+          work_arrangement: application.work_arrangement,
+          experience_level: application.experience_level,
+          location: application.job_location,
+          description: application.job_description,
+          requirements: application.job_requirements,
+          benefits: application.job_benefits,
+          salary: {
+            min: parseFloat(application.salary_min),
+            max: parseFloat(application.salary_max),
+            currency: application.salary_currency
+          }
+        },
+        
+        company: {
+          id: application.company_id,
+          name: application.company_name,
+          logo: application.company_logo,
+          website: application.company_website,
+          description: application.company_description,
+          industry: application.company_industry,
+          size: application.company_size
+        },
+        
+        candidate: {
+          id: application.candidate_id,
+          email: application.candidate_email,
+          user_type: application.candidate_user_type,
+          registered_at: application.candidate_registered_at,
+          first_name: application.first_name,
+          last_name: application.last_name,
+          full_name: `${application.first_name || ''} ${application.last_name || ''}`.trim() || application.candidate_email?.split('@')[0],
+          phone: application.phone,
+          location: application.candidate_location,
+          headline: application.headline,
+          profile_photo: application.profile_photo_url,
+          portfolio_url: application.candidate_portfolio,
+          linkedin_url: application.candidate_linkedin,
+          github_url: application.candidate_github,
+          summary: application.candidate_summary,
+          skills: application.candidate_skills,
+          experience: application.candidate_experience,
+          education: application.candidate_education,
+          languages: application.candidate_languages,
+          current_salary: application.current_salary,
+          expected_salary: application.candidate_expected_salary,
+          availability: application.availability
+        }
+      },
+      timeline: timelineResult.rows.map((row: any) => ({
+        id: row.id,
+        event_type: row.event_type,
+        description: row.event_description,
+        old_status: row.old_status,
+        new_status: row.new_status,
+        created_at: row.created_at,
+        created_by: row.created_by,
+        metadata: safeParseJSON(row.metadata, {})
+      }))
+    };
+
+    console.log('✅ Successfully fetched application details');
+    
     return res.json({
       success: true,
-      data: {
-        application,
-        timeline: timelineResult.rows
-      }
+      data: responseData
     });
 
-  } catch (error) {
-    logger.error('Get application error:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    console.error('❌ Get application error:', errorMessage);
+    
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch application'
+      message: 'Failed to fetch application',
+      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     });
   }
 });

@@ -2,10 +2,39 @@ import React, { useState, useEffect } from 'react';
 import { Play, Calendar, Clock, CheckCircle, AlertCircle, Timer, RefreshCw } from 'lucide-react';
 import { getMySimulations } from '../../services/simulationAPI';
 
-const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulation, onRefresh }) => {
-  const [simulations, setSimulations] = useState([]);
+// Add proper interface for the simulation object
+interface Simulation {
+  id: string;
+  simulationName?: string;
+  title?: string;
+  description?: string;
+  duration?: number;
+  status?: 'completed' | 'in_progress' | 'not_started' | 'expired';
+  score?: number;
+  scheduledAt?: string;
+  appliedAt?: string;
+  companyName?: string;
+  jobTitle?: string;
+  progress?: number;
+  completedAt?: string;
+  startedAt?: string;
+  sessionId?: string;
+}
+
+interface SimulationSchedulerProps {
+  simulations?: Simulation[];  // Changed from any to proper type
+  onStartSimulation?: (simulation: any) => void;
+  onRefresh?: () => void;
+}
+
+const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({ 
+  simulations: propSimulations = [], 
+  onStartSimulation, 
+  onRefresh 
+}) => {
+  const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [loading, setLoading] = useState(false);
-  const [activeSim, setActiveSim] = useState(null);
+  const [activeSim, setActiveSim] = useState<string | null>(null);
 
   // Fetch simulations from API
   const fetchSimulations = async () => {
@@ -16,7 +45,7 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
       if (response.success && response.data) {
         const rawData = response.data.data || response.data;
         // FIX: Ensure each simulation has a unique ID
-        const mappedSimulations = (Array.isArray(rawData) ? rawData : []).map((sim, index) => ({
+        const mappedSimulations: Simulation[] = (Array.isArray(rawData) ? rawData : []).map((sim, index) => ({
           id: sim.id || `sim-${Date.now()}-${index}-${Math.random()}`,
           simulationName: sim.simulationName,
           title: sim.simulationName || sim.title || 'Untitled Simulation',
@@ -29,9 +58,9 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
           companyName: sim.companyName,
           jobTitle: sim.jobTitle,
           progress: calculateProgress(sim),
-          onStart: () => handleStartSimulation(sim),
-          onResume: () => handleResumeSimulation(sim),
-          onReview: () => handleReviewSimulation(sim)
+          completedAt: sim.completedAt,
+          startedAt: sim.startedAt,
+          sessionId: sim.sessionId
         }));
         setSimulations(mappedSimulations);
         
@@ -48,7 +77,7 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
   };
 
   // Helper to resolve status
-  const resolveStatus = (sim) => {
+  const resolveStatus = (sim: any): Simulation['status'] => {
     if (sim.completedAt || (sim.score !== undefined && sim.score !== null)) return 'completed';
     if (sim.sessionId && sim.startedAt && !sim.completedAt) return 'in_progress';
     if (sim.status === 'expired') return 'expired';
@@ -56,14 +85,14 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
   };
 
   // Helper to calculate progress
-  const calculateProgress = (sim) => {
+  const calculateProgress = (sim: any): number => {
     if (sim.completedAt || sim.score) return 100;
     if (sim.startedAt && !sim.completedAt) return 50;
     return 0;
   };
 
   // Handle start simulation
-  const handleStartSimulation = (sim) => {
+  const handleStartSimulation = (sim: Simulation) => {
     console.log('Starting simulation:', sim.id);
     if (onStartSimulation) {
       onStartSimulation(sim);
@@ -71,7 +100,7 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
   };
 
   // Handle resume simulation
-  const handleResumeSimulation = (sim) => {
+  const handleResumeSimulation = (sim: Simulation) => {
     console.log('Resuming simulation:', sim.id);
     if (onStartSimulation) {
       onStartSimulation(sim);
@@ -79,7 +108,7 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
   };
 
   // Handle review simulation
-  const handleReviewSimulation = (sim) => {
+  const handleReviewSimulation = (sim: Simulation) => {
     console.log('Reviewing simulation:', sim.id);
     window.location.href = '/results';
   };
@@ -90,7 +119,7 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
   }, []);
 
   // Helper function to format date
-  const formatDate = (dateString) => {
+  const formatDate = (dateString?: string): string => {
     if (!dateString) return 'Date not set';
     try {
       const date = new Date(dateString);
@@ -105,7 +134,7 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
   };
 
   // Helper function to get status color and icon
-  const getStatusInfo = (sim) => {
+  const getStatusInfo = (sim: Simulation) => {
     if (sim.status === 'completed') {
       return { color: 'green', icon: CheckCircle, label: 'Completed', bgColor: 'bg-green-50', borderColor: 'border-green-200', textColor: 'text-green-700' };
     }
@@ -125,22 +154,19 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
   };
 
   // Use prop simulations if provided, otherwise use fetched ones
-  const displaySimulations = propSimulations.length > 0 ? propSimulations : simulations;
+  const displaySimulations: Simulation[] = propSimulations.length > 0 ? propSimulations : simulations;
 
-  // Generate a unique key for each simulation - FIX for null/undefined keys
-  const getSimulationKey = (sim, index) => {
-    // Use id if available and not null/undefined
+  // Generate a unique key for each simulation
+  const getSimulationKey = (sim: Simulation, index: number): string => {
     if (sim && sim.id) {
       return sim.id;
     }
-    // Fallback to a combination of available properties
     if (sim && sim.simulationName) {
       return `${sim.simulationName}-${index}`;
     }
     if (sim && sim.title) {
       return `${sim.title}-${index}`;
     }
-    // Last resort: use index with prefix
     return `sim-${index}-${Date.now()}`;
   };
 
@@ -309,7 +335,7 @@ const SimulationScheduler = ({ simulations: propSimulations = [], onStartSimulat
                 </div>
               )}
 
-              {/* Start Button (Only for active, not completed, not expired) */}
+              {/* Start Button (Only for active, not completed, not expired, not in progress) */}
               {isActive && !isCompleted && !isExpired && !isInProgress && (
                 <button
                   onClick={(e) => {

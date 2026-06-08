@@ -4,23 +4,71 @@ import { io } from 'socket.io-client';
 import ThemeSwitcher from './ThemeSwitcher';
 import { SOCKET_BASE_URL } from '../services/simulationAPI';
 
-const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, currentView, onViewChange }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [chatNotifications, setChatNotifications] = useState([]);
-  const [chatToast, setChatToast] = useState(null);
-  const [showSignupDropdown, setShowSignupDropdown] = useState(false);
-  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const dropdownRef = useRef(null);
-  const profileRef = useRef(null);
-  const lastSoundAtRef = useRef(0);
-  const chatNotificationIdsRef = useRef(new Set());
+// Add proper type definitions
+interface ChatNotification {
+  id: string;
+  title: string;
+  body: string;
+  sessionId?: string;
+  simulationId?: string;
+  createdAt: string;
+  read: boolean;
+}
+
+interface ChatMessage {
+  id: string;
+  session_id?: string;
+  simulation_id?: string;
+  user_id?: string;
+  author?: {
+    id?: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+  };
+  user_email?: string;
+  message: string;
+  timestamp?: string;
+  created_at?: string;
+}
+
+interface HeaderProps {
+  onToggleSidebar?: () => void;
+  onSignUp?: () => void;
+  onLogin?: () => void;
+  user?: any;
+  company?: any;
+  onLogout?: () => void;
+  currentView?: string;
+  onViewChange?: (view: string) => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ 
+  onToggleSidebar, 
+  onSignUp, 
+  onLogin, 
+  user, 
+  company, 
+  onLogout, 
+  currentView, 
+  onViewChange 
+}) => {
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showNotifications, setShowNotifications] = useState<boolean>(false);
+  const [chatNotifications, setChatNotifications] = useState<ChatNotification[]>([]);
+  const [chatToast, setChatToast] = useState<ChatNotification | null>(null);
+  const [showSignupDropdown, setShowSignupDropdown] = useState<boolean>(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState<boolean>(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const profileRef = useRef<HTMLDivElement>(null);
+  const lastSoundAtRef = useRef<number>(0);
+  const chatNotificationIdsRef = useRef<Set<string>>(new Set());
 
   // ============================================
   // 🔧 FIXED: Better user and company data extraction
   // ============================================
   
-  const getNormalizedUser = () => {
+  const getNormalizedUser = (): any => {
     // First try prop
     if (user) return user;
     
@@ -39,7 +87,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
   };
 
   // 🔧 FIXED: Get company data from multiple possible sources
-  const getNormalizedCompany = () => {
+  const getNormalizedCompany = (): any => {
     // First try company prop
     if (company) return company;
     
@@ -85,13 +133,13 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
   const isLoggedIn = !!normalizedUser;
   
   // 🔧 FIXED: Better company user detection
-  const isCompanyUser = () => {
+  const isCompanyUser = (): boolean => {
     const userType = normalizedUser?.user_type || normalizedUser?.userType || '';
     return userType === 'company_admin' || userType === 'recruiter';
   };
   
   // Get user name
-  const getUserName = () => {
+  const getUserName = (): string => {
     if (!normalizedUser) return 'Guest';
     return normalizedUser.firstName || 
            normalizedUser.name || 
@@ -99,7 +147,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
   };
   
   // Get user type display
-  const getUserTypeDisplay = () => {
+  const getUserTypeDisplay = (): string => {
     if (!normalizedUser) return '';
     const type = normalizedUser.user_type || normalizedUser.userType || '';
     if (type === 'candidate') return 'Applicant';
@@ -110,7 +158,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
   };
   
   // 🔧 FIXED: Get company name from multiple possible fields
-  const getCompanyName = () => {
+  const getCompanyName = (): string => {
     if (!normalizedCompany) {
       // If no company object, try to get from user's associated company
       if (normalizedUser?.companyName) return normalizedUser.companyName;
@@ -121,14 +169,14 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
   };
   
   // 🔧 FIXED: Get company initial
-  const getCompanyInitial = () => {
+  const getCompanyInitial = (): string => {
     const companyName = getCompanyName();
     if (!companyName) return 'C';
     return companyName.charAt(0).toUpperCase();
   };
   
   // Get user initial
-  const getUserInitial = () => {
+  const getUserInitial = (): string => {
     const name = getUserName();
     return name.charAt(0).toUpperCase();
   };
@@ -138,13 +186,13 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
   const userInitial = getUserInitial();
   const companyName = getCompanyName();
   const companyInitial = getCompanyInitial();
-  const showCompanyInfo = isLoggedIn && isCompanyUser() && companyName;
-  const unreadChatCount = chatNotifications.filter((n) => !n.read).length;
+  const showCompanyInfo = isLoggedIn && isCompanyUser() && !!companyName;
+  const unreadChatCount = chatNotifications.filter((n: ChatNotification) => !n.read).length;
   const chatNotificationStorageKey = normalizedUser?.id
     ? `simulationChatNotifications:${normalizedUser.id}`
     : null;
 
-  const playIncomingSound = () => {
+  const playIncomingSound = (): void => {
     const now = Date.now();
     if (now - lastSoundAtRef.current < 900) return;
     lastSoundAtRef.current = now;
@@ -174,10 +222,10 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
     }
   };
 
-  const parseChatText = (message) => {
+  const parseChatText = (message: string): string => {
     if (!message) return 'New chat message';
     try {
-      let current = message;
+      let current: any = message;
       let depth = 0;
       while (typeof current === 'string' && depth < 10) {
         const trimmed = current.trim();
@@ -191,12 +239,12 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
     }
   };
 
-  const getMessageAuthor = (message) => {
+  const getMessageAuthor = (message: ChatMessage): string => {
     const fullName = `${message?.author?.first_name || ''} ${message?.author?.last_name || ''}`.trim();
     return fullName || message?.author?.email?.split('@')[0] || message?.user_email?.split('@')[0] || 'Chat';
   };
 
-  const buildChatNotification = (message, fallback = {}) => ({
+  const buildChatNotification = (message: ChatMessage, fallback: Partial<ChatNotification> = {}): ChatNotification => ({
     id: message.id,
     title: fallback.title || `Message from ${getMessageAuthor(message)}`,
     body: fallback.body || parseChatText(message.message),
@@ -206,20 +254,20 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
     read: false,
   });
 
-  const addChatNotification = (notification, shouldPlaySound = true) => {
+  const addChatNotification = (notification: ChatNotification, shouldPlaySound: boolean = true): void => {
     if (chatNotificationIdsRef.current.has(notification.id)) return;
     chatNotificationIdsRef.current.add(notification.id);
-    setChatNotifications((prev) => [notification, ...prev].slice(0, 20));
+    setChatNotifications((prev: ChatNotification[]) => [notification, ...prev].slice(0, 20));
 
     if (shouldPlaySound) playIncomingSound();
     setChatToast(notification);
     window.setTimeout(() => {
-      setChatToast((current) => current?.id === notification.id ? null : current);
+      setChatToast((current: ChatNotification | null) => current?.id === notification.id ? null : current);
     }, 5000);
   };
 
   useEffect(() => {
-    chatNotificationIdsRef.current = new Set(chatNotifications.map((item) => item.id));
+    chatNotificationIdsRef.current = new Set(chatNotifications.map((item: ChatNotification) => item.id));
   }, [chatNotifications]);
 
   // 🔍 DEBUG: Log all data to console
@@ -236,7 +284,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
     console.log('   - userName:', userName);
     console.log('   - userType:', userType);
     console.log('   - isCompanyUser:', isCompanyUser());
-    console.log('   - companyId:', normalizedUser?.company_id || normalizedUser?.companyId || (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('user') || '{}')?.companyId : undefined));
+    console.log('   - companyId:', normalizedUser?.company_id || normalizedUser?.companyId);
     console.log('───────────────────────────────────────');
     console.log('🏢 Company Info:');
     console.log('   - companyName:', companyName);
@@ -266,7 +314,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
       socket.emit('join_user', normalizedUser.id);
     });
 
-    socket.on('simulation_chat_message', (message) => {
+    socket.on('simulation_chat_message', (message: ChatMessage) => {
       const senderId = message?.user_id || message?.author?.id;
       if (!message?.id || senderId === normalizedUser.id) return;
 
@@ -306,7 +354,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
   }, [chatNotificationStorageKey, chatNotifications]);
 
   useEffect(() => {
-    const handleChatNotification = (event) => {
+    const handleChatNotification = (event: CustomEvent<{ message: ChatMessage; title?: string; body?: string }>) => {
       const message = event.detail?.message;
       if (!message?.id) return;
       const senderId = message?.user_id || message?.author?.id;
@@ -317,13 +365,13 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
       }), false);
     };
 
-    window.addEventListener('simulation-chat-message', handleChatNotification);
-    return () => window.removeEventListener('simulation-chat-message', handleChatNotification);
+    window.addEventListener('simulation-chat-message', handleChatNotification as EventListener);
+    return () => window.removeEventListener('simulation-chat-message', handleChatNotification as EventListener);
   }, [normalizedUser?.id]);
 
-  const openChatNotification = (notification) => {
-    setChatNotifications((prev) =>
-      prev.map((item) => item.id === notification.id ? { ...item, read: true } : item)
+  const openChatNotification = (notification: ChatNotification): void => {
+    setChatNotifications((prev: ChatNotification[]) =>
+      prev.map((item: ChatNotification) => item.id === notification.id ? { ...item, read: true } : item)
     );
     setShowNotifications(false);
     setChatToast(null);
@@ -335,49 +383,49 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
     }
   };
 
-  const handleCompanySignup = () => {
+  const handleCompanySignup = (): void => {
     window.location.href = '/company-signup';
     setShowSignupDropdown(false);
   };
 
-  const handleCandidateSignup = () => {
+  const handleCandidateSignup = (): void => {
     window.location.href = '/signup';
     setShowSignupDropdown(false);
   };
 
-  const handleSearch = (e) => {
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter' && searchQuery.trim()) {
       if (onViewChange) onViewChange('job-search');
       localStorage.setItem('searchQuery', searchQuery.trim());
     }
   };
 
-  const handleProfileClick = () => {
+  const handleProfileClick = (): void => {
     setShowProfileDropdown(!showProfileDropdown);
   };
 
-  const handleGoToProfile = () => {
+  const handleGoToProfile = (): void => {
     if (onViewChange) onViewChange('profile');
     setShowProfileDropdown(false);
   };
 
-  const handleGoToCompanyDashboard = () => {
+  const handleGoToCompanyDashboard = (): void => {
     if (onViewChange) onViewChange('company-dashboard');
     setShowProfileDropdown(false);
   };
 
-  const handleLogout = () => {
+  const handleLogout = (): void => {
     setShowProfileDropdown(false);
     if (onLogout) onLogout();
   };
 
   // Close dropdowns when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowSignupDropdown(false);
       }
-      if (profileRef.current && !profileRef.current.contains(event.target)) {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setShowProfileDropdown(false);
       }
     };
@@ -531,7 +579,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
                         </div>
                       </div>
 
-                      {/* 🔧 FIXED: Company Info Section - Now shows even if companyName comes from user object */}
+                      {/* Company Info Section */}
                       {isLoggedIn && isCompanyUser() && (
                         <div className="p-4 border-b border-gray-100 bg-green-50">
                           <div className="flex items-center gap-3">
@@ -594,7 +642,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
                 {unreadChatCount > 0 && (
                   <button
                     onClick={() => {
-                      setChatNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+                      setChatNotifications((prev: ChatNotification[]) => prev.map((item: ChatNotification) => ({ ...item, read: true })));
                       setChatToast(null);
                     }}
                     className="text-xs text-blue-600 hover:text-blue-700 font-medium"
@@ -606,7 +654,7 @@ const Header = ({ onToggleSidebar, onSignUp, onLogin, user, company, onLogout, c
             </div>
             <div className="max-h-96 overflow-y-auto">
               {chatNotifications.length > 0 ? (
-                chatNotifications.map((notification) => (
+                chatNotifications.map((notification: ChatNotification) => (
                   <button
                     key={notification.id}
                     onClick={() => openChatNotification(notification)}

@@ -170,18 +170,27 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
   };
 
   const handleView = async (jobId: string) => {
-    try {
-      setActionLoading(jobId + '-view');
-      const response = await getJob(jobId);
-      const job = response.data;
-      setSelectedJob({ ...job, location: formatLocation(job), salary_range: formatSalary(job) });
-      setShowViewModal(true);
-    } catch (err) {
-      alert('Failed to load job details.');
-    } finally {
-      setActionLoading(null);
-    }
-  };
+  try {
+    setActionLoading(jobId + '-view');
+    const response = await getJob(jobId);
+    console.log('getJob raw response:', JSON.stringify(response, null, 2));
+    
+    // Unwrap the nested response: { success, data: { ...job } }
+    const raw = response?.data?.data || response?.data || response;
+    
+    
+    setSelectedJob({ 
+      ...raw, 
+      location: formatLocation(raw), 
+      salary_range: formatSalary(raw) 
+    });
+    setShowViewModal(true);
+  } catch (err) {
+    alert('Failed to load job details.');
+  } finally {
+    setActionLoading(null);
+  }
+};
 
   const handleViewCandidates = (jobId: string, jobTitle: string) => {
     if (onViewCandidates) {

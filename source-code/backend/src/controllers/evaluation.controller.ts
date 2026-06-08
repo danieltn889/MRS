@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { pool } from '../config/database.js';
 import { logger } from '../config/logger.js';
+import DatabaseService from '../services/database.service.js';
+import ResponseService from '../services/response.service.js';
+import { AuthenticatedRequest } from '../types/auth.types.js';
 
 export class EvaluationController {
   // Get evaluation for a specific candidate and simulation
@@ -12,13 +15,14 @@ export class EvaluationController {
       const evaluationQuery = `
         SELECT
           e.*,
-          c.first_name,
-          c.last_name,
-          c.email,
+          u.email,
+          cp.first_name,
+          cp.last_name,
           s.title as simulation_title,
           s.description as simulation_description
         FROM evaluations e
-        JOIN candidates c ON e.candidate_id = c.id
+        LEFT JOIN users u ON e.candidate_id = u.id
+        LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
         JOIN simulations s ON e.simulation_id = s.id
         WHERE e.candidate_id = $1 AND e.simulation_id = $2
       `;
@@ -83,12 +87,13 @@ export class EvaluationController {
       const similarCandidatesQuery = `
         SELECT
           sc.*,
-          c.first_name,
-          c.last_name,
-          c.current_role,
-          c.years_experience
+          u.email,
+          cp.first_name,
+          cp.last_name,
+          cp.headline as current_role
         FROM evaluation_similar_candidates sc
-        JOIN candidates c ON sc.similar_candidate_id = c.id
+        JOIN users u ON sc.similar_candidate_id = u.id
+        LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
         WHERE sc.evaluation_id = $1
         ORDER BY sc.similarity DESC
         LIMIT 5
@@ -132,6 +137,14 @@ export class EvaluationController {
         collaborationScore: evaluation.collaboration_score,
         attentionToDetailScore: evaluation.attention_to_detail_score,
         initiativeScore: evaluation.initiative_score,
+
+        // Candidate info
+        candidate: {
+          email: evaluation.email,
+          firstName: evaluation.first_name,
+          lastName: evaluation.last_name,
+          fullName: `${evaluation.first_name || ''} ${evaluation.last_name || ''}`.trim() || evaluation.email?.split('@')[0]
+        },
 
         // Detailed breakdowns
         sectionBreakdown: sectionBreakdown.rows.map(section => ({
@@ -180,8 +193,7 @@ export class EvaluationController {
             id: candidate.similar_candidate_id,
             score: candidate.score,
             similarity: candidate.similarity,
-            role: candidate.current_role,
-            experience: `${candidate.years_experience} years`
+            role: candidate.current_role
           }))
         } : null,
 
@@ -228,76 +240,294 @@ export class EvaluationController {
     }
   }
 
-  // Get all evaluations for a recruiter/company
-  async getEvaluations(req: Request, res: Response): Promise<void> {
+  /**
+   * Get evaluations for the current user (recruiter/admin)
+   * @route GET /api/v1/evaluations
+   */
+  async getEvaluations(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const { companyId, status, page = 1, limit = 20 } = req.query;
-
-      let whereClause = 'WHERE 1=1';
+      const { page = '1', limit = '20', status, candidate_id, simulation_id } = req.query;
+      
+      console.log('📊 [getEvaluations] Called by user:', {
+        userId: req.user.id,
+        userType: req.user.user_type,
+        timestamp: new Date().toISOString()
+      });
+      
+      // Get user's company ID for permission checks
+      let companyId: string | null = null;
+      
+      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+        const teamResult = await DatabaseService.query(
+          'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
+          [req.user.id]
+        );
+        companyId = teamResult.rows[0]?.company_id || null;
+      }
+      
+      const validPage = Math.max(1, Number(page));
+      const validLimit = Math.min(100, Number(limit));
+      const offset = (validPage - 1) * validLimit;
+      
+      let whereConditions: string[] = [];
       const params: any[] = [];
       let paramIndex = 1;
-
-      if (companyId) {
-        whereClause += ` AND s.company_id = $${paramIndex}`;
+      
+      // Build WHERE clause based on user role
+      if (req.user.user_type === 'system_admin') {
+        // System admin sees all evaluations
+        console.log('🔐 System admin: showing all evaluations');
+      } else if (companyId) {
+        // Recruiter/Company admin: only see evaluations for their company's simulations
+        whereConditions.push(`
+          EXISTS (
+            SELECT 1 FROM simulations s
+            JOIN simulation_templates st ON s.template_id = st.id
+            WHERE s.id = e.simulation_id AND st.company_id = $${paramIndex++}
+          )
+        `);
         params.push(companyId);
-        paramIndex++;
+        console.log('🔐 Company user: showing evaluations for company:', companyId);
+      } else {
+        // Fallback: only evaluations the user is directly involved with
+        whereConditions.push(`e.reviewer_id = $${paramIndex++} OR e.candidate_id = $${paramIndex++}`);
+        params.push(req.user.id, req.user.id);
+        console.log('🔐 Limited access: showing only user\'s evaluations');
       }
-
-      if (status) {
-        whereClause += ` AND e.status = $${paramIndex}`;
+      
+      // Apply filters
+      if (status && status !== 'all') {
+        whereConditions.push(`e.status = $${paramIndex++}`);
         params.push(status);
-        paramIndex++;
       }
-
-      const offset = (Number(page) - 1) * Number(limit);
-
-      const evaluationsQuery = `
-        SELECT
-          e.*,
-          c.first_name,
-          c.last_name,
-          c.email,
-          c.current_role,
-          s.title as simulation_title,
-          s.company_id,
-          comp.name as company_name
+      
+      if (candidate_id) {
+        whereConditions.push(`e.candidate_id = $${paramIndex++}`);
+        params.push(candidate_id);
+      }
+      
+      if (simulation_id) {
+        whereConditions.push(`e.simulation_id = $${paramIndex++}`);
+        params.push(simulation_id);
+      }
+      
+      const whereClause = whereConditions.length > 0 
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+      
+      // Main query - Use users and candidate_profiles instead of candidates
+      const result = await DatabaseService.query(`
+        SELECT 
+          e.id,
+          e.candidate_id,
+          e.simulation_id,
+          e.overall_score,
+          e.punctuality_score,
+          e.communication_score,
+          e.problem_solving_score,
+          e.adaptability_score,
+          e.collaboration_score,
+          e.attention_to_detail_score,
+          e.initiative_score,
+          e.status,
+          e.completed_at,
+          e.reviewed_at,
+          e.reviewer_id,
+          e.created_at,
+          e.updated_at,
+          
+          -- Get candidate info from users + candidate_profiles
+          u.email as candidate_email,
+          u.user_type as candidate_user_type,
+          cp.first_name as candidate_first_name,
+          cp.last_name as candidate_last_name,
+          cp.profile_photo_url as candidate_photo_url,
+          cp.headline as candidate_headline,
+          cp.github_url as candidate_github_url,
+          cp.linkedin_url as candidate_linkedin_url,
+          
+          -- Simulation info
+          sim.template_id,
+          sim.status as simulation_status,
+          sim.created_at as simulation_created_at,
+          sim.completed_at as simulation_completed_at,
+          
+          -- Template info
+          st.name as simulation_name,
+          st.type as simulation_type,
+          st.difficulty,
+          st.duration_minutes,
+          st.scoring_rubric,
+          st.pass_fail_criteria,
+          
+          -- Job info
+          j.id as job_id,
+          j.title as job_title,
+          
+          -- Company info
+          c.id as company_id,
+          c.name as company_name,
+          c.logo_url as company_logo,
+          
+          -- Reviewer info (if exists)
+          reviewer.email as reviewer_email,
+          reviewer.user_type as reviewer_type,
+          reviewer_cp.first_name as reviewer_first_name,
+          reviewer_cp.last_name as reviewer_last_name,
+          
+          -- Get AI feedback summary (aggregated)
+          (
+            SELECT jsonb_build_object(
+              'summary', eaf.summary,
+              'strengths', eaf.strengths,
+              'areas_for_improvement', eaf.areas_for_improvement,
+              'recommendations', eaf.recommendations,
+              'confidence', eaf.confidence
+            )
+            FROM evaluation_ai_feedback eaf
+            WHERE eaf.evaluation_id = e.id
+            LIMIT 1
+          ) as ai_feedback,
+          
+          -- Get behavioral metrics (aggregated)
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'metric', ebm.metric,
+                'score', ebm.score,
+                'description', ebm.description
+              )
+            )
+            FROM evaluation_behavioral_metrics ebm
+            WHERE ebm.evaluation_id = e.id
+          ) as behavioral_metrics,
+          
+          -- Get section scores (aggregated)
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'section_name', es.section_name,
+                'score', es.score,
+                'max_score', es.max_score,
+                'percentage', es.percentage,
+                'tasks_completed', es.tasks_completed,
+                'total_tasks', es.total_tasks
+              ) ORDER BY es.section_name
+            )
+            FROM evaluation_sections es
+            WHERE es.evaluation_id = e.id
+          ) as section_scores
+          
         FROM evaluations e
-        JOIN candidates c ON e.candidate_id = c.id
-        JOIN simulations s ON e.simulation_id = s.id
-        JOIN companies comp ON s.company_id = comp.id
+        
+        -- Join with users and candidate_profiles instead of candidates
+        LEFT JOIN users u ON e.candidate_id = u.id
+        LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
+        
+        LEFT JOIN simulations sim ON e.simulation_id = sim.id
+        LEFT JOIN simulation_templates st ON sim.template_id = st.id
+        LEFT JOIN jobs j ON sim.job_id = j.id
+        LEFT JOIN companies c ON j.company_id = c.id
+        
+        -- Reviewer info
+        LEFT JOIN users reviewer ON e.reviewer_id = reviewer.id
+        LEFT JOIN candidate_profiles reviewer_cp ON reviewer.id = reviewer_cp.user_id
+        
         ${whereClause}
-        ORDER BY e.completed_at DESC
-        LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
-      `;
-
-      params.push(limit, offset);
-
-      const evaluations = await pool.query(evaluationsQuery, params);
-
-      // Get total count
-      const countQuery = `
+        
+        ORDER BY e.created_at DESC
+        LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+      `, [...params, validLimit, offset]);
+      
+      // Get total count for pagination
+      const countParams = params.slice(0, paramIndex - 3);
+      const countResult = await DatabaseService.query(`
         SELECT COUNT(*) as total
         FROM evaluations e
-        JOIN simulations s ON e.simulation_id = s.id
-        ${whereClause.replace('s.company_id', 's.company_id').replace('e.status', 'e.status')}
-      `;
-
-      const countParams = params.slice(0, -2); // Remove limit and offset
-      const countResult = await pool.query(countQuery, countParams);
-
-      res.json({
-        evaluations: evaluations.rows,
-        pagination: {
-          page: Number(page),
-          limit: Number(limit),
-          total: Number(countResult.rows[0].total),
-          totalPages: Math.ceil(Number(countResult.rows[0].total) / Number(limit))
-        }
+        ${whereClause}
+      `, countParams);
+      
+      const total = parseInt(countResult.rows[0]?.total || '0');
+      
+      // Format the results
+      const formattedResults = result.rows.map((row: any) => ({
+        id: row.id,
+        candidate: {
+          id: row.candidate_id,
+          email: row.candidate_email,
+          name: `${row.candidate_first_name || ''} ${row.candidate_last_name || ''}`.trim() || row.candidate_email?.split('@')[0],
+          first_name: row.candidate_first_name,
+          last_name: row.candidate_last_name,
+          photo_url: row.candidate_photo_url,
+          headline: row.candidate_headline,
+          github_url: row.candidate_github_url,
+          linkedin_url: row.candidate_linkedin_url
+        },
+        simulation: {
+          id: row.simulation_id,
+          name: row.simulation_name,
+          type: row.simulation_type,
+          difficulty: row.difficulty,
+          duration_minutes: row.duration_minutes,
+          status: row.simulation_status,
+          created_at: row.simulation_created_at,
+          completed_at: row.simulation_completed_at
+        },
+        job: row.job_id ? {
+          id: row.job_id,
+          title: row.job_title,
+          company: {
+            id: row.company_id,
+            name: row.company_name,
+            logo: row.company_logo
+          }
+        } : null,
+        scores: {
+          overall: row.overall_score,
+          punctuality: row.punctuality_score,
+          communication: row.communication_score,
+          problem_solving: row.problem_solving_score,
+          adaptability: row.adaptability_score,
+          collaboration: row.collaboration_score,
+          attention_to_detail: row.attention_to_detail_score,
+          initiative: row.initiative_score
+        },
+        status: row.status,
+        completed_at: row.completed_at,
+        reviewed_at: row.reviewed_at,
+        reviewer: row.reviewer_id ? {
+          id: row.reviewer_id,
+          email: row.reviewer_email,
+          name: `${row.reviewer_first_name || ''} ${row.reviewer_last_name || ''}`.trim() || row.reviewer_email?.split('@')[0]
+        } : null,
+        ai_feedback: row.ai_feedback,
+        behavioral_metrics: row.behavioral_metrics || [],
+        section_scores: row.section_scores || [],
+        created_at: row.created_at,
+        updated_at: row.updated_at
+      }));
+      
+      const paginationResponse = {
+        page: validPage,
+        limit: validLimit,
+        total: total,
+        pages: Math.ceil(total / validLimit),
+        has_next: validPage * validLimit < total,
+        has_prev: validPage > 1
+      };
+      
+      console.log(`📊 [getEvaluations] Returning ${formattedResults.length} evaluations (total: ${total})`);
+      
+      ResponseService.paginated(res, formattedResults, paginationResponse);
+      
+    } catch (error: any) {
+      console.error('❌ [getEvaluations] Error:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code,
+        detail: error.detail
       });
-
-    } catch (error) {
-      logger.error('Error fetching evaluations:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      ResponseService.error(res, 'Failed to fetch evaluations', 500);
     }
   }
 
@@ -359,10 +589,9 @@ export class EvaluationController {
 
       // Get evaluation data
       const evaluationQuery = `
-        SELECT e.*, s.company_id, c.industry, c.current_role
+        SELECT e.*, s.company_id
         FROM evaluations e
         JOIN simulations s ON e.simulation_id = s.id
-        JOIN candidates c ON e.candidate_id = c.id
         WHERE e.id = $1
       `;
 
@@ -540,7 +769,7 @@ export class EvaluationController {
     // Similar calculations for role, industry, and company percentiles
     return {
       overall: Math.round((overallPercentile.rows[0]?.percentile || 0) * 100),
-      role: 75, // Mock values
+      role: 75,
       industry: 80,
       company: 70
     };
@@ -550,23 +779,16 @@ export class EvaluationController {
     // Find candidates with similar profiles
     const query = `
       SELECT
-        c.id,
+        e.candidate_id as id,
         e.overall_score,
         (1 - ABS(e.overall_score - $1) / 100.0) * 100 as similarity
-      FROM candidates c
-      JOIN evaluations e ON c.id = e.candidate_id
-      WHERE c.industry = $2 AND c.current_role = $3
-      AND c.id != $4
+      FROM evaluations e
+      WHERE e.id != $2
       ORDER BY similarity DESC
       LIMIT 5
     `;
 
-    const result = await pool.query(query, [
-      evalData.overall_score,
-      evalData.industry,
-      evalData.current_role,
-      evalData.candidate_id
-    ]);
+    const result = await pool.query(query, [evalData.overall_score, evalData.id]);
 
     return result.rows.map(row => ({
       id: row.id,

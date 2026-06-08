@@ -5,6 +5,7 @@ import { protect, authorize } from '../../middleware/auth.middleware.js';
 import { validateRequest } from '../../middleware/validation.middleware.js';
 import { withAuth } from '../../utils/auth.utils.js';
 import { AuthenticatedRequest } from '../../types/auth.types.js';
+import DatabaseService from '../../services/database.service.js';
 
 const router: Router = express.Router();
 
@@ -865,6 +866,118 @@ router.get('/filter/experience', [
   validateRequest
 ], (req: Request, res: Response) => {
   jobController.filterByExperience(req, res);
+});
+
+
+// Add this to your job.routes.ts file
+
+// @route   GET /api/v1/jobs/company/stats
+// @desc    Get company dashboard statistics
+// @access  Private (recruiter, company_admin)
+router.get('/company/stats', 
+  protect, 
+  authorize('recruiter', 'company_admin'),
+  (req: Request, res: Response) => {
+    jobController.getCompanyDashboardStats(req as AuthenticatedRequest, res);
+  }
+);
+
+
+// Add to job.routes.ts - FIXED VERSION
+router.get('/company/stats/debug', protect, async (req: Request, res: Response) => {
+  try {
+    // Cast to AuthenticatedRequest to access user property
+    const authReq = req as AuthenticatedRequest;
+    
+    // Get user info
+    const userId = authReq.user.id;
+    const userType = authReq.user.user_type;
+    
+    // Get company from team
+    const teamResult = await DatabaseService.execute(
+      'SELECT company_id FROM company_team WHERE user_id = $1',
+      [userId]
+    );
+    
+    let companyId = null;
+    if (teamResult.rows.length > 0) {
+      companyId = teamResult.rows[0].company_id;
+    }
+    
+    // Test queries
+    const testResults = {
+      user: { id: userId, type: userType },
+      team: teamResult.rows,
+      company_id: companyId,
+      
+      // Test active jobs count
+      activeJobsQuery: await DatabaseService.execute(`
+        SELECT COUNT(*) as count
+        FROM jobs
+        WHERE company_id = $1 
+          AND status = 'active'
+          AND deleted_at IS NULL
+          AND (expires_at IS NULL OR expires_at > NOW())
+      `, companyId ? [companyId] : []),
+      
+      // Test total applications
+      totalAppsQuery: await DatabaseService.execute(`
+        SELECT COUNT(*) as count
+        FROM applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE j.company_id = $1
+          AND a.deleted_at IS NULL
+      `, companyId ? [companyId] : []),
+      
+      // Test qualified candidates (match_score >= 70)
+      qualifiedCandidatesQuery: await DatabaseService.execute(`
+        SELECT COUNT(DISTINCT a.user_id) as count
+        FROM applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE j.company_id = $1
+          AND a.deleted_at IS NULL
+          AND a.match_score >= 70
+      `, companyId ? [companyId] : []),
+      
+      // Test interviews scheduled
+      interviewsScheduledQuery: await DatabaseService.execute(`
+        SELECT COUNT(*) as count
+        FROM applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE j.company_id = $1
+          AND a.deleted_at IS NULL
+          AND a.status = 'interview'
+      `, companyId ? [companyId] : []),
+      
+      // Sample jobs for this company
+      sampleJobs: await DatabaseService.execute(`
+        SELECT id, title, status, expires_at, deleted_at
+        FROM jobs
+        WHERE company_id = $1
+        LIMIT 5
+      `, companyId ? [companyId] : []),
+      
+      // Sample applications
+      sampleApps: await DatabaseService.execute(`
+        SELECT a.id, a.status, a.match_score, j.title
+        FROM applications a
+        JOIN jobs j ON a.job_id = j.id
+        WHERE j.company_id = $1
+        LIMIT 5
+      `, companyId ? [companyId] : [])
+    };
+    
+    res.json({
+      success: true,
+      data: testResults
+    });
+  } catch (error) {
+    console.error('Debug endpoint error:', error);
+    res.status(500).json({
+      success: false,
+      error: String(error)
+    });
+  }
 });
 
 export default router;

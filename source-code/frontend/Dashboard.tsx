@@ -1,16 +1,9 @@
+// Dashboard.tsx - FIXED IMPORTS
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  BarChart3, Zap, FileText, CheckSquare, TrendingUp, User, Search, Bell,
-  Settings, LogOut, ChevronRight, Clock, MapPin, Badge, Users, Briefcase,
-  Shield, Brain, Link as LinkIcon, Award, Clock as ClockIcon, MessageSquare,
-  Target, Globe, ChevronDown, Menu, X
-} from 'lucide-react';
+
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import JobCard from './components/JobCard';
-import ProfileProgressRing from './components/ProfileProgressRing';
-import SimulationScheduler from './components/Simulation/SimulationScheduler';
 import SecuritySettings from './components/SecuritySettings';
 import TeamManagement from './components/TeamManagement';
 import ProfileManagement from './components/ProfileManagement';
@@ -37,7 +30,6 @@ import SimulationList from './components/Simulation/SimulationList';
 import SimulationSessionViewer from './components/SimulationSessionViewer';
 import DashboardHome from './components/DashboardHome';
 import JobCandidatesView from './components/jobs/JobCandidatesView';
-import { mockJobs, mockSimulations } from './data/mockData';
 import { useTheme } from './context/ThemeContext';
 import { useAuth } from './context/AuthContext';
 import { GitHubRepoProvider } from './components/SimulationExecutor/context/GitHubRepoContext';
@@ -46,36 +38,56 @@ import SessionReportComponent from './components/SessionReport';
 import CandidateDetailView from './components/CandidateDetailView';
 import CandidatePerformance from './components/CandidatePerformance';
 
-export default function Dashboard({ onSignUp, onLogin }) {
-  const navigate = useNavigate();
-  const { currentTheme } = useTheme();
-  const { user: authUser, logout, loading } = useAuth();
+// Define the props for DashboardHome if needed, but it should accept these
+interface DashboardProps {
+  onSignUp?: () => void;
+  onLogin?: () => void;
+}
 
-  const [user, setUser] = useState(null);
-  const [selectedCandidate, setSelectedCandidate] = useState(null);
-  const [selectedJob, setSelectedJob] = useState(null);
-  const [appliedJobs, setAppliedJobs] = useState(() => appliedJobsManager.getAllAppliedJobs());
+// Define AuthContextType to match what useAuth returns
+interface AuthContextType {
+  user: any;
+  logout: () => void;
+  isAuthenticated: boolean;
+  loading?: boolean;
+}
+
+export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
+  const navigate = useNavigate();
+  const themeContext = useTheme();
+  const authContext = useAuth() as AuthContextType;
+  
+  const currentTheme = (themeContext as any).currentTheme || 'blue';
+  const authUser = authContext.user;
+  const logout = authContext.logout;
+  const loading = authContext.loading || false;
+
+  const [user, setUser] = useState<any>(null);
+  const [selectedCandidate, setSelectedCandidate] = useState<any>(null);
+  const [selectedJob, setSelectedJob] = useState<any>(null);
+  const [appliedJobs, setAppliedJobs] = useState<string[]>(() => appliedJobsManager.getAllAppliedJobs());
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window !== 'undefined') return window.innerWidth >= 768;
     return false;
   });
   const [currentView, setCurrentView] = useState('dashboard');
-  const [editingJobId, setEditingJobId] = useState(null);
-  const [editingSimulationId, setEditingSimulationId] = useState(null);
+  const [editingJobId, setEditingJobId] = useState<string | null>(null);
+  const [editingSimulationId, setEditingSimulationId] = useState<string | null>(null);
 
   // For Job Candidates View
-  const [selectedJobForCandidates, setSelectedJobForCandidates] = useState(null);
+  const [selectedJobForCandidates, setSelectedJobForCandidates] = useState<{ id: string; title: string } | null>(null);
 
   // For Candidate Performance View
-  const [selectedSimulation, setSelectedSimulation] = useState(null);
+  const [selectedSimulation, setSelectedSimulation] = useState<any>(null);
 
-  // ← NEW: tracks which view to return to after closing a session report
+  // Tracks which view to return to after closing a session report
   const [reportReturnView, setReportReturnView] = useState('simulations-list');
 
   // Sync user from auth context or localStorage
   useEffect(() => {
     if (authUser) {
       setUser(authUser);
+      console.log('✅ User loaded from auth context:', authUser);
     } else {
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
@@ -91,23 +103,25 @@ export default function Dashboard({ onSignUp, onLogin }) {
   }, [authUser]);
 
   useEffect(() => {
-    const handleAppliedJobsChange = (appliedJobIds) => setAppliedJobs(appliedJobIds);
+    const handleAppliedJobsChange = (appliedJobIds: string[]) => setAppliedJobs(appliedJobIds);
     appliedJobsManager.addListener(handleAppliedJobsChange);
     return () => appliedJobsManager.removeListener(handleAppliedJobsChange);
   }, []);
 
   useEffect(() => {
-    console.log('Dashboard - Auth State:', {
-      authUser, user, loading,
+    console.log('📊 Dashboard - Auth State:', {
+      authUser, 
+      user, 
+      loading, 
+      userType: user?.userType || user?.user_type,
       hasToken: !!localStorage.getItem('authToken'),
       hasUser: !!localStorage.getItem('user'),
-      storedUser: localStorage.getItem('user')
     });
   }, [authUser, user, loading]);
 
-  // Handle ?view=session-report&sessionId=xxx deep links
+  // Handle deep links
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
+    const params = new URLSearchParams(window.location.search);
     const viewParam = params.get('view');
     const sessionIdParam = params.get('sessionId');
     if (viewParam === 'session-report' && sessionIdParam) {
@@ -115,9 +129,9 @@ export default function Dashboard({ onSignUp, onLogin }) {
       setEditingSimulationId(sessionIdParam);
       setCurrentView('session-report');
     }
-  }, [location.search]);
+  }, []);
 
-  const handleApplyJob = (jobId) => {
+  const handleApplyJob = (jobId: string) => {
     appliedJobsManager.addAppliedJob(jobId);
     console.log(`Applied to job ${jobId}`);
   };
@@ -126,6 +140,8 @@ export default function Dashboard({ onSignUp, onLogin }) {
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
     localStorage.removeItem('rememberMe');
+    localStorage.removeItem('company');
+    localStorage.removeItem('companyData');
     if (logout) logout();
     setUser(null);
     setCurrentView('dashboard');
@@ -133,12 +149,12 @@ export default function Dashboard({ onSignUp, onLogin }) {
     navigate('/', { replace: true });
   };
 
-  const handleViewCandidates = (jobId, jobTitle) => {
+  const handleViewCandidates = (jobId: string, jobTitle: string) => {
     setSelectedJobForCandidates({ id: jobId, title: jobTitle });
     setCurrentView('job-candidates');
   };
 
-  const handleEditSimulation = (simulationId) => {
+  const handleEditSimulation = (simulationId: string) => {
     setEditingSimulationId(simulationId);
     setCurrentView('simulation-designer');
   };
@@ -148,13 +164,12 @@ export default function Dashboard({ onSignUp, onLogin }) {
     setCurrentView('simulation-designer');
   };
 
-  // ← NEW: open CandidatePerformance for a specific simulation
-  const handleViewCandidatePerformance = (simulation) => {
+  const handleViewCandidatePerformance = (simulation: any) => {
     setSelectedSimulation(simulation);
     setCurrentView('candidate-performance');
   };
 
-  const bgGradient = {
+  const bgGradient: Record<string, string> = {
     'blue': 'from-blue-50 to-blue-100',
     'purple': 'from-purple-50 to-purple-100',
     'indigo': 'from-indigo-50 to-indigo-100',
@@ -174,15 +189,13 @@ export default function Dashboard({ onSignUp, onLogin }) {
   }
 
   const renderView = () => {
-    console.log('🎯 Rendering view:', currentView);
+    console.log('🎯 Rendering view:', currentView, 'User type:', user?.userType || user?.user_type);
 
     switch (currentView) {
       case 'dashboard':
         return (
           <DashboardHome
             user={user}
-            mockJobs={mockJobs}
-            mockSimulations={mockSimulations}
             onApplyJob={handleApplyJob}
             onViewChange={setCurrentView}
           />
@@ -207,7 +220,7 @@ export default function Dashboard({ onSignUp, onLogin }) {
           <JobManagement
             onBack={() => setCurrentView('dashboard')}
             onCreateJob={() => setCurrentView('job-posting')}
-            onEditJob={(jobId) => {
+            onEditJob={(jobId: string) => {
               setEditingJobId(jobId);
               setCurrentView('job-posting-edit');
             }}
@@ -224,7 +237,7 @@ export default function Dashboard({ onSignUp, onLogin }) {
               setSelectedJobForCandidates(null);
               setCurrentView('jobs');
             }}
-            onViewCandidate={(candidate) => {
+            onViewCandidate={(candidate: any) => {
               setSelectedCandidate(candidate);
               setCurrentView('candidate-detail');
             }}
@@ -243,7 +256,7 @@ export default function Dashboard({ onSignUp, onLogin }) {
         return <JobPostingScreen onBack={() => setCurrentView('jobs')} isEditing={false} />;
 
       case 'job-posting-edit':
-        return <JobPostingScreen onBack={() => setCurrentView('jobs')} isEditing={true} jobId={editingJobId} />;
+        return <JobPostingScreen onBack={() => setCurrentView('jobs')} isEditing={true} jobId={editingJobId || undefined} />;
 
       case 'simulation':
         return (
@@ -261,7 +274,7 @@ export default function Dashboard({ onSignUp, onLogin }) {
             onBack={() => setCurrentView('dashboard')}
             onEditSimulation={handleEditSimulation}
             onCreateNew={handleCreateSimulation}
-            // Wire this up in SimulationList wherever you have a "View Candidates" / "View Performance" button:
+            // ✅ REMOVED: onViewCandidatePerformance is not supported by SimulationList
             // onViewCandidatePerformance={handleViewCandidatePerformance}
           />
         );
@@ -274,14 +287,12 @@ export default function Dashboard({ onSignUp, onLogin }) {
           />
         );
 
-      // ← NEW: Candidate Performance — opened from SimulationList
       case 'candidate-performance':
         return (
           <CandidatePerformance
             simulation={selectedSimulation}
             onBack={() => setCurrentView('simulations-list')}
-            onViewReport={(sessionId) => {
-              // Remember we came from candidate-performance so Back returns here
+            onViewReport={(sessionId: string) => {
               setReportReturnView('candidate-performance');
               setEditingSimulationId(sessionId);
               setCurrentView('session-report');
@@ -289,11 +300,10 @@ export default function Dashboard({ onSignUp, onLogin }) {
           />
         );
 
-      // Session report — Back goes to wherever it was opened from
       case 'session-report':
         return (
           <SessionReportComponent
-            sessionId={editingSimulationId}
+            sessionId={editingSimulationId || ''}
             onBack={() => setCurrentView(reportReturnView)}
           />
         );
@@ -360,8 +370,11 @@ export default function Dashboard({ onSignUp, onLogin }) {
     }
   };
 
+  // ============================================
+  // SAME LAYOUT FOR EVERYONE - Keep sidebar visible
+  // ============================================
   return (
-    <div className={`flex h-screen bg-gradient-to-br ${bgGradient[currentTheme]}`}>
+    <div className={`flex h-screen bg-gradient-to-br ${bgGradient[currentTheme] || bgGradient.blue}`}>
       {/* Mobile Overlay */}
       {sidebarOpen && (
         <div
@@ -370,17 +383,18 @@ export default function Dashboard({ onSignUp, onLogin }) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - Visible for EVERYONE (candidates AND recruiters) */}
       <div className={`
         fixed md:static left-0 top-16 md:top-0 h-[calc(100vh-4rem)] md:h-screen z-40 md:z-20 w-64 lg:w-72
         ${sidebarOpen ? 'block' : 'hidden'}
+        transition-all duration-300 ease-in-out
       `}>
         <Sidebar
           isOpen={sidebarOpen}
           onClose={() => setSidebarOpen(false)}
           activeView={currentView}
           onViewChange={setCurrentView}
-          userType={user?.userType || 'candidate'}
+          userType={user?.userType || user?.user_type || 'candidate'}
           onLogout={handleLogout}
         />
       </div>
@@ -392,6 +406,7 @@ export default function Dashboard({ onSignUp, onLogin }) {
           onSignUp={onSignUp}
           onLogin={onLogin}
           user={user}
+          company={user?.company || null}
           onLogout={handleLogout}
           currentView={currentView}
           onViewChange={setCurrentView}

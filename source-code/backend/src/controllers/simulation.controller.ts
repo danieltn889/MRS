@@ -14,6 +14,7 @@ import NodeCache from 'node-cache';
 // Remove circular dependency
 import githubController from './github.controller.js';
 import Groq from 'groq-sdk';
+import { logger } from '../config/logger.js';
 
 let _groq: Groq | null = null;
 function getGroq(): Groq {
@@ -13146,6 +13147,7 @@ public async verifyCredential(req: AuthenticatedRequest, res: Response): Promise
     ResponseService.error(res, 'Failed to verify credential', 500);
   }
 }
+
 
 }
 
