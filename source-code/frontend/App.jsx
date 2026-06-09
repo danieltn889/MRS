@@ -17,6 +17,7 @@ import SimulationSessionViewer from './components/SimulationSessionViewer';
 import SessionReportComponent from './components/SessionReport';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import JobDetails from './components/jobs/JobDetails';
 
 // Wrapper component for SimulationSessionViewer to handle URL params
 const SimulationResultsWrapper = () => {
@@ -117,6 +118,17 @@ function AppRoutes() {
 
       {/* Email Verification Routes */}
       <Route path="/verify-email" element={<EmailVerification />} />
+      
+      {/* ✅ FIX: Wrap JobDetails with ProtectedRoute */}
+      <Route 
+        path="/jobs/:id" 
+        element={
+          <ProtectedRoute>
+            <JobDetails />
+          </ProtectedRoute>
+        } 
+      />
+      
       <Route path="/verify-email-manual" element={<EmailVerification />} />
 
       {/* Accept Team Invitation Route */}

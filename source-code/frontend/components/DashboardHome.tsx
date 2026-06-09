@@ -251,7 +251,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
   };
 
   // Fetch AI job matches with timeout
-  const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 30000) => {
+  const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 300000) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(() => reject(new Error('Request timeout - please try again')), timeoutMs);

@@ -1,0 +1,990 @@
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Briefcase, MapPin, Clock, DollarSign, Building2, Calendar,
+  CheckCircle, XCircle, AlertCircle, Bookmark, Share2,
+  ChevronLeft, ExternalLink, GraduationCap, Award, Users,
+  Sparkles, Target, Shield, Brain, Zap, Loader2,
+  TrendingUp, TrendingDown, AlertTriangle, Info
+} from 'lucide-react';
+import { getJob } from '../../services/jobAPI';
+import { saveJob, unsaveJob, isJobSaved } from '../../services/jobStorageService';
+import appliedJobsManager from '../../src/utils/AppliedJobsManager';
+import JobApplicationModal from './JobApplicationModal';
+import { getJobMatchForCandidate } from '../../services/aiJobMatchingService';
+
+interface JobDetails {
+  id: string;
+  title: string;
+  company_name: string;
+  company_logo?: string;
+  description: string;
+  responsibilities: string[];
+  requirements: string[];
+  skills_required: Array<{ name: string }> | string[];
+  benefits: string[];
+  job_type: string;
+  work_arrangement: string;
+  location: string | { city: string; country: string; is_remote: boolean };
+  locations?: Array<{ city: string; country: string; is_remote: boolean }>;
+  salary_min: number;
+  salary_max: number;
+  salary_currency: string;
+  salary_period: string;
+  experience_min: number;
+  experience_max: number;
+  experience_level: string;
+  education_required: {
+    minimum_degree: string;
+    fields_of_study: string[];
+    certifications: string[];
+    is_degree_required: boolean;
+  };
+  department: string;
+  published_at: string;
+  expires_at: string;
+  application_count: number;
+  status: string;
+  screening_questions?: Array<{ question: string; required: boolean }>;
+  tags?: string[];
+}
+
+interface MatchDetails {
+  match_score: number;
+  match_level: string;
+  criteria_scores: {
+    skills_match: number;
+    qualifications_match: number;
+    experience_match: number;
+    preferences_match: number;
+  };
+  skills_breakdown: {
+    matched_skills: string[];
+    missing_skills: string[];
+    total_required: number;
+    total_matched: number;
+    individual_scores: number[];
+  };
+  qualifications_breakdown: {
+    candidate_degrees: string[];
+    candidate_fields: string[];
+    candidate_combined: string[];
+    job_degree_required: string;
+    job_allowed_fields: string[];
+    best_similarity: number;
+    best_matched_field: string;
+    match_type: string;
+  };
+  experience_breakdown: {
+    match_type: string;
+    total_requirements: number;
+    matched_requirements: number;
+    specific_matches: any[];
+    unmatched_requirements: string[];
+    total_years: number;
+    required_years: number;
+    gap_years: number;
+  };
+  preferences_breakdown: {
+    type_match: number;
+    remote_match: number;
+    location_match: number;
+    industry_match: number;
+    salary_match: number;
+    language_match: number;
+    candidate_job_types: string[];
+    candidate_locations: string[];
+    candidate_industries: string[];
+    candidate_languages: string[];
+    candidate_salary_min: number;
+    candidate_salary_max: number;
+    candidate_remote_preference: string;
+    missing_job_data: string[];
+  };
+}
+
+const JobDetails: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [job, setJob] = useState<JobDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [hasApplied, setHasApplied] = useState(false);
+  const [fullCandidateProfile, setFullCandidateProfile] = useState<any>(null);
+  const [matchScore, setMatchScore] = useState<number | null>(null);
+  const [matchDetails, setMatchDetails] = useState<MatchDetails | null>(null);
+  const [isLoadingMatch, setIsLoadingMatch] = useState(false);
+
+  useEffect(() => {
+    if (id) {
+      loadJobDetails();
+      checkIfSaved();
+      checkIfApplied();
+      loadCandidateProfile();
+    }
+  }, [id]);
+
+  const loadJobDetails = async () => {
+    try {
+      setLoading(true);
+      const response = await getJob(id!);
+      let jobData = response?.data?.data || response?.data || response;
+      setJob(jobData);
+    } catch (err: any) {
+      console.error('Error loading job details:', err);
+      setError(err.message || 'Failed to load job details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkIfSaved = async () => {
+    try {
+      const saved = await isJobSaved(id!);
+      setIsSaved(saved);
+    } catch (error) {
+      console.error('Error checking saved status:', error);
+    }
+  };
+
+  const checkIfApplied = () => {
+    const applied = appliedJobsManager.getAllAppliedJobs().includes(id!);
+    setHasApplied(applied);
+  };
+
+  const loadCandidateProfile = async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      
+      if (!token || !user?.id) return;
+      
+      const response = await fetch(`http://localhost:3001/api/v1/candidates/full-profile/${user.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setFullCandidateProfile(data.data);
+          await loadMatchScore(user.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading candidate profile:', error);
+    }
+  };
+
+  const loadMatchScore = async (candidateId: string) => {
+    if (!candidateId || !id) {
+      console.log('Cannot load match score - missing candidate or job ID');
+      return;
+    }
+    
+    setIsLoadingMatch(true);
+    
+    try {
+      const result = await getJobMatchForCandidate(candidateId, id);
+      
+      if (result.success && result.match) {
+        setMatchScore(result.match.match_score);
+        setMatchDetails({
+          match_score: result.match.match_score,
+          match_level: result.match.match_level,
+          criteria_scores: result.match.criteria_scores,
+          skills_breakdown: {
+            matched_skills: result.match.skills_breakdown?.matched_skills || [],
+            missing_skills: result.match.skills_breakdown?.missing_skills || [],
+            total_required: result.match.skills_breakdown?.total_required || 0,
+            total_matched: result.match.skills_breakdown?.total_matched || 0,
+            individual_scores: result.match.skills_breakdown?.individual_scores || []
+          },
+          qualifications_breakdown: {
+            candidate_degrees: result.match.qualifications_breakdown?.candidate_degrees || [],
+            candidate_fields: result.match.qualifications_breakdown?.candidate_fields || [],
+            candidate_combined: result.match.qualifications_breakdown?.candidate_combined || [],
+            job_degree_required: result.match.qualifications_breakdown?.job_degree_required || '',
+            job_allowed_fields: result.match.qualifications_breakdown?.job_allowed_fields || [],
+            best_similarity: result.match.qualifications_breakdown?.best_similarity || 0,
+            best_matched_field: result.match.qualifications_breakdown?.best_matched_field || '',
+            match_type: result.match.qualifications_breakdown?.match_type || 'none'
+          },
+          experience_breakdown: {
+            match_type: result.match.experience_breakdown?.match_type || 'unknown',
+            total_requirements: result.match.experience_breakdown?.total_requirements || 0,
+            matched_requirements: result.match.experience_breakdown?.matched_requirements || 0,
+            specific_matches: result.match.experience_breakdown?.specific_matches || [],
+            unmatched_requirements: result.match.experience_breakdown?.unmatched_requirements || [],
+            total_years: result.match.experience_breakdown?.total_years || 0,
+            required_years: result.match.experience_breakdown?.required_years || 0,
+            gap_years: result.match.experience_breakdown?.gap_years || 0
+          },
+          preferences_breakdown: {
+            type_match: result.match.preferences_breakdown?.type_match || 0,
+            remote_match: result.match.preferences_breakdown?.remote_match || 0,
+            location_match: result.match.preferences_breakdown?.location_match || 0,
+            industry_match: result.match.preferences_breakdown?.industry_match || 0,
+            salary_match: result.match.preferences_breakdown?.salary_match || 0,
+            language_match: result.match.preferences_breakdown?.language_match || 0,
+            candidate_job_types: result.match.preferences_breakdown?.candidate_job_types || [],
+            candidate_locations: result.match.preferences_breakdown?.candidate_locations || [],
+            candidate_industries: result.match.preferences_breakdown?.candidate_industries || [],
+            candidate_languages: result.match.preferences_breakdown?.candidate_languages || [],
+            candidate_salary_min: result.match.preferences_breakdown?.candidate_salary_min || 0,
+            candidate_salary_max: result.match.preferences_breakdown?.candidate_salary_max || 0,
+            candidate_remote_preference: result.match.preferences_breakdown?.candidate_remote_preference || 'flexible',
+            missing_job_data: result.match.preferences_breakdown?.missing_job_data || []
+          }
+        });
+        
+        console.log('✅ AI Match score loaded:', result.match.match_score);
+      } else {
+        console.log('No match score available:', result.error);
+      }
+    } catch (error) {
+      console.error('Error loading match score:', error);
+    } finally {
+      setIsLoadingMatch(false);
+    }
+  };
+
+  const handleSaveJob = async () => {
+    try {
+      if (isSaved) {
+        await unsaveJob(id!);
+        setIsSaved(false);
+        alert('Job removed from saved!');
+      } else {
+        await saveJob(id!);
+        setIsSaved(true);
+        alert('Job saved successfully!');
+      }
+    } catch (error: any) {
+      alert(error.message || 'Failed to update saved status');
+    }
+  };
+
+  const handleApplyNow = () => {
+    if (!fullCandidateProfile) {
+      alert('Please complete your profile before applying.');
+      navigate('/dashboard?view=profile');
+      return;
+    }
+    setShowApplicationModal(true);
+  };
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    alert('Link copied to clipboard!');
+  };
+
+  const formatSalary = () => {
+    if (!job) return 'Not specified';
+    const currency = job.salary_currency || 'Rwf';
+    const period = job.salary_period === 'yearly' ? '/year' : '/month';
+    
+    if (job.salary_min && job.salary_max) {
+      return `${currency} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}${period}`;
+    }
+    if (job.salary_min) return `From ${currency} ${job.salary_min.toLocaleString()}${period}`;
+    if (job.salary_max) return `Up to ${currency} ${job.salary_max.toLocaleString()}${period}`;
+    return 'Not specified';
+  };
+
+  const formatLocation = () => {
+    if (!job) return 'Not specified';
+    
+    if (job.locations && job.locations.length > 0) {
+      const loc = job.locations[0];
+      if (loc.is_remote) return 'Remote';
+      return [loc.city, loc.country].filter(Boolean).join(', ');
+    }
+    
+    if (typeof job.location === 'object' && job.location !== null) {
+      if (job.location.is_remote) return 'Remote';
+      return [job.location.city, job.location.country].filter(Boolean).join(', ');
+    }
+    
+    return typeof job.location === 'string' ? job.location : 'Not specified';
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Not specified';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const getDaysRemaining = () => {
+    if (!job?.expires_at) return null;
+    const days = Math.ceil((new Date(job.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+    return days > 0 ? days : 0;
+  };
+
+  const getMatchLevelColor = () => {
+    if (!matchScore) return 'bg-gray-100 text-gray-600';
+    if (matchScore >= 80) return 'bg-green-100 text-green-800';
+    if (matchScore >= 60) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
+  };
+
+  const getMatchLevelIcon = () => {
+    if (!matchScore) return null;
+    if (matchScore >= 80) return <TrendingUp className="w-5 h-5" />;
+    if (matchScore >= 60) return <TrendingUp className="w-5 h-5" />;
+    return <TrendingDown className="w-5 h-5" />;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading job details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !job) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center max-w-md mx-auto p-8 bg-white rounded-2xl shadow-lg">
+          <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Job Not Found</h2>
+          <p className="text-gray-600 mb-6">{error || 'The job you are looking for does not exist.'}</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const daysRemaining = getDaysRemaining();
+  const isExpired = daysRemaining === 0;
+  const isActive = job.status === 'active' && !isExpired;
+
+  // Show loading spinner while AI match is being calculated
+  if (isLoadingMatch) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <div className="relative">
+                <div className="w-20 h-20 border-4 border-blue-200 rounded-full animate-spin border-t-blue-600 mx-auto mb-4"></div>
+                <Brain className="w-10 h-10 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Analyzing Your Match</h3>
+              <p className="text-gray-500 max-w-md">
+                Our AI is comparing your skills, qualifications, experience, and preferences against this job...
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2 text-sm text-gray-400">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse delay-150"></div>
+                <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse delay-300"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="min-h-screen bg-gray-50">
+        {/* Header with back button */}
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+                <span>Back</span>
+              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleSaveJob}
+                  className={`p-2 rounded-lg transition-colors ${
+                    isSaved ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <Bookmark className="w-5 h-5" fill={isSaved ? 'currentColor' : 'none'} />
+                </button>
+                <button
+                  onClick={handleShare}
+                  className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                >
+                  <Share2 className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Column - Job Details */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Job Header */}
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-8 h-8 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">{job.title}</h1>
+                    <p className="text-lg text-gray-600 mb-3">{job.company_name}</p>
+                    <div className="flex flex-wrap gap-3 text-sm text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        {formatLocation()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Briefcase className="w-4 h-4" />
+                        {job.job_type || 'Full-time'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {job.work_arrangement || 'Onsite'}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="w-4 h-4" />
+                        {formatSalary()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* AI Match Score Badge */}
+                {matchScore && matchDetails && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${getMatchLevelColor()}`}>
+                      {getMatchLevelIcon()}
+                      <span className="text-sm font-medium">
+                        AI Match Score: {matchScore}% - {matchDetails.match_level}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status Badge */}
+                <div className="mt-2">
+                  {isActive ? (
+                    <div className="flex items-center gap-2 text-green-600 bg-green-50 px-3 py-2 rounded-lg inline-flex">
+                      <CheckCircle className="w-4 h-4" />
+                      <span className="text-sm font-medium">Active</span>
+                      {daysRemaining && <span className="text-xs">({daysRemaining} days left)</span>}
+                    </div>
+                  ) : isExpired ? (
+                    <div className="flex items-center gap-2 text-red-600 bg-red-50 px-3 py-2 rounded-lg inline-flex">
+                      <XCircle className="w-4 h-4" />
+                      <span className="text-sm font-medium">Expired</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-yellow-600 bg-yellow-50 px-3 py-2 rounded-lg inline-flex">
+                      <AlertCircle className="w-4 h-4" />
+                      <span className="text-sm font-medium">Draft</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Job Description</h2>
+                <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{job.description}</p>
+              </div>
+
+              {/* Responsibilities */}
+              {job.responsibilities && job.responsibilities.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Key Responsibilities</h2>
+                  <ul className="space-y-2">
+                    {job.responsibilities.map((resp, index) => (
+                      <li key={index} className="flex items-start gap-2 text-gray-600">
+                        <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <span>{resp}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Requirements */}
+              {job.requirements && job.requirements.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Requirements</h2>
+                  <ul className="space-y-2">
+                    {job.requirements.map((req, index) => (
+                      <li key={index} className="flex items-start gap-2 text-gray-600">
+                        <Target className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+                        <span>{req}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Skills Required - WITH MATCH INDICATORS */}
+              {job.skills_required && job.skills_required.length > 0 && matchDetails && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Required Skills</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {job.skills_required.map((skill, index) => {
+                      const skillName = typeof skill === 'string' ? skill : skill.name;
+                      const matchedSkills = matchDetails.skills_breakdown.matched_skills || [];
+                      const isMatched = matchedSkills.includes(skillName);
+                      const skillScore = matchDetails.skills_breakdown.individual_scores?.[index];
+                      return (
+                        <div key={index} className="relative group">
+                          <span
+                            className={`px-3 py-1.5 rounded-lg text-sm font-medium inline-flex items-center gap-1 cursor-help ${
+                              isMatched
+                                ? 'bg-green-50 text-green-700 border border-green-200'
+                                : 'bg-blue-50 text-blue-700'
+                            }`}
+                          >
+                            {skillName}
+                            {isMatched && <CheckCircle className="w-3 h-3 text-green-600" />}
+                            {!isMatched && <AlertCircle className="w-3 h-3 text-yellow-500" />}
+                          </span>
+                          {skillScore !== undefined && (
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                              Match: {Math.round(skillScore * 100)}%
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  
+                  {/* Skills Match Score */}
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-sm font-medium text-gray-700">Skills Match Score</span>
+                      <span className="text-sm font-bold text-gray-900">{matchDetails.criteria_scores.skills_match}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${matchDetails.criteria_scores.skills_match}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {matchDetails.skills_breakdown.total_matched} of {matchDetails.skills_breakdown.total_required} skills matched
+                    </p>
+                  </div>
+                  
+                  {/* Missing Skills Warning */}
+                  {matchDetails.skills_breakdown.missing_skills.length > 0 && (
+                    <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+                      <p className="text-sm text-yellow-800 font-medium mb-1 flex items-center gap-1">
+                        <AlertTriangle className="w-4 h-4" />
+                        Skills to develop:
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {matchDetails.skills_breakdown.missing_skills.map((skill, idx) => (
+                          <span key={idx} className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Education Requirements with Match Info */}
+              {job.education_required && matchDetails && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Education & Qualifications</h2>
+                  <div className="space-y-3">
+                    {job.education_required.minimum_degree && (
+                      <div className="flex items-start gap-2">
+                        <GraduationCap className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-gray-900">Minimum Degree</p>
+                          <p className="text-gray-600">{job.education_required.minimum_degree}</p>
+                          {matchDetails.qualifications_breakdown.best_matched_field && (
+                            <p className="text-xs text-green-600 mt-1">
+                              ✓ Your degree matches: {matchDetails.qualifications_breakdown.best_matched_field}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {job.education_required.fields_of_study?.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <Award className="w-5 h-5 text-purple-500 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-medium text-gray-900">Fields of Study</p>
+                          <p className="text-gray-600">{job.education_required.fields_of_study.join(', ')}</p>
+                          {matchDetails.qualifications_breakdown.candidate_fields && (
+                            <p className="text-xs text-green-600 mt-1">
+                              Your fields: {matchDetails.qualifications_breakdown.candidate_fields.join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div className="mt-3 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-sm font-medium text-gray-700">Qualifications Match</span>
+                        <span className="text-sm font-bold text-gray-900">{matchDetails.criteria_scores.qualifications_match}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-purple-600 h-2 rounded-full transition-all duration-500"
+                          style={{ width: `${matchDetails.criteria_scores.qualifications_match}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Benefits */}
+              {job.benefits && job.benefits.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4">Benefits</h2>
+                  <ul className="space-y-2">
+                    {job.benefits.map((benefit, index) => (
+                      <li key={index} className="flex items-start gap-2 text-gray-600">
+                        <Sparkles className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                        <span>{benefit}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column - Sidebar */}
+            <div className="space-y-6">
+              {/* Match Score Card with FULL AI Details */}
+              {matchScore && matchDetails && (
+                <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
+                  <div className="text-center">
+                    <div className="relative inline-flex items-center justify-center mb-4">
+                      <div className="w-32 h-32 rounded-full bg-white/20 flex items-center justify-center">
+                        <div className="text-center">
+                          <span className="text-4xl font-bold">{matchScore}%</span>
+                          <p className="text-xs opacity-80">Match Score</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <p className="text-white/90 mb-4">
+                      {matchScore >= 80 
+                        ? 'Excellent match! You are highly qualified for this role.' 
+                        : matchScore >= 60 
+                        ? 'Good match! Your profile aligns well with this position.'
+                        : 'Consider updating your profile to better match this role.'}
+                    </p>
+                    
+                    {/* Factor Breakdown with detailed info */}
+                    <div className="space-y-3 text-left mb-4">
+                      <p className="text-xs font-semibold text-white/80">Match Breakdown:</p>
+                      
+                      {/* Skills */}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="flex items-center gap-1">
+                            <Zap className="w-3 h-3" /> Skills Match
+                          </span>
+                          <span>{matchDetails.criteria_scores.skills_match}%</span>
+                        </div>
+                        <div className="w-full bg-white/20 rounded-full h-1.5">
+                          <div 
+                            className="bg-green-400 h-1.5 rounded-full transition-all duration-500" 
+                            style={{ width: `${matchDetails.criteria_scores.skills_match}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-white/60 mt-1">
+                          {matchDetails.skills_breakdown.total_matched}/{matchDetails.skills_breakdown.total_required} skills matched
+                        </p>
+                      </div>
+                      
+                      {/* Qualifications */}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="flex items-center gap-1">
+                            <GraduationCap className="w-3 h-3" /> Qualifications
+                          </span>
+                          <span>{matchDetails.criteria_scores.qualifications_match}%</span>
+                        </div>
+                        <div className="w-full bg-white/20 rounded-full h-1.5">
+                          <div 
+                            className="bg-blue-400 h-1.5 rounded-full transition-all duration-500" 
+                            style={{ width: `${matchDetails.criteria_scores.qualifications_match}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-white/60 mt-1">
+                          Matched on: {matchDetails.qualifications_breakdown.match_type}
+                        </p>
+                      </div>
+                      
+                      {/* Experience */}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="flex items-center gap-1">
+                            <Briefcase className="w-3 h-3" /> Experience
+                          </span>
+                          <span>{matchDetails.criteria_scores.experience_match}%</span>
+                        </div>
+                        <div className="w-full bg-white/20 rounded-full h-1.5">
+                          <div 
+                            className="bg-yellow-400 h-1.5 rounded-full transition-all duration-500" 
+                            style={{ width: `${matchDetails.criteria_scores.experience_match}%` }}
+                          />
+                        </div>
+                        <p className="text-[10px] text-white/60 mt-1">
+                          {matchDetails.experience_breakdown.total_years} years / {matchDetails.experience_breakdown.required_years}+ required
+                        </p>
+                      </div>
+                      
+                      {/* Preferences */}
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="flex items-center gap-1">
+                            <Target className="w-3 h-3" /> Preferences
+                          </span>
+                          <span>{matchDetails.criteria_scores.preferences_match}%</span>
+                        </div>
+                        <div className="w-full bg-white/20 rounded-full h-1.5">
+                          <div 
+                            className="bg-purple-400 h-1.5 rounded-full transition-all duration-500" 
+                            style={{ width: `${matchDetails.criteria_scores.preferences_match}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => navigate('/dashboard?view=profile')}
+                      className="w-full py-2 bg-white text-blue-600 rounded-xl font-semibold hover:bg-gray-100 transition-colors"
+                    >
+                      Improve Your Match
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Experience Match Details Card */}
+              {matchDetails && matchDetails.experience_breakdown.gap_years > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <Briefcase className="w-4 h-4 text-yellow-500" />
+                    Experience Gap Analysis
+                  </h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Your Experience:</span>
+                      <span className="font-medium text-gray-900">{matchDetails.experience_breakdown.total_years} years</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Required Experience:</span>
+                      <span className="font-medium text-gray-900">{matchDetails.experience_breakdown.required_years}+ years</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Experience Gap:</span>
+                      <span className="font-medium text-red-600">{matchDetails.experience_breakdown.gap_years} years</span>
+                    </div>
+                    <div className="mt-3 p-2 bg-yellow-50 rounded-lg">
+                      <p className="text-xs text-yellow-800">
+                        Consider highlighting transferable skills or relevant projects to bridge this gap.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Preferences Match Details */}
+              {matchDetails && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                    <Target className="w-4 h-4 text-purple-500" />
+                    Preferences Match
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Job Type:</span>
+                      <span className="font-medium text-gray-900">{Math.round(matchDetails.preferences_breakdown.type_match * 100)}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Remote Work:</span>
+                      <span className="font-medium text-gray-900">{Math.round(matchDetails.preferences_breakdown.remote_match * 100)}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Location:</span>
+                      <span className="font-medium text-gray-900">{Math.round(matchDetails.preferences_breakdown.location_match * 100)}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Industry:</span>
+                      <span className="font-medium text-gray-900">{Math.round(matchDetails.preferences_breakdown.industry_match * 100)}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Salary:</span>
+                      <span className="font-medium text-gray-900">{Math.round(matchDetails.preferences_breakdown.salary_match * 100)}%</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Application Card */}
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Application Summary</h3>
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-500">Posted</span>
+                    <span className="text-gray-900">{formatDate(job.published_at)}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-500">Applications</span>
+                    <span className="text-gray-900">{job.application_count || 0}</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100">
+                    <span className="text-gray-500">Required Experience</span>
+                    <span className="text-gray-900">
+                      {job.experience_min && job.experience_max 
+                        ? `${job.experience_min} - ${job.experience_max} years`
+                        : job.experience_level || 'Not specified'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-500">Deadline</span>
+                    <span className={daysRemaining && daysRemaining <= 7 ? 'text-red-600 font-medium' : 'text-gray-900'}>
+                      {formatDate(job.expires_at)}
+                      {daysRemaining && daysRemaining > 0 && (
+                        <span className="text-xs ml-1">({daysRemaining} days left)</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-6 space-y-3">
+                  {!hasApplied && isActive ? (
+                    <button
+                      onClick={handleApplyNow}
+                      disabled={isApplying}
+                      className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50"
+                    >
+                      {isApplying ? <Loader2 className="w-5 h-5 animate-spin mx-auto" /> : 'Apply Now'}
+                    </button>
+                  ) : hasApplied ? (
+                    <div className="text-center py-3 bg-green-50 text-green-600 rounded-xl">
+                      <CheckCircle className="w-5 h-5 inline mr-2" />
+                      You have applied for this position
+                    </div>
+                  ) : !isActive ? (
+                    <div className="text-center py-3 bg-gray-100 text-gray-500 rounded-xl">
+                      This position is no longer accepting applications
+                    </div>
+                  ) : null}
+                  
+                  <button
+                    onClick={handleSaveJob}
+                    className="w-full py-3 border-2 border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Bookmark className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />
+                    {isSaved ? 'Saved' : 'Save Job'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Tags */}
+              {job.tags && job.tags.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Tags</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {job.tags.map((tag, index) => (
+                      <span key={index} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Company Info */}
+              <div className="bg-white rounded-2xl shadow-sm p-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">About {job.company_name}</h3>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
+                    <Building2 className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{job.company_name}</p>
+                    <p className="text-xs text-gray-500">{job.department || 'Technology'}</p>
+                  </div>
+                </div>
+                <button className="w-full py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50 transition-colors">
+                  View Company Profile
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Application Modal */}
+      {showApplicationModal && fullCandidateProfile && (
+        <JobApplicationModal
+          isOpen={showApplicationModal}
+          onClose={() => {
+            setShowApplicationModal(false);
+            setIsApplying(false);
+          }}
+          onSuccess={() => {
+            setHasApplied(true);
+            setShowApplicationModal(false);
+            alert('Application submitted successfully!');
+          }}
+          job={{
+            id: job.id,
+            title: job.title,
+            company_name: job.company_name,
+            location: formatLocation(),
+            salary_range: formatSalary(),
+            job_type: job.job_type,
+            work_arrangement: job.work_arrangement,
+            description: job.description,
+            requirements: job.requirements,
+            skills_required: job.skills_required,
+            screeningQuestions: job.screening_questions,
+            expires_at: job.expires_at
+          }}
+          candidateProfile={{
+            profile: fullCandidateProfile.profile?.personal_info || {},
+            skills: fullCandidateProfile.skills || [],
+            education: fullCandidateProfile.education || [],
+            workExperience: fullCandidateProfile.work_experience || [],
+            portfolioLinks: fullCandidateProfile.portfolio_links || [],
+            resumes: fullCandidateProfile.resumes || [],
+          }}
+          matchScore={matchScore || 75}
+          requiredDocuments={['Resume', 'Cover Letter']}
+        />
+      )}
+    </>
+  );
+};
+
+export default JobDetails;

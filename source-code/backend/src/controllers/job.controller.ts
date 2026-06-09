@@ -4042,46 +4042,45 @@ private async getUserCompanyId(userId: string, userType: string): Promise<string
   
   return teamResult.rows[0]?.company_id || null;
 }
-// Add these methods to your JobController class (before the closing brace)
 
 // =====================================================
-// SAVE JOB FOR CANDIDATE
+// SAVED JOBS METHODS
 // =====================================================
 
+/**
+ * Save a job for the current user
+ * @route POST /api/v1/jobs/saved/:jobId
+ * @access Private (all authenticated users)
+ */
 async saveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const { jobId } = req.params;
     const userId = req.user.id;
 
     if (!jobId || !ValidationService.isValidUUID(jobId)) {
-      ResponseService.error(res, 'Invalid job ID format', 400);
+      this.sendError(res, 'Invalid job ID format', 400);
       return;
     }
 
-    // Check if job exists and is active
+    // Check if job exists
     const jobCheck = await DatabaseService.execute(
-      'SELECT id, status FROM jobs WHERE id = $1',
+      `SELECT id, status FROM jobs WHERE id = $1 AND deleted_at IS NULL`,
       [jobId]
     );
 
     if (jobCheck.rows.length === 0) {
-      ResponseService.error(res, 'Job not found', 404);
-      return;
-    }
-
-    if (jobCheck.rows[0].status !== 'active') {
-      ResponseService.error(res, 'Job is not active', 400);
+      this.sendError(res, 'Job not found', 404);
       return;
     }
 
     // Check if already saved
     const existingSave = await DatabaseService.execute(
-      'SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2',
+      `SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2`,
       [userId, jobId]
     );
 
     if (existingSave.rows.length > 0) {
-      ResponseService.error(res, 'Job already saved', 400);
+      this.sendError(res, 'Job already saved', 400);
       return;
     }
 
@@ -4092,55 +4091,57 @@ async saveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
       [userId, jobId]
     );
 
-    ResponseService.success(res, { jobId, saved: true }, 'Job saved successfully');
-  } catch (error: any) {
+    this.sendSuccess(res, { jobId, saved: true }, 'Job saved successfully');
+  } catch (error) {
     logger.error('Error saving job:', error);
-    ResponseService.error(res, 'Failed to save job', 500);
+    this.sendError(res, 'Failed to save job', 500, error as Error);
   }
 }
 
-// =====================================================
-// UNSAVE JOB (REMOVE FROM SAVED)
-// =====================================================
-
+/**
+ * Unsave a job (remove from saved)
+ * @route DELETE /api/v1/jobs/saved/:jobId
+ * @access Private (all authenticated users)
+ */
 async unsaveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const { jobId } = req.params;
     const userId = req.user.id;
 
     if (!jobId || !ValidationService.isValidUUID(jobId)) {
-      ResponseService.error(res, 'Invalid job ID format', 400);
+      this.sendError(res, 'Invalid job ID format', 400);
       return;
     }
 
     const result = await DatabaseService.execute(
-      'DELETE FROM saved_jobs WHERE user_id = $1 AND job_id = $2 RETURNING *',
+      `DELETE FROM saved_jobs WHERE user_id = $1 AND job_id = $2 RETURNING 1`,
       [userId, jobId]
     );
 
     if (result.rows.length === 0) {
-      ResponseService.error(res, 'Job not found in saved list', 404);
+      this.sendError(res, 'Job not found in saved list', 404);
       return;
     }
 
-    ResponseService.success(res, { jobId, unsaved: true }, 'Job removed from saved');
-  } catch (error: any) {
+    this.sendSuccess(res, { jobId, saved: false }, 'Job removed from saved');
+  } catch (error) {
     logger.error('Error unsaving job:', error);
-    ResponseService.error(res, 'Failed to unsave job', 500);
+    this.sendError(res, 'Failed to unsave job', 500, error as Error);
   }
 }
 
-// =====================================================
-// GET SAVED JOBS FOR CANDIDATE
-// =====================================================
-
+/**
+ * Get all saved jobs for the current user
+ * @route GET /api/v1/jobs/saved
+ * @access Private (all authenticated users)
+ */
 async getSavedJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const userId = req.user.id;
     const { page = '1', limit = '20' } = req.query;
 
-    const validPage = Math.max(1, Number(page));
-    const validLimit = Math.min(100, Number(limit));
+    const validPage = Math.max(1, parseInt(page as string));
+    const validLimit = Math.min(100, parseInt(limit as string));
     const offset = (validPage - 1) * validLimit;
 
     const result = await DatabaseService.execute(`
@@ -4148,59 +4149,84 @@ async getSavedJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
         j.*,
         c.name as company_name,
         c.logo_url as company_logo,
-        sj.saved_at
+        sj.saved_at,
+        sj.notes,
+        sj.tags,
+        sj.priority,
+        sj.folder
       FROM saved_jobs sj
       JOIN jobs j ON sj.job_id = j.id
       LEFT JOIN companies c ON j.company_id = c.id
       WHERE sj.user_id = $1
+        AND j.deleted_at IS NULL
       ORDER BY sj.saved_at DESC
       LIMIT $2 OFFSET $3
     `, [userId, validLimit, offset]);
 
     const countResult = await DatabaseService.execute(
-      'SELECT COUNT(*) as total FROM saved_jobs WHERE user_id = $1',
+      `SELECT COUNT(*) as total FROM saved_jobs WHERE user_id = $1`,
       [userId]
     );
 
     const total = parseInt(countResult.rows[0]?.total || '0');
 
-    ResponseService.paginated(res, result.rows, {
-      page: validPage,
-      limit: validLimit,
-      total,
-      pages: Math.ceil(total / validLimit),
-      has_next: validPage * validLimit < total,
-      has_prev: validPage > 1,
+    this.sendSuccess(res, {
+      data: result.rows,
+      pagination: {
+        current_page: validPage,
+        per_page: validLimit,
+        total_items: total,
+        total_pages: Math.ceil(total / validLimit),
+        has_next_page: validPage * validLimit < total,
+        has_prev_page: validPage > 1
+      }
     });
-  } catch (error: any) {
+  } catch (error) {
     logger.error('Error getting saved jobs:', error);
-    ResponseService.error(res, 'Failed to get saved jobs', 500);
+    this.sendError(res, 'Failed to get saved jobs', 500, error as Error);
   }
 }
 
-// =====================================================
-// CHECK IF JOB IS SAVED
-// =====================================================
-
+/**
+ * Check if a job is saved by the current user
+ * @route GET /api/v1/jobs/saved/:jobId/check
+ * @access Private (all authenticated users)
+ */
 async isJobSaved(req: AuthenticatedRequest, res: Response): Promise<void> {
   try {
     const { jobId } = req.params;
     const userId = req.user.id;
 
     if (!jobId || !ValidationService.isValidUUID(jobId)) {
-      ResponseService.error(res, 'Invalid job ID format', 400);
+      this.sendError(res, 'Invalid job ID format', 400);
       return;
     }
 
+    // Check if job exists
+    const jobCheck = await DatabaseService.execute(
+      `SELECT id FROM jobs WHERE id = $1 AND deleted_at IS NULL`,
+      [jobId]
+    );
+
+    if (jobCheck.rows.length === 0) {
+      this.sendError(res, 'Job not found', 404);
+      return;
+    }
+
+    // Check if saved
     const result = await DatabaseService.execute(
-      'SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2',
+      `SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2`,
       [userId, jobId]
     );
 
-    ResponseService.success(res, { saved: result.rows.length > 0 });
-  } catch (error: any) {
+    this.sendSuccess(res, {
+      saved: result.rows.length > 0,
+      isSaved: result.rows.length > 0,
+      jobId
+    });
+  } catch (error) {
     logger.error('Error checking saved job:', error);
-    ResponseService.error(res, 'Failed to check saved job', 500);
+    this.sendError(res, 'Failed to check saved status', 500, error as Error);
   }
 }
 

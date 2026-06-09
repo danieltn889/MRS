@@ -110,11 +110,35 @@ const Login: React.FC = () => {
       // Update auth context
       login(result.user, result.token);
 
-      // Redirect to dashboard or originally requested page
-      const from = (location.state as LocationState)?.from || '/';
+      // ✅ Get redirect path and CLEAR it from sessionStorage
+      let redirectUrl = sessionStorage.getItem('redirectAfterLogin');
+      
+      // ✅ Clear immediately after reading
+      if (redirectUrl) {
+        sessionStorage.removeItem('redirectAfterLogin');
+      }
+      
+      // Get from location state as fallback
+      const fromState = (location.state as LocationState)?.from;
+      
+      // Determine final redirect URL
+      let finalRedirectUrl = '/dashboard';
+      
+      if (redirectUrl) {
+        finalRedirectUrl = redirectUrl;
+        console.log('🔀 Redirecting to saved URL:', finalRedirectUrl);
+      } else if (fromState && fromState !== '/login') {
+        finalRedirectUrl = fromState;
+        console.log('🔀 Redirecting from state:', finalRedirectUrl);
+      } else {
+        console.log('🔀 Redirecting to dashboard');
+      }
+      
+      // Small delay to show success message
       setTimeout(() => {
-        navigate(from, { replace: true });
-      }, 1500);
+        navigate(finalRedirectUrl, { replace: true });
+      }, 1000);
+      
     } catch (error: any) {
       const errorMessage = error.message || 'Login failed. Please try again.';
       const errorCode = error.code || 'LOGIN_ERROR';
@@ -127,7 +151,7 @@ const Login: React.FC = () => {
       if (errorCode === 'RATE_LIMIT_EXCEEDED' || error.statusCode === 429) {
         newStatus = 'rate_limit';
       }
-      // Check for unverified account (by code or message fallback)
+      // Check for unverified account
       else if (errorCode === 'ACCOUNT_UNVERIFIED' || 
           errorMessage.toLowerCase().includes('not verified') ||
           errorMessage.toLowerCase().includes('verify')) {
@@ -179,6 +203,16 @@ const Login: React.FC = () => {
     } finally {
       setIsResendingEmail(false);
     }
+  };
+
+  // Handle close modal
+  const handleCloseModal = () => {
+    // ✅ Clear redirect if modal is closed without login
+    const redirectUrl = sessionStorage.getItem('redirectAfterLogin');
+    if (redirectUrl) {
+      sessionStorage.removeItem('redirectAfterLogin');
+    }
+    navigate('/');
   };
 
   // Render error state with specific handling
