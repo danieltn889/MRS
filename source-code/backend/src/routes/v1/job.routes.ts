@@ -980,4 +980,31 @@ router.get('/company/stats/debug', protect, async (req: Request, res: Response) 
   }
 });
 
+// =====================================================
+// GET JOB CANDIDATES COMPLETE WITH SIMULATIONS & TASKS
+// =====================================================
+
+// @route   GET /api/v1/jobs/:jobId/candidates/complete
+// @desc    Get all candidates who applied to a job with complete details including simulations, tasks, and marks
+// @access  Private (recruiter, company_admin)
+router.get('/:jobId/candidates/complete',
+  protect,
+  authorize('recruiter', 'company_admin'),
+  [
+    param('jobId').isUUID().withMessage('Invalid job ID format'),
+    query('page').optional().isInt({ min: 1 }),
+    query('limit').optional().isInt({ min: 1, max: 100 }),
+    query('sortBy').optional().isIn(['overall_score', 'applied_at', 'completion_rate', 'name']),
+    query('sortOrder').optional().isIn(['ASC', 'DESC']),
+    query('minScore').optional().isFloat({ min: 0, max: 100 }),
+    query('maxScore').optional().isFloat({ min: 0, max: 100 }),
+    query('status').optional().isString(),
+    query('hasSimulation').optional().isIn(['true', 'false', 'all']),
+    validateRequest
+  ],
+  (req: Request, res: Response) => {
+    jobController.getJobCandidatesComplete(req as AuthenticatedRequest, res);
+  }
+);
+
 export default router;

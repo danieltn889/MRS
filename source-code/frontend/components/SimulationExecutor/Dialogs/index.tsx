@@ -10,6 +10,7 @@ import {
 import aiEvaluationService from '../../../services/aiEvaluation.service';
 import { calculateGitHubScoreForRepo,verifyGitHubUser } from '../../../services/simulationAPI';
 import { GitHubStatsCompact } from '../GitHubStatsCompact';
+import { githubAuthService } from '../../../services/githubAuth.service';
 
 // ============================================
 // TYPES
@@ -397,112 +398,114 @@ export const SessionStartDialog: React.FC<SessionStartDialogProps> = ({
   isLoading = false,
   error = null,
 }) => {
-  const [githubUsername, setGithubUsername] = useState('');
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyError, setVerifyError] = useState<string | null>(null);
-  const [usernameValid, setUsernameValid] = useState(false);
+  const [githubUser, setGithubUser] = useState<{ username: string; avatarUrl: string } | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  // On open, check if already connected
+  useEffect(() => {
+    if (!open) return;
+    const check = async () => {
+      const lsUsername = localStorage.getItem('github_username');
+      if (lsUsername) {
+        setGithubUser({ username: lsUsername, avatarUrl: '' });
+        return;
+      }
+      const user = await githubAuthService.getCurrentUser();
+      if (user) setGithubUser(user);
+    };
+    check();
+  }, [open]);
 
   if (!open) return null;
 
-  const verifyUsername = async () => {
-    if (!githubUsername.trim()) {
-      setVerifyError('GitHub username is required');
-      return;
-    }
-    
-    setIsVerifying(true);
-    setVerifyError(null);
-    
-     try {
-      // ✅ Use simulationAPI instead of direct fetch
-      const response = await verifyGitHubUser(githubUsername.trim());
-      
-      if (response.success) {
-        setUsernameValid(true);
-      } else {
-        throw new Error(response.message || 'GitHub user not found');
+  const handleConnectGitHub = async () => {
+    setIsConnecting(true);
+    try {
+      const result = await githubAuthService.loginWithGitHubPopup();
+      if (result.success && result.username) {
+        setGithubUser({ username: result.username, avatarUrl: result.avatarUrl || '' });
       }
-    } catch (err: any) {
-      setVerifyError(err.message || 'Failed to verify GitHub username');
-      setUsernameValid(false);
+    } catch (err) {
+      console.error('GitHub popup error:', err);
     } finally {
-      setIsVerifying(false);
+      setIsConnecting(false);
     }
   };
 
   const handleStart = async () => {
-    if (!usernameValid && githubUsername) {
-      await verifyUsername();
-      if (!usernameValid) return;
-    }
-    
-    if (!githubUsername.trim()) {
-      setVerifyError('GitHub username is required');
-      return;
-    }
-    
-    await onStart(githubUsername.trim());
+    if (!githubUser?.username) return;
+    await onStart(githubUser.username);
   };
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700">
         <div className="text-center mb-6">
-          <FolderGit2 size={48} className="mx-auto text-blue-400 mb-4" />
-          <h2 className="text-2xl font-bold text-white">Start New Simulation</h2>
+          <Github size={48} className="mx-auto text-blue-400 mb-4" />
+          <h2 className="text-2xl font-bold text-white">Connect GitHub to Start</h2>
           <p className="text-gray-400 mt-2">
-            We'll create a GitHub repository for your work. Please enter your GitHub username.
+            We'll create a repository for your work. Please connect your GitHub account.
           </p>
         </div>
-        
-        <div className="mb-4">
-          <label className="block text-gray-300 text-sm font-medium mb-2">
-            GitHub Username
-          </label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={githubUsername}
-              onChange={(e) => {
-                setGithubUsername(e.target.value);
-                setUsernameValid(false);
-                setVerifyError(null);
-              }}
-              placeholder="e.g., octocat"
-              className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-              disabled={Boolean(isLoading || isVerifying)}
-            />
+
+        {!githubUser ? (
+          <div className="mb-6">
             <button
-              onClick={verifyUsername}
-              disabled={Boolean(isVerifying || !githubUsername.trim() || isLoading)}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 disabled:opacity-50 flex items-center gap-2"
+              onClick={handleConnectGitHub}
+              disabled={isConnecting}
+              className="w-full py-3 bg-gray-900 border border-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-3 disabled:opacity-50"
             >
-              {isVerifying ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-              Verify
+              {isConnecting ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Connecting to GitHub...
+                </>
+              ) : (
+                <>
+                  <Github size={20} />
+                  Sign in with GitHub
+                </>
+              )}
             </button>
+            <p className="text-gray-500 text-xs text-center mt-3">
+              A popup will open — make sure popups are allowed for this site
+            </p>
           </div>
-          {verifyError && (
-            <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
-              <AlertCircle size={12} /> {verifyError}
-            </p>
-          )}
-          {usernameValid && (
-            <p className="text-green-400 text-xs mt-2 flex items-center gap-1">
-              <CheckCircle size={12} /> ✓ GitHub user verified
-            </p>
-          )}
-        </div>
-        
+        ) : (
+          <div className="mb-6 p-4 bg-green-900/30 border border-green-700 rounded-lg">
+            <div className="flex items-center gap-3">
+              {githubUser.avatarUrl && (
+                <img src={githubUser.avatarUrl} alt="" className="w-10 h-10 rounded-full" />
+              )}
+              <div className="flex-1">
+                <p className="text-green-400 font-medium flex items-center gap-2">
+                  <CheckCircle size={14} />
+                  Connected as @{githubUser.username}
+                </p>
+                <p className="text-gray-400 text-xs mt-1">
+                  Repository will be created under: recruitment-platform
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  githubAuthService.logout();
+                  setGithubUser(null);
+                }}
+                className="text-xs text-gray-400 hover:text-red-400"
+              >
+                Change
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="mb-4 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
           <p className="text-blue-300 text-xs flex items-center gap-2">
             <Github size={14} />
-            A repository will be created under: <strong>recruitment-platform</strong>
-          </p>
-          <p className="text-gray-400 text-xs mt-1">
-            You'll be added as a collaborator with push permissions.
+            A private repository will be created for your assessment
           </p>
         </div>
-        
+
         {error && (
           <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg">
             <p className="text-red-400 text-sm flex items-center gap-2">
@@ -510,18 +513,18 @@ export const SessionStartDialog: React.FC<SessionStartDialogProps> = ({
             </p>
           </div>
         )}
-        
+
         <div className="flex gap-3">
           <button
             onClick={onCancel}
-            disabled={Boolean(isLoading)}
+            disabled={isLoading}
             className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleStart}
-            disabled={Boolean(isLoading || (!usernameValid && githubUsername) || (!githubUsername && !usernameValid))}
+            disabled={isLoading || !githubUser}
             className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isLoading ? (

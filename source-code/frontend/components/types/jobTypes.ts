@@ -194,7 +194,7 @@ export const DEFAULT_FORM_DATA: JobFormData = {
   publishedAt: new Date().toISOString().split('T')[0],
   expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
   visibility: 'public',
-  applicationLimit: '',
+  applicationLimit: '100000',
   tags: [],
   noExperienceNeeded: false,
   noCertificationsNeeded: false,
@@ -246,30 +246,105 @@ export const DEPARTMENTS = [
   'Supply Chain', 'Communications', 'Strategy', 'Administration',
 ];
 
+// ============================================================
+// DEGREE TYPES - Complete list for qualification selection
+// ============================================================
 export const DEGREE_TYPES = [
   "Bachelor's Degree",
   "Master's Degree",
-  'PhD / Doctorate',
-  'Associate Degree',
-  'High School Diploma',
-  'Professional Certificate',
-  'Vocational Training',
-  'No Degree Required',
+  "PhD / Doctorate",
+  "Associate Degree",
+  "High School Diploma",
+  "Professional Certificate",
+  "Vocational Training",
+  "No Degree Required",
+  // Additional degree types for more options
+  "Bachelor of Science (BSc)",
+  "Bachelor of Arts (BA)",
+  "Bachelor of Business Administration (BBA)",
+  "Bachelor of Commerce (BCom)",
+  "Master of Business Administration (MBA)",
+  "Master of Science (MSc)",
+  "Master of Arts (MA)",
+  "Postgraduate Diploma",
+  "Advanced Certificate",
+  "Executive Education",
 ];
 
+// ============================================================
+// FIELDS OF STUDY - Complete list for qualification selection
+// ============================================================
 export const FIELDS_OF_STUDY = [
+  // Technology & Engineering
   'Computer Science', 'Information Technology', 'Software Engineering',
   'Computer Engineering', 'Data Science', 'Cybersecurity',
   'Artificial Intelligence', 'Machine Learning', 'Network Engineering',
+  'Cloud Computing', 'DevOps', 'Database Management', 'Web Development',
+  'Mobile Development', 'Embedded Systems', 'Robotics', 'Bioinformatics',
+  'Electrical Engineering', 'Mechanical Engineering', 'Civil Engineering',
+  'Industrial Engineering', 'Chemical Engineering', 'Aerospace Engineering',
+  'Biomedical Engineering', 'Environmental Engineering', 'Petroleum Engineering',
+  
+  // Business & Management
   'Business Administration', 'Finance', 'Accounting', 'Marketing',
   'Management', 'Human Resources', 'Project Management', 'Economics',
-  'Electrical Engineering', 'Mechanical Engineering', 'Civil Engineering',
-  'Industrial Engineering', 'Mathematics', 'Statistics', 'Physics',
-  'Nursing', 'Medicine', 'Public Health', 'Biology', 'Chemistry',
-  'Law', 'Political Science', 'International Relations', 'Education',
-  'Communications', 'Journalism', 'Psychology', 'Sociology',
-  'Graphic Design', 'Architecture', 'Supply Chain Management',
+  'Business Analytics', 'International Business', 'Supply Chain Management',
+  'Logistics', 'Operations Management', 'Entrepreneurship', 'Strategic Management',
+  'Risk Management', 'Real Estate', 'Hospitality Management', 'Tourism Management',
+  'Nonprofit Management', 'Public Administration',
+  
+  // Marketing Specific (Critical for your role)
+  'Marketing Analytics', 'Digital Marketing', 'Market Research',
+  'Consumer Behavior', 'Brand Management', 'Social Media Marketing',
+  'Content Marketing', 'SEO/SEM', 'Email Marketing', 'Product Marketing',
+  'Advertising', 'Public Relations', 'Communications', 'Media Studies',
+  'Corporate Communications', 'Integrated Marketing Communications',
+  
+  // Data & Analytics
+  'Statistics', 'Data Analytics', 'Business Intelligence', 'Big Data',
+  'Predictive Analytics', 'Quantitative Methods', 'Econometrics',
+  'Mathematics', 'Applied Mathematics', 'Operations Research',
+  
+  // Science & Healthcare
+  'Biology', 'Chemistry', 'Physics', 'Biochemistry', 'Biotechnology',
+  'Genetics', 'Neuroscience', 'Pharmacology', 'Nursing', 'Medicine',
+  'Public Health', 'Epidemiology', 'Pharmacy', 'Dentistry', 'Veterinary Medicine',
+  'Environmental Science', 'Geology', 'Astronomy', 'Marine Biology',
+  
+  // Social Sciences & Humanities
+  'Psychology', 'Sociology', 'Anthropology', 'Political Science',
+  'International Relations', 'History', 'Philosophy', 'Theology',
+  'Linguistics', 'English Literature', 'Foreign Languages', 'Translation',
+  'Journalism', 'Creative Writing', 'Library Science', 'Archival Studies',
+  
+  // Arts & Design
+  'Graphic Design', 'UI/UX Design', 'Product Design', 'Industrial Design',
+  'Interior Design', 'Fashion Design', 'Game Design', 'Animation',
+  'Visual Arts', 'Fine Arts', 'Photography', 'Film Studies', 'Music Production',
+  'Performing Arts', 'Architecture', 'Landscape Architecture', 'Urban Planning',
+  
+  // Law & Legal
+  'Law', 'Legal Studies', 'Criminal Justice', 'Paralegal Studies',
+  'Intellectual Property Law', 'Corporate Law', 'Tax Law', 'International Law',
+  
+  // Education
+  'Education', 'Early Childhood Education', 'Primary Education',
+  'Secondary Education', 'Special Education', 'Educational Leadership',
+  'Curriculum Development', 'Instructional Design', 'TESOL', 'Linguistics',
+  
+  // Sports & Recreation
+  'Sports Management', 'Kinesiology', 'Exercise Science', 'Physical Education',
+  'Sports Psychology', 'Athletic Training', 'Recreation Management',
+  
+  // Trades & Vocational
+  'Culinary Arts', 'Baking and Pastry Arts', 'Wine Studies', 'Hospitality',
+  'Automotive Technology', 'Construction Management', 'Welding', 'Plumbing',
+  'Electrical Technology', 'HVAC', 'Cosmetology', 'Barbering',
 ];
+
+// ============================================================
+// SUGGESTIONS FOR RESPONSIBILITIES, REQUIREMENTS, BENEFITS, SKILLS
+// ============================================================
 
 export const RESPONSIBILITIES_SUGGESTIONS = [
   'Design and develop scalable software solutions',
@@ -292,6 +367,13 @@ export const RESPONSIBILITIES_SUGGESTIONS = [
   'Identify and mitigate project risks',
   'Coordinate with vendors and external partners',
   'Ensure compliance with regulatory standards',
+  // Marketing specific responsibilities
+  'Conduct market research and competitive analysis',
+  'Analyze customer behavior and market trends',
+  'Track and report on marketing campaign performance',
+  'Create dashboards and visualizations for stakeholders',
+  'Provide data-driven recommendations for marketing strategies',
+  'Monitor social media and digital marketing KPIs',
 ];
 
 export const REQUIREMENTS_SUGGESTIONS = [
@@ -309,6 +391,12 @@ export const REQUIREMENTS_SUGGESTIONS = [
   'Willingness to learn and adapt',
   'Experience in a fast-paced startup environment',
   'Strong organizational skills',
+  // Marketing specific requirements
+  'Proficiency in Excel, SQL, or data analysis tools',
+  'Experience with Google Analytics or similar platforms',
+  'Strong presentation and storytelling skills',
+  'Knowledge of marketing automation tools',
+  'Ability to translate data into actionable insights',
 ];
 
 export const BENEFITS_SUGGESTIONS = [
@@ -348,14 +436,19 @@ export const SKILLS_SUGGESTIONS: string[] = [
   'SQL', 'PostgreSQL', 'MySQL', 'MongoDB', 'Redis', 'Elasticsearch',
   // Cloud & DevOps
   'AWS', 'Azure', 'GCP', 'Docker', 'Kubernetes', 'Terraform', 'CI/CD', 'Jenkins', 'GitHub Actions',
-  // Data
+  // Data & Analytics
   'Machine Learning', 'Deep Learning', 'TensorFlow', 'PyTorch', 'Pandas', 'NumPy', 'Power BI', 'Tableau',
+  'Data Analysis', 'Statistical Analysis', 'Excel', 'Google Analytics', 'SQL Queries',
+  // Marketing Skills
+  'Market Research', 'Competitive Analysis', 'Customer Segmentation', 'Campaign Analysis',
+  'Digital Marketing', 'SEO', 'SEM', 'Social Media Analytics', 'Content Strategy',
+  'Email Marketing', 'Marketing Automation', 'HubSpot', 'Salesforce', 'CRM',
+  'Business Intelligence', 'Data Visualization', 'Dashboards', 'KPI Tracking',
   // Tools
   'Git', 'Jira', 'Confluence', 'Figma', 'Sketch', 'REST API', 'GraphQL', 'Microservices',
-  // Soft
+  // Soft Skills
   'Leadership', 'Communication', 'Problem Solving', 'Project Management', 'Agile', 'Scrum',
-  // Business
-  'Excel', 'Salesforce', 'HubSpot', 'SAP', 'QuickBooks', 'Google Analytics',
+  'Critical Thinking', 'Attention to Detail', 'Time Management', 'Teamwork', 'Adaptability',
 ];
 
 export const EXPERIENCE_YEAR_OPTIONS = [
@@ -371,4 +464,8 @@ export const EXPERIENCE_TITLE_SUGGESTIONS = [
   'Financial Analysis', 'Accounting', 'HR Management', 'Recruitment',
   'UX / UI Design', 'Graphic Design', 'Content Writing', 'SEO',
   'Network Administration', 'Cybersecurity', 'Database Administration',
+  // Marketing specific experience titles
+  'Marketing Analysis', 'Market Research', 'Brand Management',
+  'Digital Marketing Strategy', 'Social Media Management', 'Content Marketing',
+  'Marketing Operations', 'Campaign Management', 'Customer Insights',
 ];

@@ -1091,6 +1091,9 @@ CREATE TABLE simulation_sessions (
     feedback       JSONB,
     notes          TEXT,
     github_links   JSONB DEFAULT '{}'::JSONB,
+    submission_results JSONB DEFAULT '{}'::JSONB,
+    submission_score INTEGER GENERATED ALWAYS AS ((submission_results->>'score')::INTEGER) STORED,
+    submission_passed BOOLEAN GENERATED ALWAYS AS ((submission_results->>'passed')::BOOLEAN) STORED,
     created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -1099,6 +1102,13 @@ CREATE INDEX idx_simulation_sessions_simulation ON simulation_sessions(simulatio
 CREATE INDEX idx_simulation_sessions_user       ON simulation_sessions(user_id);
 CREATE INDEX idx_simulation_sessions_status     ON simulation_sessions(status);
 CREATE INDEX idx_simulation_sessions_started    ON simulation_sessions(started_at);
+CREATE INDEX idx_simulation_sessions_submission_results ON simulation_sessions USING GIN (submission_results);
+CREATE INDEX idx_simulation_sessions_submission_score
+    ON simulation_sessions(submission_score)
+    WHERE submission_score IS NOT NULL;
+CREATE INDEX idx_simulation_sessions_submission_passed
+    ON simulation_sessions(submission_passed)
+    WHERE submission_passed IS NOT NULL;
 
 CREATE TABLE chat_messages (
     id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -1447,6 +1457,7 @@ CREATE TABLE wallet_addresses (
     status        VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'used', 'expired', 'revoked')),
     used_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(address)
 );
 
@@ -2916,44 +2927,6 @@ SELECT 'How are my simulation results used?',
        'Privacy', 4, true, 0, 0, NOW(), NOW()
 WHERE NOT EXISTS (SELECT 1 FROM faqs WHERE question = 'How are my simulation results used?');
 
--- Change these columns from INTEGER to DECIMAL
-ALTER TABLE simulations 
-  ALTER COLUMN attention_score TYPE DECIMAL(5,2),
-  ALTER COLUMN initiative_score TYPE DECIMAL(5,2);
-  
-ALTER TABLE wallet_addresses 
-ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-
-ALTER TABLE blockchain_records 
-ADD COLUMN IF NOT EXISTS wallet_address VARCHAR(255);
-
--- =====================================================
--- ADD SUBMISSION RESULTS COLUMN TO simulation_sessions
--- =====================================================
-
-ALTER TABLE simulation_sessions 
-ADD COLUMN IF NOT EXISTS submission_results JSONB DEFAULT '{}'::JSONB;
-
--- Index for faster queries
-CREATE INDEX IF NOT EXISTS idx_simulation_sessions_submission_results 
-ON simulation_sessions USING GIN (submission_results);
-
--- Generated columns for fast filtering
-ALTER TABLE simulation_sessions 
-ADD COLUMN IF NOT EXISTS submission_score INTEGER 
-GENERATED ALWAYS AS ((submission_results->>'score')::INTEGER) STORED;
-
-CREATE INDEX IF NOT EXISTS idx_simulation_sessions_submission_score 
-ON simulation_sessions(submission_score) 
-WHERE submission_score IS NOT NULL;
-
-ALTER TABLE simulation_sessions 
-ADD COLUMN IF NOT EXISTS submission_passed BOOLEAN 
-GENERATED ALWAYS AS ((submission_results->>'passed')::BOOLEAN) STORED;
-
-CREATE INDEX IF NOT EXISTS idx_simulation_sessions_submission_passed 
-ON simulation_sessions(submission_passed) 
-WHERE submission_passed IS NOT NULL;
 -- =====================================================
 -- END OF SCHEMA
 -- =====================================================

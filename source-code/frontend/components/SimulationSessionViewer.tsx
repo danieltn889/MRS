@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Github, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   Play,
@@ -49,6 +50,7 @@ interface SimulationSession {
   applicationId: string;
   tasks?: any[];
   scoringRubric?: any;
+  submission_results?: any;
 }
 
 interface SimulationDetail extends SimulationSession {
@@ -229,23 +231,25 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
       
       console.log('📊 Full API response:', JSON.stringify(response, null, 2));
       
-      // ✅ FIX: Extract the nested data structure correctly
+      // Extract the nested data structure correctly
       let apiData = response.data?.data || response.data;
       
       if (apiData) {
-        // ✅ Extract from the nested structure based on your API response
+        // Extract from the nested structure based on your API response
         const sessionData = apiData.session || apiData;
         const evaluationData = apiData.evaluation;
         const templateData = apiData.simulation_template;
         const companyData = apiData.company;
         const jobData = apiData.job;
         const applicationData = apiData.application;
+        const submissionResults = apiData.submission_results || {};
         
         console.log('📊 Session data:', sessionData);
         console.log('📊 Evaluation data:', evaluationData);
         console.log('📊 Template data:', templateData);
+        console.log('📊 Submission results:', submissionResults);
         
-        // ✅ Determine correct status
+        // Determine correct status
         let sessionStatus: 'not_started' | 'in_progress' | 'completed' = 'not_started';
         
         if (sessionData?.status === 'completed' || evaluationData?.status === 'completed' || apiData.has_evaluation === true) {
@@ -256,10 +260,12 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
         
         console.log('📊 Determined status:', sessionStatus);
         
-        // ✅ Determine correct score
+        // Determine correct score
         let sessionScore = null;
         if (evaluationData?.overall_score) {
           sessionScore = evaluationData.overall_score;
+        } else if (submissionResults.score) {
+          sessionScore = submissionResults.score;
         } else if (apiData.total_score) {
           sessionScore = apiData.total_score;
         } else if (sessionData?.score) {
@@ -299,14 +305,15 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
           settings: templateData?.tasks_structure?.settings,
           evaluation: evaluationData,
           hasEvaluation: apiData.has_evaluation,
-          passed: apiData.passed,
+          passed: apiData.passed || submissionResults.passed,
           punctuality_score: evaluationData?.punctuality_score || sessionData?.punctuality_score,
           communication_score: evaluationData?.communication_score || sessionData?.communication_score,
           problem_solving_score: evaluationData?.problem_solving_score || sessionData?.problem_solving_score,
           adaptability_score: evaluationData?.adaptability_score || sessionData?.adaptability_score,
           collaboration_score: evaluationData?.collaboration_score || sessionData?.collaboration_score,
           attention_to_detail_score: evaluationData?.attention_to_detail_score || sessionData?.attention_score,
-          initiative_score: evaluationData?.initiative_score || sessionData?.initiative_score
+          initiative_score: evaluationData?.initiative_score || sessionData?.initiative_score,
+          submission_results: submissionResults
         };
         
         setSelectedSession(session);
@@ -375,24 +382,73 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
   const ResultsModal = () => {
     if (!selectedSession) return null;
     
-    const score = selectedSession.score || 0;
-    const passed = score >= 70;
-    const evaluation = selectedSession.evaluation || {};
+    // ✅ Get submission_results from selectedSession
+    const submissionResults = selectedSession.submission_results || {};
+    
+    // Check if we have submission results
+    const hasSubmissionResults = Object.keys(submissionResults).length > 0;
+    
+    // Extract data from submission_results
+    const summary = submissionResults.summary || {};
+    const scores = submissionResults.scoreBreakdown || {};
+    const feedback = submissionResults.feedback || {};
+    const githubAnalysis = submissionResults.githubAnalysis || {};
+    const communicationAnalysis = submissionResults.communicationAnalysis || submissionResults.fullAnalysis?.communication_analysis || {};
+    const taskAnalysis = submissionResults.taskAnalysis || [];
+    const timeTracking = submissionResults.timeTracking || {};
+    
+    // Get score from multiple possible sources
+    const score = submissionResults.score || 
+                  scores.overall || 
+                  selectedSession.score || 
+                  selectedSession.evaluation?.overall_score || 
+                  0;
+    const passed = submissionResults.passed || (score >= 70);
     
     // Score categories
     const scoreCategories = [
-      { name: 'Punctuality', score: selectedSession.punctuality_score || evaluation.punctuality_score || 0, icon: <Clock className="w-4 h-4" />, color: 'bg-blue-500' },
-      { name: 'Communication', score: selectedSession.communication_score || evaluation.communication_score || 0, icon: <MessageSquare className="w-4 h-4" />, color: 'bg-green-500' },
-      { name: 'Problem Solving', score: selectedSession.problem_solving_score || evaluation.problem_solving_score || 0, icon: <Brain className="w-4 h-4" />, color: 'bg-purple-500' },
-      { name: 'Adaptability', score: selectedSession.adaptability_score || evaluation.adaptability_score || 0, icon: <Zap className="w-4 h-4" />, color: 'bg-yellow-500' },
-      { name: 'Collaboration', score: selectedSession.collaboration_score || evaluation.collaboration_score || 0, icon: <Users className="w-4 h-4" />, color: 'bg-indigo-500' },
-      { name: 'Attention to Detail', score: selectedSession.attention_to_detail_score || evaluation.attention_to_detail_score || 0, icon: <EyeIcon className="w-4 h-4" />, color: 'bg-pink-500' },
-      { name: 'Initiative', score: selectedSession.initiative_score || evaluation.initiative_score || 0, icon: <Target className="w-4 h-4" />, color: 'bg-orange-500' }
+      { name: 'Overall Score', score: scores.overall || score, max: 100, icon: <Award className="w-4 h-4" />, color: 'bg-blue-500' },
+      { name: 'Technical', score: scores.technical || 0, max: 100, icon: <Brain className="w-4 h-4" />, color: 'bg-purple-500' },
+      { name: 'Speed', score: scores.speed || 0, max: 100, icon: <Zap className="w-4 h-4" />, color: 'bg-yellow-500' },
+      { name: 'GitHub', score: scores.github || 0, max: 100, icon: <Github className="w-4 h-4" />, color: 'bg-gray-700' },
+      { name: 'Communication', score: scores.communication || 0, max: 100, icon: <MessageSquare className="w-4 h-4" />, color: 'bg-green-500' },
+      { name: 'Collaboration', score: scores.collaboration || 0, max: 100, icon: <Users className="w-4 h-4" />, color: 'bg-indigo-500' },
+      { name: 'Quality', score: scores.quality || 0, max: 100, icon: <Target className="w-4 h-4" />, color: 'bg-pink-500' },
+      { name: 'Behavioral', score: scores.behavioral || 0, max: 100, icon: <Heart className="w-4 h-4" />, color: 'bg-red-500' }
     ];
+    
+    // GitHub detailed marks
+    const githubDetailedMarks = githubAnalysis.detailed_marks || githubAnalysis.breakdown || {};
+    
+    // If no submission results, show fallback
+    if (!hasSubmissionResults) {
+      return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Results Loading</h2>
+              <p className="text-gray-600 mb-4">
+                Detailed results are being processed. Please check back later.
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Score: {Math.round(score)}% {passed ? '(Passed)' : '(Failed)'}
+              </p>
+              <button
+                onClick={() => setShowResultsModal(false)}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="bg-white rounded-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
           {/* Modal Header */}
           <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
             <div>
@@ -410,7 +466,9 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
           <div className="p-6">
             {/* Overall Score Section */}
             <div className="text-center mb-8">
-              <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 mb-4">
+              <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-br ${
+                passed ? 'from-green-500 to-teal-600' : 'from-red-500 to-orange-600'
+              } mb-4`}>
                 <div className="text-center">
                   <div className="text-3xl font-bold text-white">{Math.round(score)}%</div>
                   <div className="text-xs text-white opacity-90">Overall Score</div>
@@ -420,14 +478,14 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
               }`}>
                 {passed ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                {passed ? 'PASSED' : 'FAILED'} (Passing Score: 70%)
+                {passed ? 'PASSED' : 'FAILED'} (Passing Score: {summary.passing_score || 70}%)
               </div>
             </div>
             
             {/* Score Categories Grid */}
             <div className="mb-8">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Performance Breakdown</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 {scoreCategories.map((cat, idx) => (
                   <div key={idx} className="bg-gray-50 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
@@ -448,11 +506,224 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                         className={`h-2 rounded-full transition-all duration-500 ${
                           cat.score >= 70 ? 'bg-green-500' : cat.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
                         }`}
-                        style={{ width: `${cat.score}%` }}
+                        style={{ width: `${Math.min(100, cat.score)}%` }}
                       />
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+            
+            {/* GitHub Analysis Section */}
+            {githubAnalysis.has_repo && (
+              <div className="mb-8 border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-gray-800 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <Github className="w-5 h-5 text-white" />
+                    <h3 className="font-semibold text-white">GitHub Repository Analysis</h3>
+                    <span className="ml-auto text-lg font-bold text-green-400">
+                      {githubAnalysis.score || 0}%
+                    </span>
+                  </div>
+                </div>
+                <div className="p-4 bg-gray-50">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Commits</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.commits?.count || 0}</p>
+                      <p className="text-xs text-green-600">+{githubDetailedMarks.commits?.earned || 0}/{githubDetailedMarks.commits?.max || 40}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Code Files</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.codeFiles?.count || 0}</p>
+                      <p className="text-xs text-green-600">+{githubDetailedMarks.codeFiles?.earned || 0}/{githubDetailedMarks.codeFiles?.max || 20}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">README</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.readme?.present ? '✓' : '✗'}</p>
+                      <p className="text-xs text-green-600">+{githubDetailedMarks.readme?.earned || 0}/{githubDetailedMarks.readme?.max || 15}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Config Files</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.configFile?.found?.length || 0}</p>
+                      <p className="text-xs text-green-600">+{githubDetailedMarks.configFile?.earned || 0}/{githubDetailedMarks.configFile?.max || 10}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">.gitignore</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.gitignore?.present ? '✓' : '✗'}</p>
+                      <p className="text-xs text-green-600">+{githubDetailedMarks.gitignore?.earned || 0}/{githubDetailedMarks.gitignore?.max || 5}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Commit Match</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.commitMatching?.combinedMatchedCount || 0}/{githubDetailedMarks.commitMatching?.totalCommitsAnalyzed || 0}</p>
+                      <p className="text-xs text-green-600">+{githubDetailedMarks.commitMatching?.earned || 0}/{githubDetailedMarks.commitMatching?.max || 30}</p>
+                    </div>
+                  </div>
+                  {githubAnalysis.repo_info && (
+                    <div className="mt-3 text-center">
+                      <a 
+                        href={githubAnalysis.repo_info.repoUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        {githubAnalysis.repo_info.repoName}
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Communication Analysis Section */}
+            {communicationAnalysis && communicationAnalysis.has_chat && (
+              <div className="mb-8 border border-gray-200 rounded-lg overflow-hidden">
+                <div className="bg-purple-600 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-white" />
+                    <h3 className="font-semibold text-white">Communication Analysis</h3>
+                    <span className="ml-auto text-lg font-bold text-white">
+                      {communicationAnalysis.score || 0}%
+                    </span>
+                  </div>
+                </div>
+                <div className="p-4 bg-gray-50">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Messages</p>
+                      <p className="text-lg font-bold">{communicationAnalysis.message_count || 0}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Candidate Msgs</p>
+                      <p className="text-lg font-bold">{communicationAnalysis.candidate_messages || 0}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Recruiter Msgs</p>
+                      <p className="text-lg font-bold">{communicationAnalysis.recruiter_messages || 0}</p>
+                    </div>
+                    <div className="bg-white rounded p-2 text-center border">
+                      <p className="text-xs text-gray-500">Dominant Style</p>
+                      <p className="text-sm font-semibold capitalize">{communicationAnalysis.classifier_analysis?.dominant_style || 'N/A'}</p>
+                    </div>
+                  </div>
+                  
+                  {communicationAnalysis.groq_analysis && (
+                    <div className="bg-white rounded-lg p-3 border">
+                      <p className="text-sm font-medium text-gray-700 mb-2">AI Insights:</p>
+                      <p className="text-sm text-gray-600">{communicationAnalysis.groq_analysis.overall_assessment || communicationAnalysis.combined_insights?.taskDiscussionSummary}</p>
+                      {communicationAnalysis.groq_analysis.strengths?.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-green-600">Strengths:</p>
+                          <ul className="list-disc list-inside text-xs text-gray-600">
+                            {communicationAnalysis.groq_analysis.strengths.slice(0, 2).map((s: string, i: number) => (
+                              <li key={i}>{s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {communicationAnalysis.groq_analysis.areas_for_improvement?.length > 0 && (
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-red-600">Areas to Improve:</p>
+                          <ul className="list-disc list-inside text-xs text-gray-600">
+                            {communicationAnalysis.groq_analysis.areas_for_improvement.slice(0, 2).map((a: string, i: number) => (
+                              <li key={i}>{a}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            
+            {/* Task Summary */}
+            {taskAnalysis.length > 0 && (
+              <div className="mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Task Summary</h3>
+                <div className="space-y-3">
+                  {taskAnalysis.map((task: any, idx: number) => (
+                    <div key={idx} className={`p-4 rounded-lg border ${
+                      task.status === 'completed' ? 'bg-green-50 border-green-200' :
+                      task.status === 'in_progress' ? 'bg-yellow-50 border-yellow-200' :
+                      'bg-gray-50 border-gray-200'
+                    }`}>
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm font-medium text-gray-500">Task {task.task_index + 1}</span>
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                              task.status === 'completed' ? 'bg-green-200 text-green-800' :
+                              task.status === 'in_progress' ? 'bg-yellow-200 text-yellow-800' :
+                              'bg-gray-200 text-gray-600'
+                            }`}>
+                              {task.status === 'in_progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : 'Not Started'}
+                            </span>
+                            {task.scores?.overall > 0 && (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                task.scores.overall >= 70 ? 'bg-green-200 text-green-800' :
+                                task.scores.overall >= 50 ? 'bg-yellow-200 text-yellow-800' :
+                                'bg-red-200 text-red-800'
+                              }`}>
+                                Score: {Math.round(task.scores.overall)}%
+                              </span>
+                            )}
+                          </div>
+                          <h4 className="font-medium text-gray-900">{task.task_title}</h4>
+                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">{task.task_description?.slice(0, 100)}...</p>
+                        </div>
+                        <div className="text-right">
+                          {task.scores?.overall > 0 && (
+                            <div className="text-2xl font-bold text-gray-700">{Math.round(task.scores.overall)}%</div>
+                          )}
+                          {task.time_taken_formatted && task.time_taken_formatted !== 'Not started' && (
+                            <div className="text-xs text-gray-400 mt-1">{task.time_taken_formatted}</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Strengths & Improvements */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <h3 className="font-semibold text-green-800 mb-3 flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5" />
+                  Strengths
+                </h3>
+                <ul className="space-y-2">
+                  {(feedback.strengths || []).map((s: string, i: number) => (
+                    <li key={i} className="text-sm text-green-700 flex items-start gap-2">
+                      <span className="text-green-500">•</span>
+                      {s.replace('✅', '').trim()}
+                    </li>
+                  ))}
+                  {(!feedback.strengths || feedback.strengths.length === 0) && (
+                    <li className="text-sm text-green-700">No strengths identified</li>
+                  )}
+                </ul>
+              </div>
+              
+              <div className="bg-red-50 rounded-lg p-4 border border-red-200">
+                <h3 className="font-semibold text-red-800 mb-3 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  Areas for Improvement
+                </h3>
+                <ul className="space-y-2">
+                  {(feedback.improvements || []).map((imp: string, i: number) => (
+                    <li key={i} className="text-sm text-red-700 flex items-start gap-2">
+                      <span className="text-red-500">•</span>
+                      {imp.replace('⚠️', '').trim()}
+                    </li>
+                  ))}
+                  {(!feedback.improvements || feedback.improvements.length === 0) && (
+                    <li className="text-sm text-red-700">Continue improving in all areas</li>
+                  )}
+                </ul>
               </div>
             </div>
             
@@ -461,50 +732,27 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Clock className="w-5 h-5 text-blue-600" />
-                  <span className="font-medium text-blue-900">Time Spent</span>
+                  <span className="font-medium text-blue-900">Time Information</span>
                 </div>
-                <p className="text-2xl font-bold text-blue-700">
-                  {Math.floor((selectedSession.timeSpent || 0) / 60)} minutes {(selectedSession.timeSpent || 0) % 60} seconds
-                </p>
+                <p className="text-blue-700">Time spent: {summary.total_time_formatted || timeTracking.sessionTotalFormatted || selectedSession.timeSpent ? `${Math.floor(selectedSession.timeSpent / 60)}m ${selectedSession.timeSpent % 60}s` : 'N/A'}</p>
+                <p className="text-blue-700 text-sm mt-1">Time limit: {summary.time_limit_formatted || timeTracking.timeLimitFormatted || `${selectedSession.duration} min`}</p>
+                <p className="text-blue-700 text-sm">Time used: {summary.time_used_percent || timeTracking.timeUsedPercent || 0}%</p>
               </div>
               <div className="bg-purple-50 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className="w-5 h-5 text-purple-600" />
-                  <span className="font-medium text-purple-900">Completed</span>
+                  <span className="font-medium text-purple-900">Completion</span>
                 </div>
-                <p className="text-purple-700">
-                  {selectedSession.completedAt ? new Date(selectedSession.completedAt).toLocaleString() : 'N/A'}
-                </p>
+                <p className="text-purple-700">Completed: {selectedSession.completedAt ? new Date(selectedSession.completedAt).toLocaleString() : submissionResults.submittedAt ? new Date(submissionResults.submittedAt).toLocaleString() : 'N/A'}</p>
+                <p className="text-purple-700 text-sm mt-1">Tasks completed: {summary.completed_tasks || 0}/{summary.total_tasks || selectedSession.tasks?.length || 0}</p>
+                <p className="text-purple-700 text-sm">Completion rate: {Math.round(summary.completion_rate || 0)}%</p>
               </div>
             </div>
             
-            {/* Task Summary */}
-            {selectedSession.tasks && selectedSession.tasks.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Task Summary</h3>
-                <div className="space-y-3">
-                  {selectedSession.tasks.map((task: any, idx: number) => (
-                    <div key={idx} className="bg-gray-50 rounded-lg p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-medium text-gray-500">Task {idx + 1}</span>
-                            {idx < (selectedSession.currentTask || 0) && (
-                              <CheckCircle className="w-4 h-4 text-green-500" />
-                            )}
-                          </div>
-                          <h4 className="font-medium text-gray-900">{task.title || `Task ${idx + 1}`}</h4>
-                          <p className="text-sm text-gray-500 mt-1">{task.description?.slice(0, 100)}...</p>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-xs text-gray-400">{task.type || 'technical'}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* Feedback Summary */}
+            <div className="bg-gray-100 rounded-lg p-4 mb-6">
+              <p className="text-gray-700">{feedback.summary || feedback.detailed_feedback || submissionResults.message || `You scored ${Math.round(score)}% on the ${selectedSession.simulationName} simulation. The passing threshold is ${summary.passing_score || 70}%.`}</p>
+            </div>
             
             {/* Close Button */}
             <div className="flex justify-end pt-4 border-t border-gray-200">

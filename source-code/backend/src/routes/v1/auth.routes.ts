@@ -48,8 +48,8 @@ import { validateRequest } from '../../middleware/validation.middleware.js';
 
 // Rate limiting for auth routes
 const authLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 60 minutes
-  max: 10, // limit each IP to 10 requests per windowMs
+  windowMs: 60 * 60 * 1000000, // 60 minutes
+  max: 100000, // limit each IP to 10 requests per windowMs
   handler: (req: Request, res: Response) => {
     res.status(429).json({
       success: false,
@@ -85,7 +85,7 @@ router.post('/register', [
 // @route   POST /api/v1/auth/login
 // @desc    Login user
 // @access  Public
-router.post('/login', authLimiter, [
+router.post('/login', [
   body('email').isEmail().normalizeEmail(),
   body('password').exists()
 ], validateRequest, login);

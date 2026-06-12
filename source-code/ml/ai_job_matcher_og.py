@@ -124,8 +124,8 @@ except ImportError:
 
 # API Configuration
 BASE_URL = "http://localhost:3001/api/v1"
-EMAIL = "turikumwenimanadaniel727@gmail.com"
-PASSWORD = "password123"
+EMAIL = "ccilem4@gmail.com"
+PASSWORD = "123456@Uc"
 
 log_info(f"📡 API Configuration:")
 log_info(f"   BASE_URL: {BASE_URL}")
@@ -295,24 +295,156 @@ class Factor1_SkillsMatcher:
 # FACTOR 2: QUALIFICATIONS MATCHER (25%) - COMPLETE FIXED
 # =====================================================
 
+# =====================================================
+# FACTOR 2: QUALIFICATIONS MATCHER (25%) - PURE SEMANTIC + HIERARCHY
+# =====================================================
+
 class Factor2_QualificationsMatcher:
     def __init__(self, tp):
         self.tp = tp
-    
-    def extract_candidate_qualifications(self, profile_data):
-        result = {"degrees": [], "fields": [], "combined": [], "certifications": []}
         
-        # Extract from education table
+        # Degree level hierarchy (Lower number = lower degree)
+        self.degree_levels = {
+            # Level 0 - No degree
+            "no formal education": 0, 
+            "high school": 0, 
+            "secondary school": 0,
+            "ged": 0,
+            
+            # Level 1 - Certificate/Diploma
+            "certificate": 1, 
+            "diploma": 1,
+            "certification": 1,
+            
+            # Level 2 - Advanced Diploma/Associate
+            "advanced diploma": 2, 
+            "associate degree": 2, 
+            "hnd": 2,
+            "foundation degree": 2,
+            
+            # Level 3 - Bachelor's
+            "bachelor": 3, 
+            "bachelor's": 3, 
+            "bachelor's degree": 3,
+            "bsc": 3, 
+            "ba": 3, 
+            "beng": 3,
+            "bachelor degree": 3,
+            "undergraduate": 3,
+            
+            # Level 4 - Postgraduate Diploma/Certificate
+            "postgraduate diploma": 4, 
+            "postgraduate certificate": 4,
+            "pgdip": 4,
+            "pgcert": 4,
+            
+            # Level 5 - Master's
+            "master": 5, 
+            "master's": 5, 
+            "master's degree": 5,
+            "msc": 5, 
+            "ma": 5, 
+            "mba": 5,
+            "masters": 5,
+            "postgraduate": 5,
+            
+            # Level 6 - Doctorate
+            "phd": 6, 
+            "doctorate": 6, 
+            "doctoral": 6,
+            "doctor": 6,
+            "dphil": 6,
+        }
+        
+        # Qualification entry weights
+        self.qualification_weights = {
+            "degree": 0.6,
+            "field": 0.4
+        }
+    
+    def get_degree_level(self, degree_text: str) -> int:
+        """Get hierarchical level - returns -1 if not found"""
+        if not degree_text:
+            return -1
+        
+        degree_lower = degree_text.lower().strip()
+        
+        # Direct match first
+        for degree_name, level in self.degree_levels.items():
+            if degree_name in degree_lower:
+                return level
+        
+        # Try semantic similarity with known levels
+        highest_score = 0.0
+        best_level = -1
+        
+        for degree_name, level in self.degree_levels.items():
+            sim = self.tp.semantic_similarity(degree_lower, degree_name)
+            if sim > highest_score and sim > 0.4:
+                highest_score = sim
+                best_level = level
+        
+        return best_level if best_level >= 0 else -1
+    
+    def check_degree_hierarchy(self, candidate_level: int, required_level: int, exact_match_only: bool = False) -> float:
+        """
+        Calculate degree hierarchy score.
+        """
+        # No requirement - always 100%
+        if required_level <= 0:
+            return 1.0
+        
+        # Candidate has no degree - 0%
+        if candidate_level <= 0:
+            return 0.0
+        
+        # EXACT MATCH MODE (strict)
+        if exact_match_only:
+            return 1.0 if candidate_level == required_level else 0.0
+        
+        # HIERARCHY MODE
+        if candidate_level >= required_level:
+            # Candidate meets or exceeds requirement - ALWAYS 100%
+            return 1.0  # Any degree at or above requirement = 100%
+        else:
+            # Candidate below requirement
+            level_diff = required_level - candidate_level
+            
+            if level_diff == 1:
+                return 0.50  # One level below = 50%
+            elif level_diff == 2:
+                return 0.25  # Two levels below = 25%
+            else:
+                return 0.10  # Three+ levels below = 10%
+    def extract_candidate_qualifications(self, profile_data):
+        result = {
+            "degrees": [], 
+            "fields": [], 
+            "combined": [], 
+            "certifications": [],
+            "highest_degree_level": -1,
+            "highest_degree_raw": None
+        }
+        
+        # Extract from education records
         for edu in profile_data.get('education', []):
             degree = edu.get('degree', '')
             field = edu.get('field_of_study', '')
             
             if degree:
+                degree_level = self.get_degree_level(degree)
                 result["degrees"].append({
                     "raw": degree, 
-                    "cleaned": self.tp.clean(degree)
+                    "cleaned": self.tp.clean(degree),
+                    "level": degree_level
                 })
-                log_candidate(f"   Degree from DB: {degree}")
+                
+                # Track highest degree
+                if degree_level > result["highest_degree_level"]:
+                    result["highest_degree_level"] = degree_level
+                    result["highest_degree_raw"] = degree
+                
+                log_candidate(f"   Degree from DB: {degree} (Level: {degree_level})")
             
             if field:
                 result["fields"].append({
@@ -325,16 +457,17 @@ class Factor2_QualificationsMatcher:
                 combined = f"{degree} in {field}"
                 result["combined"].append({
                     "raw": combined,
-                    "cleaned": self.tp.clean(combined)
+                    "cleaned": self.tp.clean(combined),
+                    "degree_level": degree_level if degree else -1
                 })
-                log_candidate(f"   Combined from DB: {combined}")
             elif degree:
                 result["combined"].append({
                     "raw": degree,
-                    "cleaned": self.tp.clean(degree)
+                    "cleaned": self.tp.clean(degree),
+                    "degree_level": degree_level if degree else -1
                 })
         
-        # Extract certifications from certifications table
+        # Extract from certifications
         for cert in profile_data.get('certifications', []):
             cert_name = cert.get('name', '')
             if cert_name:
@@ -348,38 +481,76 @@ class Factor2_QualificationsMatcher:
     
     def extract_job_qualifications(self, job):
         edu_required = job.get('education_required', {})
+        
         if isinstance(edu_required, str):
             try:
                 edu_required = json.loads(edu_required)
             except:
                 edu_required = {}
         
-        # Extract basic fields
+        # Get minimum degree requirement
         min_degree = edu_required.get('minimum_degree', '')
-        fields = edu_required.get('fields_of_study', [])
-        if isinstance(fields, str):
-            try:
-                fields = json.loads(fields)
-            except:
-                fields = []
+        min_degree_level = self.get_degree_level(min_degree)
         
-        # Extract certifications
+        # Parse qualification entries (MULTIPLE qualifications allowed)
+        qualification_entries = edu_required.get('qualification_entries', [])
+        processed_entries = []
+        
+        # ✅ COLLECT ALL FIELDS FROM QUALIFICATION ENTRIES
+        all_fields_from_entries = []
+        
+        for entry in qualification_entries:
+            entry_degree = entry.get('degree', '')
+            entry_fields = entry.get('fields_of_study', [])
+            
+            # Handle fields as array or string
+            if isinstance(entry_fields, str):
+                try:
+                    entry_fields = json.loads(entry_fields)
+                except:
+                    entry_fields = [entry_fields] if entry_fields else []
+            elif not isinstance(entry_fields, list):
+                entry_fields = []
+            
+            # ✅ ADD ALL FIELDS TO THE COLLECTION
+            for field in entry_fields:
+                if field and field not in all_fields_from_entries:
+                    all_fields_from_entries.append(field)
+            
+            processed_entries.append({
+                "degree": entry_degree,
+                "degree_level": self.get_degree_level(entry_degree),
+                "fields_of_study": entry_fields,
+                "fields_cleaned": [self.tp.clean(f) for f in entry_fields if f]
+            })
+        
+        # ✅ MERGE root fields_of_study with fields from qualification_entries
+        root_fields = edu_required.get('fields_of_study', [])
+        if isinstance(root_fields, str):
+            try:
+                root_fields = json.loads(root_fields)
+            except:
+                root_fields = []
+        elif not isinstance(root_fields, list):
+            root_fields = []
+        
+        # Combine all fields (root + from entries)
+        all_fields = list(set(root_fields + all_fields_from_entries))
+        
+        # Parse certifications
         certifications = edu_required.get('certifications', [])
         if isinstance(certifications, str):
             try:
                 certifications = json.loads(certifications)
             except:
                 certifications = []
+        elif not isinstance(certifications, list):
+            certifications = []
         
-        # Extract additional requirements
-        additional_requirements = edu_required.get('additional_requirements', [])
-        if isinstance(additional_requirements, str):
-            try:
-                additional_requirements = json.loads(additional_requirements)
-            except:
-                additional_requirements = []
+        # Parse age requirement
+        age_requirement = edu_required.get('age_requirement', '')
         
-        # ✅ FIX: Extract languages - handle dictionaries correctly
+        # Parse languages
         languages = edu_required.get('languages', [])
         if isinstance(languages, str):
             try:
@@ -394,9 +565,10 @@ class Factor2_QualificationsMatcher:
                 if lang_name:
                     processed_languages.append(lang_name)
             elif isinstance(lang, str):
-                processed_languages.append(lang)
+                if lang:
+                    processed_languages.append(lang)
         
-        # ✅ FIX: Extract experience requirements - handle dictionaries correctly
+        # Parse experience requirements
         experience_requirements = edu_required.get('experience_requirements', [])
         if isinstance(experience_requirements, str):
             try:
@@ -422,231 +594,273 @@ class Factor2_QualificationsMatcher:
             elif isinstance(exp, str):
                 processed_experience.append({"title": exp, "years_required": 0})
         
-        log_job(f"   Required degree from DB: {min_degree}")
-        log_job(f"   Required fields from DB: {fields}")
-        log_job(f"   Required certifications from DB: {certifications}")
-        log_job(f"   Additional requirements from DB: {additional_requirements}")
-        log_job(f"   Languages required from DB: {processed_languages}")
-        log_job(f"   Experience requirements from DB: {processed_experience}")
+        # ============================================
+        # ✅ ENHANCED LOGGING - SHOW COMPLETE EDUCATION REQUIREMENTS
+        # ============================================
+        log_job(f"   ============================================")
+        log_job(f"   📚 COMPLETE EDUCATION REQUIREMENTS FROM DB:")
+        log_job(f"   ============================================")
+        log_job(f"   🎓 Minimum Degree: {min_degree} (Level: {min_degree_level})")
+        log_job(f"   🎓 Is Degree Required: {edu_required.get('is_degree_required', False)}")
+        log_job(f"   ")
+        
+        if processed_entries:
+            log_job(f"   📋 QUALIFICATION ENTRIES ({len(processed_entries)}):")
+            for idx, entry in enumerate(processed_entries):
+                log_job(f"      Entry {idx + 1}:")
+                log_job(f"         Degree: {entry['degree']} (Level: {entry['degree_level']})")
+                log_job(f"         Fields of Study: {entry['fields_of_study']}")
+            log_job(f"   ")
+        else:
+            log_job(f"   📋 Qualification Entries: None")
+            log_job(f"   ")
+        
+        if all_fields:
+            log_job(f"   📚 Combined Fields of Study ({len(all_fields)}):")
+            log_job(f"      {all_fields}")
+            log_job(f"   ")
+        else:
+            log_job(f"   📚 Fields of Study: None")
+            log_job(f"   ")
+        
+        if certifications:
+            log_job(f"   ✅ Certifications Required ({len(certifications)}):")
+            for cert in certifications:
+                log_job(f"      - {cert}")
+            log_job(f"   ")
+        else:
+            log_job(f"   ✅ Certifications: None")
+            log_job(f"   ")
+        
+        if processed_experience:
+            log_job(f"   💼 Experience Requirements ({len(processed_experience)}):")
+            for exp in processed_experience:
+                log_job(f"      - {exp.get('title', 'Unknown')}: {exp.get('years_required', 0)}+ years")
+            log_job(f"   ")
+        else:
+            log_job(f"   💼 Experience Requirements: None")
+            log_job(f"   ")
+        
+        if processed_languages:
+            log_job(f"   🌐 Languages Required ({len(processed_languages)}):")
+            for lang in processed_languages:
+                log_job(f"      - {lang}")
+            log_job(f"   ")
+        else:
+            log_job(f"   🌐 Languages: None")
+            log_job(f"   ")
+        
+        log_job(f"   👤 Age Requirement: {age_requirement if age_requirement else 'Not specified'}")
+        log_job(f"   ============================================")
         
         return {
             "minimum_degree": min_degree,
+            "minimum_degree_level": min_degree_level,
+            "qualification_entries": processed_entries,
             "min_degree_cleaned": self.tp.clean(min_degree),
             "is_degree_required": edu_required.get('is_degree_required', False),
-            "fields_of_study": fields,
-            "fields_cleaned": [self.tp.clean(f) for f in fields],
+            "fields_of_study": all_fields,
+            "fields_cleaned": [self.tp.clean(f) for f in all_fields if f],
             "certifications": certifications,
-            "certifications_cleaned": [self.tp.clean(c) for c in certifications],
-            "additional_requirements": additional_requirements,
-            "additional_requirements_cleaned": [self.tp.clean(req) for req in additional_requirements],
+            "certifications_cleaned": [self.tp.clean(c) for c in certifications if c],
+            "additional_requirements": edu_required.get('additional_requirements', []),
             "languages": processed_languages,
-            "languages_cleaned": [self.tp.clean(lang) for lang in processed_languages],
             "experience_requirements": processed_experience,
-            "experience_requirements_cleaned": [self.tp.clean(exp.get("title", "")) for exp in processed_experience]
+            "age_requirement": age_requirement,
+            # ✅ ADD THESE FOR COMPLETE DATA
+            "raw_education_required": edu_required,
+            "has_qualification_entries": len(processed_entries) > 0,
+            "total_qualification_options": len(processed_entries),
+            "allowed_degrees": [entry['degree'] for entry in processed_entries if entry['degree']],
+            "allowed_fields": all_fields,
         }
-    
-    def _extract_allowed_fields(self, min_degree: str, fields: list) -> list:
-        allowed = []
-        
-        if min_degree:
-            allowed.append(min_degree)
-            if " or " in min_degree.lower():
-                parts = re.split(r'\s+or\s+', min_degree.lower())
-                allowed.extend(parts)
-        
-        for field in fields:
-            if field:
-                allowed.append(field)
-                if " or " in field.lower():
-                    parts = re.split(r'\s+or\s+', field.lower())
-                    allowed.extend(parts)
-        
-        cleaned = []
-        for item in allowed:
-            item_clean = self.tp.clean(item)
-            if item_clean and item_clean not in cleaned and len(item_clean) > 3:
-                cleaned.append(item_clean)
-        
-        return cleaned
-    
+   
     def match(self, candidate_quals, job_quals):
-        result = {
-            "candidate_degrees": [d["raw"] for d in candidate_quals.get("degrees", [])],
-            "candidate_fields": [f["raw"] for f in candidate_quals.get("fields", [])],
-            "candidate_combined": [c["raw"] for c in candidate_quals.get("combined", [])],
-            "candidate_certifications": [c["raw"] for c in candidate_quals.get("certifications", [])],
-            "job_degree_required": job_quals.get("minimum_degree", ""),
-            "job_allowed_fields": job_quals.get("fields_of_study", []),
-            "job_certifications": job_quals.get("certifications", []),
-            "job_additional_requirements": job_quals.get("additional_requirements", []),
-            "job_languages": job_quals.get("languages", []),
-            "job_experience_requirements": job_quals.get("experience_requirements", []),
-            "is_degree_required": job_quals.get("is_degree_required", False)
-        }
+        # Get candidate's highest degree
+        candidate_highest_level = candidate_quals.get("highest_degree_level", -1)
+        candidate_highest_degree = candidate_quals.get("highest_degree_raw", "No degree")
         
-        # If no requirement, return 100%
-        if not job_quals.get("is_degree_required", False) or not job_quals.get("minimum_degree"):
-            log_match(f"   Qualifications: No requirement from DB → 100%")
-            result["score"] = 1.0
-            result["match_percentage"] = 100.0
-            result["weight"] = 0.25
-            result["weighted_score"] = 0.25
-            return result
+        job_required_level = job_quals.get("minimum_degree_level", -1)
+        job_required_degree = job_quals.get("minimum_degree", "")
         
-        allowed_fields = self._extract_allowed_fields(
-            job_quals.get("minimum_degree", ""),
-            job_quals.get("fields_of_study", [])
+        # Check if job has multiple qualification entries
+        qualification_entries = job_quals.get("qualification_entries", [])
+        has_qualification_entries = len(qualification_entries) > 0
+        
+        # =====================================================
+        # DEGREE HIERARCHY SCORE
+        # =====================================================
+        exact_match_only = False
+        
+        hierarchy_score = self.check_degree_hierarchy(
+            candidate_highest_level, 
+            job_required_level,
+            exact_match_only
         )
         
-        result["allowed_fields"] = allowed_fields
+        log_match(f"   Degree Hierarchy: Candidate={candidate_highest_level} ({candidate_highest_degree}), Job={job_required_level} ({job_required_degree}) → Score={hierarchy_score:.2f}")
         
-        if not allowed_fields:
-            result["score"] = 1.0
-            result["match_percentage"] = 100.0
-            result["weight"] = 0.25
-            result["weighted_score"] = 0.25
-            return result
+        # =====================================================
+        # CHECK QUALIFICATION ENTRIES (if job has multiple options)
+        # =====================================================
+        qualification_entry_score = 0.0
+        best_entry_match = None
         
-        best_score = 0.0
-        best_match = None
-        best_type = None
-        best_raw_match = None
-        best_job_requirement = None
+        if has_qualification_entries and candidate_highest_level > 0:
+            for entry in qualification_entries:
+                entry_degree = entry.get("degree", "")
+                entry_level = entry.get("degree_level", -1)
+                entry_fields = entry.get("fields_cleaned", [])
+                
+                if entry_level > 0:
+                    entry_hierarchy_score = self.check_degree_hierarchy(
+                        candidate_highest_level, 
+                        entry_level,
+                        exact_match_only
+                    )
+                    
+                    if entry_hierarchy_score > qualification_entry_score:
+                        qualification_entry_score = entry_hierarchy_score
+                        best_entry_match = entry
         
-        # Track individual component scores
-        component_scores = {
-            "degrees": {"best": 0.0, "matches": [], "candidate_values": []},
-            "fields": {"best": 0.0, "matches": [], "candidate_values": []},
-            "combined": {"best": 0.0, "matches": [], "candidate_values": []},
-            "certifications": {"best": 0.0, "matches": [], "candidate_values": []}
-        }
+        # Use qualification entry score if better than base hierarchy
+        final_hierarchy_score = max(hierarchy_score, qualification_entry_score)
         
-        # 1. DEGREES MATCHING
-        for degree in candidate_quals.get("degrees", []):
-            component_scores["degrees"]["candidate_values"].append(degree["raw"])
-            for allowed in allowed_fields:
-                sim = self.tp.semantic_similarity(degree["cleaned"], allowed)
-                if sim > component_scores["degrees"]["best"]:
-                    component_scores["degrees"]["best"] = sim
-                    component_scores["degrees"]["matches"] = [{
-                        "candidate": degree["raw"],
-                        "matched_with": allowed,
-                        "similarity": round(sim, 4)
-                    }]
-                log_match(f"      Degree '{degree['raw']}' vs '{allowed}': {sim:.4f}")
-                if sim > best_score:
-                    best_score = sim
-                    best_match = allowed
-                    best_type = "degree"
-                    best_raw_match = degree["raw"]
-                    best_job_requirement = allowed
+        # =====================================================
+        # FIELD MATCHING
+        # =====================================================
+        job_fields = job_quals.get("fields_cleaned", [])
+        candidate_fields_list = [f["cleaned"] for f in candidate_quals.get("fields", [])]
+        candidate_combined_list = [c["cleaned"] for c in candidate_quals.get("combined", [])]
         
-        # 2. FIELDS MATCHING
-        for field in candidate_quals.get("fields", []):
-            component_scores["fields"]["candidate_values"].append(field["raw"])
-            for allowed in allowed_fields:
-                sim = self.tp.semantic_similarity(field["cleaned"], allowed)
-                if sim > component_scores["fields"]["best"]:
-                    component_scores["fields"]["best"] = sim
-                    component_scores["fields"]["matches"] = [{
-                        "candidate": field["raw"],
-                        "matched_with": allowed,
-                        "similarity": round(sim, 4)
-                    }]
-                log_match(f"      Field '{field['raw']}' vs '{allowed}': {sim:.4f}")
-                if sim > best_score:
-                    best_score = sim
-                    best_match = allowed
-                    best_type = "field"
-                    best_raw_match = field["raw"]
-                    best_job_requirement = allowed
+        field_match_score = 0.0
+        best_field_sim = 0.0
+        best_matched_field = None
+        has_field_requirement = len(job_fields) > 0
         
-        # 3. COMBINED MATCHING
-        for combined in candidate_quals.get("combined", []):
-            component_scores["combined"]["candidate_values"].append(combined["raw"])
-            for allowed in allowed_fields:
-                sim = self.tp.semantic_similarity(combined["cleaned"], allowed)
-                if sim > component_scores["combined"]["best"]:
-                    component_scores["combined"]["best"] = sim
-                    component_scores["combined"]["matches"] = [{
-                        "candidate": combined["raw"],
-                        "matched_with": allowed,
-                        "similarity": round(sim, 4)
-                    }]
-                log_match(f"      Combined '{combined['raw']}' vs '{allowed}': {sim:.4f}")
-                if sim > best_score:
-                    best_score = sim
-                    best_match = allowed
-                    best_type = "combined"
-                    best_raw_match = combined["raw"]
-                    best_job_requirement = allowed
+        if has_field_requirement:
+            log_match(f"   Job requires field(s): {job_fields}")
+            
+            # Calculate best similarity
+            for job_field in job_fields:
+                for cand_field in candidate_fields_list + candidate_combined_list:
+                    sim = self.tp.semantic_similarity(cand_field, job_field)
+                    log_match(f"      Comparing '{cand_field}' with '{job_field}': similarity={sim:.4f}")
+                    if sim > best_field_sim:
+                        best_field_sim = sim
+                        best_matched_field = cand_field
+            
+            # Calculate field match score with stricter thresholds
+            if best_field_sim >= 0.8:
+                field_match_score = 1.0
+                log_match(f"   ✅ Field match: EXCELLENT ({best_field_sim:.2f})")
+            elif best_field_sim >= 0.6:
+                field_match_score = 0.8
+                log_match(f"   ✅ Field match: GOOD ({best_field_sim:.2f})")
+            elif best_field_sim >= 0.4:
+                field_match_score = 0.5
+                log_match(f"   ⚠️ Field match: PARTIAL ({best_field_sim:.2f})")
+            else:
+                field_match_score = 0.2
+                log_match(f"   ❌ Field match: POOR ({best_field_sim:.2f})")
         
-        # 4. CERTIFICATIONS MATCHING
+        # =====================================================
+        # CERTIFICATION MATCHING
+        # =====================================================
         job_certs = job_quals.get("certifications_cleaned", [])
-        job_certs_raw = job_quals.get("certifications", [])
+        candidate_certs = [c["cleaned"] for c in candidate_quals.get("certifications", [])]
         
-        for cert in candidate_quals.get("certifications", []):
-            component_scores["certifications"]["candidate_values"].append(cert["raw"])
-            for job_cert in job_certs:
-                if job_cert:
-                    sim = self.tp.semantic_similarity(cert["cleaned"], job_cert)
-                    if sim > component_scores["certifications"]["best"]:
-                        component_scores["certifications"]["best"] = sim
-                        component_scores["certifications"]["matches"] = [{
-                            "candidate": cert["raw"],
-                            "matched_with": job_cert,
-                            "similarity": round(sim, 4)
-                        }]
-                    log_match(f"      Certification '{cert['raw']}' vs '{job_cert}': {sim:.4f}")
-                    if sim > best_score:
-                        best_score = sim
-                        best_match = job_cert
-                        best_type = "certification"
-                        best_raw_match = cert["raw"]
-                        best_job_requirement = job_cert
+        cert_match_score = 1.0
+        matched_certs = []
+        has_cert_requirement = len(job_certs) > 0
         
-        # Calculate final score
-        if best_score >= 0.8:
-            score = 1.0
+        if has_cert_requirement:
+            if candidate_certs:
+                cert_matches = 0
+                log_match(f"   DEBUG - Job Certifications: {job_certs}")
+                log_match(f"   DEBUG - Candidate Certifications: {candidate_certs}")
+
+                for job_cert in job_certs:
+                    for cand_cert in candidate_certs:
+                        sim = self.tp.semantic_similarity(cand_cert, job_cert)
+                        log_match(f"      Comparing cert: '{cand_cert}' vs '{job_cert}' = {sim:.4f}")
+                        if sim >= 0.6:
+                            cert_matches += 1
+                            matched_certs.append({"job": job_cert, "candidate": cand_cert, "similarity": sim})
+                            break
+                
+                cert_match_score = cert_matches / len(job_certs)
+                log_match(f"   Certifications: {cert_matches}/{len(job_certs)} matched → Score={cert_match_score:.2f}")
+            else:
+                # No candidate certifications - give 50% credit
+                cert_match_score = 0.5
+                log_match(f"   Certifications: No candidate certifications → Partial credit: {cert_match_score:.2f}")
+        
+        # =====================================================
+        # CALCULATE FINAL QUALIFICATION SCORE
+        # NEW WEIGHTS: Degree=30%, Field=50%, Certifications=20%
+        # =====================================================
+        
+        if has_qualification_entries and qualification_entry_score > 0:
+            final_score = (qualification_entry_score * 0.15) + (field_match_score * 0.70) + (cert_match_score * 0.15)
+            log_match(f"   Using qualification entries with weights: Degree 15%, Field 70%, Certs 15%")
+        else:
+            final_score = (final_hierarchy_score * 0.15) + (field_match_score * 0.70) + (cert_match_score * 0.15)
+            log_match(f"   Using standard scoring with weights: Degree 15%, Field 70%, Certs 15%")
+        
+        final_score = min(1.0, max(0.0, final_score))
+        
+        # Determine match quality
+        if final_score >= 0.85:
             match_quality = "Excellent"
-        elif best_score >= 0.6:
-            score = 0.9
+            explanation = f"Your {candidate_highest_degree} perfectly matches the job requirements"
+        elif final_score >= 0.70:
             match_quality = "Good"
-        elif best_score >= 0.5:
-            score = 0.75
+            explanation = f"Your {candidate_highest_degree} meets the job requirements"
+        elif final_score >= 0.50:
             match_quality = "Fair"
-        elif best_score >= 0.3:
-            score = 0.5
+            explanation = f"Your {candidate_highest_degree} partially meets the job requirements"
+        elif final_score >= 0.30:
             match_quality = "Partial"
+            explanation = f"Your {candidate_highest_degree} is below the required {job_required_degree}"
         else:
-            score = max(0.1, best_score)
             match_quality = "Poor"
+            explanation = f"Your qualifications do not match the job requirements"
         
-        log_match(f"   Qualifications match: {score*100:.1f}% ({match_quality})")
+        log_match(f"   ============================================")
+        log_match(f"   QUALIFICATIONS MATCH SUMMARY:")
+        log_match(f"      Degree Hierarchy Score: {final_hierarchy_score:.2f} ({final_hierarchy_score*100:.0f}%)")
+        log_match(f"      Field Match Score: {field_match_score:.2f} ({field_match_score*100:.0f}%)")
+        log_match(f"      Certification Score: {cert_match_score:.2f} ({cert_match_score*100:.0f}%)")
+        log_match(f"      Has Field Requirement: {has_field_requirement}")
+        log_match(f"      Has Qualification Entries: {has_qualification_entries}")
+        log_match(f"      Has Certification Requirement: {has_cert_requirement}")
+        log_match(f"      Final Score: {final_score:.2f} ({final_score*100:.0f}%)")
+        log_match(f"      Match Quality: {match_quality}")
+        log_match(f"   ============================================")
         
-        result["score"] = round(score, 4)
-        result["match_percentage"] = round(score * 100, 1)
-        result["match_quality"] = match_quality
-        result["best_matched_field"] = best_match
-        result["best_matched_candidate_value"] = best_raw_match
-        result["best_job_requirement"] = best_job_requirement
-        result["best_similarity"] = round(best_score, 4)
-        result["match_type"] = best_type if best_type else "none"
-        result["component_scores"] = component_scores
-        result["weight"] = 0.25
-        result["weighted_score"] = round(score * 0.25, 4)
-        
-        if best_type:
-            result["explanation"] = f"Your {best_type} '{best_raw_match}' matched with job requirement '{best_match}' (Similarity: {round(best_score*100, 1)}%)"
-        else:
-            result["explanation"] = "No qualification matches found"
-        
-        return result
-
-# =====================================================
-# FACTOR 3: EXPERIENCE MATCHER (20%)
-# =====================================================
-
+        return {
+            "score": round(final_score, 4),
+            "match_percentage": round(final_score * 100, 1),
+            "match_quality": match_quality,
+            "explanation": explanation,
+            "degree_hierarchy_score": round(final_hierarchy_score, 4),
+            "field_match_score": round(field_match_score, 4),
+            "certification_score": round(cert_match_score, 4),
+            "best_field_similarity": round(best_field_sim, 4),
+            "best_matched_field": best_matched_field,
+            "has_field_requirement": has_field_requirement,
+            "has_qualification_entries": has_qualification_entries,
+            "has_certification_requirement": has_cert_requirement,
+            "candidate_highest_degree": candidate_highest_degree,
+            "candidate_degree_level": candidate_highest_level,
+            "job_required_degree": job_required_degree,
+            "job_degree_level": job_required_level,
+            "matched_certifications": matched_certs,
+            "qualification_entry_used": best_entry_match,
+            "weight": 0.25,
+            "weighted_score": round(final_score * 0.25, 4)
+        }
 class Factor3_ExperienceMatcher:
     def __init__(self, tp):
         self.tp = tp
@@ -884,10 +1098,33 @@ class Factor3_ExperienceMatcher:
 # FACTOR 4: PREFERENCES MATCHER (15%)
 # =====================================================
 
+# =====================================================
+# FACTOR 4: PREFERENCES MATCHER (15%) - FIXED VERSION (NO DUPLICATE)
+# =====================================================
+
 class Factor4_PreferencesMatcher:
     def __init__(self, tp):
         self.tp = tp
-    
+    def extract_candidate_age(self, profile_data):
+        """Extract candidate age from profile data"""
+        dob = profile_data.get('profile', {}).get('personal_info', {}).get('date_of_birth')
+        if dob:
+            try:
+                # Handle various date formats
+                if isinstance(dob, str):
+                    # Handle ISO format with Z
+                    dob = dob.replace('Z', '+00:00')
+                birth_date = datetime.fromisoformat(dob)
+                today = datetime.now()
+                age = today.year - birth_date.year
+                # Adjust if birthday hasn't occurred yet this year
+                if (today.month, today.day) < (birth_date.month, birth_date.day):
+                    age -= 1
+                return age
+            except Exception as e:
+                log_error(f"Error parsing date of birth: {e}")
+                return None
+        return None
     def extract_candidate_preferences(self, profile_data):
         job_prefs = profile_data.get('profile', {}).get('job_preferences', {})
         
@@ -928,8 +1165,142 @@ class Factor4_PreferencesMatcher:
         
         return prefs
     
-    def match(self, candidate_prefs, job):
+    def parse_age_requirement(self, age_req_str):
+        """Parse age requirement string from job posting."""
+        if not age_req_str or not isinstance(age_req_str, str):
+            return {"min_age": None, "max_age": None, "raw": age_req_str}
+        
+        age_req_clean = age_req_str.strip().lower()
+        
+        # No requirement cases
+        no_requirement_keywords = ['not required', 'any', 'none', 'no requirement', 'n/a', 'any age']
+        if any(keyword in age_req_clean for keyword in no_requirement_keywords):
+            log_match(f"      Age requirement: '{age_req_str}' → No restriction")
+            return {"min_age": None, "max_age": None, "raw": age_req_str}
+        
+        # Pattern 1: "XX+" or "Above XX" or "Over XX"
+        patterns_above = [
+            r'(\d+)\+', r'above\s+(\d+)', r'over\s+(\d+)',
+            r'minimum\s+(\d+)', r'at least\s+(\d+)', r'(\d+)\s+or\s+older'
+        ]
+        
+        for pattern in patterns_above:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                min_age = int(match.group(1))
+                log_match(f"      Age requirement: '{age_req_str}' → Min age: {min_age}")
+                return {"min_age": min_age, "max_age": None, "raw": age_req_str}
+        
+        # Pattern 2: "Under XX" or "Below XX"
+        patterns_below = [
+            r'under\s+(\d+)', r'below\s+(\d+)', r'less than\s+(\d+)',
+            r'maximum\s+(\d+)', r'(\d+)\s+or\s+younger', r'up to\s+(\d+)'
+        ]
+        
+        for pattern in patterns_below:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                max_age = int(match.group(1))
+                log_match(f"      Age requirement: '{age_req_str}' → Max age: {max_age}")
+                return {"min_age": None, "max_age": max_age, "raw": age_req_str}
+        
+        # Pattern 3: "XX-YY" or "XX to YY" (range)
+        patterns_range = [
+            r'(\d+)\s*-\s*(\d+)', r'(\d+)\s+to\s+(\d+)',
+            r'between\s+(\d+)\s+and\s+(\d+)', r'from\s+(\d+)\s+to\s+(\d+)'
+        ]
+        
+        for pattern in patterns_range:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                min_age = int(match.group(1))
+                max_age = int(match.group(2))
+                if min_age <= max_age:
+                    log_match(f"      Age requirement: '{age_req_str}' → Range: {min_age}-{max_age}")
+                    return {"min_age": min_age, "max_age": max_age, "raw": age_req_str}
+        
+        # Pattern 4: Exact age
+        patterns_exact = [r'^(\d+)$', r'exactly\s+(\d+)', r'(\d+)\s+years old', r'age\s+(\d+)']
+        
+        for pattern in patterns_exact:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                exact_age = int(match.group(1))
+                log_match(f"      Age requirement: '{age_req_str}' → Exact age: {exact_age}")
+                return {"min_age": exact_age, "max_age": exact_age, "raw": age_req_str}
+        
+        # Fallback
+        numbers = re.findall(r'(\d+)', age_req_clean)
+        if numbers:
+            min_age = int(numbers[0])
+            max_age = int(numbers[-1]) if len(numbers) > 1 else None
+            log_match(f"      Age requirement: '{age_req_str}' → Parsed as Min: {min_age}, Max: {max_age}")
+            return {"min_age": min_age, "max_age": max_age, "raw": age_req_str}
+        
+        log_match(f"      Age requirement: '{age_req_str}' → Could not parse, treating as no restriction")
+        return {"min_age": None, "max_age": None, "raw": age_req_str}
+    
+    def match_age(self, candidate_age, job_age_requirement):
+        """Calculate age match score between candidate and job requirement."""
+        if not job_age_requirement or job_age_requirement.lower() in ['not required', 'any', '']:
+            log_match(f"   Age: No requirement from DB → 100%")
+            return {"score": 1.0, "match_percentage": 100.0, "details": "No age requirement"}
+        
+        if candidate_age is None:
+            log_match(f"   Age: Candidate age unknown → 70% (neutral)")
+            return {"score": 0.7, "match_percentage": 70.0, "details": "Candidate age not provided"}
+        
+        age_rule = self.parse_age_requirement(job_age_requirement)
+        
+        meets_min = True
+        meets_max = True
+        min_age = age_rule.get("min_age")
+        max_age = age_rule.get("max_age")
+        
+        if min_age is not None and candidate_age < min_age:
+            meets_min = False
+            log_match(f"   Age: Candidate {candidate_age} < required min {min_age}")
+        
+        if max_age is not None and candidate_age > max_age:
+            meets_max = False
+            log_match(f"   Age: Candidate {candidate_age} > required max {max_age}")
+        
+        if meets_min and meets_max:
+            if min_age is not None and max_age is not None:
+                center = (min_age + max_age) / 2
+                distance = abs(candidate_age - center)
+                range_half = (max_age - min_age) / 2
+                if range_half > 0:
+                    score = max(0.5, 1.0 - (distance / range_half) * 0.5)
+                else:
+                    score = 1.0
+            else:
+                score = 1.0
+            log_match(f"   Age: Candidate {candidate_age} meets requirement → {score*100:.0f}%")
+            return {"score": round(score, 4), "match_percentage": round(score * 100, 1), "details": "Age requirement met"}
+        else:
+            penalty = 0.0
+            if min_age is not None and candidate_age < min_age:
+                gap = min_age - candidate_age
+                penalty = min(0.5, gap / min_age * 0.5)
+            elif max_age is not None and candidate_age > max_age:
+                gap = candidate_age - max_age
+                penalty = min(0.5, gap / max_age * 0.5)
+            
+            score = max(0.3, 1.0 - penalty)
+            log_match(f"   Age: Candidate {candidate_age} does NOT meet requirement → {score*100:.0f}%")
+            return {"score": round(score, 4), "match_percentage": round(score * 100, 1), "details": f"Age {candidate_age} does not meet requirement"}
+    
+    # ============================================
+    # SINGLE MATCH METHOD (NO DUPLICATE)
+    # ============================================
+    def match(self, candidate_prefs, job, candidate_age=None, job_age_requirement=None):
         missing_job_data = []
+        
+        # ============================================
+        # AGE MATCH
+        # ============================================
+        age_match = self.match_age(candidate_age, job_age_requirement)
         
         job_type_raw = job.get('job_type', '')
         job_type = self.tp.clean(job_type_raw) if job_type_raw else ''
@@ -1097,11 +1468,11 @@ class Factor4_PreferencesMatcher:
             if job_salary_min > 0 and candidate_salary_max > 0:
                 if job_salary_min <= candidate_salary_max:
                     salary_match = 1.0
-                    log_match(f"      Salary match: Job min ({job_salary_min}) <= Candidate max ({candidate_salary_max}) → 1.00")
+                    log_match(f"      Salary match: Job min <= Candidate max → 1.00")
                 else:
                     diff = job_salary_min - candidate_salary_max
                     salary_match = max(0.3, 1.0 - (diff / candidate_salary_max))
-                    log_match(f"      Salary match: Job min ({job_salary_min}) > Candidate max ({candidate_salary_max}) by {diff} → {salary_match:.2f}")
+                    log_match(f"      Salary match: Job min > Candidate max by {diff} → {salary_match:.2f}")
             elif job_salary_max > 0 and candidate_salary_min > 0:
                 if candidate_salary_min <= job_salary_max:
                     salary_match = 1.0
@@ -1150,27 +1521,43 @@ class Factor4_PreferencesMatcher:
                 log_match(f"      No language preferences specified → {language_match:.2f}")
             log_match(f"   Language match: {language_match:.2f}")
         
-        # Total preference score
-        score = (type_match * 0.20) + \
-                (remote_match * 0.20) + \
-                (location_match * 0.15) + \
-                (industry_match * 0.15) + \
-                (salary_match * 0.15) + \
-                (language_match * 0.15)
+        # ============================================
+        # WEIGHTS WITH AGE FACTOR (5%)
+        # ============================================
+        
+        age_weight = 0.05
+        remaining_weight = 0.95
+        
+        type_weight = 0.20 * remaining_weight
+        remote_weight = 0.20 * remaining_weight
+        location_weight = 0.15 * remaining_weight
+        industry_weight = 0.15 * remaining_weight
+        salary_weight = 0.15 * remaining_weight
+        language_weight = 0.15 * remaining_weight
+        
+        preference_score = (type_match * type_weight) + \
+                           (remote_match * remote_weight) + \
+                           (location_match * location_weight) + \
+                           (industry_match * industry_weight) + \
+                           (salary_match * salary_weight) + \
+                           (language_match * language_weight)
+        
+        final_score = preference_score + (age_match["score"] * age_weight)
         
         log_match(f"   ============================================")
         log_match(f"   PREFERENCE SCORES BREAKDOWN:")
-        log_match(f"      Type Match (20%):      {type_match:.2f} × 0.20 = {type_match * 0.20:.3f}")
-        log_match(f"      Remote Match (20%):    {remote_match:.2f} × 0.20 = {remote_match * 0.20:.3f}")
-        log_match(f"      Location Match (15%):  {location_match:.2f} × 0.15 = {location_match * 0.15:.3f}")
-        log_match(f"      Industry Match (15%):  {industry_match:.2f} × 0.15 = {industry_match * 0.15:.3f}")
-        log_match(f"      Salary Match (15%):    {salary_match:.2f} × 0.15 = {salary_match * 0.15:.3f}")
-        log_match(f"      Language Match (15%):  {language_match:.2f} × 0.15 = {language_match * 0.15:.3f}")
-        log_match(f"   TOTAL PREFERENCE SCORE: {score:.4f} ({score*100:.1f}%)")
+        log_match(f"      Type Match:     {type_match:.2f} × {type_weight:.2f} = {type_match * type_weight:.3f}")
+        log_match(f"      Remote Match:   {remote_match:.2f} × {remote_weight:.2f} = {remote_match * remote_weight:.3f}")
+        log_match(f"      Location Match: {location_match:.2f} × {location_weight:.3f} = {location_match * location_weight:.3f}")
+        log_match(f"      Industry Match: {industry_match:.2f} × {industry_weight:.3f} = {industry_match * industry_weight:.3f}")
+        log_match(f"      Salary Match:   {salary_match:.2f} × {salary_weight:.3f} = {salary_match * salary_weight:.3f}")
+        log_match(f"      Language Match: {language_match:.2f} × {language_weight:.3f} = {language_match * language_weight:.3f}")
+        log_match(f"      Age Match:      {age_match['score']:.2f} × {age_weight:.2f} = {age_match['score'] * age_weight:.3f}")
+        log_match(f"   TOTAL: {final_score:.4f} ({final_score*100:.1f}%)")
         
         return {
-            "score": round(score, 4), 
-            "match_percentage": round(score * 100, 1),
+            "score": round(final_score, 4), 
+            "match_percentage": round(final_score * 100, 1),
             "missing_job_data": missing_job_data,
             "type_match": round(type_match, 4),
             "type_match_details": type_scores_detail,
@@ -1189,10 +1576,306 @@ class Factor4_PreferencesMatcher:
             "language_match": round(language_match, 4),
             "language_match_details": language_matches_detail,
             "language_match_note": language_match_note,
+            "age_match": round(age_match["score"], 4),
+            "age_match_percentage": round(age_match["score"] * 100, 1),
+            "age_match_details": age_match.get("details", ""),
             "weight": 0.15, 
-            "weighted_score": round(score * 0.15, 4)
+            "weighted_score": round(final_score * 0.15, 4)
         }
-
+def match(self, candidate_prefs, job, candidate_age=None, job_age_requirement=None):
+    missing_job_data = []
+    
+    # ============================================
+    # AGE MATCH (NEW FACTOR - 5% WEIGHT)
+    # ============================================
+    age_match = self.match_age(candidate_age, job_age_requirement)
+    
+    job_type_raw = job.get('job_type', '')
+    job_type = self.tp.clean(job_type_raw) if job_type_raw else ''
+    if not job_type:
+        missing_job_data.append("job_type")
+        job_type = 'full-time'
+    
+    job_remote_raw = job.get('work_arrangement', '')
+    job_remote = self.tp.clean(job_remote_raw) if job_remote_raw else ''
+    if not job_remote:
+        missing_job_data.append("work_arrangement")
+    
+    job_industry_raw = job.get('company_industry', '')
+    job_industry = self.tp.clean(job_industry_raw) if job_industry_raw else ''
+    if not job_industry:
+        missing_job_data.append("industry")
+    
+    job_locations = []
+    for loc in job.get('locations', []):
+        if isinstance(loc, dict):
+            city = loc.get('city', '')
+            country = loc.get('country', '')
+            if city or country:
+                job_locations.append(self.tp.clean(f"{city} {country}"))
+    if not job_locations:
+        missing_job_data.append("locations")
+    
+    job_languages = []
+    lang_reqs = job.get('language_requirements', [])
+    if isinstance(lang_reqs, str):
+        try:
+            lang_reqs = json.loads(lang_reqs)
+        except:
+            lang_reqs = []
+    for lang in lang_reqs:
+        if isinstance(lang, dict):
+            lang_name = lang.get('name', '')
+            if lang_name:
+                job_languages.append(self.tp.clean(lang_name))
+        elif isinstance(lang, str):
+            if lang:
+                job_languages.append(self.tp.clean(lang))
+    if not job_languages:
+        missing_job_data.append("languages")
+    
+    job_salary_min = 0
+    job_salary_max = 0
+    try:
+        job_salary_min = float(job.get('salary_min', 0)) if job.get('salary_min') else 0
+        job_salary_max = float(job.get('salary_max', 0)) if job.get('salary_max') else 0
+    except (ValueError, TypeError):
+        pass
+    
+    if job_salary_min == 0 and job_salary_max == 0:
+        missing_job_data.append("salary")
+    
+    log_job(f"   Missing job data: {missing_job_data if missing_job_data else 'None'}")
+    
+    # Type match
+    type_match = 1.0
+    type_scores_detail = []
+    type_match_note = None
+    
+    if not job_type_raw:
+        type_match_note = "Job type not specified by employer"
+        log_match(f"   Job type: Not specified by employer → 100%")
+    else:
+        if candidate_prefs["job_types"]:
+            type_scores = []
+            for pt in candidate_prefs["job_types"]:
+                sim = self.tp.semantic_similarity(pt, job_type)
+                type_scores.append(sim)
+                type_scores_detail.append({"preference": pt, "job_value": job_type, "similarity": round(sim, 4)})
+                log_match(f"      Job type '{pt}' vs '{job_type}': {sim:.2f}")
+            type_match = max(type_scores) if type_scores else 0.5
+        else:
+            type_match = 0.7
+        log_match(f"   Job type match: {type_match:.2f}")
+    
+    # Remote match
+    remote_match = 1.0
+    remote_match_note = None
+    
+    if not job_remote_raw:
+        remote_match_note = "Remote work not specified by employer"
+        log_match(f"   Remote work: Not specified by employer → 100%")
+    else:
+        if candidate_prefs["remote_preference"]:
+            remote_match = self.tp.semantic_similarity(candidate_prefs["remote_preference"], job_remote)
+            log_match(f"      Remote preference '{candidate_prefs['remote_preference']}' vs '{job_remote}': {remote_match:.2f}")
+        else:
+            remote_match = 0.7
+        log_match(f"   Remote work match: {remote_match:.2f}")
+    
+    # Location match
+    location_match = 1.0
+    location_match_detail = None
+    location_match_note = None
+    
+    if not job_locations:
+        location_match_note = "Location not specified by employer"
+        log_match(f"   Location: Not specified by employer → 100%")
+    else:
+        if candidate_prefs["locations"]:
+            best = 0.0
+            best_pair = None
+            for pl in candidate_prefs["locations"]:
+                for jl in job_locations:
+                    sim = self.tp.semantic_similarity(pl, jl)
+                    if sim > best:
+                        best = sim
+                        best_pair = (pl, jl)
+                    log_match(f"      Location '{pl}' vs '{jl}': {sim:.2f}")
+            location_match = best if best > 0 else 0.5
+            if best_pair:
+                location_match_detail = {"candidate_location": best_pair[0], "job_location": best_pair[1], "similarity": round(location_match, 4)}
+                log_match(f"      Best location match: '{best_pair[0]}' vs '{best_pair[1]}' = {location_match:.2f}")
+        else:
+            location_match = 0.7
+        log_match(f"   Location match: {location_match:.2f}")
+    
+    # Industry match
+    industry_match = 1.0
+    industry_scores_detail = []
+    industry_match_note = None
+    
+    if not job_industry_raw:
+        industry_match_note = "Industry not specified by employer"
+        log_match(f"   Industry: Not specified by employer → 100%")
+    else:
+        if candidate_prefs["industries"]:
+            ind_scores = []
+            for ind in candidate_prefs["industries"]:
+                sim = self.tp.semantic_similarity(ind, job_industry)
+                ind_scores.append(sim)
+                industry_scores_detail.append({"preference": ind, "job_value": job_industry, "similarity": round(sim, 4)})
+                log_match(f"      Industry '{ind}' vs '{job_industry}': {sim:.2f}")
+            industry_match = max(ind_scores) if ind_scores else 0.5
+        else:
+            industry_match = 0.7
+        log_match(f"   Industry match: {industry_match:.2f}")
+    
+    # Salary match
+    salary_match = 1.0
+    salary_detail = {}
+    salary_match_note = None
+    
+    if job_salary_min == 0 and job_salary_max == 0:
+        salary_match_note = "Salary not specified by employer"
+        log_match(f"   Salary: Not specified by employer → 100%")
+    else:
+        candidate_salary_max = candidate_prefs.get("salary_max", 0)
+        candidate_salary_min = candidate_prefs.get("salary_min", 0)
+        
+        try:
+            candidate_salary_max = float(candidate_salary_max) if candidate_salary_max else 0
+            candidate_salary_min = float(candidate_salary_min) if candidate_salary_min else 0
+        except (ValueError, TypeError):
+            candidate_salary_max = 0
+            candidate_salary_min = 0
+        
+        log_match(f"      Job salary range: {job_salary_min} - {job_salary_max}")
+        log_match(f"      Candidate salary expectation: {candidate_salary_min} - {candidate_salary_max}")
+        
+        if job_salary_min > 0 and candidate_salary_max > 0:
+            if job_salary_min <= candidate_salary_max:
+                salary_match = 1.0
+                log_match(f"      Salary match: Job min ({job_salary_min}) <= Candidate max ({candidate_salary_max}) → 1.00")
+            else:
+                diff = job_salary_min - candidate_salary_max
+                salary_match = max(0.3, 1.0 - (diff / candidate_salary_max))
+                log_match(f"      Salary match: Job min ({job_salary_min}) > Candidate max ({candidate_salary_max}) by {diff} → {salary_match:.2f}")
+        elif job_salary_max > 0 and candidate_salary_min > 0:
+            if candidate_salary_min <= job_salary_max:
+                salary_match = 1.0
+            else:
+                diff = candidate_salary_min - job_salary_max
+                salary_match = max(0.3, 1.0 - (diff / candidate_salary_min))
+        else:
+            log_match(f"      Salary match: No valid salary data for comparison → 1.00")
+        
+        salary_detail = {
+            "job_min": job_salary_min,
+            "job_max": job_salary_max,
+            "candidate_min": candidate_salary_min,
+            "candidate_max": candidate_salary_max,
+            "match_score": round(salary_match, 4)
+        }
+        log_match(f"   Salary match: {salary_match:.2f}")
+    
+    # Language match
+    language_match = 1.0
+    language_matches_detail = []
+    language_match_note = None
+    
+    if not job_languages:
+        language_match_note = "Languages not specified by employer"
+        log_match(f"   Languages: Not specified by employer → 100%")
+    else:
+        if candidate_prefs["languages"]:
+            matches = 0
+            for jl in job_languages:
+                matched = False
+                for lang in candidate_prefs["languages"]:
+                    sim = self.tp.semantic_similarity(lang, jl)
+                    log_match(f"      Language '{lang}' vs '{jl}': {sim:.2f}")
+                    if sim >= 0.7:
+                        matches += 1
+                        matched = True
+                        language_matches_detail.append({"required": jl, "matched_with": lang, "similarity": round(sim, 4)})
+                        break
+                if not matched:
+                    language_matches_detail.append({"required": jl, "matched_with": None, "similarity": 0})
+            language_match = matches / len(job_languages) if job_languages else 1.0
+            log_match(f"      Language match: {matches}/{len(job_languages)} languages matched = {language_match:.2f}")
+        else:
+            language_match = 0.5
+            log_match(f"      No language preferences specified → {language_match:.2f}")
+        log_match(f"   Language match: {language_match:.2f}")
+    
+    # ============================================
+    # NEW WEIGHTS WITH AGE FACTOR (5%)
+    # Age factor takes 5%, other factors scaled down proportionally
+    # ============================================
+    
+    age_weight = 0.05  # Age now has 5% weight
+    remaining_weight = 0.95  # Remaining 95% for other factors
+    
+    # Scale other factors to total 95%
+    # Original: type=20%, remote=20%, location=15%, industry=15%, salary=15%, language=15% (total 100%)
+    # New scaled: each multiplied by 0.95
+    type_weight = 0.20 * remaining_weight
+    remote_weight = 0.20 * remaining_weight
+    location_weight = 0.15 * remaining_weight
+    industry_weight = 0.15 * remaining_weight
+    salary_weight = 0.15 * remaining_weight
+    language_weight = 0.15 * remaining_weight
+    
+    # Total preference score without age
+    preference_score = (type_match * type_weight) + \
+                       (remote_match * remote_weight) + \
+                       (location_match * location_weight) + \
+                       (industry_match * industry_weight) + \
+                       (salary_match * salary_weight) + \
+                       (language_match * language_weight)
+    
+    # Final score with age
+    final_score = preference_score + (age_match["score"] * age_weight)
+    
+    log_match(f"   ============================================")
+    log_match(f"   PREFERENCE SCORES BREAKDOWN:")
+    log_match(f"      Type Match (19%):       {type_match:.2f} × {type_weight:.2f} = {type_match * type_weight:.3f}")
+    log_match(f"      Remote Match (19%):     {remote_match:.2f} × {remote_weight:.2f} = {remote_match * remote_weight:.3f}")
+    log_match(f"      Location Match (14.25%):{location_match:.2f} × {location_weight:.3f} = {location_match * location_weight:.3f}")
+    log_match(f"      Industry Match (14.25%):{industry_match:.2f} × {industry_weight:.3f} = {industry_match * industry_weight:.3f}")
+    log_match(f"      Salary Match (14.25%):  {salary_match:.2f} × {salary_weight:.3f} = {salary_match * salary_weight:.3f}")
+    log_match(f"      Language Match (14.25%):{language_match:.2f} × {language_weight:.3f} = {language_match * language_weight:.3f}")
+    log_match(f"      Age Match (5%):         {age_match['score']:.2f} × {age_weight:.2f} = {age_match['score'] * age_weight:.3f}")
+    log_match(f"   TOTAL PREFERENCE SCORE: {final_score:.4f} ({final_score*100:.1f}%)")
+    
+    return {
+        "score": round(final_score, 4), 
+        "match_percentage": round(final_score * 100, 1),
+        "missing_job_data": missing_job_data,
+        "type_match": round(type_match, 4),
+        "type_match_details": type_scores_detail,
+        "type_match_note": type_match_note,
+        "remote_match": round(remote_match, 4),
+        "remote_match_note": remote_match_note,
+        "location_match": round(location_match, 4),
+        "location_match_details": location_match_detail,
+        "location_match_note": location_match_note,
+        "industry_match": round(industry_match, 4),
+        "industry_match_details": industry_scores_detail,
+        "industry_match_note": industry_match_note,
+        "salary_match": round(salary_match, 4),
+        "salary_match_details": salary_detail,
+        "salary_match_note": salary_match_note,
+        "language_match": round(language_match, 4),
+        "language_match_details": language_matches_detail,
+        "language_match_note": language_match_note,
+        "age_match": round(age_match["score"], 4),
+        "age_match_percentage": round(age_match["score"] * 100, 1),
+        "age_match_details": age_match.get("details", ""),
+        "weight": 0.15, 
+        "weighted_score": round(final_score * 0.15, 4)
+    }
 # =====================================================
 # COMPLETE JOB FIELD EXTRACTOR
 # =====================================================
@@ -1383,6 +2066,14 @@ def extract_all_job_fields(job: Dict) -> Dict:
             company_social_links = json.loads(company_social_links)
         except:
             company_social_links = {}
+            
+    education_required = job.get('education_required', {})
+    
+    
+     # ✅ CRITICAL: Extract age requirement
+    age_requirement = education_required.get('age_requirement', '')
+    if not age_requirement:
+        age_requirement = education_required.get('age_requirement_text', '')
     
     # Return COMPLETE job object
     return {
@@ -1440,6 +2131,8 @@ def extract_all_job_fields(job: Dict) -> Dict:
         "application_count": int(job.get('application_count', 0)) if job.get('application_count') else 0,
         "metadata": metadata,
         "deleted_at": job.get('deleted_at'),
+        "education_required": education_required, 
+         "age_requirement": age_requirement,  # ✅ ADD THIS
         "company": {
             "id": job.get('company_id', ''),
             "name": job.get('company_name', 'Unknown'),
@@ -1472,6 +2165,193 @@ def extract_all_job_fields(job: Dict) -> Dict:
         }
     }
 
+
+    
+    
+def parse_age_requirement(self, age_req_str):
+    """
+    Parse age requirement string from job posting.
+    
+    Supported formats:
+    - "18+" -> min_age=18, max_age=None
+    - "21" -> min_age=21, max_age=21 (exact age)
+    - "25-35" -> min_age=25, max_age=35
+    - "Under 40" -> min_age=None, max_age=40
+    - "Below 30" -> min_age=None, max_age=30
+    - "Above 50" -> min_age=50, max_age=None
+    - "Over 18" -> min_age=18, max_age=None
+    - "18 to 30" -> min_age=18, max_age=30
+    - "Not required" -> min_age=None, max_age=None
+    - "Any" -> min_age=None, max_age=None
+    - "" -> min_age=None, max_age=None
+    
+    Returns:
+        dict: {"min_age": int or None, "max_age": int or None, "raw": str}
+    """
+    if not age_req_str or not isinstance(age_req_str, str):
+        return {"min_age": None, "max_age": None, "raw": age_req_str}
+    
+    age_req_clean = age_req_str.strip().lower()
+    
+    # No requirement cases
+    no_requirement_keywords = ['not required', 'any', 'none', 'no requirement', 'n/a', 'any age']
+    if any(keyword in age_req_clean for keyword in no_requirement_keywords):
+        log_match(f"      Age requirement: '{age_req_str}' → No restriction")
+        return {"min_age": None, "max_age": None, "raw": age_req_str}
+    
+    # Pattern 1: "XX+" or "Above XX" or "Over XX" or "XX or older"
+    patterns_above = [
+        r'(\d+)\+',                    # "18+"
+        r'above\s+(\d+)',              # "above 18"
+        r'over\s+(\d+)',               # "over 18"
+        r'greater than\s+(\d+)',       # "greater than 18"
+        r'minimum\s+(\d+)',            # "minimum 18"
+        r'at least\s+(\d+)',           # "at least 18"
+        r'(\d+)\s+or\s+older',         # "18 or older"
+        r'(\d+)\+ years',              # "18+ years"
+    ]
+    
+    for pattern in patterns_above:
+        match = re.search(pattern, age_req_clean)
+        if match:
+            min_age = int(match.group(1))
+            log_match(f"      Age requirement: '{age_req_str}' → Min age: {min_age}")
+            return {"min_age": min_age, "max_age": None, "raw": age_req_str}
+    
+    # Pattern 2: "Under XX" or "Below XX" or "XX or younger"
+    patterns_below = [
+        r'under\s+(\d+)',              # "under 40"
+        r'below\s+(\d+)',              # "below 40"
+        r'less than\s+(\d+)',          # "less than 40"
+        r'maximum\s+(\d+)',            # "maximum 40"
+        r'not exceed\s+(\d+)',         # "not exceed 40"
+        r'(\d+)\s+or\s+younger',       # "40 or younger"
+        r'up to\s+(\d+)',              # "up to 40"
+    ]
+    
+    for pattern in patterns_below:
+        match = re.search(pattern, age_req_clean)
+        if match:
+            max_age = int(match.group(1))
+            log_match(f"      Age requirement: '{age_req_str}' → Max age: {max_age}")
+            return {"min_age": None, "max_age": max_age, "raw": age_req_str}
+    
+    # Pattern 3: "XX-YY" or "XX to YY" (range)
+    patterns_range = [
+        r'(\d+)\s*-\s*(\d+)',          # "25-35" or "25 - 35"
+        r'(\d+)\s+to\s+(\d+)',         # "25 to 35"
+        r'between\s+(\d+)\s+and\s+(\d+)',  # "between 25 and 35"
+        r'from\s+(\d+)\s+to\s+(\d+)',  # "from 25 to 35"
+    ]
+    
+    for pattern in patterns_range:
+        match = re.search(pattern, age_req_clean)
+        if match:
+            min_age = int(match.group(1))
+            max_age = int(match.group(2))
+            if min_age <= max_age:
+                log_match(f"      Age requirement: '{age_req_str}' → Range: {min_age}-{max_age}")
+                return {"min_age": min_age, "max_age": max_age, "raw": age_req_str}
+            else:
+                # Swapped values? Try to fix
+                log_match(f"      Age requirement: '{age_req_str}' → Invalid range (min > max)")
+                return {"min_age": max_age, "max_age": min_age, "raw": age_req_str}
+    
+    # Pattern 4: Exact age (single number)
+    patterns_exact = [
+        r'^(\d+)$',                    # "25"
+        r'exactly\s+(\d+)',            # "exactly 25"
+        r'(\d+)\s+years old',          # "25 years old"
+        r'age\s+(\d+)',                # "age 25"
+    ]
+    
+    for pattern in patterns_exact:
+        match = re.search(pattern, age_req_clean)
+        if match:
+            exact_age = int(match.group(1))
+            log_match(f"      Age requirement: '{age_req_str}' → Exact age: {exact_age}")
+            return {"min_age": exact_age, "max_age": exact_age, "raw": age_req_str}
+    
+    # Pattern 5: Try to extract any number as min_age (fallback)
+    numbers = re.findall(r'(\d+)', age_req_clean)
+    if numbers:
+        min_age = int(numbers[0])
+        max_age = int(numbers[-1]) if len(numbers) > 1 else None
+        log_match(f"      Age requirement: '{age_req_str}' → Parsed as Min: {min_age}, Max: {max_age}")
+        return {"min_age": min_age, "max_age": max_age, "raw": age_req_str}
+    
+    # No pattern matched
+    log_match(f"      Age requirement: '{age_req_str}' → Could not parse, treating as no restriction")
+    return {"min_age": None, "max_age": None, "raw": age_req_str}
+    
+# Add this method to Factor4_PreferencesMatcher class
+def match_age(self, candidate_age, job_age_requirement):
+    """
+    Calculate age match score between candidate and job requirement.
+    
+    Args:
+        candidate_age: int or None (candidate's age from date_of_birth)
+        job_age_requirement: str (e.g., "18+", "25-35", "Under 40")
+    
+    Returns:
+        dict: {"score": float, "match_percentage": float, "details": dict}
+    """
+    # If no job age requirement, return 100%
+    if not job_age_requirement or job_age_requirement.lower() in ['not required', 'any', '']:
+        log_match(f"   Age: No requirement from DB → 100%")
+        return {"score": 1.0, "match_percentage": 100.0, "details": "No age requirement"}
+    
+    # If candidate age is unknown, return neutral score
+    if candidate_age is None:
+        log_match(f"   Age: Candidate age unknown → 70% (neutral)")
+        return {"score": 0.7, "match_percentage": 70.0, "details": "Candidate age not provided"}
+    
+    # Parse job age requirement
+    age_rule = self.parse_age_requirement(job_age_requirement)
+    
+    # Check if candidate meets age requirement
+    meets_min = True
+    meets_max = True
+    min_age = age_rule.get("min_age")
+    max_age = age_rule.get("max_age")
+    
+    if min_age is not None and candidate_age < min_age:
+        meets_min = False
+        log_match(f"   Age: Candidate {candidate_age} < required min {min_age}")
+    
+    if max_age is not None and candidate_age > max_age:
+        meets_max = False
+        log_match(f"   Age: Candidate {candidate_age} > required max {max_age}")
+    
+    # Calculate score
+    if meets_min and meets_max:
+        # Perfect match if within range
+        if min_age is not None and max_age is not None:
+            # Calculate how centered the age is in the range
+            center = (min_age + max_age) / 2
+            distance = abs(candidate_age - center)
+            range_half = (max_age - min_age) / 2
+            if range_half > 0:
+                score = max(0.5, 1.0 - (distance / range_half) * 0.5)
+            else:
+                score = 1.0
+        else:
+            score = 1.0
+        log_match(f"   Age: Candidate {candidate_age} meets requirement '{job_age_requirement}' → {score*100:.0f}%")
+        return {"score": round(score, 4), "match_percentage": round(score * 100, 1), "details": "Age requirement met"}
+    else:
+        # Partial match - penalty based on how far off
+        penalty = 0.0
+        if min_age is not None and candidate_age < min_age:
+            gap = min_age - candidate_age
+            penalty = min(0.5, gap / min_age * 0.5)
+        elif max_age is not None and candidate_age > max_age:
+            gap = candidate_age - max_age
+            penalty = min(0.5, gap / max_age * 0.5)
+        
+        score = max(0.3, 1.0 - penalty)
+        log_match(f"   Age: Candidate {candidate_age} does NOT meet requirement '{job_age_requirement}' → {score*100:.0f}%")
+        return {"score": round(score, 4), "match_percentage": round(score * 100, 1), "details": f"Age {candidate_age} does not meet requirement"}
 # =====================================================
 # EXTRACT COMPLETE CANDIDATE DATA
 # =====================================================
@@ -1619,12 +2499,32 @@ class BackendClient:
     
     def get_profile(self, candidate_id):
         try:
-            resp = requests.get(f"{self.base_url}/candidates/full-profile/{candidate_id}", headers=self.headers, timeout=30)
+            log_info(f"🔍 Calling backend API for candidate: {candidate_id}")
+            log_info(f"   URL: {self.base_url}/candidates/full-profile/{candidate_id}")
+            log_info(f"   Headers: {self.headers}")
+            
+            resp = requests.get(
+                f"{self.base_url}/candidates/full-profile/{candidate_id}", 
+                headers=self.headers, 
+                timeout=30
+            )
+            
+            log_info(f"📊 Response status: {resp.status_code}")
+            log_info(f"📊 Response body: {resp.text[:500] if resp.text else 'Empty'}")
+            
             if resp.status_code == 200:
-                return resp.json()
-            return None
+                data = resp.json()
+                if data.get("success"):
+                    return data
+                else:
+                    log_error(f"❌ API returned success=false: {data.get('message')}")
+                    return None
+            else:
+                log_error(f"❌ HTTP {resp.status_code}: {resp.text}")
+                return None
+                
         except Exception as e:
-            log_error(f"Profile error: {e}")
+            log_error(f"❌ Profile error: {e}")
             return None
     
     def get_jobs(self):
@@ -1825,9 +2725,12 @@ async def match_candidate(request: Request):
                     "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
                     "job_degree_required": job_quals.get("minimum_degree", ""),
                     "job_allowed_fields": job_quals.get("fields_of_study", []),
+                    "qualification_entries": job_quals.get("qualification_entries", []),  # ✅ ADD THIS
                     "best_similarity": q.get("best_similarity", 0),
                     "best_matched_field": q.get("best_matched_field", None),
-                    "match_type": q.get("match_type", "none")
+                    "match_type": q.get("match_type", "none"),
+                    "match_quality": q.get("match_quality", ""),  # ✅ ADD THIS
+                    "explanation": q.get("explanation", "")       # ✅ ADD THIS
                 },
                 "experience_breakdown": {
                     "match_type": e.get("match_type", "unknown"),
@@ -1937,11 +2840,14 @@ async def match_candidate_for_job(job_id: str, request: Request):
             return {"success": False, "error": "Candidate not found"}
         
         profile_data = profile_resp.get('data', {})
+         
+        candidate_age = factor4.extract_candidate_age(profile_data)
         
         job = backend.get_job_by_id(job_id)
+        
         if not job:
             return {"success": False, "error": f"Job not found: {job_id}"}
-        
+        job_age_requirement = job.get('education_required', {}).get('age_requirement', '')
         candidate_skills = factor1.extract_candidate_skills(profile_data)
         candidate_quals = factor2.extract_candidate_qualifications(profile_data)
         candidate_prefs = factor4.extract_candidate_preferences(profile_data)
@@ -1974,7 +2880,7 @@ async def match_candidate_for_job(job_id: str, request: Request):
         e = factor3.match(profile_data, job)
         
         log_match("FACTOR 4: PREFERENCES (15%)")
-        p = factor4.match(candidate_prefs, job)
+        p = factor4.match(candidate_prefs, job, candidate_age, job_age_requirement)
         
         total_raw = s["weighted_score"] + q["weighted_score"] + e["weighted_score"] + p["weighted_score"]
         total_score = round(total_raw * 100, 1)
@@ -2023,9 +2929,12 @@ async def match_candidate_for_job(job_id: str, request: Request):
                 "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
                 "job_degree_required": job_quals.get("minimum_degree", ""),
                 "job_allowed_fields": job_quals.get("fields_of_study", []),
+                "qualification_entries": job_quals.get("qualification_entries", []),  # ✅ ADD THIS
                 "best_similarity": q.get("best_similarity", 0),
                 "best_matched_field": q.get("best_matched_field", None),
-                "match_type": q.get("match_type", "none")
+                "match_type": q.get("match_type", "none"),
+                "match_quality": q.get("match_quality", ""),  # ✅ ADD THIS
+                "explanation": q.get("explanation", "")       # ✅ ADD THIS
             },
             "experience_breakdown": {
                 "match_type": e.get("match_type", "unknown"),
@@ -2167,6 +3076,7 @@ async def view_log(log_type: str, lines: int = 100):
         return {"success": True, "log_type": log_type, "lines": len(last_lines), "content": "".join(last_lines)}
     except Exception as e:
         return {"success": False, "error": str(e)}
+        
 
 
 if __name__ == "__main__":

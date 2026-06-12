@@ -61,10 +61,10 @@ npm install
 
 ```env
 DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=recruitment_db
+DB_PORT=8090
+DB_NAME=SVWR-CFE_DB
 DB_USER=postgres
-DB_PASSWORD=your_password_here
+DB_PASSWORD=TN12
 JWT_SECRET=your_jwt_secret_here
 JWT_EXPIRE=30d
 PORT=3001

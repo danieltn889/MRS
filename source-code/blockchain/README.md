@@ -60,7 +60,11 @@ npm run node          # Start local Hardhat blockchain
 npm run deploy:local  # Deploy contract to localhost
 npm run clean         # Clean Hardhat artifacts/cache
 ```
+# Run tests
+npx hardhat test
 
+# Open Hardhat console
+npx hardhat console --network hardhat
 ## Integration Notes
 
 After deployment, the contract address is stored in `contract.address`. The backend blockchain service uses this address, the contract ABI, and the configured RPC URL to store and read simulation verification data.

@@ -3,7 +3,7 @@ import {
   ArrowLeft, Eye, Save, Trash2, Plus, Minus, X, CheckCircle,
   AlertCircle, ChevronRight, ChevronLeft, Target, Sparkles,
   DollarSign, GraduationCap, Briefcase, Users, FileText,
-  Search, Tag, ChevronDown, Check, Loader2,
+  Search, Tag, ChevronDown, Check, Loader2, Edit2,
 } from 'lucide-react';
 import { createJob, getJob, updateJob, deleteJob, getSuggestions } from '../../services/jobAPI';
 import { useAuth } from '../../context/AuthContext';
@@ -17,10 +17,10 @@ import {
   DEPARTMENTS, DEGREE_TYPES, FIELDS_OF_STUDY,
   RESPONSIBILITIES_SUGGESTIONS, REQUIREMENTS_SUGGESTIONS,
   BENEFITS_SUGGESTIONS, SKILLS_SUGGESTIONS,
-  EXPERIENCE_YEAR_OPTIONS, EXPERIENCE_TITLE_SUGGESTIONS,
+  EXPERIENCE_YEAR_OPTIONS, EXPERIENCE_TITLE_SUGGESTIONS, ExperienceRequirement,
 } from '../types/jobTypes';
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
+// ─── Design tokens ─────────────────────────────────────────────────────────
 const C = {
   bg: '#f8fafc', surface: '#ffffff', border: '#e2e8f0',
   text: '#0f172a', textMuted: '#64748b', textLight: '#94a3b8',
@@ -43,7 +43,7 @@ const inputBase: React.CSSProperties = {
   outline: 'none', transition: 'border .15s', fontFamily: 'inherit',
 };
 
-// ─── Button styles ────────────────────────────────────────────────────────────
+// ─── Button styles ──────────────────────────────────────────────────────────
 const primaryBtnStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', gap: 6,
   padding: '9px 20px', borderRadius: 10, border: 'none',
@@ -70,7 +70,7 @@ const addBtnStyle: React.CSSProperties = {
   fontWeight: 600, fontSize: 13, cursor: 'pointer',
 };
 
-// ─── Micro-components ─────────────────────────────────────────────────────────
+// ─── Micro-components ───────────────────────────────────────────────────────
 
 const Label = ({ children, required }: { children: React.ReactNode; required?: boolean }) => (
   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: C.text, marginBottom: 6 }}>
@@ -122,19 +122,31 @@ const NoneIndicator = ({ label }: { label: string }) => (
   </div>
 );
 
-const ListItem = ({ label, sub, onRemove }: { label: string; sub?: string; onRemove: () => void }) => (
+// ─── EditableListItem ────────────────────────────────────────────────────────
+const EditableListItem = ({ label, sub, onRemove, onEdit }: {
+  label: string; sub?: string; onRemove: () => void; onEdit?: () => void;
+}) => (
   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff', padding: '10px 14px', borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 8 }}>
     <div>
       <p style={{ fontSize: 14, fontWeight: 500, color: C.text, margin: 0 }}>{label}</p>
       {sub && <p style={{ fontSize: 12, color: C.textMuted, margin: 0 }}>{sub}</p>}
     </div>
-    <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.danger, display: 'flex', alignItems: 'center' }}>
-      <Trash2 size={14} />
-    </button>
+    <div style={{ display: 'flex', gap: 6 }}>
+      {onEdit && (
+        <button onClick={onEdit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.primary, display: 'flex', alignItems: 'center', padding: 4 }}>
+          <Edit2 size={13} />
+        </button>
+      )}
+      <button onClick={onRemove} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.danger, display: 'flex', alignItems: 'center', padding: 4 }}>
+        <Trash2 size={14} />
+      </button>
+    </div>
   </div>
 );
 
-// ─── ComboBox: select from list OR type custom ────────────────────────────────
+const ListItem = EditableListItem;
+
+// ─── ComboBox ───────────────────────────────────────────────────────────────
 const ComboBox = ({ value, onChange, options, placeholder, hasError }: {
   value: string; onChange: (v: string) => void;
   options: string[]; placeholder?: string; hasError?: boolean;
@@ -148,6 +160,8 @@ const ComboBox = ({ value, onChange, options, placeholder, hasError }: {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -180,8 +194,7 @@ const ComboBox = ({ value, onChange, options, placeholder, hasError }: {
   );
 };
 
-// ─── SmartListField: debounced search + AI — suggestions only when typing ────────
-// Replaces AutoSuggestListField.  No static chips; dropdown opens only on input.
+// ─── AutoSuggestListField ───────────────────────────────────────────────────
 const AutoSuggestListField = ({
   items, onAdd, onUpdate, onRemove,
   suggestions, placeholder,
@@ -189,7 +202,6 @@ const AutoSuggestListField = ({
   items: string[]; onAdd: (v: string) => void;
   onUpdate: (i: number, v: string) => void; onRemove: (i: number) => void;
   suggestions: string[]; placeholder: string;
-  /** unused – kept for call-site compatibility */ aiLabel?: string;
 }) => {
   const [input, setInput] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -211,12 +223,10 @@ const AutoSuggestListField = ({
     clearTimeout(debRef.current);
     setIsSearching(true); setIsOpen(true);
     debRef.current = setTimeout(() => {
-      // Simulate backend search — filter dataset, deduplicate with existing items
       const db = suggestions
         .filter(s => s.toLowerCase().includes(val.toLowerCase()) && !items.includes(s))
         .slice(0, 5)
         .map(text => ({ text, ai: false }));
-      // Simulate AI: 1–2 relevant suggestions not already in db results
       const pool = suggestions.filter(s => !items.includes(s) && !db.find(d => d.text === s));
       const ai = pool.sort(() => Math.random() - 0.5).slice(0, 2).map(text => ({ text, ai: true }));
       setDropRows([...db, ...ai]);
@@ -231,8 +241,8 @@ const AutoSuggestListField = ({
 
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(i + 1, dropRows.length - 1)); return; }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); setSelIdx(i => Math.max(i - 1, -1)); return; }
-    if (e.key === 'Escape')    { setIsOpen(false); setSelIdx(-1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(i - 1, -1)); return; }
+    if (e.key === 'Escape') { setIsOpen(false); setSelIdx(-1); return; }
     if (e.key === 'Enter') {
       e.preventDefault();
       commit(selIdx >= 0 && dropRows[selIdx] ? dropRows[selIdx].text : input);
@@ -247,11 +257,10 @@ const AutoSuggestListField = ({
   };
 
   const dbRows = dropRows.filter(r => !r.ai);
-  const aiRows = dropRows.filter(r =>  r.ai);
+  const aiRows = dropRows.filter(r => r.ai);
 
   return (
     <div>
-      {/* ── Added items list ── */}
       {items.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           {items.map((item, i) => (
@@ -270,7 +279,6 @@ const AutoSuggestListField = ({
         </div>
       )}
 
-      {/* ── Search input + live dropdown ── */}
       <div ref={wrapRef} style={{ position: 'relative' }}>
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ position: 'relative', flex: 1 }}>
@@ -289,7 +297,6 @@ const AutoSuggestListField = ({
           </button>
         </div>
 
-        {/* ── Dropdown ── */}
         {isOpen && (
           <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radius, boxShadow: C.shadowMd, overflow: 'hidden' }}>
             {isSearching ? (
@@ -352,21 +359,49 @@ const AutoSuggestListField = ({
   );
 };
 
-// ─── SkillInput ───────────────────────────────────────────────────────────────
-const SkillInput = ({ skills, onAdd, onRemove, color, placeholder, suggestions = SKILLS_SUGGESTIONS }: {
-  skills: Skill[]; onAdd: (name: string) => void; onRemove: (i: number) => void;
-  color: string; placeholder: string; suggestions?: string[];
+// ─── Proficiency labels & picker ────────────────────────────────────────────
+const PROF_LABELS = ['', 'Beginner', 'Basic', 'Intermediate', 'Advanced', 'Expert'];
+
+const ProficiencyPicker = ({ value, onChange, color }: {
+  value: number; onChange: (v: number) => void; color: string;
+}) => (
+  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+    {[1, 2, 3, 4, 5].map(n => (
+      <button key={n} onClick={e => { e.stopPropagation(); onChange(n); }}
+        title={PROF_LABELS[n]}
+        style={{
+          width: 16, height: 16, borderRadius: '50%', border: `2px solid ${n <= value ? color : `${color}40`}`,
+          cursor: 'pointer', padding: 0, background: n <= value ? color : 'transparent',
+          transition: 'all .15s',
+        }} />
+    ))}
+    <span style={{ fontSize: 11, color, fontWeight: 500, marginLeft: 4 }}>{PROF_LABELS[value] || 'Intermediate'}</span>
+  </div>
+);
+
+// ─── SkillInput ──────────────────────────────────────────────────────────────
+const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, placeholder, suggestions = SKILLS_SUGGESTIONS }: {
+  skills: Skill[];
+  onAdd: (name: string) => void;
+  onRemove: (i: number) => void;
+  onUpdateProficiency?: (i: number, level: number) => void;
+  color: string;
+  placeholder: string;
+  suggestions?: string[];
 }) => {
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [dropRows, setDropRows] = useState<Array<{ text: string; suggested: boolean }>>([]);
   const [selIdx, setSelIdx] = useState(-1);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const debRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const h = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
@@ -396,9 +431,9 @@ const SkillInput = ({ skills, onAdd, onRemove, color, placeholder, suggestions =
 
   const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(i + 1, dropRows.length - 1)); return; }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); setSelIdx(i => Math.max(i - 1, -1)); return; }
-    if (e.key === 'Escape')    { setOpen(false); setSelIdx(-1); return; }
-    if (e.key === 'Enter')     { e.preventDefault(); add(selIdx >= 0 && dropRows[selIdx] ? dropRows[selIdx].text : input); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); setSelIdx(i => Math.max(i - 1, -1)); return; }
+    if (e.key === 'Escape') { setOpen(false); setSelIdx(-1); return; }
+    if (e.key === 'Enter') { e.preventDefault(); add(selIdx >= 0 && dropRows[selIdx] ? dropRows[selIdx].text : input); }
   };
 
   const hi = (text: string, q: string) => {
@@ -416,12 +451,58 @@ const SkillInput = ({ skills, onAdd, onRemove, color, placeholder, suggestions =
       {skills.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
           {skills.map((s, i) => (
-            <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 14px', borderRadius: 20, background: `${color}15`, color, fontSize: 13, fontWeight: 500, border: `1px solid ${color}30` }}>
-              {s.name}
-              <button onClick={() => onRemove(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color, padding: 0, lineHeight: 1, fontSize: 15, opacity: 0.7, display: 'flex', alignItems: 'center' }}>×</button>
-            </span>
+            <div
+              key={i}
+              onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
+              style={{
+                display: 'inline-flex', flexDirection: 'column', gap: 6,
+                padding: expandedIdx === i ? '10px 14px' : '6px 14px',
+                borderRadius: expandedIdx === i ? 10 : 20,
+                background: expandedIdx === i ? `${color}20` : `${color}15`,
+                color,
+                border: `1px solid ${expandedIdx === i ? color : `${color}30`}`,
+                cursor: 'pointer',
+                transition: 'all .15s',
+                boxShadow: expandedIdx === i ? `0 0 0 3px ${color}18` : 'none',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{s.name}</span>
+                {expandedIdx !== i && s.proficiency_level !== undefined && s.proficiency_level > 0 && (
+                  <span style={{ fontSize: 10, opacity: 0.65, fontWeight: 400 }}>
+                    · {PROF_LABELS[s.proficiency_level] || 'Intermediate'}
+                  </span>
+                )}
+                <span style={{ fontSize: 10, opacity: 0.5, marginLeft: 2 }}>
+                  {expandedIdx === i ? '▲' : '▼'}
+                </span>
+                <button
+                  onClick={e => {
+                    e.stopPropagation();
+                    onRemove(i);
+                    if (expandedIdx === i) setExpandedIdx(null);
+                  }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color, padding: 0, lineHeight: 1, fontSize: 16, opacity: 0.6, display: 'flex', alignItems: 'center', marginLeft: 2 }}
+                >×</button>
+              </div>
+              {expandedIdx === i && onUpdateProficiency && (
+                <div onClick={e => e.stopPropagation()} style={{ borderTop: `1px solid ${color}30`, paddingTop: 8 }}>
+                  <p style={{ fontSize: 11, color, opacity: 0.7, marginBottom: 6, fontWeight: 500 }}>Proficiency level</p>
+                  <ProficiencyPicker
+                    value={s.proficiency_level || 3}
+                    onChange={v => onUpdateProficiency(i, v)}
+                    color={color}
+                  />
+                </div>
+              )}
+            </div>
           ))}
         </div>
+      )}
+      {skills.length > 0 && (
+        <p style={{ fontSize: 11, color: C.textLight, marginBottom: 8 }}>
+          Click a skill to edit its proficiency level
+        </p>
       )}
 
       <div ref={ref} style={{ position: 'relative' }}>
@@ -455,12 +536,10 @@ const SkillInput = ({ skills, onAdd, onRemove, color, placeholder, suggestions =
               <>
                 {matchRows.length > 0 && (
                   <>
-                    <div style={{ padding: '5px 12px 3px', fontSize: 10, fontWeight: 700, color: C.textLight, letterSpacing: 0.9, textTransform: 'uppercase', background: C.bg }}>
-                      Matches
-                    </div>
+                    <div style={{ padding: '5px 12px 3px', fontSize: 10, fontWeight: 700, color: C.textLight, letterSpacing: 0.9, textTransform: 'uppercase', background: C.bg }}>Matches</div>
                     {matchRows.map((row, idx) => (
                       <div key={row.text} onMouseDown={() => add(row.text)}
-                        style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === idx ? `${color}12` : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s' }}
+                        style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === idx ? `${color}12` : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseOver={e => (e.currentTarget.style.background = `${color}12`)}
                         onMouseOut={e => (e.currentTarget.style.background = selIdx === idx ? `${color}12` : 'transparent')}>
                         <Tag size={12} color={color} />
@@ -478,7 +557,7 @@ const SkillInput = ({ skills, onAdd, onRemove, color, placeholder, suggestions =
                       const absIdx = matchRows.length + idx;
                       return (
                         <div key={row.text} onMouseDown={() => add(row.text)}
-                          style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === absIdx ? C.purpleGhost : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s' }}
+                          style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === absIdx ? C.purpleGhost : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8 }}
                           onMouseOver={e => (e.currentTarget.style.background = C.purpleGhost)}
                           onMouseOut={e => (e.currentTarget.style.background = selIdx === absIdx ? C.purpleGhost : 'transparent')}>
                           <Sparkles size={11} color={C.purple} />
@@ -503,7 +582,7 @@ const SkillInput = ({ skills, onAdd, onRemove, color, placeholder, suggestions =
   );
 };
 
-// ─── YearPicker ───────────────────────────────────────────────────────────────
+// ─── YearPicker ─────────────────────────────────────────────────────────────
 const YearPicker = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
   const [custom, setCustom] = useState(!EXPERIENCE_YEAR_OPTIONS.includes(value) && value !== '');
 
@@ -524,13 +603,13 @@ const YearPicker = ({ value, onChange }: { value: string; onChange: (v: string) 
   );
 };
 
-// ─── Salary section ───────────────────────────────────────────────────────────
+// ─── SalaryTypeSelector ─────────────────────────────────────────────────────
 const SalaryTypeSelector = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
   const options = [
-    { value: 'range',      label: 'Range',       icon: '↔' },
-    { value: 'above',      label: 'Above',        icon: '↑' },
-    { value: 'under',      label: 'Under',        icon: '↓' },
-    { value: 'negotiable', label: 'Negotiable',   icon: '~' },
+    { value: 'range', label: 'Range', icon: '↔' },
+    { value: 'above', label: 'Above', icon: '↑' },
+    { value: 'under', label: 'Under', icon: '↓' },
+    { value: 'negotiable', label: 'Negotiable', icon: '~' },
   ];
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
@@ -545,7 +624,7 @@ const SalaryTypeSelector = ({ value, onChange }: { value: string; onChange: (v: 
   );
 };
 
-// ─── TagSearchInput — chip list with live-search dropdown ────────────────────
+// ─── TagSearchInput ─────────────────────────────────────────────────────────
 const TagSearchInput = ({ tags, onAdd, onRemove, suggestions, placeholder, color = C.primary }: {
   tags: string[]; onAdd: (t: string) => void; onRemove: (t: string) => void;
   suggestions: string[]; placeholder: string; color?: string;
@@ -653,7 +732,7 @@ const TagSearchInput = ({ tags, onAdd, onRemove, suggestions, placeholder, color
   );
 };
 
-// ─── AgeRequirementInput — structured range / above / under / not required ────
+// ─── AgeRequirementInput ─────────────────────────────────────────────────────
 type AgeInputType = 'not_required' | 'above' | 'under' | 'range';
 
 const AgeRequirementInput = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
@@ -678,18 +757,18 @@ const AgeRequirementInput = ({ value, onChange }: { value: string; onChange: (v:
   const [b, setB] = useState(init.b);
 
   const emit = (t: AgeInputType, va: string, vb: string) => {
-    if (t === 'not_required')      onChange('Not required');
-    else if (t === 'above' && va)  onChange(`${va}+`);
-    else if (t === 'under' && va)  onChange(`Under ${va}`);
+    if (t === 'not_required') onChange('Not required');
+    else if (t === 'above' && va) onChange(`${va}+`);
+    else if (t === 'under' && va) onChange(`Under ${va}`);
     else if (t === 'range' && va && vb) onChange(`${va}–${vb}`);
     else onChange('');
   };
 
   const typeOptions: { value: AgeInputType; label: string; icon: string }[] = [
     { value: 'not_required', label: 'Not required', icon: '—' },
-    { value: 'above',        label: 'Above / min',  icon: '↑' },
-    { value: 'under',        label: 'Under / max',  icon: '↓' },
-    { value: 'range',        label: 'Range',        icon: '↔' },
+    { value: 'above', label: 'Above / min', icon: '↑' },
+    { value: 'under', label: 'Under / max', icon: '↓' },
+    { value: 'range', label: 'Range', icon: '↔' },
   ];
 
   return (
@@ -703,13 +782,11 @@ const AgeRequirementInput = ({ value, onChange }: { value: string; onChange: (v:
           </button>
         ))}
       </div>
-
       {type === 'not_required' && (
         <div style={{ padding: '10px 14px', background: C.successGhost, borderRadius: 8, color: C.success, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
           <CheckCircle size={14} /> No age requirement for this role
         </div>
       )}
-
       {type !== 'not_required' && (
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           {type === 'range' ? (
@@ -739,7 +816,7 @@ const AgeRequirementInput = ({ value, onChange }: { value: string; onChange: (v:
   );
 };
 
-// ─── Qualifications section ───────────────────────────────────────────────────
+// ─── QualificationsSection ──────────────────────────────────────────────────
 const QualificationsSection = ({ entries, onChange, degreeSuggestions = DEGREE_TYPES, fieldSuggestions = FIELDS_OF_STUDY }: {
   entries: QualificationEntry[];
   onChange: (entries: QualificationEntry[]) => void;
@@ -753,7 +830,7 @@ const QualificationsSection = ({ entries, onChange, degreeSuggestions = DEGREE_T
 
   const removeEntry = (id: string) => onChange(entries.filter(e => e.id !== id));
   const updateDegree = (id: string, degree: string) => onChange(entries.map(e => e.id === id ? { ...e, degree } : e));
-  const addField   = (id: string, field: string) => {
+  const addField = (id: string, field: string) => {
     const t = field.trim(); if (!t) return;
     onChange(entries.map(e => e.id === id ? { ...e, fields: e.fields.includes(t) ? e.fields : [...e.fields, t] } : e));
   };
@@ -775,7 +852,6 @@ const QualificationsSection = ({ entries, onChange, degreeSuggestions = DEGREE_T
               <Trash2 size={14} />
             </button>
           </div>
-
           <Label>Fields of Study</Label>
           <TagSearchInput
             tags={entry.fields}
@@ -786,7 +862,6 @@ const QualificationsSection = ({ entries, onChange, degreeSuggestions = DEGREE_T
             color={C.primary} />
         </div>
       ))}
-
       <button onClick={addEntry} style={{ ...addBtnStyle, marginTop: 4 }}>
         <GraduationCap size={14} /> Add Qualification
       </button>
@@ -794,30 +869,18 @@ const QualificationsSection = ({ entries, onChange, degreeSuggestions = DEGREE_T
   );
 };
 
-// ─── Validation ───────────────────────────────────────────────────────────────
+// ─── Validation ─────────────────────────────────────────────────────────────
 const validate = (data: JobFormData, step: number, isEditing = false): ValidationErrors => {
   const errors: ValidationErrors = {};
-
-  // ── Step 1: Job Information ──────────────────────────────────────────────────
   if (step === 1) {
-    if (!data.title.trim())
-      errors.title = 'Job title is required';
-    else if (data.title.trim().length < 3)
-      errors.title = 'Title must be at least 3 characters';
-    else if (data.title.trim().length > 100)
-      errors.title = 'Title must be 100 characters or less';
-
-    if (!data.description.trim())
-      errors.description = 'Job description is required';
-    else if (data.description.trim().length < 30)
-      errors.description = 'Description must be at least 30 characters';
-
+    if (!data.title.trim()) errors.title = 'Job title is required';
+    else if (data.title.trim().length < 3) errors.title = 'Title must be at least 3 characters';
+    else if (data.title.trim().length > 100) errors.title = 'Title must be 100 characters or less';
+    if (!data.description.trim()) errors.description = 'Job description is required';
+    else if (data.description.trim().length < 30) errors.description = 'Description must be at least 30 characters';
     const validLocs = data.locations.filter(l => l.trim());
-    if (validLocs.length === 0)
-      errors.locations = 'At least one location is required';
+    if (validLocs.length === 0) errors.locations = 'At least one location is required';
   }
-
-  // ── Step 2: Salary & Benefits ────────────────────────────────────────────────
   if (step === 2) {
     const st = data.salaryType;
     if (st === 'range') {
@@ -833,56 +896,39 @@ const validate = (data: JobFormData, step: number, isEditing = false): Validatio
       }
       if (data.salaryMin && data.salaryMax) {
         const min = parseFloat(data.salaryMin), max = parseFloat(data.salaryMax);
-        if (!isNaN(min) && !isNaN(max) && min > max)
-          errors.salaryMax = 'Max salary must be ≥ min salary';
+        if (!isNaN(min) && !isNaN(max) && min > max) errors.salaryMax = 'Max salary must be ≥ min salary';
       }
     } else if (st === 'above' || st === 'under') {
-      if (!data.salaryMin.trim())
-        errors.salaryMin = 'Salary amount is required';
+      if (!data.salaryMin.trim()) errors.salaryMin = 'Salary amount is required';
       else {
         const v = parseFloat(data.salaryMin);
         if (isNaN(v)) errors.salaryMin = 'Enter a valid amount';
         else if (v < 0) errors.salaryMin = 'Salary must be 0 or greater';
       }
     }
-    if (data.salaryCurrency && data.salaryCurrency.trim().length === 0)
-      errors.salaryCurrency = 'Currency is required';
   }
-
-  // ── Step 3: Skills & Experience ──────────────────────────────────────────────
   if (step === 3) {
-    if (data.requiredSkills.length === 0)
-      errors.requiredSkills = 'Add at least one required skill';
+    if (data.requiredSkills.length === 0) errors.requiredSkills = 'Add at least one required skill';
   }
-
-  // ── Step 5: Screening & Dates ────────────────────────────────────────────────
   if (step === 5) {
     if (data.applicationLimit && (isNaN(parseInt(data.applicationLimit)) || parseInt(data.applicationLimit) < 1))
       errors.applicationLimit = 'Application limit must be a positive number';
-
     const today = new Date().toISOString().split('T')[0];
-
     if (!data.publishedAt) {
       errors.publishedAt = 'Publish date is required';
     } else if (!isEditing && data.publishedAt < today) {
-      // Only block past publish dates on new jobs; editing keeps existing date
       errors.publishedAt = 'Publish date cannot be in the past';
     }
-
     if (!data.expiresAt) {
       errors.expiresAt = 'Expiry date is required';
     } else if (!isEditing && data.expiresAt <= today) {
-      // Only block past expiry on new jobs; editing can retain existing expiry
       errors.expiresAt = 'Expiry date must be in the future';
     } else if (data.publishedAt && data.expiresAt <= data.publishedAt) {
       errors.expiresAt = 'Expiry date must be after the publish date';
     }
-
     const emptyQuestion = data.screeningQuestions.some(q => !q.question.trim());
-    if (emptyQuestion)
-      errors.screeningQuestions = 'All screening questions must have text';
+    if (emptyQuestion) errors.screeningQuestions = 'All screening questions must have text';
   }
-
   return errors;
 };
 
@@ -893,15 +939,15 @@ const validateAll = (data: JobFormData, isEditing = false): ValidationErrors => 
   ...validate(data, 5, isEditing),
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 const getCompanyId = (user: any): string | null => {
   let id = localStorage.getItem('companyId');
   if (!id) {
-    try { const u = JSON.parse(localStorage.getItem('user') || '{}'); id = u?.companyId || u?.company?.id || null; } catch {}
+    try { const u = JSON.parse(localStorage.getItem('user') || '{}'); id = u?.companyId || u?.company?.id || null; } catch { }
   }
   if (!id && user) id = user?.companyId || user?.company?.id || null;
   if (!id) {
-    try { const c = JSON.parse(localStorage.getItem('company') || '{}'); id = c?.id || null; } catch {}
+    try { const c = JSON.parse(localStorage.getItem('company') || '{}'); id = c?.id || null; } catch { }
   }
   if (id) localStorage.setItem('companyId', id);
   return id;
@@ -920,7 +966,40 @@ const toArray = (value: any): any[] => {
   return String(parsed).trim() ? [parsed] : [];
 };
 
-// ─── Sub-layout components ────────────────────────────────────────────────────
+const cleanList = (values: any[] = []) =>
+  [...new Set(values.map(v => String(v ?? '').trim()).filter(Boolean))];
+
+const looksLikeCombinedQualification = (value: string) =>
+  /\s+in\s+/i.test(value) || /\s+or\s+/i.test(value) || value.includes(';') || value.length > 60;
+
+const normalizeDegreeSuggestions = (values: any[] = []) =>
+  cleanList(values)
+    .map(value => value.replace(/\s+in\s+.+$/i, '').trim())
+    .filter(value => value && !looksLikeCombinedQualification(value));
+
+const normalizeFieldSuggestions = (values: any[] = []) =>
+  cleanList(values)
+    .flatMap(value => value.split(/\s+or\s+|,|;/i).map((v: string) => v.trim()))
+    .filter((value: string) => value && !/\bdegree\b/i.test(value));
+
+const normalizeQualificationEntries = (raw: any, fallbackDegree?: string): QualificationEntry[] => {
+  const entries = toArray(raw).map((entry: any, i: number) => {
+    if (!entry || typeof entry !== 'object') return null;
+    const degree = String(entry.degree || entry.minimum_degree || '').replace(/\s+in\s+.+$/i, '').trim();
+    const fields = cleanList(toArray(entry.fields || entry.fields_of_study || entry.field_of_study));
+    if (!degree && fields.length === 0) return null;
+    return { id: entry.id ? String(entry.id) : String(Date.now() + i), degree: degree || "Bachelor's Degree", fields };
+  }).filter(Boolean) as QualificationEntry[];
+  if (entries.length > 0) return entries;
+  const fields = cleanList(toArray(raw?.fields_of_study || raw?.field_of_study));
+  const degree = String(fallbackDegree || raw?.minimum_degree || '').replace(/\s+in\s+.+$/i, '').trim();
+  if (degree || fields.length > 0) {
+    return [{ id: String(Date.now()), degree: degree || "Bachelor's Degree", fields }];
+  }
+  return [];
+};
+
+// ─── Sub-layout components ───────────────────────────────────────────────────
 const FormSection = ({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) => (
   <div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
@@ -988,30 +1067,38 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [touched, setTouched] = useState(false);
+
   const [newLang, setNewLang] = useState({ name: '', proficiency: 'professional' as Language['proficiency'], is_required: false });
+  const [editingLangIdx, setEditingLangIdx] = useState<number | null>(null);
+
   const [newExp, setNewExp] = useState<{ title: string; years: string; description: string }>({ title: '', years: '', description: '' });
+  const [editingExpIdx, setEditingExpIdx] = useState<number | null>(null);
+
   const [newCert, setNewCert] = useState({ name: '', issuer: '' });
+  const [editingCertIdx, setEditingCertIdx] = useState<number | null>(null);
+
   const [newDoc, setNewDoc] = useState({ name: '', is_required: true });
+  const [editingDocIdx, setEditingDocIdx] = useState<number | null>(null);
+
   const [tagInput, setTagInput] = useState('');
 
-  const [liveSkills,           setLiveSkills]           = useState<string[]>(SKILLS_SUGGESTIONS);
+  const [liveSkills, setLiveSkills] = useState<string[]>(SKILLS_SUGGESTIONS);
   const [liveResponsibilities, setLiveResponsibilities] = useState<string[]>(RESPONSIBILITIES_SUGGESTIONS);
-  const [liveRequirements,     setLiveRequirements]     = useState<string[]>(REQUIREMENTS_SUGGESTIONS);
-  const [liveBenefits,         setLiveBenefits]         = useState<string[]>(BENEFITS_SUGGESTIONS);
-  const [liveDegreeTypes,      setLiveDegreeTypes]      = useState<string[]>(DEGREE_TYPES);
-  const [liveFieldsOfStudy,    setLiveFieldsOfStudy]    = useState<string[]>(FIELDS_OF_STUDY);
+  const [liveRequirements, setLiveRequirements] = useState<string[]>(REQUIREMENTS_SUGGESTIONS);
+  const [liveBenefits, setLiveBenefits] = useState<string[]>(BENEFITS_SUGGESTIONS);
+  const [liveDegreeTypes, setLiveDegreeTypes] = useState<string[]>(DEGREE_TYPES);
+  const [liveFieldsOfStudy, setLiveFieldsOfStudy] = useState<string[]>(FIELDS_OF_STUDY);
 
   useEffect(() => {
     getSuggestions().then(data => {
       if (!data) return;
-      const merge = (live: string[], fallback: string[]) =>
-        live.length > 0 ? [...new Set([...live, ...fallback])] : fallback;
+      const merge = (live: string[], fallback: string[]) => cleanList([...(live || []), ...fallback]);
       setLiveSkills(merge(data.skills, SKILLS_SUGGESTIONS));
       setLiveResponsibilities(merge(data.responsibilities, RESPONSIBILITIES_SUGGESTIONS));
       setLiveRequirements(merge(data.requirements, REQUIREMENTS_SUGGESTIONS));
       setLiveBenefits(merge(data.benefits, BENEFITS_SUGGESTIONS));
-      setLiveDegreeTypes(merge(data.degreeTypes, DEGREE_TYPES));
-      setLiveFieldsOfStudy(merge(data.fieldsOfStudy, FIELDS_OF_STUDY));
+      setLiveDegreeTypes(normalizeDegreeSuggestions([...(data.degreeTypes || []), ...DEGREE_TYPES]));
+      setLiveFieldsOfStudy(normalizeFieldSuggestions([...(data.fieldsOfStudy || []), ...FIELDS_OF_STUDY]));
     });
   }, []);
 
@@ -1023,7 +1110,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
       if (touched) setErrors(validate(next, currentStep, isEditing));
       return next;
     });
-  }, [touched, currentStep]);
+  }, [touched, currentStep, isEditing]);
 
   const updateArr = (field: keyof JobFormData, idx: number, value: any) =>
     setFormData(prev => ({ ...prev, [field]: (prev[field] as any[]).map((item, i) => i === idx ? value : item) }));
@@ -1034,14 +1121,98 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
   const removeArr = (field: keyof JobFormData, idx: number) =>
     setFormData(prev => ({ ...prev, [field]: (prev[field] as any[]).filter((_, i) => i !== idx) }));
 
+  const addSkill = (name: string, required: boolean) => {
+    if (!name.trim()) return;
+    const skill: Skill = { name: name.trim(), proficiency_level: 3 };
+    const field = required ? 'requiredSkills' : 'preferredSkills';
+    const existing = formData[field] as Skill[];
+    if (!existing.find(s => s.name === name.trim())) update(field, [...existing, skill]);
+  };
+
+  const updateSkillProficiency = (idx: number, level: number, required: boolean) => {
+    const field = required ? 'requiredSkills' : 'preferredSkills';
+    const skills = [...(formData[field] as Skill[])];
+    skills[idx] = { ...skills[idx], proficiency_level: level };
+    update(field, skills);
+  };
+
+  const goNext = () => {
+    setTouched(true);
+    const e = validate(formData, currentStep, isEditing);
+    setErrors(e);
+    if (Object.keys(e).length > 0) return;
+    setCurrentStep(s => Math.min(STEPS.length, s + 1));
+  };
+
+  const goPrev = () => {
+    setCurrentStep(s => Math.max(1, s - 1));
+    setErrors({});
+  };
+
+  // ─── FIXED loadJob ──────────────────────────────────────────────────────────
   const loadJob = async () => {
     try {
       setPageLoading(true);
       const { data: job } = await getJob(jobId!);
       const edObj: any = parseJsonField(job.education_required ?? job.educationLevel, {});
+
+      // ── Qualification entries ──
+      let qualificationEntries: QualificationEntry[] = [];
+      if (edObj.qualification_entries && Array.isArray(edObj.qualification_entries) && edObj.qualification_entries.length > 0) {
+        qualificationEntries = edObj.qualification_entries.map((entry: any, i: number) => ({
+          id: entry.id ? String(entry.id) : String(Date.now() + i),
+          degree: entry.degree || '',
+          fields: entry.fields_of_study || entry.fields || [],
+        }));
+      } else if (edObj.minimum_degree && edObj.minimum_degree.trim()) {
+        const degreeText = edObj.minimum_degree;
+        if (degreeText.includes(' in ')) {
+          const [degree, fieldsPart] = degreeText.split(' in ');
+          const fields = fieldsPart.split(/\s+or\s+|,|;/).map((f: string) => f.trim());
+          qualificationEntries = [{ id: String(Date.now()), degree: degree.trim(), fields }];
+        } else {
+          qualificationEntries = [{ id: String(Date.now()), degree: edObj.minimum_degree, fields: [] }];
+        }
+      }
+
+      // ── FIXED: Experience requirements — check all possible locations ──
+      let experienceRequirements: ExperienceRequirement[] = [];
+
+      // Priority 1: inside educationLevel.experience_requirements
+      const expFromEd = edObj.experience_requirements;
+      // Priority 2: top-level experience_requirements (snake_case from API)
+      const expFromTopSnake = job.experience_requirements;
+      // Priority 3: top-level experienceRequirements (camelCase)
+      const expFromTopCamel = job.experienceRequirements;
+
+      const expSource =
+        Array.isArray(expFromEd) && expFromEd.length > 0 ? expFromEd
+          : Array.isArray(expFromTopSnake) && expFromTopSnake.length > 0 ? expFromTopSnake
+            : Array.isArray(expFromTopCamel) && expFromTopCamel.length > 0 ? expFromTopCamel
+              : [];
+
+      experienceRequirements = expSource
+        .map((e: any, i: number) => ({
+          id: e.id ? String(e.id) : `${Date.now()}-${i}`,
+          title: e.title || e.field || '',
+          years: String(e.years || e.min_years || ''),
+          description: e.description || '',
+        }))
+        .filter((e: ExperienceRequirement) => Boolean(e.title));
+
+      // ── Locations ──
       const locations: string[] = Array.isArray(job.locations)
         ? job.locations.map((l: any) => typeof l === 'string' ? l : l.is_remote ? 'Remote' : `${l.city || ''}, ${l.country || ''}`.trim().replace(/^,|,$/g, ''))
         : [''];
+
+      // ── Determine salaryType from saved data ──
+      const hasSalaryMin = job.salary_min != null;
+      const hasSalaryMax = job.salary_max != null;
+      let salaryType: 'range' | 'above' | 'under' | 'negotiable' = 'range';
+      if (!hasSalaryMin && !hasSalaryMax) salaryType = 'negotiable';
+      else if (hasSalaryMin && !hasSalaryMax) salaryType = 'above';
+      else if (!hasSalaryMin && hasSalaryMax) salaryType = 'under';
+      else salaryType = 'range';
 
       setFormData({
         title: job.title || '',
@@ -1052,9 +1223,9 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         description: job.description || '',
         responsibilities: toArray(job.responsibilities),
         requirements: Array.isArray(job.requirements) ? job.requirements : toArray(job.requirements?.required ?? job.requirements),
-        qualifications: job.qualifications || edObj?.minimum_degree || '',
-        qualificationEntries: [],
-        salaryType: 'range',
+        qualifications: job.qualifications || edObj.minimum_degree || '',
+        qualificationEntries,
+        salaryType,
         salaryMin: job.salary_min ? String(job.salary_min) : '',
         salaryMax: job.salary_max ? String(job.salary_max) : '',
         salaryCurrency: job.salary_currency || 'Rwf',
@@ -1064,12 +1235,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         requiredSkills: toArray(job.skills_required),
         preferredSkills: toArray(job.skills_preferred),
         experienceLevel: job.experience_level || 'mid',
-        experienceRequirements: toArray(edObj.experience_requirements).map((e: any, i: number) => ({
-          id: e.id ? String(e.id) : String(Date.now() + i),
-          title: e.title || e.field || '',
-          years: e.years || e.min_years || '',
-          description: e.description || '',
-        })),
+        experienceRequirements,   // ← now correctly populated
         languages: toArray(edObj.languages ?? job.language_requirements).map((l: any, i: number) => ({
           id: l.id ? String(l.id) : String(Date.now() + i),
           name: typeof l === 'string' ? l : l.name || '',
@@ -1097,7 +1263,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         publishedAt: job.published_at ? new Date(job.published_at).toISOString().split('T')[0] : DEFAULT_FORM_DATA.publishedAt,
         expiresAt: job.expires_at ? new Date(job.expires_at).toISOString().split('T')[0] : DEFAULT_FORM_DATA.expiresAt,
         visibility: job.visibility || 'public',
-        applicationLimit: job.application_limit?.toString() || '',
+
+        applicationLimit: job.application_limit?.toString() || '100000',
         tags: job.tags || [],
         noExperienceNeeded: edObj.no_experience_needed || false,
         noCertificationsNeeded: edObj.no_certifications_needed || false,
@@ -1105,7 +1272,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         noDocumentsNeeded: edObj.no_documents_needed || false,
         aiMatchRequiredScore: job.ai_match_required_score ?? 70,
       });
-    } catch {
+    } catch (err) {
+      console.error('Failed to load job:', err);
       alert('Failed to load job. Please try again.');
       onBack();
     } finally {
@@ -1113,23 +1281,93 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     }
   };
 
-  const goNext = () => {
-    setTouched(true);
-    const e = validate(formData, currentStep, isEditing);
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
-    setCurrentStep(s => Math.min(STEPS.length, s + 1));
-  };
-
-  const goPrev = () => {
-    setCurrentStep(s => Math.max(1, s - 1));
-    setErrors({});
-  };
-
   const handleSave = async (action: 'draft' | 'publish') => {
+    // Reset all editing states
+    setEditingExpIdx(null);
+    setEditingLangIdx(null);
+    setEditingCertIdx(null);
+    setEditingDocIdx(null);
+
+    // ✅ Auto-commit any pending new experience entry
+    let finalFormData = { ...formData };
+
+    if (newExp.title.trim()) {
+      finalFormData = {
+        ...finalFormData,
+        experienceRequirements: [
+          ...finalFormData.experienceRequirements,
+          {
+            id: `${Date.now()}-auto`,
+            title: newExp.title,
+            years: newExp.years,
+            description: newExp.description || '',
+          },
+        ],
+        noExperienceNeeded: false,
+      };
+      setFormData(finalFormData);
+      setNewExp({ title: '', years: '', description: '' });
+    }
+
+    // ✅ Auto-commit any pending new certification
+    if (newCert.name.trim()) {
+      finalFormData = {
+        ...finalFormData,
+        certifications: [
+          ...finalFormData.certifications,
+          {
+            id: `${Date.now()}-cert`,
+            name: newCert.name,
+            issuer: newCert.issuer || '',
+          },
+        ],
+        noCertificationsNeeded: false,
+      };
+      setFormData(finalFormData);
+      setNewCert({ name: '', issuer: '' });
+    }
+
+    // ✅ Auto-commit any pending new document
+    if (newDoc.name.trim()) {
+      finalFormData = {
+        ...finalFormData,
+        requiredDocuments: [
+          ...finalFormData.requiredDocuments,
+          {
+            id: `${Date.now()}-doc`,
+            name: newDoc.name,
+            is_required: newDoc.is_required,
+          },
+        ],
+        noDocumentsNeeded: false,
+      };
+      setFormData(finalFormData);
+      setNewDoc({ name: '', is_required: true });
+    }
+
+    // ✅ Auto-commit any pending new language
+    if (newLang.name.trim()) {
+      finalFormData = {
+        ...finalFormData,
+        languages: [
+          ...finalFormData.languages,
+          {
+            id: `${Date.now()}-lang`,
+            name: newLang.name,
+            proficiency: newLang.proficiency,
+            is_required: newLang.is_required,
+          },
+        ],
+        noLanguagesNeeded: false,
+      };
+      setFormData(finalFormData);
+      setNewLang({ name: '', proficiency: 'professional', is_required: false });
+    }
+
     setTouched(true);
-    const allErrors = validateAll(formData, isEditing);
+    const allErrors = validateAll(finalFormData, isEditing);
     setErrors(allErrors);
+
     if (Object.keys(allErrors).length > 0) {
       const stepMap: any = {
         title: 1, description: 1, locations: 1,
@@ -1144,107 +1382,148 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     }
 
     const companyId = getCompanyId(user);
-    if (!companyId) { alert('Company info not found. Please log out and log in again.'); return; }
+    if (!companyId) {
+      alert('Company info not found. Please log out and log in again.');
+      return;
+    }
 
     try {
       setLoading(true);
 
-      const locations: LocationObject[] = formData.locations
-        .filter(l => l.trim())
+      const locations: LocationObject[] = [...new Set(finalFormData.locations.filter(l => l.trim()))]
         .map(l => {
           if (l.toLowerCase().includes('remote')) return { city: '', country: '', is_remote: true };
           const [city = '', country = 'Rwanda'] = l.split(',').map(p => p.trim());
           return { city, country, is_remote: false };
         });
 
-      const qualText = formData.qualificationEntries.length > 0
-        ? formData.qualificationEntries.map(e => `${e.degree}${e.fields.length > 0 ? ` in ${e.fields.join(' or ')}` : ''}`).join('; ')
-        : formData.qualifications;
+      let qualificationEntries: Array<{ degree: string; fields_of_study: string[] }> = [];
+      if (finalFormData.qualificationEntries && finalFormData.qualificationEntries.length > 0) {
+        qualificationEntries = finalFormData.qualificationEntries.map(entry => ({
+          degree: entry.degree,
+          fields_of_study: entry.fields && entry.fields.length > 0 ? entry.fields : [],
+        }));
+      } else if (finalFormData.qualifications && finalFormData.qualifications.trim()) {
+        qualificationEntries = [{ degree: finalFormData.qualifications, fields_of_study: [] }];
+      }
+
+      // Build experience requirements without id field for API
+      const experienceRequirements: Omit<ExperienceRequirement, 'id'>[] =
+        !finalFormData.noExperienceNeeded && finalFormData.experienceRequirements.length > 0
+          ? finalFormData.experienceRequirements.map(exp => ({
+            title: exp.title,
+            years: exp.years,
+            description: exp.description || '',
+          }))
+          : [];
 
       const educationLevel = {
-        minimum_degree: qualText || null,
-        qualification_entries: formData.qualificationEntries,
-        certifications: formData.certifications.map(c => c.name),
-        languages: formData.languages.map(l => ({ name: l.name, proficiency: l.proficiency, is_required: l.is_required })),
-        experience_requirements: formData.experienceRequirements,
-        age_requirement: formData.ageRequirement,
-        no_experience_needed: formData.noExperienceNeeded && formData.experienceRequirements.length === 0,
-        no_languages_needed: formData.noLanguagesNeeded && formData.languages.length === 0,
-        no_certifications_needed: formData.noCertificationsNeeded,
-        no_documents_needed: formData.noDocumentsNeeded,
+        minimum_degree: finalFormData.qualifications?.trim() || null,
+        qualification_entries: qualificationEntries,
+        certifications: finalFormData.certifications.map(c => c.name),
+        languages: finalFormData.languages.map(l => ({
+          name: l.name,
+          proficiency: l.proficiency,
+          is_required: l.is_required
+        })),
+        experience_requirements: experienceRequirements,
+        age_requirement: finalFormData.ageRequirement,
+        no_experience_needed: finalFormData.noExperienceNeeded,
+        no_languages_needed: finalFormData.noLanguagesNeeded,
+        no_certifications_needed: finalFormData.noCertificationsNeeded,
+        no_documents_needed: finalFormData.noDocumentsNeeded,
       };
 
       const salaryPayload = (() => {
-        if (formData.salaryType === 'negotiable') return { salaryMin: null, salaryMax: null };
-        if (formData.salaryType === 'above') return { salaryMin: formData.salaryMin ? parseFloat(formData.salaryMin) : null, salaryMax: null };
-        if (formData.salaryType === 'under') return { salaryMin: null, salaryMax: formData.salaryMin ? parseFloat(formData.salaryMin) : null };
-        return { salaryMin: formData.salaryMin ? parseFloat(formData.salaryMin) : null, salaryMax: formData.salaryMax ? parseFloat(formData.salaryMax) : null };
+        if (finalFormData.salaryType === 'negotiable') return { salaryMin: null, salaryMax: null };
+        if (finalFormData.salaryType === 'above') return { salaryMin: finalFormData.salaryMin ? parseFloat(finalFormData.salaryMin) : null, salaryMax: null };
+        if (finalFormData.salaryType === 'under') return { salaryMin: null, salaryMax: finalFormData.salaryMin ? parseFloat(finalFormData.salaryMin) : null };
+        return {
+          salaryMin: finalFormData.salaryMin ? parseFloat(finalFormData.salaryMin) : null,
+          salaryMax: finalFormData.salaryMax ? parseFloat(finalFormData.salaryMax) : null
+        };
       })();
 
+      // Build qualifications text for display
+      const qualificationsText = finalFormData.qualifications?.trim() ||
+        (finalFormData.qualificationEntries.length > 0
+          ? finalFormData.qualificationEntries.map(e =>
+            e.fields.length > 0
+              ? `${e.degree} in ${e.fields.join(' or ')}`
+              : e.degree
+          ).join('; ')
+          : null);
+
       const jobData = {
-        title: formData.title,
-        department: formData.department || null,
-        jobType: formData.jobType,
-        workArrangement: formData.workArrangement,
+        title: finalFormData.title,
+        department: finalFormData.department || null,
+        jobType: finalFormData.jobType,
+        workArrangement: finalFormData.workArrangement,
         locations,
-        description: formData.description,
-        responsibilities: formData.responsibilities.filter(r => r.trim()),
-        requirements: formData.requirements.filter(r => r.trim()),
-        qualifications: qualText || null,
-        benefits: formData.benefits.filter(b => b.trim()),
-        tags: formData.tags.filter(t => t.trim()),
-        requiredSkills: formData.requiredSkills.map(s => ({ name: s.name, proficiency_level: s.proficiency_level || 3, is_required: true })),
-        preferredSkills: formData.preferredSkills.map(s => ({ name: s.name, proficiency_level: s.proficiency_level || 3, is_required: false })),
-        experienceLevel: formData.experienceLevel,
+        description: finalFormData.description,
+        responsibilities: finalFormData.responsibilities.filter(r => r.trim()),
+        requirements: finalFormData.requirements.filter(r => r.trim()),
+        qualifications: qualificationsText,
+        benefits: finalFormData.benefits.filter(b => b.trim()),
+        tags: finalFormData.tags.filter(t => t.trim()),
+        requiredSkills: finalFormData.requiredSkills.map(s => ({
+          name: s.name,
+          proficiency_level: s.proficiency_level || 3,
+          is_required: true
+        })),
+        preferredSkills: finalFormData.preferredSkills.map(s => ({
+          name: s.name,
+          proficiency_level: s.proficiency_level || 3,
+          is_required: false
+        })),
+        experienceLevel: finalFormData.experienceLevel,
         educationLevel,
-        languageRequirements: formData.languages.map(l => ({ name: l.name, proficiency: l.proficiency, is_required: l.is_required })),
-        experienceRequirements: formData.experienceRequirements,
+        languageRequirements: finalFormData.languages.map(l => ({
+          name: l.name,
+          proficiency: l.proficiency,
+          is_required: l.is_required
+        })),
+        experienceRequirements,
         ...salaryPayload,
-        salaryCurrency: formData.salaryCurrency,
-        salaryPeriod: formData.salaryPeriod,
-        salaryVisible: formData.salaryVisible,
-        screeningQuestions: formData.screeningQuestions,
-        applicationInstructions: formData.applicationInstructions || null,
-        requiredDocuments: formData.requiredDocuments.map(d => d.name),
-        applicationLimit: formData.applicationLimit ? parseInt(formData.applicationLimit) : null,
-        visibility: formData.visibility,
+        salaryCurrency: finalFormData.salaryCurrency,
+        salaryPeriod: finalFormData.salaryPeriod,
+        salaryVisible: finalFormData.salaryVisible,
+        screeningQuestions: finalFormData.screeningQuestions,
+        applicationInstructions: finalFormData.applicationInstructions || null,
+        requiredDocuments: finalFormData.requiredDocuments.map(d => ({
+          name: d.name,
+          is_required: d.is_required
+        })),
+        applicationLimit: finalFormData.applicationLimit ? parseInt(finalFormData.applicationLimit) : null,
+        visibility: finalFormData.visibility,
         status: action === 'publish' ? 'active' : 'draft',
-        publishedAt: new Date(formData.publishedAt).toISOString(),
-        expiresAt: new Date(formData.expiresAt).toISOString(),
-        aiMatchRequiredScore: formData.aiMatchRequiredScore || 70,
+        publishedAt: new Date(finalFormData.publishedAt).toISOString(),
+        expiresAt: new Date(finalFormData.expiresAt).toISOString(),
+        aiMatchRequiredScore: finalFormData.aiMatchRequiredScore || 70,
       };
 
-      if (isEditing && jobId) { await updateJob(jobId, jobData); alert('Job updated successfully!'); }
-      else { await createJob(jobData); alert('Job created successfully!'); }
+      // Debug log to see what's being sent
+      console.log('📤 Sending job data:', {
+        certifications: jobData.educationLevel.certifications,
+        requiredDocuments: jobData.requiredDocuments,
+        languages: jobData.languageRequirements,
+        qualifications: jobData.qualifications
+      });
+
+      if (isEditing && jobId) {
+        await updateJob(jobId, jobData);
+        alert('Job updated successfully!');
+      } else {
+        await createJob(jobData);
+        alert('Job created successfully!');
+      }
       onBack();
     } catch (err: any) {
+      console.error('Save error:', err);
       alert(err?.response?.data?.message || 'Failed to save job. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleDelete = async () => {
-    if (!jobId) return;
-    try {
-      setLoading(true);
-      await deleteJob(jobId);
-      alert('Job deleted.');
-      onBack();
-    } catch (err: any) {
-      alert(err?.message || 'Failed to delete job.');
-    } finally {
-      setLoading(false);
-      setShowDeleteConfirm(false);
-    }
-  };
-
-  const addSkill = (name: string, required: boolean) => {
-    if (!name.trim()) return;
-    const skill: Skill = { name: name.trim(), proficiency_level: 3 };
-    const field = required ? 'requiredSkills' : 'preferredSkills';
-    const existing = formData[field] as Skill[];
-    if (!existing.find(s => s.name === name.trim())) update(field, [...existing, skill]);
   };
 
   if (pageLoading) return (
@@ -1263,7 +1542,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: font }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* ── Top bar ── */}
+      {/* Top bar */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '0 32px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100, boxShadow: C.shadow }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'none', cursor: 'pointer', fontSize: 13, color: C.textMuted }}>
@@ -1300,7 +1579,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
       <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 24px' }}>
         {!isPreview ? (
           <>
-            {/* ── Step progress ── */}
+            {/* Step progress */}
             <div style={{ display: 'flex', gap: 0, marginBottom: 28, background: C.surface, borderRadius: C.radius, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: C.shadow }}>
               {STEPS.map((step, i) => {
                 const active = currentStep === step.id;
@@ -1326,7 +1605,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
             <div style={{ background: C.surface, borderRadius: C.radius, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: 32 }}>
 
-              {/* ══ STEP 1 – Job Information ══════════════════════════════ */}
+              {/* ── STEP 1 ── */}
               {currentStep === 1 && (
                 <FormSection title="Job Information" icon={<Briefcase size={16} color={C.primary} />}>
                   <FormRow>
@@ -1371,29 +1650,27 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     <p style={{ fontSize: 11, color: formData.description.length < 30 && touched ? C.danger : C.textLight, textAlign: 'right', marginTop: 3 }}>{formData.description.length} chars</p>
                   </FormField>
 
-                  <FormField label="Key Responsibilities" hint="Type your own or use suggestions. Press Enter or click Add.">
+                  <FormField label="Key Responsibilities" hint="Type your own or use suggestions. Press Enter or click Add. Click any item to edit inline.">
                     <AutoSuggestListField
                       items={formData.responsibilities}
                       onAdd={v => update('responsibilities', [...formData.responsibilities, v])}
                       onUpdate={(i, v) => updateArr('responsibilities', i, v)}
                       onRemove={i => removeArr('responsibilities', i)}
                       suggestions={liveResponsibilities}
-                      placeholder="e.g. Lead development of core features"
-                      aiLabel="responsibilities" />
+                      placeholder="e.g. Lead development of core features" />
                   </FormField>
 
-                  <FormField label="General Requirements" hint="Skills, behaviours, or conditions required for the role.">
+                  <FormField label="General Requirements" hint="Skills, behaviours, or conditions required for the role. Click any item to edit inline.">
                     <AutoSuggestListField
                       items={formData.requirements}
                       onAdd={v => update('requirements', [...formData.requirements, v])}
                       onUpdate={(i, v) => updateArr('requirements', i, v)}
                       onRemove={i => removeArr('requirements', i)}
                       suggestions={liveRequirements}
-                      placeholder="e.g. Strong communication skills"
-                      aiLabel="requirements" />
+                      placeholder="e.g. Strong communication skills" />
                   </FormField>
 
-                  <FormField label="Qualifications (optional)" hint="Add one or more degree + field-of-study requirements. One degree can have multiple fields.">
+                  <FormField label="Qualifications (optional)" hint="Add one or more degree + field-of-study requirements.">
                     <QualificationsSection
                       entries={formData.qualificationEntries}
                       onChange={entries => update('qualificationEntries', entries)}
@@ -1410,7 +1687,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 </FormSection>
               )}
 
-              {/* ══ STEP 2 – Salary & Benefits ═══════════════════════════ */}
+              {/* ── STEP 2 ── */}
               {currentStep === 2 && (
                 <FormSection title="Salary & Benefits" icon={<DollarSign size={16} color={C.primary} />}>
                   <FormField label="Salary Type">
@@ -1467,20 +1744,19 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
                   <Divider />
 
-                  <FormField label="Benefits" hint="Type your own or use suggestions and quick-add chips.">
+                  <FormField label="Benefits" hint="Type your own or use suggestions. Click any item to edit inline.">
                     <AutoSuggestListField
                       items={formData.benefits}
                       onAdd={v => update('benefits', [...formData.benefits, v])}
                       onUpdate={(i, v) => updateArr('benefits', i, v)}
                       onRemove={i => removeArr('benefits', i)}
                       suggestions={liveBenefits}
-                      placeholder="e.g. Health insurance, Remote work…"
-                      aiLabel="benefits" />
+                      placeholder="e.g. Health insurance, Remote work…" />
                   </FormField>
                 </FormSection>
               )}
 
-              {/* ══ STEP 3 – Skills & Experience ═════════════════════════ */}
+              {/* ── STEP 3 ── */}
               {currentStep === 3 && (
                 <FormSection title="Skills & Experience" icon={<Users size={16} color={C.primary} />}>
                   <FormField label="Experience Level">
@@ -1489,6 +1765,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </Sel>
                   </FormField>
 
+                  {/* Experience Requirements */}
                   <SectionCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontWeight: 600, fontSize: 14, color: C.text }}>Specific Experience Requirements</span>
@@ -1501,64 +1778,105 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </div>
                     {formData.noExperienceNeeded ? <NoneIndicator label="No experience required for this role" /> : (
                       <>
-                        {formData.experienceRequirements.map(exp => (
-                          <ListItem key={exp.id} label={exp.title}
-                            sub={exp.years ? `${exp.years} year${exp.years !== '1' ? 's' : ''} required${exp.description ? ` — ${exp.description}` : ''}` : 'Any duration'}
-                            onRemove={() => setFormData(p => ({ ...p, experienceRequirements: p.experienceRequirements.filter(e => e.id !== exp.id) }))} />
+                        {formData.experienceRequirements.map((exp, idx) => (
+                          editingExpIdx === idx ? (
+                            <div key={exp.id} style={{ border: `1px solid ${C.primary}40`, borderRadius: C.radiusSm, padding: 14, marginBottom: 8, background: C.primaryGhost }}>
+                              <div style={{ marginBottom: 10 }}>
+                                <Label>Area of Experience</Label>
+                                <ComboBox value={exp.title}
+                                  onChange={v => setFormData(p => ({ ...p, experienceRequirements: p.experienceRequirements.map((e, i) => i === idx ? { ...e, title: v } : e) }))}
+                                  options={EXPERIENCE_TITLE_SUGGESTIONS} placeholder="e.g. Software Development…" />
+                              </div>
+                              <FormRow cols="1fr 1fr">
+                                <div>
+                                  <Label>Years Required</Label>
+                                  <YearPicker value={exp.years}
+                                    onChange={v => setFormData(p => ({ ...p, experienceRequirements: p.experienceRequirements.map((e, i) => i === idx ? { ...e, years: v } : e) }))} />
+                                </div>
+                                <div>
+                                  <Label>Additional Note</Label>
+                                  <input value={exp.description}
+                                    onChange={e => setFormData(p => ({ ...p, experienceRequirements: p.experienceRequirements.map((x, i) => i === idx ? { ...x, description: e.target.value } : x) }))}
+                                    placeholder="e.g. in a startup environment"
+                                    style={{ ...inputBase }} />
+                                </div>
+                              </FormRow>
+                              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                                <button onClick={() => setEditingExpIdx(null)} style={primaryBtnStyle}><Check size={13} /> Done</button>
+                                <button onClick={() => { setFormData(p => ({ ...p, experienceRequirements: p.experienceRequirements.filter((_, i) => i !== idx) })); setEditingExpIdx(null); }} style={dangerGhostBtnStyle}><Trash2 size={13} /> Remove</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <EditableListItem key={exp.id} label={exp.title}
+                              sub={exp.years ? `${exp.years} year${exp.years !== '1' ? 's' : ''} required${exp.description ? ` — ${exp.description}` : ''}` : 'Any duration'}
+                              onRemove={() => setFormData(p => ({ ...p, experienceRequirements: p.experienceRequirements.filter(e => e.id !== exp.id) }))}
+                              onEdit={() => setEditingExpIdx(idx)} />
+                          )
                         ))}
 
-                        <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radiusSm, padding: 16, marginTop: 12 }}>
-                          <p style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 10 }}>Add Experience Requirement</p>
-                          <div style={{ marginBottom: 10 }}>
-                            <Label>Area of Experience</Label>
-                            <ComboBox value={newExp.title} onChange={v => setNewExp(p => ({ ...p, title: v }))}
-                              options={EXPERIENCE_TITLE_SUGGESTIONS} placeholder="e.g. Software Development, Project Management…" />
+                        {editingExpIdx === null && (
+                          <div style={{ background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radiusSm, padding: 16, marginTop: 12 }}>
+                            <p style={{ fontSize: 13, fontWeight: 600, color: C.textMuted, marginBottom: 10 }}>Add Experience Requirement</p>
+                            <div style={{ marginBottom: 10 }}>
+                              <Label>Area of Experience</Label>
+                              <ComboBox value={newExp.title} onChange={v => setNewExp(p => ({ ...p, title: v }))}
+                                options={EXPERIENCE_TITLE_SUGGESTIONS} placeholder="e.g. Software Development, Project Management…" />
+                            </div>
+                            <FormRow cols="1fr 1fr">
+                              <div>
+                                <Label>Years Required</Label>
+                                <YearPicker value={newExp.years} onChange={v => setNewExp(p => ({ ...p, years: v }))} />
+                              </div>
+                              <div>
+                                <Label>Additional Note (optional)</Label>
+                                <input value={newExp.description} onChange={e => setNewExp(p => ({ ...p, description: e.target.value }))}
+                                  placeholder="e.g. in a startup environment"
+                                  style={{ ...inputBase }} />
+                              </div>
+                            </FormRow>
+                            <button onClick={() => {
+                              if (!newExp.title.trim()) return alert('Please enter an area of experience.');
+                              setFormData(p => ({ ...p, experienceRequirements: [...p.experienceRequirements, { id: Date.now().toString(), title: newExp.title, years: newExp.years, description: newExp.description }], noExperienceNeeded: false }));
+                              setNewExp({ title: '', years: '', description: '' });
+                            }} style={{ ...addBtnStyle, marginTop: 12 }}>
+                              <Plus size={14} /> Add Experience
+                            </button>
                           </div>
-                          <FormRow cols="1fr 1fr">
-                            <div>
-                              <Label>Years Required</Label>
-                              <YearPicker value={newExp.years} onChange={v => setNewExp(p => ({ ...p, years: v }))} />
-                            </div>
-                            <div>
-                              <Label>Additional Note (optional)</Label>
-                              <input value={newExp.description} onChange={e => setNewExp(p => ({ ...p, description: e.target.value }))}
-                                placeholder="e.g. in a startup environment"
-                                style={{ ...inputBase }} />
-                            </div>
-                          </FormRow>
-                          <button onClick={() => {
-                            if (!newExp.title.trim()) return alert('Please enter an area of experience.');
-                            setFormData(p => ({ ...p, experienceRequirements: [...p.experienceRequirements, { id: Date.now().toString(), ...newExp }], noExperienceNeeded: false }));
-                            setNewExp({ title: '', years: '', description: '' });
-                          }} style={{ ...addBtnStyle, marginTop: 12 }}>
-                            <Plus size={14} /> Add Experience
-                          </button>
-                        </div>
+                        )}
                       </>
                     )}
                   </SectionCard>
 
-                  <FormField label="Required Skills" required error={errors.requiredSkills} hint="Add at least one skill candidates must have.">
-                    <SkillInput skills={formData.requiredSkills}
+                  {/* Required Skills */}
+                  <FormField label="Required Skills" required error={errors.requiredSkills} hint="Click a skill chip to edit its proficiency level.">
+                    <SkillInput
+                      skills={formData.requiredSkills}
                       onAdd={name => addSkill(name, true)}
                       onRemove={i => update('requiredSkills', formData.requiredSkills.filter((_, idx) => idx !== i))}
+                      onUpdateProficiency={(i, level) => updateSkillProficiency(i, level, true)}
                       suggestions={liveSkills}
-                      color={C.primary} placeholder="Search skills (e.g. React, Python)…" />
+                      color={C.primary}
+                      placeholder="Search skills (e.g. React, Python)…" />
                   </FormField>
 
-                  <FormField label="Preferred Skills (optional)" hint="Nice-to-have skills that strengthen a candidate's application.">
-                    <SkillInput skills={formData.preferredSkills}
+                  {/* Preferred Skills */}
+                  <FormField label="Preferred Skills (optional)" hint="Nice-to-have skills. Click a skill chip to edit its proficiency level.">
+                    <SkillInput
+                      skills={formData.preferredSkills}
                       onAdd={name => addSkill(name, false)}
                       onRemove={i => update('preferredSkills', formData.preferredSkills.filter((_, idx) => idx !== i))}
+                      onUpdateProficiency={(i, level) => updateSkillProficiency(i, level, false)}
                       suggestions={liveSkills}
-                      color={C.success} placeholder="Search preferred skills…" />
+                      color={C.success}
+                      placeholder="Search preferred skills…" />
                   </FormField>
                 </FormSection>
               )}
 
-              {/* ══ STEP 4 – Languages & Docs ════════════════════════════ */}
+              {/* ── STEP 4 ── */}
               {currentStep === 4 && (
                 <FormSection title="Languages & Documents" icon={<FileText size={16} color={C.primary} />}>
+
                   {/* Languages */}
                   <SectionCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -1572,27 +1890,67 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </div>
                     {formData.noLanguagesNeeded ? <NoneIndicator label="No language requirements for this role" /> : (
                       <>
-                        {formData.languages.map(l => (
-                          <ListItem key={l.id} label={l.name} sub={`${l.proficiency} · ${l.is_required ? 'Required' : 'Preferred'}`}
-                            onRemove={() => setFormData(p => ({ ...p, languages: p.languages.filter(x => x.id !== l.id) }))} />
+                        {formData.languages.map((l, idx) => (
+                          editingLangIdx === idx ? (
+                            <div key={l.id} style={{ border: `1px solid ${C.primary}40`, borderRadius: C.radiusSm, padding: 14, marginBottom: 8, background: C.primaryGhost }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, alignItems: 'end', marginBottom: 8 }}>
+                                <div>
+                                  <Label>Language</Label>
+                                  <input value={l.name}
+                                    onChange={e => setFormData(p => ({ ...p, languages: p.languages.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))}
+                                    placeholder="e.g. English" style={inputBase} />
+                                </div>
+                                <div>
+                                  <Label>Proficiency</Label>
+                                  <select value={l.proficiency}
+                                    onChange={e => setFormData(p => ({ ...p, languages: p.languages.map((x, i) => i === idx ? { ...x, proficiency: e.target.value as any } : x) }))}
+                                    style={inputBase}>
+                                    <option value="basic">Basic</option>
+                                    <option value="conversational">Conversational</option>
+                                    <option value="professional">Professional</option>
+                                    <option value="native">Native</option>
+                                  </select>
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap', paddingBottom: 10 }}>
+                                  <input type="checkbox" checked={l.is_required}
+                                    onChange={e => setFormData(p => ({ ...p, languages: p.languages.map((x, i) => i === idx ? { ...x, is_required: e.target.checked } : x) }))}
+                                    style={{ accentColor: C.primary }} /> Required
+                                </label>
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setEditingLangIdx(null)} style={primaryBtnStyle}><Check size={13} /> Done</button>
+                                <button onClick={() => { setFormData(p => ({ ...p, languages: p.languages.filter((_, i) => i !== idx) })); setEditingLangIdx(null); }} style={dangerGhostBtnStyle}><Trash2 size={13} /> Remove</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <EditableListItem key={l.id} label={l.name}
+                              sub={`${l.proficiency} · ${l.is_required ? 'Required' : 'Preferred'}`}
+                              onRemove={() => setFormData(p => ({ ...p, languages: p.languages.filter(x => x.id !== l.id) }))}
+                              onEdit={() => setEditingLangIdx(idx)} />
+                          )
                         ))}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginTop: 12, alignItems: 'end' }}>
-                          <div><input value={newLang.name} onChange={e => setNewLang(p => ({ ...p, name: e.target.value }))} placeholder="Language (e.g. English)" style={inputBase} /></div>
-                          <select value={newLang.proficiency} onChange={e => setNewLang(p => ({ ...p, proficiency: e.target.value as any }))} style={inputBase}>
-                            <option value="basic">Basic</option>
-                            <option value="conversational">Conversational</option>
-                            <option value="professional">Professional</option>
-                            <option value="native">Native</option>
-                          </select>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" checked={newLang.is_required} onChange={e => setNewLang(p => ({ ...p, is_required: e.target.checked }))} style={{ accentColor: C.primary }} /> Required
-                          </label>
-                        </div>
-                        <button onClick={() => {
-                          if (!newLang.name.trim()) return alert('Please enter a language name.');
-                          setFormData(p => ({ ...p, languages: [...p.languages, { id: Date.now().toString(), ...newLang }], noLanguagesNeeded: false }));
-                          setNewLang({ name: '', proficiency: 'professional', is_required: false });
-                        }} style={{ ...addBtnStyle, marginTop: 10 }}><Plus size={14} /> Add Language</button>
+
+                        {editingLangIdx === null && (
+                          <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginTop: 12, alignItems: 'end' }}>
+                              <div><input value={newLang.name} onChange={e => setNewLang(p => ({ ...p, name: e.target.value }))} placeholder="Language (e.g. English)" style={inputBase} /></div>
+                              <select value={newLang.proficiency} onChange={e => setNewLang(p => ({ ...p, proficiency: e.target.value as any }))} style={inputBase}>
+                                <option value="basic">Basic</option>
+                                <option value="conversational">Conversational</option>
+                                <option value="professional">Professional</option>
+                                <option value="native">Native</option>
+                              </select>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+                                <input type="checkbox" checked={newLang.is_required} onChange={e => setNewLang(p => ({ ...p, is_required: e.target.checked }))} style={{ accentColor: C.primary }} /> Required
+                              </label>
+                            </div>
+                            <button onClick={() => {
+                              if (!newLang.name.trim()) return alert('Please enter a language name.');
+                              setFormData(p => ({ ...p, languages: [...p.languages, { id: Date.now().toString(), ...newLang }], noLanguagesNeeded: false }));
+                              setNewLang({ name: '', proficiency: 'professional', is_required: false });
+                            }} style={{ ...addBtnStyle, marginTop: 10 }}><Plus size={14} /> Add Language</button>
+                          </>
+                        )}
                       </>
                     )}
                   </SectionCard>
@@ -1610,24 +1968,63 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </div>
                     {formData.noCertificationsNeeded ? <NoneIndicator label="No certifications required" /> : (
                       <>
-                        {formData.certifications.map(c => (
-                          <ListItem key={c.id} label={c.name} sub={c.issuer}
-                            onRemove={() => setFormData(p => ({ ...p, certifications: p.certifications.filter(x => x.id !== c.id) }))} />
+                        {formData.certifications.map((c, idx) => (
+                          editingCertIdx === idx ? (
+                            <div key={c.id} style={{ border: `1px solid ${C.primary}40`, borderRadius: C.radiusSm, padding: 14, marginBottom: 8, background: C.primaryGhost }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+                                <div>
+                                  <Label>Certification Name</Label>
+                                  <input value={c.name}
+                                    onChange={e => setFormData(p => ({ ...p, certifications: p.certifications.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))}
+                                    placeholder="Certification name" style={inputBase} />
+                                </div>
+                                <div>
+                                  <Label>Issuer (optional)</Label>
+                                  <input value={c.issuer}
+                                    onChange={e => setFormData(p => ({ ...p, certifications: p.certifications.map((x, i) => i === idx ? { ...x, issuer: e.target.value } : x) }))}
+                                    placeholder="e.g. AWS, Google" style={inputBase} />
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setEditingCertIdx(null)} style={primaryBtnStyle}><Check size={13} /> Done</button>
+                                <button onClick={() => { setFormData(p => ({ ...p, certifications: p.certifications.filter((_, i) => i !== idx) })); setEditingCertIdx(null); }} style={dangerGhostBtnStyle}><Trash2 size={13} /> Remove</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <EditableListItem key={c.id} label={c.name} sub={c.issuer}
+                              onRemove={() => setFormData(p => ({ ...p, certifications: p.certifications.filter(x => x.id !== c.id) }))}
+                              onEdit={() => setEditingCertIdx(idx)} />
+                          )
                         ))}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
-                          <input value={newCert.name} onChange={e => setNewCert(p => ({ ...p, name: e.target.value }))} placeholder="Certification name" style={inputBase} />
-                          <input value={newCert.issuer} onChange={e => setNewCert(p => ({ ...p, issuer: e.target.value }))} placeholder="Issuer (optional)" style={inputBase} />
-                        </div>
-                        <button onClick={() => {
-                          if (!newCert.name.trim()) return alert('Enter a certification name.');
-                          setFormData(p => ({ ...p, certifications: [...p.certifications, { id: Date.now().toString(), ...newCert }], noCertificationsNeeded: false }));
-                          setNewCert({ name: '', issuer: '' });
-                        }} style={{ ...addBtnStyle, marginTop: 10 }}><Plus size={14} /> Add Certification</button>
+
+                        {editingCertIdx === null && (
+                          <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+                              <input value={newCert.name} onChange={e => setNewCert(p => ({ ...p, name: e.target.value }))} placeholder="Certification name" style={inputBase} />
+                              <input value={newCert.issuer} onChange={e => setNewCert(p => ({ ...p, issuer: e.target.value }))} placeholder="Issuer (optional)" style={inputBase} />
+                            </div>
+                            <button onClick={() => {
+                              if (!newCert.name.trim()) return alert('Enter a certification name.');
+                              setFormData(prev => ({
+                                ...prev,
+                                certifications: [...prev.certifications, {
+                                  id: Date.now().toString(),
+                                  name: newCert.name,
+                                  issuer: newCert.issuer || ''
+                                }],
+                                noCertificationsNeeded: false
+                              }));
+                              setNewCert({ name: '', issuer: '' });
+                            }} style={{ ...addBtnStyle, marginTop: 10 }}>
+                              <Plus size={14} /> Add Certification
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </SectionCard>
 
-                  {/* Documents */}
+                  {/* Required Documents */}
                   <SectionCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontWeight: 600, fontSize: 14 }}>Required Documents</span>
@@ -1640,21 +2037,59 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </div>
                     {formData.noDocumentsNeeded ? <NoneIndicator label="No documents required" /> : (
                       <>
-                        {formData.requiredDocuments.map(d => (
-                          <ListItem key={d.id} label={d.name} sub={d.is_required ? 'Required' : 'Optional'}
-                            onRemove={() => setFormData(p => ({ ...p, requiredDocuments: p.requiredDocuments.filter(x => x.id !== d.id) }))} />
+                        {formData.requiredDocuments.map((d, idx) => (
+                          editingDocIdx === idx ? (
+                            <div key={d.id} style={{ border: `1px solid ${C.primary}40`, borderRadius: C.radiusSm, padding: 14, marginBottom: 8, background: C.primaryGhost }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                <div>
+                                  <Label>Document Name</Label>
+                                  <input value={d.name}
+                                    onChange={e => setFormData(p => ({ ...p, requiredDocuments: p.requiredDocuments.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))}
+                                    placeholder="e.g. Resume, Cover Letter" style={inputBase} />
+                                </div>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap', paddingTop: 20 }}>
+                                  <input type="checkbox" checked={d.is_required}
+                                    onChange={e => setFormData(p => ({ ...p, requiredDocuments: p.requiredDocuments.map((x, i) => i === idx ? { ...x, is_required: e.target.checked } : x) }))}
+                                    style={{ accentColor: C.primary }} /> Required
+                                </label>
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => setEditingDocIdx(null)} style={primaryBtnStyle}><Check size={13} /> Done</button>
+                                <button onClick={() => { setFormData(p => ({ ...p, requiredDocuments: p.requiredDocuments.filter((_, i) => i !== idx) })); setEditingDocIdx(null); }} style={dangerGhostBtnStyle}><Trash2 size={13} /> Remove</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <EditableListItem key={d.id} label={d.name} sub={d.is_required ? 'Required' : 'Optional'}
+                              onRemove={() => setFormData(p => ({ ...p, requiredDocuments: p.requiredDocuments.filter(x => x.id !== d.id) }))}
+                              onEdit={() => setEditingDocIdx(idx)} />
+                          )
                         ))}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginTop: 12, alignItems: 'center' }}>
-                          <input value={newDoc.name} onChange={e => setNewDoc(p => ({ ...p, name: e.target.value }))} placeholder="Document (e.g. Resume, Cover Letter, Portfolio)" style={inputBase} />
-                          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
-                            <input type="checkbox" checked={newDoc.is_required} onChange={e => setNewDoc(p => ({ ...p, is_required: e.target.checked }))} style={{ accentColor: C.primary }} /> Required
-                          </label>
-                        </div>
-                        <button onClick={() => {
-                          if (!newDoc.name.trim()) return alert('Enter a document name.');
-                          setFormData(p => ({ ...p, requiredDocuments: [...p.requiredDocuments, { id: Date.now().toString(), ...newDoc }], noDocumentsNeeded: false }));
-                          setNewDoc({ name: '', is_required: true });
-                        }} style={{ ...addBtnStyle, marginTop: 10 }}><Plus size={14} /> Add Document</button>
+
+                        {editingDocIdx === null && (
+                          <>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                              <input value={newDoc.name} onChange={e => setNewDoc(p => ({ ...p, name: e.target.value }))} placeholder="Document (e.g. Resume, Cover Letter, Portfolio)" style={inputBase} />
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+                                <input type="checkbox" checked={newDoc.is_required} onChange={e => setNewDoc(p => ({ ...p, is_required: e.target.checked }))} style={{ accentColor: C.primary }} /> Required
+                              </label>
+                            </div>
+                            <button onClick={() => {
+                              if (!newDoc.name.trim()) return alert('Enter a document name.');
+                              setFormData(prev => ({
+                                ...prev,
+                                requiredDocuments: [...prev.requiredDocuments, {
+                                  id: Date.now().toString(),
+                                  name: newDoc.name,
+                                  is_required: newDoc.is_required
+                                }],
+                                noDocumentsNeeded: false
+                              }));
+                              setNewDoc({ name: '', is_required: true });
+                            }} style={{ ...addBtnStyle, marginTop: 10 }}>
+                              <Plus size={14} /> Add Document
+                            </button>
+                          </>
+                        )}
                       </>
                     )}
                   </SectionCard>
@@ -1665,7 +2100,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 </FormSection>
               )}
 
-              {/* ══ STEP 5 – Screening ══════════════════════════════════ */}
+              {/* ── STEP 5 ── */}
               {currentStep === 5 && (
                 <FormSection title="Screening Questions" icon={<FileText size={16} color={C.primary} />}>
                   {formData.screeningQuestions.map((q, i) => (
@@ -1707,7 +2142,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                           <select value={q.scoring_weight ?? 1}
                             onChange={e => update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, scoring_weight: parseInt(e.target.value) } : x))}
                             style={{ ...inputBase, width: 60, padding: '6px 8px', fontSize: 12 }}>
-                            {[1,2,3,4,5].map(w => <option key={w} value={w}>{w}</option>)}
+                            {[1, 2, 3, 4, 5].map(w => <option key={w} value={w}>{w}</option>)}
                           </select>
                         </div>
                       </div>
@@ -1756,14 +2191,13 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
                   <Divider />
 
-                  {/* Application Instructions */}
                   <div style={{ background: C.primaryGhost, border: `1px solid ${C.primary}25`, borderRadius: C.radius, padding: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <FileText size={16} color={C.primary} />
                       <h3 style={{ fontSize: 15, fontWeight: 700, color: C.primary, margin: 0 }}>Application Instructions</h3>
                     </div>
                     <p style={{ fontSize: 13, color: C.textMuted, marginBottom: 10 }}>
-                      Tell applicants how to apply, what to include, or any special requirements for their application.
+                      Tell applicants how to apply, what to include, or any special requirements.
                     </p>
                     <Textarea value={formData.applicationInstructions}
                       onChange={v => update('applicationInstructions', v)} rows={4}
@@ -1799,10 +2233,9 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 </FormSection>
               )}
 
-              {/* ══ STEP 6 – Settings ════════════════════════════════════ */}
+              {/* ── STEP 6 ── */}
               {currentStep === 6 && (
                 <FormSection title="Posting Settings" icon={<Target size={16} color={C.primary} />}>
-                  {/* AI match score */}
                   <div style={{ background: 'linear-gradient(135deg, #667eea15, #764ba215)', border: `1px solid #667eea40`, borderRadius: C.radius, padding: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
                       <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #667eea, #764ba2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1837,7 +2270,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                   </FormField>
 
                   <FormField label="Application Limit (optional)" error={errors.applicationLimit} hint="Leave blank to accept unlimited applications.">
-                    <Input type="number" value={formData.applicationLimit} onChange={v => update('applicationLimit', v)} placeholder="No limit" hasError={!!errors.applicationLimit} />
+                    <Input type="number" value={formData.applicationLimit} onChange={v => update('applicationLimit', v)} placeholder="10000" hasError={!!errors.applicationLimit} />
                   </FormField>
 
                   <FormField label="Tags">
@@ -1857,7 +2290,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </div>
                   </FormField>
 
-                  {/* Summary card */}
                   <div style={{ background: C.primaryGhost, border: `1px solid ${C.primary}25`, borderRadius: C.radiusSm, padding: 20, marginTop: 8 }}>
                     <p style={{ fontSize: 13, fontWeight: 700, color: C.primary, marginBottom: 12, letterSpacing: 0.3, textTransform: 'uppercase' }}>Job Summary</p>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px' }}>
@@ -1884,7 +2316,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 </FormSection>
               )}
 
-              {/* ── Navigation ── */}
+              {/* Navigation */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 32, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
                 <button onClick={goPrev} disabled={currentStep === 1} style={{ ...ghostBtnStyle, opacity: currentStep === 1 ? 0.4 : 1 }}>
                   <ChevronLeft size={16} /> Previous
@@ -1902,12 +2334,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
             </div>
           </>
         ) : (
-
-          /* ══════════════════════════════════════════════════════════════
-             PREVIEW
-             ══════════════════════════════════════════════════════════════ */
+          /* ── PREVIEW ── */
           <div style={{ background: C.surface, borderRadius: C.radius, border: `1px solid ${C.border}`, padding: 40 }}>
-            {/* Header */}
             <div style={{ marginBottom: 28 }}>
               <h2 style={{ fontSize: 28, fontWeight: 700, color: C.text, marginBottom: 8 }}>{formData.title || 'Job Title'}</h2>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -1920,7 +2348,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
               </div>
             </div>
 
-            {/* Meta grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 16, marginBottom: 28, padding: '20px', background: C.bg, borderRadius: C.radiusSm }}>
               {[
                 { label: 'Location', value: formData.locations.filter(Boolean).join(', ') || '—' },
@@ -1966,10 +2393,18 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 <p style={{ ...previewLabel, marginBottom: 8 }}>Qualifications</p>
                 {formData.qualificationEntries.length > 0
                   ? formData.qualificationEntries.map(e => (
-                    <div key={e.id} style={{ fontSize: 14, color: C.text, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <GraduationCap size={14} color={C.primary} />
-                      <strong>{e.degree}</strong>
-                      {e.fields.length > 0 && <span style={{ color: C.textMuted }}>in {e.fields.join(' or ')}</span>}
+                    <div key={e.id} style={{ fontSize: 14, color: C.text, marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <GraduationCap size={14} color={C.primary} />
+                        <strong>{e.degree}</strong>
+                      </div>
+                      {e.fields.length > 0 && (
+                        <div style={{ marginLeft: 22, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {e.fields.map((field, idx) => (
+                            <span key={idx} style={{ padding: '2px 10px', borderRadius: 16, background: C.primaryGhost, color: C.primary, fontSize: 12 }}>{field}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))
                   : <p style={{ fontSize: 14, color: C.text }}>{formData.qualifications}</p>}
@@ -1996,7 +2431,14 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                   <div>
                     <p style={{ ...previewLabel, marginBottom: 8 }}>Required Skills</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {formData.requiredSkills.map((s, i) => <span key={i} style={{ padding: '4px 10px', borderRadius: 20, background: `${C.primary}15`, color: C.primary, fontSize: 13 }}>{s.name}</span>)}
+                      {formData.requiredSkills.map((s, i) => (
+                        <span key={i} style={{ padding: '4px 10px', borderRadius: 20, background: `${C.primary}15`, color: C.primary, fontSize: 13 }}>
+                          {s.name}
+                          {s.proficiency_level !== undefined && s.proficiency_level > 0 && (
+                            <span style={{ opacity: 0.65, fontSize: 11 }}> · {PROF_LABELS[s.proficiency_level]}</span>
+                          )}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -2004,7 +2446,14 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                   <div>
                     <p style={{ ...previewLabel, marginBottom: 8 }}>Preferred Skills</p>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {formData.preferredSkills.map((s, i) => <span key={i} style={{ padding: '4px 10px', borderRadius: 20, background: `${C.success}15`, color: C.success, fontSize: 13 }}>{s.name}</span>)}
+                      {formData.preferredSkills.map((s, i) => (
+                        <span key={i} style={{ padding: '4px 10px', borderRadius: 20, background: `${C.success}15`, color: C.success, fontSize: 13 }}>
+                          {s.name}
+                          {s.proficiency_level !== undefined && s.proficiency_level > 0 && (
+                            <span style={{ opacity: 0.65, fontSize: 11 }}> · {PROF_LABELS[s.proficiency_level]}</span>
+                          )}
+                        </span>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -2092,7 +2541,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         )}
       </div>
 
-      {/* ── Delete modal ── */}
+      {/* Delete modal */}
       {showDeleteConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
           <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>

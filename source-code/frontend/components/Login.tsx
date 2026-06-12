@@ -122,7 +122,7 @@ const Login: React.FC = () => {
       const fromState = (location.state as LocationState)?.from;
       
       // Determine final redirect URL
-      let finalRedirectUrl = '/dashboard';
+      let finalRedirectUrl = '/';
       
       if (redirectUrl) {
         finalRedirectUrl = redirectUrl;

@@ -42,7 +42,7 @@ const createDatabaseIfNotExists = async (): Promise<void> => {
     await client.connect();
     console.log('✅ Connected to PostgreSQL server');
 
-    const dbName = process.env.DB_NAME || 'recruitment_db';
+    const dbName = process.env.DB_NAME || 'SVWR-CFE_DB';
     console.log(`🔴 [6] Checking if database '${dbName}' exists...`);
     
     const result = await client.query(
@@ -157,8 +157,9 @@ const parseSQLStatements = (sql: string): string[] => {
 
       if (char === ';' && !inDollarQuote && !inSingleLineComment && !inMultiLineComment) {
         currentStatement += processedLine + char;
-        if (currentStatement.trim()) {
-          statements.push(currentStatement.trim());
+        const trimmedStatement = currentStatement.trim();
+        if (trimmedStatement && !trimmedStatement.match(/^--/)) {
+          statements.push(trimmedStatement);
         }
         currentStatement = '';
         processedLine = '';
@@ -173,89 +174,45 @@ const parseSQLStatements = (sql: string): string[] => {
     inSingleLineComment = false;
   }
 
-  if (currentStatement.trim()) {
-    statements.push(currentStatement.trim());
+  // Handle the last statement if it exists
+  const finalStatement = currentStatement.trim();
+  if (finalStatement && !finalStatement.match(/^--/)) {
+    statements.push(finalStatement);
   }
 
-  console.log(`🔴 [parseSQLStatements] Found ${statements.length} statements`);
-  return statements.filter(stmt => stmt.trim().length > 0 && !stmt.trim().match(/^--/));
+  // Filter out any potential undefined or empty statements
+  const validStatements = statements.filter(stmt => stmt && stmt.trim().length > 0);
+  
+  console.log(`🔴 [parseSQLStatements] Found ${validStatements.length} valid statements`);
+  return validStatements;
 };
 
 const executeSchemaWithErrorHandling = async (client: Client, schemaSQL: string): Promise<void> => {
-  console.log('🔴 [executeSchema] Starting...');
-  const statements = parseSQLStatements(schemaSQL) || [];
-
-  console.log(`Parsed ${statements.length} SQL statements`);
-
-  const createTableRegex = /CREATE\s+TABLE\s+(\w+)\s*\(/i;
-  const createExtensionStatements: string[] = [];
-  const createTableStatements: string[] = [];
-  const otherStatements: string[] = [];
-
-  for (const statement of statements) {
-    const trimmedStatement = statement.trim();
-    if (!trimmedStatement) continue;
-
-    if (trimmedStatement.toUpperCase().startsWith('CREATE EXTENSION')) {
-      createExtensionStatements.push(trimmedStatement);
-    } else if (createTableRegex.test(trimmedStatement)) {
-      createTableStatements.push(trimmedStatement);
-    } else {
-      otherStatements.push(trimmedStatement);
+  const statements = parseSQLStatements(schemaSQL);
+  
+  for (let i = 0; i < statements.length; i++) {
+    const statement = statements[i];
+    
+    // Skip if statement is undefined or empty
+    if (!statement || statement.trim().length === 0) {
+      console.log(`⚠️ Skipping empty statement at index ${i}`);
+      continue;
     }
-  }
-
-  //console.log(`Found ${createExtensionStatements.length} CREATE EXTENSION, ${createTableStatements.length} CREATE TABLE, ${otherStatements.length} other`);
-
-  let createdTables = 0;
-  let skippedTables = 0;
-
-  for (const statement of createExtensionStatements) {
+    
     try {
       await client.query(statement);
-      logger.info(`Created extension`);
+      console.log(`✅ Statement ${i + 1}/${statements.length} executed`);
     } catch (error: any) {
-      if (error.code === '42710') {
-        logger.info(`Extension already exists`);
-      } else {
-        logger.warn(`Error creating extension:`, error.message);
-      }
-    }
-  }
-
-  for (const statement of createTableStatements) {
-    const match = createTableRegex.exec(statement);
-    const tableName = match?.[1] || 'unknown';
-
-    try {
-      //console.log(`Creating table: ${tableName}...`);
-      await client.query(statement);
-      logger.info(`Created table: ${tableName}`);
-      createdTables++;
-    } catch (error: any) {
-      if (error.code === '42P07') {
-        // logger.info(`Table ${tableName} already exists, skipping`);
-        skippedTables++;
-      } else {
-        logger.warn(`Error creating table ${tableName}:`, error.message);
-      }
-    }
-  }
-
-  for (const statement of otherStatements) {
-    try {
-      await client.query(statement);
-    } catch (error: any) {
-      if (error.code === '42P07' || error.code === '42710' || error.code === '42704' || error.code === '23505') {
-        // logger.info(`Object already exists, skipping`);
+      // console.error(`❌ Error at statement ${i + 1}:`);
+      // console.error(`SQL: ${statement.substring(0, 200)}...`);
+      // console.error(`Error: ${error.message}`);
       
-      } else {
-        logger.warn(`Error executing statement:`, error.message);
+      // Don't fail on duplicate objects
+      if (error.code !== '42P07' && error.code !== '42710') {
+        throw error;
       }
     }
   }
-
-  //logger.info(`Migration completed: ${createdTables} tables created, ${skippedTables} skipped`);
 };
 
 const runMigrations = async (): Promise<void> => {
@@ -264,7 +221,7 @@ const runMigrations = async (): Promise<void> => {
   const client = new Client({
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '8090'),
-    database: process.env.DB_NAME || 'recruitment_db',
+    database: process.env.DB_NAME || 'SVWR-CFE_DB',
     user: process.env.DB_USER || 'postgres',
     password: process.env.DB_PASSWORD || 'TN12',
   });
@@ -272,7 +229,7 @@ const runMigrations = async (): Promise<void> => {
   try {
     console.log('🔴 [runMigrations] Connecting to database...');
     await client.connect();
-    logger.info('Connected to recruitment_db database');
+    logger.info(`Connected to ${process.env.DB_NAME || 'SVWR-CFE_DB'} database`);
 
     const schemaPath = path.join(__dirname, 'queries', 'schema.sql');
     console.log(`🔴 [runMigrations] Looking for schema at: ${schemaPath}`);

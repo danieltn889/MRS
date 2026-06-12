@@ -205,7 +205,7 @@ const CompanyProfile: React.FC = () => {
                 <p className="text-xs text-gray-400">Profile Management</p>
               </div>
             </div>
-            <button onClick={() => navigate('/dashboard')}
+            <button onClick={() => navigate('/')}
               className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Dashboard</span>

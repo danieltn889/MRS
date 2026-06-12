@@ -5,7 +5,7 @@ import {
   GraduationCap, Layers, Eye, Calendar, AlertCircle, Info,
   ThumbsUp, User, ChevronRight, Heart, Tag, Link as LinkIcon,
   Code, Award, MessageSquare, List, Shield, TrendingUp, Zap,
-  BookOpen, Briefcase as WorkIcon, Home, Sparkles
+  BookOpen, Briefcase as WorkIcon, Home, Sparkles, AlertTriangle
 } from 'lucide-react';
 
 interface JobViewModalProps {
@@ -68,7 +68,7 @@ const skillProficiency = (s: any): string | null => {
   if (s && typeof s === 'object') {
     if (s.proficiency) return s.proficiency;
     if (s.proficiency_level) {
-      const levels: Record<number, string> = { 1: 'beginner', 2: 'basic', 3: 'intermediate', 4: 'advanced', 5: 'expert' };
+      const levels: Record<number, string> = { 1: 'Beginner', 2: 'Basic', 3: 'Intermediate', 4: 'Advanced', 5: 'Expert' };
       return levels[s.proficiency_level] || null;
     }
   }
@@ -262,6 +262,36 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
 
   const ringColor = matchScore >= 80 ? '#22c55e' : matchScore >= 60 ? '#3b82f6' : matchScore >= 40 ? '#f59e0b' : '#ef4444';
 
+  // Extract detailed match breakdowns
+  const qualsBD = matchData?.qualificationsBreakdown || {};
+  const expBD = matchData?.experienceBreakdown || {};
+  const prefsBD = matchData?.preferencesBreakdown || {};
+  const skillsBD = matchData?.skillsBreakdown || {};
+
+  const candidateDegrees = qualsBD.candidate_degrees || [];
+  const candidateFields = qualsBD.candidate_fields || [];
+  const jobDegreeRequired = qualsBD.job_degree_required || '';
+  const jobAllowedFields = qualsBD.job_allowed_fields || [];
+  const bestSimilarity = qualsBD.best_similarity || 0;
+  const bestMatchedField = qualsBD.best_matched_field || '';
+  const matchType = qualsBD.match_type || 'none';
+
+  const experienceMatches = expBD.specific_matches || [];
+  const totalExperienceYears = expBD.total_years || 0;
+  const requiredExperienceYears = expBD.required_years || 0;
+  const experienceGap = expBD.gap_years || 0;
+  const matchedRequirements = expBD.matched_requirements || 0;
+  const totalRequirements = expBD.total_requirements || 0;
+
+  const preferenceMatches = {
+    type_match: prefsBD.type_match || 0,
+    remote_match: prefsBD.remote_match || 0,
+    location_match: prefsBD.location_match || 0,
+    industry_match: prefsBD.industry_match || 0,
+    salary_match: prefsBD.salary_match || 0,
+    language_match: prefsBD.language_match || 0,
+  };
+
   // ─── renderEducation ────────────────────────────────────────────────────────
   const renderEducation = (edu: any) => {
     if (!edu) return null;
@@ -446,9 +476,9 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
         <span>{name}</span>
         {proficiency && (
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-            proficiency === 'expert'        ? 'bg-purple-100 text-purple-700' :
-            proficiency === 'advanced'      ? 'bg-blue-100 text-blue-700' :
-            proficiency === 'intermediate'  ? 'bg-yellow-100 text-yellow-700' :
+            proficiency === 'Expert' ? 'bg-purple-100 text-purple-700' :
+            proficiency === 'Advanced' ? 'bg-blue-100 text-blue-700' :
+            proficiency === 'Intermediate' ? 'bg-yellow-100 text-yellow-700' :
             'bg-gray-100 text-gray-500'
           }`}>
             {proficiency}
@@ -726,22 +756,205 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                 </div>
               </div>
 
-              {/* Skills gap */}
-              {missingSkills.length > 0 && (
-                <div className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
-                  <h4 className="text-sm font-bold text-orange-800 mb-3 flex items-center gap-2">
-                    <Zap size={14} /> Skills Gap Analysis
+              {/* Education Qualification Match Section */}
+              {(candidateDegrees.length > 0 || jobDegreeRequired) && (
+                <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                  <h4 className="text-sm font-bold text-blue-800 mb-3 flex items-center gap-2">
+                    <GraduationCap size={14} /> Education Qualification Match
                   </h4>
-                  <p className="text-xs text-orange-700 mb-2">
-                    You're missing {missingSkills.length} skill{missingSkills.length !== 1 ? 's' : ''} that the job requires:
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {missingSkills.map((s, idx) => (
-                      <span key={idx} className="px-2.5 py-1 bg-white border border-orange-200 text-orange-800 text-xs font-medium rounded-full">
-                        {s}
-                      </span>
-                    ))}
+                  
+                  <div className="grid md:grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-xs text-blue-600 font-medium mb-2">🎓 Your Education:</p>
+                      <div className="space-y-2">
+                        {candidateDegrees.map((deg: string, idx: number) => (
+                          <div key={idx} className="bg-white rounded-lg p-2">
+                            <span className="text-blue-900 font-medium">✓ {deg}</span>
+                          </div>
+                        ))}
+                        {candidateFields.map((field: string, idx: number) => (
+                          <div key={idx} className="bg-white rounded-lg p-2">
+                            <span className="text-blue-700 text-xs">📚 {field}</span>
+                          </div>
+                        ))}
+                        {candidateDegrees.length === 0 && candidateFields.length === 0 && (
+                          <div className="bg-white rounded-lg p-2 text-orange-600 text-xs">
+                            ⚠️ No education information provided
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <p className="text-xs text-blue-600 font-medium mb-2">📋 Job Requirements:</p>
+                      <div className="bg-white rounded-lg p-2 mb-2">
+                        <p className="text-blue-900">🎓 {jobDegreeRequired || 'Not specified'}</p>
+                      </div>
+                      {jobAllowedFields.length > 0 && (
+                        <div>
+                          <p className="text-xs text-blue-600 mt-2 mb-1">Allowed Fields of Study:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {jobAllowedFields.map((field: string, idx: number) => (
+                              <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded-md text-xs">
+                                {field}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                  
+                  {bestSimilarity > 0 && bestMatchedField && (
+                    <div className="mt-3 pt-2 border-t border-blue-200 text-xs text-blue-700">
+                      🎯 Best match: <strong>{bestMatchedField}</strong> (Similarity: {(bestSimilarity * 100).toFixed(0)}%) - Match type: <strong>{matchType}</strong>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Experience Match Section */}
+              {(experienceMatches.length > 0 || totalExperienceYears > 0) && (
+                <div className="rounded-2xl border border-purple-100 bg-purple-50 p-4">
+                  <h4 className="text-sm font-bold text-purple-800 mb-3 flex items-center gap-2">
+                    <Briefcase size={14} /> Experience Match Details
+                  </h4>
+                  
+                  <div className="grid md:grid-cols-2 gap-3 mb-3">
+                    <div className="bg-white rounded-lg p-2 text-center">
+                      <p className="text-xs text-purple-600">Your Total Experience</p>
+                      <p className="text-lg font-bold text-purple-900">{totalExperienceYears.toFixed(1)} years</p>
+                    </div>
+                    {requiredExperienceYears > 0 && (
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-purple-600">Job Requires</p>
+                        <p className="text-lg font-bold text-purple-900">{requiredExperienceYears}+ years</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {matchedRequirements > 0 && totalRequirements > 0 && (
+                    <div className="bg-white rounded-lg p-2 text-center mb-3">
+                      <p className="text-xs text-purple-600">Requirements Met</p>
+                      <p className="text-lg font-bold text-purple-900">{matchedRequirements} / {totalRequirements}</p>
+                    </div>
+                  )}
+                  
+                  {experienceGap > 0 && (
+                    <div className="bg-amber-100 text-amber-800 rounded-lg p-2 text-xs mb-3 flex items-center gap-2">
+                      <AlertTriangle size={14} /> Experience gap: {experienceGap.toFixed(1)} years
+                    </div>
+                  )}
+                  
+                  {experienceMatches.map((match: any, idx: number) => (
+                    <div key={idx} className="bg-white rounded-lg p-3 mb-2">
+                      <p className="font-semibold text-purple-800 text-sm">{match.requirement_title}</p>
+                      <div className="flex justify-between text-xs mt-1">
+                        <span className="text-purple-600">Your experience: {match.candidate_years} years</span>
+                        <span className="text-purple-600">Required: {match.requirement_years} years</span>
+                      </div>
+                      <div className="w-full bg-purple-100 rounded-full h-1.5 mt-2">
+                        <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${match.years_score * 100}%` }} />
+                      </div>
+                      <p className="text-xs text-purple-500 mt-1">Match quality: {(match.combined_score * 100).toFixed(0)}%</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Skills Analysis Section */}
+              {(matchedSkills.length > 0 || missingSkills.length > 0) && (
+                <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+                  <h4 className="text-sm font-bold text-green-800 mb-3 flex items-center gap-2">
+                    <Code size={14} /> Skills Analysis
+                  </h4>
+                  
+                  {skillsBD.total_required > 0 && (
+                    <div className="bg-white rounded-lg p-2 text-center mb-3">
+                      <p className="text-xs text-green-600">Skills Match Rate</p>
+                      <p className="text-lg font-bold text-green-900">{skillsBD.total_matched || 0} / {skillsBD.total_required} matched</p>
+                    </div>
+                  )}
+                  
+                  {matchedSkills.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs text-green-700 font-medium mb-2">✓ Matched Skills ({matchedSkills.length}):</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {matchedSkills.map((skill: string, idx: number) => (
+                          <span key={idx} className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {missingSkills.length > 0 && (
+                    <div>
+                      <p className="text-xs text-orange-700 font-medium mb-2">❌ Missing Skills ({missingSkills.length}):</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {missingSkills.map((skill: string, idx: number) => (
+                          <span key={idx} className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
+                            {skill}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Preferences Breakdown */}
+              {(preferenceMatches.type_match > 0 || preferenceMatches.remote_match > 0 || 
+                preferenceMatches.location_match > 0 || preferenceMatches.salary_match > 0) && (
+                <div className="rounded-2xl border border-yellow-100 bg-yellow-50 p-4">
+                  <h4 className="text-sm font-bold text-yellow-800 mb-3 flex items-center gap-2">
+                    <Heart size={14} /> Preferences Match
+                  </h4>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                    {preferenceMatches.type_match > 0 && (
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Job Type</p>
+                        <p className="font-semibold text-gray-800">{(preferenceMatches.type_match * 100).toFixed(0)}%</p>
+                      </div>
+                    )}
+                    {preferenceMatches.remote_match > 0 && (
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Remote Work</p>
+                        <p className="font-semibold text-gray-800">{(preferenceMatches.remote_match * 100).toFixed(0)}%</p>
+                      </div>
+                    )}
+                    {preferenceMatches.location_match > 0 && (
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Location</p>
+                        <p className="font-semibold text-gray-800">{(preferenceMatches.location_match * 100).toFixed(0)}%</p>
+                      </div>
+                    )}
+                    {preferenceMatches.industry_match > 0 && (
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Industry</p>
+                        <p className="font-semibold text-gray-800">{(preferenceMatches.industry_match * 100).toFixed(0)}%</p>
+                      </div>
+                    )}
+                    {preferenceMatches.salary_match > 0 && (
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Salary</p>
+                        <p className="font-semibold text-gray-800">{(preferenceMatches.salary_match * 100).toFixed(0)}%</p>
+                      </div>
+                    )}
+                    {preferenceMatches.language_match > 0 && (
+                      <div className="bg-white rounded-lg p-2 text-center">
+                        <p className="text-xs text-gray-500">Languages</p>
+                        <p className="font-semibold text-gray-800">{(preferenceMatches.language_match * 100).toFixed(0)}%</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {prefsBD.missing_job_data && prefsBD.missing_job_data.length > 0 && (
+                    <div className="mt-3 pt-2 border-t border-yellow-200 text-xs text-yellow-700">
+                      ℹ️ Missing job data: {prefsBD.missing_job_data.join(', ')}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -758,9 +971,36 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                       {r.type === 'positive' ? <ThumbsUp   size={13} className="mt-0.5 shrink-0" /> :
                        r.type === 'warning'  ? <AlertCircle size={13} className="mt-0.5 shrink-0" /> :
                                                <Info        size={13} className="mt-0.5 shrink-0" />}
-                      {r.text}
+                      <span>{r.text}</span>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Candidate Preferences Info */}
+              {candidateInfo && (
+                <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <User size={14} /> Your Candidate Profile
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-white rounded-lg p-2">
+                      <span className="text-gray-500">Name:</span>
+                      <p className="font-medium text-gray-800">{candidateInfo.name || 'Not provided'}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-2">
+                      <span className="text-gray-500">Level:</span>
+                      <p className="font-medium text-gray-800">{candidateInfo.level || 'Not specified'}</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-2">
+                      <span className="text-gray-500">Experience:</span>
+                      <p className="font-medium text-gray-800">{candidateInfo.total_experience_years || 0} years</p>
+                    </div>
+                    <div className="bg-white rounded-lg p-2">
+                      <span className="text-gray-500">Top Skills:</span>
+                      <p className="font-medium text-gray-800">{candidateInfo.skills?.slice(0, 3).join(', ') || 'None'}</p>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

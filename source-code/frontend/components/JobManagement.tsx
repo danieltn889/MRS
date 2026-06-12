@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   Plus, Search, Edit, Trash2, Eye, Copy, Users,
   Briefcase, MapPin, Clock, CheckCircle,
-  XCircle, AlertCircle, TrendingUp, Filter, UserCheck
+  AlertCircle, UserCheck, BarChart3, ArrowLeft,
+  Star, Award, Medal, TrendingUp, XCircle
 } from 'lucide-react';
 import { getCompanyJobs, deleteJob, duplicateJob, getJob } from '../services/jobAPI';
 import JobViewModal from './jobs/JobViewModal';
 import type { Job, JobStatus, JobManagementProps } from './types/jobTypes';
+import CandidatesResultsScreen from './jobs/CandidatesResultsScreen';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -110,7 +112,7 @@ const StatCard = ({
   </div>
 );
 
-// ─── Main component ─────────────────────────────────────────────────────────
+// ─── Main JobManagement Component ───────────────────────────────────────────
 
 interface ExtendedJobManagementProps extends JobManagementProps {
   onViewCandidates?: (jobId: string, jobTitle: string) => void;
@@ -126,6 +128,10 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  
+  // State for results screen
+  const [showResultsScreen, setShowResultsScreen] = useState(false);
+  const [selectedJobForResults, setSelectedJobForResults] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => { loadJobs(); }, [refreshTrigger]);
 
@@ -170,32 +176,33 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
   };
 
   const handleView = async (jobId: string) => {
-  try {
-    setActionLoading(jobId + '-view');
-    const response = await getJob(jobId);
-    console.log('getJob raw response:', JSON.stringify(response, null, 2));
-    
-    // Unwrap the nested response: { success, data: { ...job } }
-    const raw = response?.data?.data || response?.data || response;
-    
-    
-    setSelectedJob({ 
-      ...raw, 
-      location: formatLocation(raw), 
-      salary_range: formatSalary(raw) 
-    });
-    setShowViewModal(true);
-  } catch (err) {
-    alert('Failed to load job details.');
-  } finally {
-    setActionLoading(null);
-  }
-};
+    try {
+      setActionLoading(jobId + '-view');
+      const response = await getJob(jobId);
+      const raw = response?.data?.data || response?.data || response;
+      setSelectedJob({ 
+        ...raw, 
+        location: formatLocation(raw), 
+        salary_range: formatSalary(raw) 
+      });
+      setShowViewModal(true);
+    } catch (err) {
+      alert('Failed to load job details.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const handleViewCandidates = (jobId: string, jobTitle: string) => {
     if (onViewCandidates) {
       onViewCandidates(jobId, jobTitle);
     }
+  };
+
+  // Handle View Results button click
+  const handleViewResults = (jobId: string, jobTitle: string) => {
+    setSelectedJobForResults({ id: jobId, title: jobTitle });
+    setShowResultsScreen(true);
   };
 
   const filtered = jobs.filter(j => {
@@ -211,8 +218,27 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
     applications: jobs.reduce((s, j) => s + (j.applications_count ?? 0), 0),
   };
 
-  // ── Styles ──────────────────────────────────────────────────────────────
+  // Show results screen when a job is selected
+  if (showResultsScreen && selectedJobForResults) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#f8fafc',
+        fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
+        padding: '24px'
+      }}>
+        <CandidatesResultsScreen
+          jobId={selectedJobForResults.id}
+          jobTitle={selectedJobForResults.title}
+          onBack={() => {
+            setShowResultsScreen(false);
+            setSelectedJobForResults(null);
+          }}
+        />
+      </div>
+    );
+  }
 
+  // Styles
   const s = {
     page: {
       minHeight: '100vh',
@@ -313,11 +339,11 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
       background: `${color}10`, color, cursor: 'pointer', transition: 'all .15s',
     } as React.CSSProperties),
 
-    candidatesBtn: {
+    resultsBtn: {
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '4px 12px', borderRadius: 8, fontWeight: 500,
+      padding: '6px 12px', borderRadius: 8, fontWeight: 500,
       fontSize: 12, cursor: 'pointer', border: 'none',
-      background: '#8b5cf615', color: '#7c3aed',
+      background: '#22c55e15', color: '#16a34a',
     } as React.CSSProperties,
 
     emptyBox: {
@@ -357,11 +383,9 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
       </div>
 
       <div style={s.body}>
-        {/* Title */}
         <p style={s.sectionTitle}>Job Postings</p>
         <p style={s.sectionSub}>Manage your company's active, draft, and closed job listings</p>
 
-        {/* Stats */}
         <div style={s.statsGrid}>
           <StatCard label="Total Jobs" value={stats.total} icon={Briefcase} color="#2563eb" />
           <StatCard label="Active" value={stats.active} icon={CheckCircle} color="#22c55e" />
@@ -369,7 +393,6 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
           <StatCard label="Drafts" value={stats.draft} icon={AlertCircle} color="#f59e0b" />
         </div>
 
-        {/* Toolbar */}
         <div style={s.toolbar}>
           <div style={s.searchWrap}>
             <Search size={15} style={s.searchIcon} />
@@ -388,7 +411,6 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
           </select>
         </div>
 
-        {/* Table / Empty */}
         {filtered.length === 0 ? (
           <div style={s.emptyBox}>
             <Briefcase size={48} color="#cbd5e1" style={{ margin: '0 auto 16px' }} />
@@ -405,7 +427,7 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
             )}
           </div>
         ) : (
-          <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,.06)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' as any }}>
+          <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflowX: 'auto' }}>
             <table style={{ ...s.table, minWidth: 1020 }}>
               <thead>
                 <tr>
@@ -469,6 +491,13 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
                           title="View Candidates"
                         >
                           <UserCheck size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleViewResults(job.id, job.title)}
+                          style={s.resultsBtn}
+                          title="View Candidate Results & Scores"
+                        >
+                          <BarChart3 size={14} /> Results
                         </button>
                         <button
                           onClick={() => handleDelete(job.id, job.title)}

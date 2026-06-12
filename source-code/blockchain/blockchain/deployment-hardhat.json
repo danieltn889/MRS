@@ -1,18 +1,18 @@
 {
-  "network": "localhost",
+  "network": "hardhat",
   "chainId": 1337,
   "contractAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
   "deployerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "deployerBalance": "9999.999193785499078612",
-  "timestamp": "2026-06-06T13:46:11.624Z",
-  "transactionHash": "0xf91369f27f70c511b28eca04a09ba57aaab14c4f9ab0a789fa08171bd67fd791",
+  "deployerBalance": "9999.9982723975",
+  "timestamp": "2026-06-11T04:04:24.421Z",
+  "transactionHash": "0x5c6678df668e5e63de551a8a90627a6f0bcff16fac37e3779acb164a0810aaf4",
   "blockNumber": 1,
   "gasUsed": "921388",
   "accounts": [
     {
       "index": 0,
       "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-      "balance": "9999.999193785499078612"
+      "balance": "9999.9982723975"
     },
     {
       "index": 1,

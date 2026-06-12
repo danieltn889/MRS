@@ -232,27 +232,35 @@ export const saveSimulationDraft = async (simulation: any) => {
   }
 };
 
+// simulationAPI.ts - FIXED publishSimulation function
+
+// simulationAPI.ts - FIXED publishSimulation function
+
 export const publishSimulation = async (simulation: any) => {
   const isValidUUID = (str: string) =>
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
   const hasRealId = simulation.id && isValidUUID(simulation.id);
 
   if (hasRealId) {
+    // ✅ FIRST: Update the simulation to 'active' status (NOT 'published')
     await fetch(`${API_BASE_URL}/simulations/${simulation.id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify(buildFullPayload(simulation, 'draft')),
+      body: JSON.stringify(buildFullPayload(simulation, 'active')), // ✅ Use 'active'
     });
+    
+    // ✅ SECOND: Call the dedicated publish endpoint
     const publishRes = await fetch(`${API_BASE_URL}/simulations/${simulation.id}/publish`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
     return handleResponse(publishRes);
   } else {
+    // For new simulations without an ID, create with 'active' status
     const response = await fetch(`${API_BASE_URL}/simulations`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(buildFullPayload(simulation, 'published')),
+      body: JSON.stringify(buildFullPayload(simulation, 'active')), // ✅ Use 'active'
     });
     return handleResponse(response);
   }
@@ -1189,6 +1197,20 @@ function deriveType(tasks: any[]): string {
 }
 
 function buildFullPayload(simulation: any, statusOverride?: string) {
+  // ✅ Ensure status is either 'draft' or 'active' (NOT 'published')
+  let finalStatus = statusOverride || simulation.status || 'draft';
+  
+  // ✅ Map 'published' to 'active' if it somehow gets through
+  if (finalStatus === 'published') {
+    console.warn('⚠️ "published" status detected, mapping to "active"');
+    finalStatus = 'active';
+  }
+  
+  // ✅ Also map 'inactive' to 'archived' if needed
+  if (finalStatus === 'inactive') {
+    finalStatus = 'archived';
+  }
+  
   return {
     title: simulation.title,
     jobRole: simulation.jobRole,
@@ -1196,7 +1218,7 @@ function buildFullPayload(simulation: any, statusOverride?: string) {
     description: simulation.description,
     duration: simulation.duration,
     difficulty: simulation.difficulty,
-    status: statusOverride || simulation.status || 'draft',
+    status: finalStatus, // ✅ Now will be 'draft' or 'active' or 'archived'
     objectives: simulation.objectives ?? [],
     tasks: simulation.tasks ?? [],
     scoring: simulation.scoring ?? {},

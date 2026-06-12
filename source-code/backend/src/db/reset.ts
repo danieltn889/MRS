@@ -14,7 +14,7 @@ const resetDatabase = async (): Promise<void> => {
     await client.connect();
     logger.info('Connected to PostgreSQL server for database reset');
 
-    const dbName = process.env.DB_NAME || 'recruitment_db';
+    const dbName = process.env.DB_NAME || 'SVWR-CFE_DB';
 
     // Terminate active connections to the database
     logger.info('Terminating active connections...');

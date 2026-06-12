@@ -1,5 +1,3 @@
-// jobStorageService.ts
-
 const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:3001/api/v1';
 
 interface SavedJob {
@@ -10,11 +8,6 @@ interface SavedJob {
   [key: string]: any;
 }
 
-interface SavedJobsResponse {
-  success: boolean;
-  data: SavedJob[];
-}
-
 const getAuthHeaders = (): HeadersInit => {
   const token = localStorage.getItem('authToken');
   return {
@@ -22,6 +15,36 @@ const getAuthHeaders = (): HeadersInit => {
     'Authorization': token ? `Bearer ${token}` : '',
   };
 };
+
+/**
+ * Normalise whatever the API returns into a plain SavedJob[].
+ * Handles the three shapes we have seen in production:
+ *   1. { success: true, data: SavedJob[] }
+ *   2. { success: true, data: { data: SavedJob[], total, page, … } }  ← paginated
+ *   3. SavedJob[]  (bare array)
+ */
+const extractJobs = (raw: any): SavedJob[] => {
+  if (!raw) return [];
+
+  // bare array
+  if (Array.isArray(raw)) return raw;
+
+  const inner = raw.data;
+  if (!inner) return [];
+
+  // { data: SavedJob[] }
+  if (Array.isArray(inner)) return inner;
+
+  // { data: { data: SavedJob[], … } }  — paginated envelope
+  if (inner && Array.isArray(inner.data)) return inner.data;
+
+  // { data: { jobs: SavedJob[], … } }  — some backends use "jobs"
+  if (inner && Array.isArray(inner.jobs)) return inner.jobs;
+
+  return [];
+};
+
+// ─── save / unsave ────────────────────────────────────────────────────────────
 
 export const saveJob = async (jobId: string): Promise<any> => {
   try {
@@ -57,18 +80,25 @@ export const unsaveJob = async (jobId: string): Promise<any> => {
   }
 };
 
+// ─── check ───────────────────────────────────────────────────────────────────
+
 export const isJobSaved = async (jobId: string): Promise<boolean> => {
   try {
     const response = await fetch(`${API_BASE_URL}/jobs/saved/${jobId}/check`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
-    
+
     if (response.ok) {
       const data = await response.json();
-      return data.saved === true || data.isSaved === true || data.data?.saved === true;
+      return (
+        data.saved === true ||
+        data.isSaved === true ||
+        data.data?.saved === true
+      );
     }
-    
+
+    // fall back to full list check
     const savedJobs = await loadSavedJobsFromAPI();
     return savedJobs.includes(jobId);
   } catch (error) {
@@ -82,27 +112,27 @@ export const isJobSaved = async (jobId: string): Promise<boolean> => {
   }
 };
 
+// ─── load (IDs only) ─────────────────────────────────────────────────────────
+
 export const loadSavedJobsFromAPI = async (): Promise<string[]> => {
   try {
     const response = await fetch(`${API_BASE_URL}/jobs/saved`, {
       method: 'GET',
       headers: getAuthHeaders(),
     });
-    if (response.ok) {
-      const data = await response.json();
-      if (data.success && data.data) {
-        return data.data.map((job: SavedJob) => job.id);
-      }
-      if (Array.isArray(data)) {
-        return data.map((job: SavedJob) => job.id);
-      }
-    }
-    return [];
+
+    if (!response.ok) return [];
+
+    const raw = await response.json();
+    const jobs = extractJobs(raw);
+    return jobs.map((job: SavedJob) => job.id).filter(Boolean);
   } catch (error) {
     console.error('Error loading saved jobs:', error);
     return [];
   }
 };
+
+// ─── load (full objects) ─────────────────────────────────────────────────────
 
 export const getSavedJobsDetails = async (): Promise<SavedJob[]> => {
   try {
@@ -110,25 +140,21 @@ export const getSavedJobsDetails = async (): Promise<SavedJob[]> => {
       method: 'GET',
       headers: getAuthHeaders(),
     });
-    if (response.ok) {
-      const data = await response.json();
-      if (data.success && data.data) {
-        return data.data;
-      }
-      if (Array.isArray(data)) {
-        return data;
-      }
-    }
-    return [];
+
+    if (!response.ok) return [];
+
+    const raw = await response.json();
+    return extractJobs(raw);
   } catch (error) {
     console.error('Error fetching saved jobs details:', error);
     return [];
   }
 };
 
+// ─── toggle ──────────────────────────────────────────────────────────────────
+
 export const toggleSaveJob = async (jobId: string): Promise<boolean> => {
   const isCurrentlySaved = await isJobSaved(jobId);
-  
   if (isCurrentlySaved) {
     await unsaveJob(jobId);
     return false;

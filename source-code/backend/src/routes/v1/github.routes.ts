@@ -1,4 +1,4 @@
-// routes/github.routes.ts
+// routes/github.routes.ts - COMPLETE
 import express, { Router, Request, Response } from 'express';
 import { body, query, param } from 'express-validator';
 import { protect, authorize } from '../../middleware/auth.middleware.js';
@@ -14,6 +14,87 @@ const wrap = (fn: (req: AuthenticatedRequest, res: Response) => Promise<void>) =
     return fn(req as AuthenticatedRequest, res);
   };
 };
+
+// ============================================
+// GITHUB OAUTH CALLBACK (NO AUTH - PUBLIC)
+// ============================================
+// @route   POST /api/v1/github/auth/callback
+// @desc    GitHub OAuth callback - exchange code for token
+// @access  Public
+router.post('/auth/callback', async (req: Request, res: Response) => {
+  const { code, redirect_uri } = req.body;
+  
+  try {
+    // Exchange code for access token
+    const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        code: code,
+        redirect_uri: redirect_uri,
+      }),
+    });
+    
+    const tokenData = await tokenResponse.json() as {
+      access_token?: string;
+      token_type?: string;
+      scope?: string;
+      error?: string;
+      error_description?: string;
+    };
+    
+    const accessToken = tokenData.access_token;
+    
+    if (!accessToken || tokenData.error) {
+      console.error('GitHub OAuth error:', tokenData.error_description || tokenData.error);
+      res.status(400).json({ 
+        success: false, 
+        error: tokenData.error_description || 'Failed to get access token' 
+      });
+      return;
+    }
+    
+    // Get user info from GitHub
+    const userResponse = await fetch('https://api.github.com/user', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (!userResponse.ok) {
+      throw new Error(`GitHub API error: ${userResponse.status}`);
+    }
+    
+    const userData = await userResponse.json() as {
+      login: string;
+      avatar_url: string;
+      id: number;
+      name?: string;
+      email?: string;
+    };
+    
+    res.json({
+      success: true,
+      token: accessToken,
+      username: userData.login,
+      avatarUrl: userData.avatar_url,
+    });
+    
+  } catch (error: any) {
+    console.error('GitHub OAuth callback error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to authenticate with GitHub' 
+    });
+  }
+});
+
+// ============================================
+// REST OF YOUR ROUTES...
+// ============================================
 
 // @route   POST /api/v1/github/verify-user
 // @desc    Verify GitHub user exists
@@ -228,8 +309,6 @@ router.post('/webhook',
   GitHubController.handleWebhook
 );
 
-// Add to routes/github.routes.ts
-
 // Full repository statistics (all in one)
 router.get('/repo/:owner/:repo/full-stats', 
   protect, 
@@ -347,6 +426,7 @@ router.get('/repo/:owner/:repo/compare/:base...:head',
   validateRequest, 
   wrap(GitHubController.compareCommits)
 );
+
 // ============================================
 // COMPLETE REPOSITORY DATA (CODE + STATISTICS)
 // ============================================
@@ -366,7 +446,7 @@ router.get('/repo/:owner/:repo/everything',
   wrap(GitHubController.getEverything)
 );
 
-// Add this to your github.routes.ts (temporary, before export default router)
+// Debug route
 router.get('/debug/routes', (req: Request, res: Response) => {
   const routes: string[] = [];
   const extractRoutes = (stack: any[], basePath = '') => {
@@ -383,6 +463,13 @@ router.get('/debug/routes', (req: Request, res: Response) => {
   res.json({ 
     totalRoutes: routes.length,
     routes: routes.filter(r => r.includes('/github') || r.includes('/repo'))
+  });
+});
+
+router.get('/check-env', (req: Request, res: Response) => {
+  res.json({
+    clientId: process.env.GITHUB_CLIENT_ID ? '✅ set: ' + process.env.GITHUB_CLIENT_ID : '❌ MISSING',
+    clientSecret: process.env.GITHUB_CLIENT_SECRET ? '✅ set (length: ' + process.env.GITHUB_CLIENT_SECRET.length + ')' : '❌ MISSING',
   });
 });
 

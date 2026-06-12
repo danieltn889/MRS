@@ -267,84 +267,195 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
   };
 
-  const fetchAiJobMatches = async () => {
-    if (isCompanyUser) {
-      console.log('Company user - skipping AI matches');
+ const fetchAiJobMatches = async () => {
+  if (isCompanyUser) {
+    console.log('Company user - skipping AI matches');
+    setLoading(false);
+    return;
+  }
+  
+  try {
+    const candidateId = user?.id;
+    if (!candidateId) {
+      console.log('❌ No candidate ID found');
+      setJobError('User ID not found. Please log in again.');
       setLoading(false);
       return;
     }
     
-    try {
-      const candidateId = user?.id;
-      if (!candidateId) {
-        console.log('❌ No candidate ID found');
-        setJobError('User ID not found. Please log in again.');
-        setLoading(false);
-        return;
-      }
-      
-      console.log('📊 Fetching AI matches for candidate:', candidateId);
-      
-      const data = await fetchWithTimeout(getJobMatchesFromAI(candidateId), 30000);
-      
-      console.log('📊 API Response:', data);
-      
-      if (data && data.success && data.matches) {
-        // Set candidate info
-        if (data.candidate) {
-          setCandidateInfo({
-            name: data.candidate.name || data.candidate.full_name || 'Candidate',
-            level: data.candidate.level || 'Professional',
-            total_experience_years: data.candidate.total_experience_years || 0,
-            skills: data.candidate.skills || []
-          });
-        }
-        
-        // Transform matches
-        const transformedMatches = data.matches.map((match: any) => {
-          const jobData = match.job || {};
-          const companyData = jobData.company || {};
-          
-          return {
-            id: jobData.id || match.id,
-            title: jobData.title || match.title,
-            company: companyData.name || jobData.company_name || match.company || 'Unknown Company',
-            location: jobData.locations?.[0]?.city || jobData.location || match.location || 'Location not specified',
-            salary: match.salary,
-            type: jobData.job_type || match.type || 'Full-time',
-            workArrangement: jobData.work_arrangement || match.workArrangement || 'Onsite',
-            description: jobData.description || match.description,
-            requirements: jobData.requirements || match.requirements,
-            skills: jobData.skills_required?.map((s: any) => typeof s === 'string' ? s : s.name) || match.skills,
-            screeningQuestions: jobData.screening_questions || match.screeningQuestions,
-            expiresAt: jobData.expires_at || match.expiresAt,
-            matchScore: match.match_score || match.matchScore || 0,
-            matchLevel: match.match_level || match.matchLevel,
-            criteriaScores: match.criteria_scores || match.criteriaScores,
-            skillsBreakdown: match.skills_breakdown || match.skillsBreakdown,
-            experienceBreakdown: match.experience_breakdown || match.experienceBreakdown,
-            qualificationsBreakdown: match.qualifications_breakdown || match.qualificationsBreakdown,
-            preferencesBreakdown: match.preferences_breakdown || match.preferencesBreakdown,
-            rawJob: jobData
-          };
+    console.log('📊 Fetching AI matches for candidate:', candidateId);
+    
+    const data = await fetchWithTimeout(getJobMatchesFromAI(candidateId), 30000);
+    
+    console.log('📊 API Response:', data);
+    
+    if (data && data.success && data.matches) {
+      // ✅ Set candidate info from AI response
+      if (data.candidate) {
+        setCandidateInfo({
+          name: data.candidate.name || data.candidate.full_name || 'Candidate',
+          level: data.candidate.level || 'Professional',
+          total_experience_years: data.candidate.total_experience_years || 0,
+          skills: data.candidate.skills || []
         });
-        
-        console.log('✅ Transformed matches:', transformedMatches.length);
-        setAiMatches(transformedMatches);
-        setJobError(null);
-      } else {
-        console.log('No matches found');
-        setAiMatches([]);
-        setJobError(data?.message || 'No job matches found. Complete your profile for better recommendations.');
       }
-    } catch (error: any) {
-      console.error('Error fetching AI matches:', error);
-      setJobError(error.message || 'Failed to load job matches. Please try again later.');
+      
+      // ✅ Transform matches - COLLECT ALL DATA HERE
+      const transformedMatches = data.matches.map((match: any) => {
+        const jobData = match.job || {};
+        const companyData = jobData.company || {};
+        
+        // ✅ Extract all breakdowns
+        const criteriaScores = match.criteria_scores || {};
+        const skillsBD = match.skills_breakdown || {};
+        const expBD = match.experience_breakdown || {};
+        const qualsBD = match.qualifications_breakdown || {};
+        const prefsBD = match.preferences_breakdown || {};
+        
+        return {
+          // ========== BASIC JOB INFO ==========
+          id: jobData.id || match.id,
+          title: jobData.title || match.title,
+          company: companyData.name || jobData.company_name || match.company || 'Unknown Company',
+          location: jobData.locations?.[0]?.city || jobData.location || match.location || 'Location not specified',
+          salary: match.salary,
+          type: jobData.job_type || match.type || 'Full-time',
+          workArrangement: jobData.work_arrangement || match.workArrangement || 'Onsite',
+          description: jobData.description || match.description,
+          requirements: jobData.requirements || match.requirements || [],
+          skills: jobData.skills_required?.map((s: any) => typeof s === 'string' ? s : s.name) || match.skills || [],
+          screeningQuestions: jobData.screening_questions || match.screeningQuestions || [],
+          expiresAt: jobData.expires_at || match.expiresAt,
+          publishedAt: jobData.published_at || match.publishedAt,
+          
+          // ========== MATCH SCORES ==========
+          matchScore: match.match_score || match.matchScore || 0,
+          matchLevel: match.match_level || match.matchLevel || '',
+          
+          // ========== 4-FACTOR CRITERIA SCORES ==========
+          criteriaScores: {
+            skills_match: criteriaScores.skills_match || 0,
+            qualifications_match: criteriaScores.qualifications_match || 0,
+            experience_match: criteriaScores.experience_match || 0,
+            preferences_match: criteriaScores.preferences_match || 0
+          },
+          
+          // ========== SKILLS BREAKDOWN ==========
+          skillsBreakdown: {
+            matched_skills: skillsBD.matched_skills || [],
+            missing_skills: skillsBD.missing_skills || [],
+            total_required: skillsBD.total_required || 0,
+            total_matched: skillsBD.total_matched || 0,
+            individual_scores: skillsBD.individual_scores || []
+          },
+          
+          // ========== EXPERIENCE BREAKDOWN ==========
+          experienceBreakdown: {
+            match_type: expBD.match_type || 'unknown',
+            total_requirements: expBD.total_requirements || 0,
+            matched_requirements: expBD.matched_requirements || 0,
+            specific_matches: expBD.specific_matches || [],
+            unmatched_requirements: expBD.unmatched_requirements || [],
+            total_years: expBD.total_years || 0,
+            required_years: expBD.required_years || 0,
+            gap_years: expBD.gap_years || 0,
+            candidate_years: expBD.candidate_years || 0
+          },
+          
+          // ========== QUALIFICATIONS BREAKDOWN (DEGREES & FIELDS) ==========
+          qualificationsBreakdown: {
+            candidate_degrees: qualsBD.candidate_degrees || [],
+            candidate_fields: qualsBD.candidate_fields || [],
+            candidate_combined: qualsBD.candidate_combined || [],
+            candidate_certifications: qualsBD.candidate_certifications || [],
+            job_degree_required: qualsBD.job_degree_required || '',
+            job_allowed_fields: qualsBD.job_allowed_fields || [],
+            job_certifications: qualsBD.job_certifications || [],
+            best_similarity: qualsBD.best_similarity || 0,
+            best_matched_field: qualsBD.best_matched_field || null,
+            best_matched_candidate_value: qualsBD.best_matched_candidate_value || '',
+            best_job_requirement: qualsBD.best_job_requirement || '',
+            match_type: qualsBD.match_type || 'none',
+            match_quality: qualsBD.match_quality || '',
+            explanation: qualsBD.explanation || '',
+            is_degree_required: qualsBD.is_degree_required || false,
+            component_scores: qualsBD.component_scores || {}
+          },
+          
+          // ========== PREFERENCES BREAKDOWN ==========
+          preferencesBreakdown: {
+            missing_job_data: prefsBD.missing_job_data || [],
+            type_match: prefsBD.type_match || 0,
+            type_match_details: prefsBD.type_match_details || [],
+            type_match_note: prefsBD.type_match_note || null,
+            remote_match: prefsBD.remote_match || 0,
+            remote_match_note: prefsBD.remote_match_note || null,
+            location_match: prefsBD.location_match || 0,
+            location_match_details: prefsBD.location_match_details || null,
+            location_match_note: prefsBD.location_match_note || null,
+            industry_match: prefsBD.industry_match || 0,
+            industry_match_details: prefsBD.industry_match_details || [],
+            industry_match_note: prefsBD.industry_match_note || null,
+            salary_match: prefsBD.salary_match || 0,
+            salary_match_details: prefsBD.salary_match_details || {},
+            salary_match_note: prefsBD.salary_match_note || null,
+            language_match: prefsBD.language_match || 0,
+            language_match_details: prefsBD.language_match_details || [],
+            language_match_note: prefsBD.language_match_note || null,
+            candidate_job_types: prefsBD.candidate_job_types || [],
+            candidate_locations: prefsBD.candidate_locations || [],
+            candidate_industries: prefsBD.candidate_industries || [],
+            candidate_languages: prefsBD.candidate_languages || [],
+            candidate_salary_min: prefsBD.candidate_salary_min || 0,
+            candidate_salary_max: prefsBD.candidate_salary_max || 0,
+            candidate_remote_preference: prefsBD.candidate_remote_preference || 'flexible'
+          },
+          
+          // ========== RAW JOB DATA (for detailed view) ==========
+          rawJob: jobData,
+          
+          // ========== EXTRA FIELDS ==========
+          benefits: jobData.benefits || [],
+          tags: jobData.tags || [],
+          experienceLevel: jobData.experience_level || '',
+          department: jobData.department || '',
+          status: jobData.status || 'active',
+          responsibilities: jobData.responsibilities || [],
+          applications: jobData.application_count || 0,
+          viewCount: jobData.view_count || 0,
+          companyLogo: companyData.logo_url || '',
+          companyVerified: companyData.verified || false,
+          companyIndustry: companyData.industry || '',
+          companySize: companyData.size || '',
+          companyWebsite: companyData.website || '',
+          companyDescription: companyData.description || ''
+        };
+      });
+      
+      console.log('✅ Transformed matches:', transformedMatches.length);
+      console.log('📊 Sample match data:', {
+        matchScore: transformedMatches[0]?.matchScore,
+        qualificationsBreakdown: transformedMatches[0]?.qualificationsBreakdown,
+        experienceBreakdown: transformedMatches[0]?.experienceBreakdown,
+        skillsBreakdown: transformedMatches[0]?.skillsBreakdown,
+        preferencesBreakdown: transformedMatches[0]?.preferencesBreakdown
+      });
+      
+      setAiMatches(transformedMatches);
+      setJobError(null);
+    } else {
+      console.log('No matches found');
       setAiMatches([]);
-    } finally {
-      setLoading(false);
+      setJobError(data?.message || 'No job matches found. Complete your profile for better recommendations.');
     }
-  };
+  } catch (error: any) {
+    console.error('Error fetching AI matches:', error);
+    setJobError(error.message || 'Failed to load job matches. Please try again later.');
+    setAiMatches([]);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const fetchFullCandidateProfile = async () => {
     try {
@@ -804,44 +915,51 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
         </div>
       </div>
 
-      {showApplicationModal && selectedMatchForApply && fullCandidateProfile && (
-        <JobApplicationModal
-          isOpen={showApplicationModal}
-          onClose={() => { setShowApplicationModal(false); setSelectedMatchForApply(null); }}
-          onSuccess={() => {
-            if (selectedMatchForApply) {
-              appliedJobsManager.addAppliedJob(selectedMatchForApply.id);
-              setAppliedJobs([...appliedJobs, selectedMatchForApply.id]);
-            }
-            setShowApplicationModal(false);
-            setSelectedMatchForApply(null);
-          }}
-          job={{
-            id: selectedMatchForApply.id,
-            title: selectedMatchForApply.title,
-            company_name: selectedMatchForApply.company,
-            location: selectedMatchForApply.location,
-            salary_range: selectedMatchForApply.salary,
-            job_type: selectedMatchForApply.type,
-            work_arrangement: selectedMatchForApply.workArrangement,
-            description: selectedMatchForApply.description,
-            requirements: selectedMatchForApply.requirements,
-            skills_required: selectedMatchForApply.skills,
-            screeningQuestions: selectedMatchForApply.screeningQuestions,
-            expires_at: selectedMatchForApply.expiresAt
-          }}
-          candidateProfile={{
-            profile: fullCandidateProfile.profile?.personal_info || {},
-            skills: fullCandidateProfile.skills || [],
-            education: fullCandidateProfile.education || [],
-            workExperience: fullCandidateProfile.work_experience || [],
-            portfolioLinks: fullCandidateProfile.portfolio_links || [],
-            resumes: fullCandidateProfile.resumes || [],
-          }}
-          matchScore={selectedMatchForApply.matchScore || 78.7}
-          requiredDocuments={['Resume', 'Cover Letter']}
-        />
-      )}
+     {showApplicationModal && selectedMatchForApply && fullCandidateProfile && (
+  <JobApplicationModal
+    isOpen={showApplicationModal}
+    onClose={() => { setShowApplicationModal(false); setSelectedMatchForApply(null); }}
+    onSuccess={() => {
+      if (selectedMatchForApply) {
+        appliedJobsManager.addAppliedJob(selectedMatchForApply.id);
+        setAppliedJobs([...appliedJobs, selectedMatchForApply.id]);
+      }
+      setShowApplicationModal(false);
+      setSelectedMatchForApply(null);
+    }}
+    job={{
+      id: selectedMatchForApply.id,
+      title: selectedMatchForApply.title,
+      company_name: selectedMatchForApply.company,
+      location: selectedMatchForApply.location,
+      salary_range: selectedMatchForApply.salary,
+      job_type: selectedMatchForApply.type,
+      work_arrangement: selectedMatchForApply.workArrangement,
+      description: selectedMatchForApply.description,
+      requirements: selectedMatchForApply.requirements,
+      skills_required: selectedMatchForApply.skills,
+      screeningQuestions: selectedMatchForApply.screeningQuestions,
+      expires_at: selectedMatchForApply.expiresAt
+    }}
+    candidateProfile={{
+      profile: fullCandidateProfile.profile?.personal_info || {},
+      skills: fullCandidateProfile.skills || [],
+      education: fullCandidateProfile.education || [],
+      workExperience: fullCandidateProfile.work_experience || [],
+      portfolioLinks: fullCandidateProfile.portfolio_links || [],
+      resumes: fullCandidateProfile.resumes || [],
+    }}
+    matchScore={selectedMatchForApply.matchScore || 78.7}
+    matchDetails={{  // ✅ ADD THIS - pass the match details
+      criteria_scores: selectedMatchForApply.criteriaScores,
+      skills_breakdown: selectedMatchForApply.skillsBreakdown,
+      qualifications_breakdown: selectedMatchForApply.qualificationsBreakdown,
+      experience_breakdown: selectedMatchForApply.experienceBreakdown,
+      preferences_breakdown: selectedMatchForApply.preferencesBreakdown
+    }}
+    requiredDocuments={['Resume', 'Cover Letter']}
+  />
+)}
 
       {showDetails && selectedMatch && (
         <JobViewModal

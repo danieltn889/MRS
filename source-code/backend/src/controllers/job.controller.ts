@@ -3,7 +3,7 @@ import BaseController from './base.controller.js';  // Use .js, not .ts
 import DatabaseService from '../services/database.service.js';  // Use .js
 import ResponseService from '../services/response.service.js';  // Use .js
 import { logger } from '../utils/logger.js';  // Use .js
-import { AuthenticatedRequest, User as AuthUser} from '../types/auth.types.js';  // Use .js
+import { AuthenticatedRequest, User as AuthUser } from '../types/auth.types.js';  // Use .js
 import PaginationService from '../services/pagination.service.js';
 import ValidationService from '../services/validation.service.js';
 
@@ -46,11 +46,83 @@ class JobController extends BaseController {
     super('JobController');
   }
 
- private normalizeEducationRequirements(educationLevel: any): any {
-  // Return default structure even if no data
-  if (!educationLevel) {
+  private normalizeEducationRequirements(educationLevel: any): any {
+    if (!educationLevel) {
+      return {
+        minimum_degree: null,
+        qualification_entries: [],        // ← ADD
+        fields_of_study: [],
+        is_degree_required: false,
+        certifications: [],
+        additional_requirements: [],
+        languages: [],
+        experience_requirements: [],
+        age_requirement: '',
+        no_experience_needed: false,
+        no_languages_needed: false,
+        no_certifications_needed: false,
+        no_documents_needed: false
+      };
+    }
+
+    if (typeof educationLevel === 'object' && !Array.isArray(educationLevel)) {
+      return {
+        minimum_degree: educationLevel.minimum_degree || null,
+        qualification_entries: educationLevel.qualification_entries || [],  // ← ADD
+        fields_of_study: educationLevel.fields_of_study || [],
+        is_degree_required: educationLevel.is_degree_required !== false,
+        certifications: educationLevel.certifications || [],
+        additional_requirements: educationLevel.additional_requirements || [],
+        languages: educationLevel.languages || [],
+        experience_requirements: educationLevel.experience_requirements || [],
+        age_requirement: educationLevel.age_requirement || '',
+        no_experience_needed: educationLevel.no_experience_needed || false,
+        no_languages_needed: educationLevel.no_languages_needed || false,
+        no_certifications_needed: educationLevel.no_certifications_needed || false,
+        no_documents_needed: educationLevel.no_documents_needed || false
+      };
+    }
+
+    // array / string cases — keep as-is, just add qualification_entries: []
+    if (Array.isArray(educationLevel)) {
+      return {
+        minimum_degree: educationLevel[0] || null,
+        qualification_entries: [],        // ← ADD
+        fields_of_study: educationLevel.slice(1),
+        is_degree_required: true,
+        certifications: [],
+        additional_requirements: [],
+        languages: [],
+        experience_requirements: [],
+        age_requirement: '',
+        no_experience_needed: false,
+        no_languages_needed: false,
+        no_certifications_needed: false,
+        no_documents_needed: false
+      };
+    }
+
+    if (typeof educationLevel === 'string' && educationLevel.trim() !== '') {
+      return {
+        minimum_degree: educationLevel.trim(),
+        qualification_entries: [],        // ← ADD
+        fields_of_study: [],
+        is_degree_required: true,
+        certifications: [],
+        additional_requirements: [],
+        languages: [],
+        experience_requirements: [],
+        age_requirement: '',
+        no_experience_needed: false,
+        no_languages_needed: false,
+        no_certifications_needed: false,
+        no_documents_needed: false
+      };
+    }
+
     return {
       minimum_degree: null,
+      qualification_entries: [],          // ← ADD
       fields_of_study: [],
       is_degree_required: false,
       certifications: [],
@@ -64,78 +136,6 @@ class JobController extends BaseController {
       no_documents_needed: false
     };
   }
-  
-  if (typeof educationLevel === 'object' && !Array.isArray(educationLevel)) {
-    return {
-      // Basic education fields
-      minimum_degree: educationLevel.minimum_degree || null,
-      fields_of_study: educationLevel.fields_of_study || [],
-      is_degree_required: educationLevel.is_degree_required !== false,
-      certifications: educationLevel.certifications || [],
-      additional_requirements: educationLevel.additional_requirements || [],
-      
-      // Frontend custom fields
-      languages: educationLevel.languages || [],
-      experience_requirements: educationLevel.experience_requirements || [],
-      age_requirement: educationLevel.age_requirement || '',
-      no_experience_needed: educationLevel.no_experience_needed || false,
-      no_languages_needed: educationLevel.no_languages_needed || false,
-      no_certifications_needed: educationLevel.no_certifications_needed || false,
-      no_documents_needed: educationLevel.no_documents_needed || false
-    };
-  }
-  
-  if (Array.isArray(educationLevel)) {
-    return {
-      minimum_degree: educationLevel[0] || null,
-      fields_of_study: educationLevel.slice(1),
-      is_degree_required: true,
-      certifications: [],
-      additional_requirements: [],
-      languages: [],
-      experience_requirements: [],
-      age_requirement: '',
-      no_experience_needed: false,
-      no_languages_needed: false,
-      no_certifications_needed: false,
-      no_documents_needed: false
-    };
-  }
-  
-  if (typeof educationLevel === 'string' && educationLevel.trim() !== '') {
-    return {
-      minimum_degree: educationLevel.trim(),
-      fields_of_study: [],
-      is_degree_required: true,
-      certifications: [],
-      additional_requirements: [],
-      languages: [],
-      experience_requirements: [],
-      age_requirement: '',
-      no_experience_needed: false,
-      no_languages_needed: false,
-      no_certifications_needed: false,
-      no_documents_needed: false
-    };
-  }
-  
-  // Default return for any other case
-  return {
-    minimum_degree: null,
-    fields_of_study: [],
-    is_degree_required: false,
-    certifications: [],
-    additional_requirements: [],
-    languages: [],
-    experience_requirements: [],
-    age_requirement: '',
-    no_experience_needed: false,
-    no_languages_needed: false,
-    no_certifications_needed: false,
-    no_documents_needed: false
-  };
-}
-
   private normalizeApplicationLimit(limit: any): number | null {
     if (limit === null || limit === undefined || limit === '') {
       return null;
@@ -240,7 +240,7 @@ class JobController extends BaseController {
         WHERE j.status = 'active'
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
       `;
-      
+
       const params: any[] = [];
       let paramIndex = 1;
 
@@ -301,7 +301,7 @@ class JobController extends BaseController {
       params.push(validLimit, (validPage - 1) * validLimit);
 
       const result = await DatabaseService.execute(query, params);
-      
+
       let countQuery = `
         SELECT COUNT(*) as total FROM jobs j
         LEFT JOIN companies c ON j.company_id = c.id
@@ -310,7 +310,7 @@ class JobController extends BaseController {
       `;
       const countParams: any[] = [];
       let countIndex = 1;
-      
+
       if (search) {
         countQuery += ` AND (j.title ILIKE $${countIndex} OR j.description ILIKE $${countIndex} OR c.name ILIKE $${countIndex})`;
         countParams.push(`%${search}%`);
@@ -336,7 +336,7 @@ class JobController extends BaseController {
         countParams.push(companyId);
         countIndex++;
       }
-      
+
       const countResult = await DatabaseService.execute(countQuery, countParams);
       const total = parseInt(countResult.rows[0]?.total || '0');
 
@@ -352,16 +352,16 @@ class JobController extends BaseController {
     }
   }
 
-async getJob(req: Request, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
+  async getJob(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
 
-    if (!id || !ValidationService.isValidUUID(id)) {
-      this.sendError(res, 'Invalid job ID format', 400);
-      return;
-    }
+      if (!id || !ValidationService.isValidUUID(id)) {
+        this.sendError(res, 'Invalid job ID format', 400);
+        return;
+      }
 
-    const jobResult = await DatabaseService.execute(`
+      const jobResult = await DatabaseService.execute(`
       SELECT
         j.*,
         c.name as company_name,
@@ -375,95 +375,95 @@ async getJob(req: Request, res: Response): Promise<void> {
       WHERE j.id = $1
     `, [id]);
 
-    const job = jobResult.rows[0];
+      const job = jobResult.rows[0];
 
-    if (!job) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
-
-    // Parse JSONB fields
-    if (job.education_required && typeof job.education_required === 'string') {
-      job.education_required = JSON.parse(job.education_required);
-    }
-    if (job.locations && typeof job.locations === 'string') {
-      job.locations = JSON.parse(job.locations);
-    }
-    if (job.responsibilities && typeof job.responsibilities === 'string') {
-      job.responsibilities = JSON.parse(job.responsibilities);
-    }
-    if (job.requirements && typeof job.requirements === 'string') {
-      try {
-        const parsed = JSON.parse(job.requirements);
-        job.requirements = Array.isArray(parsed) ? parsed : (parsed.required || []);
-      } catch {
-        job.requirements = [];
+      if (!job) {
+        this.sendError(res, 'Job not found', 404);
+        return;
       }
-    }
-    if (job.benefits && typeof job.benefits === 'string') {
-      job.benefits = JSON.parse(job.benefits);
-    }
-    if (job.skills_required && typeof job.skills_required === 'string') {
-      job.skills_required = JSON.parse(job.skills_required);
-    }
-    if (job.skills_preferred && typeof job.skills_preferred === 'string') {
-      job.skills_preferred = JSON.parse(job.skills_preferred);
-    }
-    if (job.language_requirements && typeof job.language_requirements === 'string') {
-      job.language_requirements = JSON.parse(job.language_requirements);
-    }
-    if (job.experience_requirements && typeof job.experience_requirements === 'string') {
-      job.experience_requirements = JSON.parse(job.experience_requirements);
-    }
-    if (job.screening_questions && typeof job.screening_questions === 'string') {
-      job.screening_questions = JSON.parse(job.screening_questions);
-    }
-    if (job.documents && typeof job.documents === 'string') {
-      job.documents = JSON.parse(job.documents);
-    }
 
-    // ✅ CRITICAL: Map education_required to educationLevel for frontend
-    job.educationLevel = job.education_required;
+      // Parse JSONB fields
+      if (job.education_required && typeof job.education_required === 'string') {
+        job.education_required = JSON.parse(job.education_required);
+      }
+      if (job.locations && typeof job.locations === 'string') {
+        job.locations = JSON.parse(job.locations);
+      }
+      if (job.responsibilities && typeof job.responsibilities === 'string') {
+        job.responsibilities = JSON.parse(job.responsibilities);
+      }
+      if (job.requirements && typeof job.requirements === 'string') {
+        try {
+          const parsed = JSON.parse(job.requirements);
+          job.requirements = Array.isArray(parsed) ? parsed : (parsed.required || []);
+        } catch {
+          job.requirements = [];
+        }
+      }
+      if (job.benefits && typeof job.benefits === 'string') {
+        job.benefits = JSON.parse(job.benefits);
+      }
+      if (job.skills_required && typeof job.skills_required === 'string') {
+        job.skills_required = JSON.parse(job.skills_required);
+      }
+      if (job.skills_preferred && typeof job.skills_preferred === 'string') {
+        job.skills_preferred = JSON.parse(job.skills_preferred);
+      }
+      if (job.language_requirements && typeof job.language_requirements === 'string') {
+        job.language_requirements = JSON.parse(job.language_requirements);
+      }
+      if (job.experience_requirements && typeof job.experience_requirements === 'string') {
+        job.experience_requirements = JSON.parse(job.experience_requirements);
+      }
+      if (job.screening_questions && typeof job.screening_questions === 'string') {
+        job.screening_questions = JSON.parse(job.screening_questions);
+      }
+      if (job.documents && typeof job.documents === 'string') {
+        job.documents = JSON.parse(job.documents);
+      }
 
-    // ✅ Ensure default structure if empty
-    if (!job.education_required) {
-      const defaultEducation = {
-        minimum_degree: null,
-        fields_of_study: [],
-        certifications: [],
-        languages: [],
-        experience_requirements: [],
-        age_requirement: '',
-        no_experience_needed: false,
-        no_languages_needed: false,
-        no_certifications_needed: false,
-        no_documents_needed: false
-      };
-      job.education_required = defaultEducation;
-      job.educationLevel = defaultEducation;
-    }
+      // ✅ CRITICAL: Map education_required to educationLevel for frontend
+      job.educationLevel = job.education_required;
 
-    // Map other fields to frontend expected names
-    job.jobType = job.job_type;
-    job.workArrangement = job.work_arrangement;
-    job.experienceLevel = job.experience_level;
-    job.salaryCurrency = job.salary_currency;
-    job.salaryVisible = job.salary_visible;
-    job.publishedAt = job.published_at;
-    job.expiresAt = job.expires_at;
-    job.applicationLimit = job.application_limit;
-    job.screeningQuestions = job.screening_questions;
-    job.applicationInstructions = job.application_instructions;
-    job.requiredDocuments = job.documents;
+      // ✅ Ensure default structure if empty
+      if (!job.education_required) {
+        const defaultEducation = {
+          minimum_degree: null,
+          fields_of_study: [],
+          certifications: [],
+          languages: [],
+          experience_requirements: [],
+          age_requirement: '',
+          no_experience_needed: false,
+          no_languages_needed: false,
+          no_certifications_needed: false,
+          no_documents_needed: false
+        };
+        job.education_required = defaultEducation;
+        job.educationLevel = defaultEducation;
+      }
 
-    // Increment view count
-    await DatabaseService.execute(
-      'UPDATE jobs SET view_count = view_count + 1 WHERE id = $1',
-      [id]
-    );
+      // Map other fields to frontend expected names
+      job.jobType = job.job_type;
+      job.workArrangement = job.work_arrangement;
+      job.experienceLevel = job.experience_level;
+      job.salaryCurrency = job.salary_currency;
+      job.salaryVisible = job.salary_visible;
+      job.publishedAt = job.published_at;
+      job.expiresAt = job.expires_at;
+      job.applicationLimit = job.application_limit;
+      job.screeningQuestions = job.screening_questions;
+      job.applicationInstructions = job.application_instructions;
+      job.requiredDocuments = job.documents;
 
-    // Get skills for this job
-    const skills = await DatabaseService.execute(`
+      // Increment view count
+      await DatabaseService.execute(
+        'UPDATE jobs SET view_count = view_count + 1 WHERE id = $1',
+        [id]
+      );
+
+      // Get skills for this job
+      const skills = await DatabaseService.execute(`
       SELECT s.id, s.name, s.category, js.proficiency_level, js.is_required, js.importance
       FROM job_skills js
       JOIN skills s ON js.skill_id = s.id
@@ -471,112 +471,112 @@ async getJob(req: Request, res: Response): Promise<void> {
       ORDER BY js.is_required DESC, js.importance DESC, s.name
     `, [id]);
 
-    const storedRequiredSkills = Array.isArray(job.skills_required) ? job.skills_required : [];
-    const storedPreferredSkills = Array.isArray(job.skills_preferred) ? job.skills_preferred : [];
-    const joinedRequiredSkills = skills.rows.filter((s: any) => s.is_required === true);
-    const joinedPreferredSkills = skills.rows.filter((s: any) => s.is_required === false);
+      const storedRequiredSkills = Array.isArray(job.skills_required) ? job.skills_required : [];
+      const storedPreferredSkills = Array.isArray(job.skills_preferred) ? job.skills_preferred : [];
+      const joinedRequiredSkills = skills.rows.filter((s: any) => s.is_required === true);
+      const joinedPreferredSkills = skills.rows.filter((s: any) => s.is_required === false);
 
-    job.skills = skills.rows.length > 0 ? skills.rows : [...storedRequiredSkills, ...storedPreferredSkills];
-    job.skills_required = joinedRequiredSkills.length > 0 ? joinedRequiredSkills : storedRequiredSkills;
-    job.skills_preferred = joinedPreferredSkills.length > 0 ? joinedPreferredSkills : storedPreferredSkills;
-    
-    // Map skills fields
-    job.requiredSkills = job.skills_required;
-    job.preferredSkills = job.skills_preferred;
+      job.skills = skills.rows.length > 0 ? skills.rows : [...storedRequiredSkills, ...storedPreferredSkills];
+      job.skills_required = joinedRequiredSkills.length > 0 ? joinedRequiredSkills : storedRequiredSkills;
+      job.skills_preferred = joinedPreferredSkills.length > 0 ? joinedPreferredSkills : storedPreferredSkills;
 
-    this.sendSuccess(res, job);
-  } catch (error) {
-    logger.error('Error fetching job:', error);
-    this.sendError(res, 'Failed to fetch job', 500, error as Error);
+      // Map skills fields
+      job.requiredSkills = job.skills_required;
+      job.preferredSkills = job.skills_preferred;
+
+      this.sendSuccess(res, job);
+    } catch (error) {
+      logger.error('Error fetching job:', error);
+      this.sendError(res, 'Failed to fetch job', 500, error as Error);
+    }
   }
-}
 
- async createJob(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    logger.info('========== CREATE JOB START ==========');
-    
-    const jobData = req.body;
-    logger.info('Received job data:', JSON.stringify(jobData, null, 2));
-    
-    let companyId: string | null = null;
-    const userId = req.user?.id;
-    
-    if (!userId) {
-      this.sendError(res, 'User not authenticated', 401);
-      return;
-    }
-    
-    // For company admins and recruiters, lookup company from company_team table first
-    if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
-      const teamResult = await DatabaseService.execute(
-        'SELECT company_id FROM company_team WHERE user_id = $1',
-        [userId]
-      );
-      if (teamResult.rows.length > 0) {
-        companyId = teamResult.rows[0].company_id;
-      } else {
-        companyId = req.user.company_id ? String(req.user.company_id) : null;
+  async createJob(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      logger.info('========== CREATE JOB START ==========');
+
+      const jobData = req.body;
+      logger.info('Received job data:', JSON.stringify(jobData, null, 2));
+
+      let companyId: string | null = null;
+      const userId = req.user?.id;
+
+      if (!userId) {
+        this.sendError(res, 'User not authenticated', 401);
+        return;
       }
-    }
-    
-    if (!companyId) {
-      this.sendError(res, 'No company found for this user', 404);
-      return;
-    }
-    
-    if (!jobData.title || !jobData.description) {
-      this.sendError(res, 'Title and description are required', 400);
-      return;
-    }
 
-    const normalizedJobType = this.normalizeJobType(jobData.jobType);
-    const normalizedWorkArrangement = this.normalizeWorkArrangement(jobData.workArrangement);
-    const normalizedExperienceLevel = this.normalizeExperienceLevel(jobData.experienceLevel);
-    
-    let publishedAt = null;
-    let expiresAt = null;
-    let postingDuration = jobData.postingDuration || 30;
-    
-    const status = jobData.status || 'draft';
-    
-    if (status === 'active') {
-      publishedAt = jobData.publishedAt ? new Date(jobData.publishedAt) : new Date();
-      expiresAt = jobData.expiresAt 
-        ? new Date(jobData.expiresAt) 
-        : new Date(publishedAt.getTime() + postingDuration * 24 * 60 * 60 * 1000);
-    }
+      // For company admins and recruiters, lookup company from company_team table first
+      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+        const teamResult = await DatabaseService.execute(
+          'SELECT company_id FROM company_team WHERE user_id = $1',
+          [userId]
+        );
+        if (teamResult.rows.length > 0) {
+          companyId = teamResult.rows[0].company_id;
+        } else {
+          companyId = req.user.company_id ? String(req.user.company_id) : null;
+        }
+      }
 
-    const slug = this.generateSlug(jobData.title);
-    
-    const existingJob = await DatabaseService.execute(
-      'SELECT id FROM jobs WHERE slug = $1',
-      [slug]
-    );
-    const finalSlug = existingJob.rows.length > 0 ? `${slug}-${Date.now()}` : slug;
+      if (!companyId) {
+        this.sendError(res, 'No company found for this user', 404);
+        return;
+      }
 
-    const locations = this.normalizeArrayField(jobData.locations);
-    const responsibilities = this.normalizeArrayField(jobData.responsibilities);
-    const requirements = this.normalizeArrayField(jobData.requirements);
-    const benefits = this.normalizeArrayField(jobData.benefits);
-    const skillsRequired = this.normalizeArrayField(jobData.requiredSkills);
-    const skillsPreferred = this.normalizeArrayField(jobData.preferredSkills);
-    const screeningQuestions = this.normalizeArrayField(jobData.screeningQuestions);
-    const documents = this.normalizeArrayField(jobData.requiredDocuments);
-    const tags = this.normalizeArrayField(jobData.tags);
-    const educationRequired = this.normalizeEducationRequirements(jobData.educationLevel);
-    const languageRequirements = this.normalizeArrayField(
-      jobData.languageRequirements ?? educationRequired.languages
-    );
-    const experienceRequirements = this.normalizeArrayField(
-      jobData.experienceRequirements ?? educationRequired.experience_requirements
-    );
-    const allSkills = this.normalizeJobSkillEntries(skillsRequired, skillsPreferred);
+      if (!jobData.title || !jobData.description) {
+        this.sendError(res, 'Title and description are required', 400);
+        return;
+      }
 
-    // Get AI match score (default to 70 if not provided)
-    const aiMatchRequiredScore = jobData.aiMatchRequiredScore ?? 70;
+      const normalizedJobType = this.normalizeJobType(jobData.jobType);
+      const normalizedWorkArrangement = this.normalizeWorkArrangement(jobData.workArrangement);
+      const normalizedExperienceLevel = this.normalizeExperienceLevel(jobData.experienceLevel);
 
-    const job = await this.withTransaction(async (client) => {
-      const jobResult = await client.query(`
+      let publishedAt = null;
+      let expiresAt = null;
+      let postingDuration = jobData.postingDuration || 30;
+
+      const status = jobData.status || 'draft';
+
+      if (status === 'active') {
+        publishedAt = jobData.publishedAt ? new Date(jobData.publishedAt) : new Date();
+        expiresAt = jobData.expiresAt
+          ? new Date(jobData.expiresAt)
+          : new Date(publishedAt.getTime() + postingDuration * 24 * 60 * 60 * 1000);
+      }
+
+      const slug = this.generateSlug(jobData.title);
+
+      const existingJob = await DatabaseService.execute(
+        'SELECT id FROM jobs WHERE slug = $1',
+        [slug]
+      );
+      const finalSlug = existingJob.rows.length > 0 ? `${slug}-${Date.now()}` : slug;
+
+      const locations = this.normalizeArrayField(jobData.locations);
+      const responsibilities = this.normalizeArrayField(jobData.responsibilities);
+      const requirements = this.normalizeArrayField(jobData.requirements);
+      const benefits = this.normalizeArrayField(jobData.benefits);
+      const skillsRequired = this.normalizeArrayField(jobData.requiredSkills);
+      const skillsPreferred = this.normalizeArrayField(jobData.preferredSkills);
+      const screeningQuestions = this.normalizeArrayField(jobData.screeningQuestions);
+      const documents = this.normalizeArrayField(jobData.requiredDocuments);
+      const tags = this.normalizeArrayField(jobData.tags);
+      const educationRequired = this.normalizeEducationRequirements(jobData.educationLevel);
+      const languageRequirements = this.normalizeArrayField(
+        jobData.languageRequirements ?? educationRequired.languages
+      );
+      const experienceRequirements = this.normalizeArrayField(
+        jobData.experienceRequirements ?? educationRequired.experience_requirements
+      );
+      const allSkills = this.normalizeJobSkillEntries(skillsRequired, skillsPreferred);
+
+      // Get AI match score (default to 70 if not provided)
+      const aiMatchRequiredScore = jobData.aiMatchRequiredScore ?? 70;
+
+      const job = await this.withTransaction(async (client) => {
+        const jobResult = await client.query(`
         INSERT INTO jobs (
           company_id, created_by, title, slug, department, job_type, work_arrangement,
           locations, description, responsibilities, requirements, salary_min, 
@@ -591,131 +591,131 @@ async getJob(req: Request, res: Response): Promise<void> {
                   NOW(), NOW())
         RETURNING *
       `, [
-        companyId,
-        userId,
-        jobData.title,
-        finalSlug,
-        jobData.department || null,
-        normalizedJobType,
-        normalizedWorkArrangement,
-        JSON.stringify(locations),
-        jobData.description,
-        JSON.stringify(responsibilities),
-        JSON.stringify(requirements),
-        jobData.salaryMin || null,
-        jobData.salaryMax || null,
-        jobData.salaryCurrency || 'Rwf',
-        jobData.salaryVisible !== false,
-        JSON.stringify(benefits),
-        status,
-        jobData.visibility || 'public',
-        publishedAt,
-        expiresAt,
-        this.normalizeApplicationLimit(jobData.applicationLimit),
-        JSON.stringify(screeningQuestions),
-        JSON.stringify({ 
-          method: jobData.applicationMethod || 'platform', 
-          instructions: jobData.applicationInstructions || null,
-          documents: documents 
-        }),
-        JSON.stringify(skillsRequired),
-        JSON.stringify(skillsPreferred),
-        JSON.stringify(documents),
-        tags,
-        JSON.stringify(educationRequired),
-        JSON.stringify(languageRequirements),
-        JSON.stringify(experienceRequirements),
-        normalizedExperienceLevel,
-        jobData.experienceMin || null,
-        jobData.experienceMax || null,
-        aiMatchRequiredScore
-      ]);
-      
-      return jobResult.rows[0];
-    });
+          companyId,
+          userId,
+          jobData.title,
+          finalSlug,
+          jobData.department || null,
+          normalizedJobType,
+          normalizedWorkArrangement,
+          JSON.stringify(locations),
+          jobData.description,
+          JSON.stringify(responsibilities),
+          JSON.stringify(requirements),
+          jobData.salaryMin || null,
+          jobData.salaryMax || null,
+          jobData.salaryCurrency || 'Rwf',
+          jobData.salaryVisible !== false,
+          JSON.stringify(benefits),
+          status,
+          jobData.visibility || 'public',
+          publishedAt,
+          expiresAt,
+          this.normalizeApplicationLimit(jobData.applicationLimit),
+          JSON.stringify(screeningQuestions),
+          JSON.stringify({
+            method: jobData.applicationMethod || 'platform',
+            instructions: jobData.applicationInstructions || null,
+            documents: documents
+          }),
+          JSON.stringify(skillsRequired),
+          JSON.stringify(skillsPreferred),
+          JSON.stringify(documents),
+          tags,
+          JSON.stringify(educationRequired),
+          JSON.stringify(languageRequirements),
+          JSON.stringify(experienceRequirements),
+          normalizedExperienceLevel,
+          jobData.experienceMin || null,
+          jobData.experienceMax || null,
+          aiMatchRequiredScore
+        ]);
 
-    if (allSkills.length > 0) {
-      await this.insertJobSkills(job.id, allSkills);
+        return jobResult.rows[0];
+      });
+
+      if (allSkills.length > 0) {
+        await this.insertJobSkills(job.id, allSkills);
+      }
+
+      logger.info('========== CREATE JOB SUCCESS ==========');
+
+      this.sendSuccess(res, job, 'Job created successfully', 201);
+    } catch (error) {
+      logger.error('========== CREATE JOB ERROR ==========');
+      logger.error('Error creating job:', error);
+      this.sendError(res, 'Failed to create job: ' + (error as Error).message, 500, error as Error);
     }
-
-    logger.info('========== CREATE JOB SUCCESS ==========');
-    
-    this.sendSuccess(res, job, 'Job created successfully', 201);
-  } catch (error) {
-    logger.error('========== CREATE JOB ERROR ==========');
-    logger.error('Error creating job:', error);
-    this.sendError(res, 'Failed to create job: ' + (error as Error).message, 500, error as Error);
   }
-}
 
   async updateJob(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      this.sendError(res, 'Job ID is required', 400);
-      return;
-    }
+    try {
+      const { id } = req.params;
+      if (!id) {
+        this.sendError(res, 'Job ID is required', 400);
+        return;
+      }
 
-    const existingJob = await this.findById('jobs', id);
-    if (!existingJob) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
+      const existingJob = await this.findById('jobs', id);
+      if (!existingJob) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
 
-    if (!this.canEditJob(req.user, existingJob)) {
-      this.sendError(res, 'Unauthorized to edit this job', 403);
-      return;
-    }
+      if (!this.canEditJob(req.user, existingJob)) {
+        this.sendError(res, 'Unauthorized to edit this job', 403);
+        return;
+      }
 
-    const jobData = req.body;
+      const jobData = req.body;
 
-    let publishedAt = existingJob.published_at;
-    let expiresAt = existingJob.expires_at;
-    let postingDuration = jobData.postingDuration || 30;
-    
-    const newStatus = jobData.status || existingJob.status;
-    
-    if (newStatus === 'active' && existingJob.status !== 'active') {
-      publishedAt = new Date();
-      expiresAt = new Date(Date.now() + postingDuration * 24 * 60 * 60 * 1000);
-    } else if (jobData.publishedAt) {
-      publishedAt = new Date(jobData.publishedAt);
-      if (jobData.expiresAt) {
+      let publishedAt = existingJob.published_at;
+      let expiresAt = existingJob.expires_at;
+      let postingDuration = jobData.postingDuration || 30;
+
+      const newStatus = jobData.status || existingJob.status;
+
+      if (newStatus === 'active' && existingJob.status !== 'active') {
+        publishedAt = new Date();
+        expiresAt = new Date(Date.now() + postingDuration * 24 * 60 * 60 * 1000);
+      } else if (jobData.publishedAt) {
+        publishedAt = new Date(jobData.publishedAt);
+        if (jobData.expiresAt) {
+          expiresAt = new Date(jobData.expiresAt);
+        }
+      } else if (jobData.expiresAt) {
         expiresAt = new Date(jobData.expiresAt);
       }
-    } else if (jobData.expiresAt) {
-      expiresAt = new Date(jobData.expiresAt);
-    }
 
-    const normalizedJobType = this.normalizeJobType(jobData.jobType || existingJob.job_type);
-    const normalizedWorkArrangement = this.normalizeWorkArrangement(jobData.workArrangement || existingJob.work_arrangement);
-    const normalizedExperienceLevel = this.normalizeExperienceLevel(jobData.experienceLevel || existingJob.experience_level);
+      const normalizedJobType = this.normalizeJobType(jobData.jobType || existingJob.job_type);
+      const normalizedWorkArrangement = this.normalizeWorkArrangement(jobData.workArrangement || existingJob.work_arrangement);
+      const normalizedExperienceLevel = this.normalizeExperienceLevel(jobData.experienceLevel || existingJob.experience_level);
 
-    const locations = this.normalizeArrayField(jobData.locations || existingJob.locations);
-    const responsibilities = this.normalizeArrayField(jobData.responsibilities || existingJob.responsibilities);
-    const requirements = this.normalizeArrayField(jobData.requirements || existingJob.requirements);
-    const benefits = this.normalizeArrayField(jobData.benefits || existingJob.benefits);
-    const skillsRequired = this.normalizeArrayField(jobData.requiredSkills || existingJob.skills_required);
-    const skillsPreferred = this.normalizeArrayField(jobData.preferredSkills || existingJob.skills_preferred);
-    const screeningQuestions = this.normalizeArrayField(jobData.screeningQuestions || existingJob.screening_questions);
-    const documents = this.normalizeArrayField(jobData.requiredDocuments || existingJob.documents);
-    const tags = this.normalizeArrayField(jobData.tags || existingJob.tags);
-    const educationRequired = this.normalizeEducationRequirements(jobData.educationLevel || existingJob.education_required);
-    const languageRequirements = this.normalizeArrayField(
-      jobData.languageRequirements ?? educationRequired.languages ?? existingJob.language_requirements
-    );
-    const experienceRequirements = this.normalizeArrayField(
-      jobData.experienceRequirements ?? educationRequired.experience_requirements ?? existingJob.experience_requirements
-    );
-    const allSkills = this.normalizeJobSkillEntries(skillsRequired, skillsPreferred);
+      const locations = this.normalizeArrayField(jobData.locations || existingJob.locations);
+      const responsibilities = this.normalizeArrayField(jobData.responsibilities || existingJob.responsibilities);
+      const requirements = this.normalizeArrayField(jobData.requirements || existingJob.requirements);
+      const benefits = this.normalizeArrayField(jobData.benefits || existingJob.benefits);
+      const skillsRequired = this.normalizeArrayField(jobData.requiredSkills || existingJob.skills_required);
+      const skillsPreferred = this.normalizeArrayField(jobData.preferredSkills || existingJob.skills_preferred);
+      const screeningQuestions = this.normalizeArrayField(jobData.screeningQuestions || existingJob.screening_questions);
+      const documents = this.normalizeArrayField(jobData.requiredDocuments || existingJob.documents);
+      const tags = this.normalizeArrayField(jobData.tags || existingJob.tags);
+      const educationRequired = this.normalizeEducationRequirements(jobData.educationLevel || existingJob.education_required);
+      const languageRequirements = this.normalizeArrayField(
+        jobData.languageRequirements ?? educationRequired.languages ?? existingJob.language_requirements
+      );
+      const experienceRequirements = this.normalizeArrayField(
+        jobData.experienceRequirements ?? educationRequired.experience_requirements ?? existingJob.experience_requirements
+      );
+      const allSkills = this.normalizeJobSkillEntries(skillsRequired, skillsPreferred);
 
-    // Get AI match score (default to existing or 70)
-    const aiMatchRequiredScore = jobData.aiMatchRequiredScore !== undefined 
-      ? jobData.aiMatchRequiredScore 
-      : (existingJob.ai_match_required_score ?? 70);
+      // Get AI match score (default to existing or 70)
+      const aiMatchRequiredScore = jobData.aiMatchRequiredScore !== undefined
+        ? jobData.aiMatchRequiredScore
+        : (existingJob.ai_match_required_score ?? 70);
 
-    const updatedJob = await this.withTransaction(async (client) => {
-      const jobResult = await client.query(`
+      const updatedJob = await this.withTransaction(async (client) => {
+        const jobResult = await client.query(`
         UPDATE jobs SET
           title = $1, 
           department = $2, 
@@ -752,100 +752,100 @@ async getJob(req: Request, res: Response): Promise<void> {
         WHERE id = $32
         RETURNING *
       `, [
-        jobData.title || existingJob.title,
-        jobData.department || existingJob.department,
-        normalizedJobType,
-        normalizedWorkArrangement,
-        JSON.stringify(locations),
-        jobData.description || existingJob.description,
-        JSON.stringify(responsibilities),
-        JSON.stringify(requirements),
-        jobData.salaryMin !== undefined ? jobData.salaryMin : existingJob.salary_min,
-        jobData.salaryMax !== undefined ? jobData.salaryMax : existingJob.salary_max,
-        jobData.salaryCurrency || existingJob.salary_currency || 'Rwf',
-        jobData.salaryVisible !== undefined ? jobData.salaryVisible : existingJob.salary_visible,
-        JSON.stringify(benefits),
-        newStatus,
-        jobData.visibility || existingJob.visibility || 'public',
-        publishedAt,
-        expiresAt,
-        this.normalizeApplicationLimit(jobData.applicationLimit) !== undefined 
-          ? this.normalizeApplicationLimit(jobData.applicationLimit) 
-          : existingJob.application_limit,
-        JSON.stringify(screeningQuestions),
-        JSON.stringify({ 
-          method: jobData.applicationMethod || 'platform', 
-          instructions: jobData.applicationInstructions || null,
-          documents: documents 
-        }),
-        JSON.stringify(skillsRequired),
-        JSON.stringify(skillsPreferred),
-        JSON.stringify(documents),
-        tags,
-        JSON.stringify(educationRequired),
-        JSON.stringify(languageRequirements),
-        JSON.stringify(experienceRequirements),
-        normalizedExperienceLevel,
-        jobData.experienceMin !== undefined ? jobData.experienceMin : existingJob.experience_min,
-        jobData.experienceMax !== undefined ? jobData.experienceMax : existingJob.experience_max,
-        aiMatchRequiredScore,
-        id
-      ]);
+          jobData.title || existingJob.title,
+          jobData.department || existingJob.department,
+          normalizedJobType,
+          normalizedWorkArrangement,
+          JSON.stringify(locations),
+          jobData.description || existingJob.description,
+          JSON.stringify(responsibilities),
+          JSON.stringify(requirements),
+          jobData.salaryMin !== undefined ? jobData.salaryMin : existingJob.salary_min,
+          jobData.salaryMax !== undefined ? jobData.salaryMax : existingJob.salary_max,
+          jobData.salaryCurrency || existingJob.salary_currency || 'Rwf',
+          jobData.salaryVisible !== undefined ? jobData.salaryVisible : existingJob.salary_visible,
+          JSON.stringify(benefits),
+          newStatus,
+          jobData.visibility || existingJob.visibility || 'public',
+          publishedAt,
+          expiresAt,
+          this.normalizeApplicationLimit(jobData.applicationLimit) !== undefined
+            ? this.normalizeApplicationLimit(jobData.applicationLimit)
+            : existingJob.application_limit,
+          JSON.stringify(screeningQuestions),
+          JSON.stringify({
+            method: jobData.applicationMethod || 'platform',
+            instructions: jobData.applicationInstructions || null,
+            documents: documents
+          }),
+          JSON.stringify(skillsRequired),
+          JSON.stringify(skillsPreferred),
+          JSON.stringify(documents),
+          tags,
+          JSON.stringify(educationRequired),
+          JSON.stringify(languageRequirements),
+          JSON.stringify(experienceRequirements),
+          normalizedExperienceLevel,
+          jobData.experienceMin !== undefined ? jobData.experienceMin : existingJob.experience_min,
+          jobData.experienceMax !== undefined ? jobData.experienceMax : existingJob.experience_max,
+          aiMatchRequiredScore,
+          id
+        ]);
 
-      return jobResult.rows[0];
-    });
+        return jobResult.rows[0];
+      });
 
-    // Update skills if needed
-    if (jobData.requiredSkills !== undefined || jobData.preferredSkills !== undefined) {
-      try {
-        await DatabaseService.execute('DELETE FROM job_skills WHERE job_id = $1', [id]);
-        if (allSkills.length > 0) {
-          await this.insertJobSkills(id, allSkills);
+      // Update skills if needed
+      if (jobData.requiredSkills !== undefined || jobData.preferredSkills !== undefined) {
+        try {
+          await DatabaseService.execute('DELETE FROM job_skills WHERE job_id = $1', [id]);
+          if (allSkills.length > 0) {
+            await this.insertJobSkills(id, allSkills);
+          }
+        } catch (skillsError) {
+          logger.error('Error updating job skills:', skillsError);
+          // Don't fail the whole update - just log the error
         }
-      } catch (skillsError) {
-        logger.error('Error updating job skills:', skillsError);
-        // Don't fail the whole update - just log the error
       }
-    }
 
-    this.sendSuccess(res, updatedJob, 'Job updated successfully');
-  } catch (error) {
-    logger.error('Error updating job:', error);
-    this.sendError(res, 'Failed to update job: ' + (error as Error).message, 500, error as Error);
+      this.sendSuccess(res, updatedJob, 'Job updated successfully');
+    } catch (error) {
+      logger.error('Error updating job:', error);
+      this.sendError(res, 'Failed to update job: ' + (error as Error).message, 500, error as Error);
+    }
   }
-}
 
- async deleteJob(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
-    if (!id) {
-      this.sendError(res, 'Job ID is required', 400);
-      return;
+  async deleteJob(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        this.sendError(res, 'Job ID is required', 400);
+        return;
+      }
+
+      const existingJob = await this.findById('jobs', id);
+      if (!existingJob) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
+
+      if (!this.canEditJob(req.user, existingJob)) {
+        this.sendError(res, 'Unauthorized to delete this job', 403);
+        return;
+      }
+
+      // ✅ FIX: Use 'archived' which is a valid status in CHECK constraint
+      await DatabaseService.execute(
+        'UPDATE jobs SET status = $1, updated_at = NOW() WHERE id = $2',
+        ['archived', id]
+      );
+
+      this.sendSuccess(res, null, 'Job deleted successfully');
+    } catch (error) {
+      logger.error('Error deleting job:', error);
+      this.sendError(res, 'Failed to delete job', 500, error as Error);
     }
-
-    const existingJob = await this.findById('jobs', id);
-    if (!existingJob) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
-
-    if (!this.canEditJob(req.user, existingJob)) {
-      this.sendError(res, 'Unauthorized to delete this job', 403);
-      return;
-    }
-
-    // ✅ FIX: Use 'archived' which is a valid status in CHECK constraint
-    await DatabaseService.execute(
-      'UPDATE jobs SET status = $1, updated_at = NOW() WHERE id = $2',
-      ['archived', id]
-    );
-
-    this.sendSuccess(res, null, 'Job deleted successfully');
-  } catch (error) {
-    logger.error('Error deleting job:', error);
-    this.sendError(res, 'Failed to delete job', 500, error as Error);
   }
-}
   async duplicateJob(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -932,39 +932,39 @@ async getJob(req: Request, res: Response): Promise<void> {
   }
 
   async getMyJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { page = '1', limit = '20' } = req.query as { page?: string; limit?: string };
-    const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
+    try {
+      const { page = '1', limit = '20' } = req.query as { page?: string; limit?: string };
+      const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
 
-    let companyId: string | null = null;
-    
-    // Use company from company_team table first, fallback to token
-    if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
-      // Always lookup from company_team table to ensure correct company
-      const teamResult = await DatabaseService.execute(
-        'SELECT company_id FROM company_team WHERE user_id = $1',
-        [req.user.id]
-      );
-      if (teamResult.rows.length > 0) {
-        companyId = teamResult.rows[0].company_id;
-      } else {
-        // Fallback to token company_id if not found in company_team
-        companyId = req.user.company_id ? String(req.user.company_id) : null;
+      let companyId: string | null = null;
+
+      // Use company from company_team table first, fallback to token
+      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+        // Always lookup from company_team table to ensure correct company
+        const teamResult = await DatabaseService.execute(
+          'SELECT company_id FROM company_team WHERE user_id = $1',
+          [req.user.id]
+        );
+        if (teamResult.rows.length > 0) {
+          companyId = teamResult.rows[0].company_id;
+        } else {
+          // Fallback to token company_id if not found in company_team
+          companyId = req.user.company_id ? String(req.user.company_id) : null;
+        }
       }
-    }
 
-    if (!companyId) {
-      this.sendSuccess(res, { 
-        data: [], 
-        pagination: PaginationService.getPaginationMeta(0, validPage, validLimit) 
-      });
-      return;
-    }
+      if (!companyId) {
+        this.sendSuccess(res, {
+          data: [],
+          pagination: PaginationService.getPaginationMeta(0, validPage, validLimit)
+        });
+        return;
+      }
 
-    const offset = (validPage - 1) * validLimit;
-    
-    // ✅ FIX: Exclude archived jobs from the list
-    const result = await DatabaseService.execute(`
+      const offset = (validPage - 1) * validLimit;
+
+      // ✅ FIX: Exclude archived jobs from the list
+      const result = await DatabaseService.execute(`
       SELECT *
       FROM jobs
       WHERE company_id = $1
@@ -983,28 +983,28 @@ async getJob(req: Request, res: Response): Promise<void> {
       LIMIT $2 OFFSET $3
     `, [companyId, validLimit, offset]);
 
-    // ✅ FIX: Count only non-archived jobs
-    const countResult = await DatabaseService.execute(
-      `SELECT COUNT(*) as total 
+      // ✅ FIX: Count only non-archived jobs
+      const countResult = await DatabaseService.execute(
+        `SELECT COUNT(*) as total 
        FROM jobs 
        WHERE company_id = $1 
          AND status != 'archived' 
          AND status != 'deleted'`,
-      [companyId]
-    );
-    const total = parseInt(countResult.rows[0]?.total || '0');
+        [companyId]
+      );
+      const total = parseInt(countResult.rows[0]?.total || '0');
 
-    const paginationMeta = PaginationService.getPaginationMeta(total, validPage, validLimit);
+      const paginationMeta = PaginationService.getPaginationMeta(total, validPage, validLimit);
 
-    this.sendSuccess(res, {
-      data: result.rows,
-      pagination: paginationMeta
-    });
-  } catch (error) {
-    logger.error('Error fetching my jobs:', error);
-    this.sendError(res, 'Failed to fetch your jobs', 500, error as Error);
+      this.sendSuccess(res, {
+        data: result.rows,
+        pagination: paginationMeta
+      });
+    } catch (error) {
+      logger.error('Error fetching my jobs:', error);
+      this.sendError(res, 'Failed to fetch your jobs', 500, error as Error);
+    }
   }
-}
 
   async saveAsDraft(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -1102,7 +1102,7 @@ async getJob(req: Request, res: Response): Promise<void> {
       }
 
       let companyId: string | null = null;
-      
+
       // Use company from company_team table first, fallback to token
       if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
         // Always lookup from company_team table to ensure correct company
@@ -1124,7 +1124,7 @@ async getJob(req: Request, res: Response): Promise<void> {
       }
 
       const slug = this.generateSlug(jobData.title);
-      
+
       const existingJob = await DatabaseService.execute(
         'SELECT id FROM jobs WHERE slug = $1',
         [slug]
@@ -1164,9 +1164,9 @@ async getJob(req: Request, res: Response): Promise<void> {
           jobData.visibility || 'public',
           this.normalizeApplicationLimit(jobData.applicationLimit),
           JSON.stringify(this.normalizeArrayField(jobData.screeningQuestions)),
-          JSON.stringify({ 
-            method: jobData.applicationMethod || 'platform', 
-            documents: this.normalizeArrayField(jobData.requiredDocuments) 
+          JSON.stringify({
+            method: jobData.applicationMethod || 'platform',
+            documents: this.normalizeArrayField(jobData.requiredDocuments)
           }),
           JSON.stringify(this.normalizeArrayField(jobData.requiredSkills)),
           JSON.stringify(this.normalizeArrayField(jobData.requiredDocuments)),
@@ -1263,8 +1263,8 @@ async getJob(req: Request, res: Response): Promise<void> {
         WHERE id = $2
       `, [JSON.stringify(educationRequired), id]);
 
-      this.sendSuccess(res, { 
-        education_required: educationRequired 
+      this.sendSuccess(res, {
+        education_required: educationRequired
       }, 'Education requirements updated successfully');
     } catch (error) {
       logger.error('Error updating education requirements:', error);
@@ -1409,7 +1409,7 @@ async getJob(req: Request, res: Response): Promise<void> {
 
       const status = paused ? 'paused' : 'active';
       const pausedAt = paused ? new Date() : null;
-      
+
       await DatabaseService.execute(
         'UPDATE jobs SET status = $1, paused_at = $2, updated_at = NOW() WHERE id = $3',
         [status, pausedAt, id]
@@ -1462,38 +1462,38 @@ async getJob(req: Request, res: Response): Promise<void> {
     }
   }
 
- async archiveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
+  async archiveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
 
-    if (!id) {
-      this.sendError(res, 'Job ID is required', 400);
-      return;
+      if (!id) {
+        this.sendError(res, 'Job ID is required', 400);
+        return;
+      }
+
+      const existingJob = await this.findById('jobs', id);
+      if (!existingJob) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
+
+      if (!this.canEditJob(req.user, existingJob)) {
+        this.sendError(res, 'Unauthorized to archive this job', 403);
+        return;
+      }
+
+      // ✅ FIX: Use 'status' column
+      await DatabaseService.execute(
+        'UPDATE jobs SET status = $1, closed_at = NOW(), updated_at = NOW() WHERE id = $2',
+        ['archived', id]
+      );
+
+      this.sendSuccess(res, null, 'Job archived successfully');
+    } catch (error) {
+      logger.error('Error archiving job:', error);
+      this.sendError(res, 'Failed to archive job', 500, error as Error);
     }
-
-    const existingJob = await this.findById('jobs', id);
-    if (!existingJob) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
-
-    if (!this.canEditJob(req.user, existingJob)) {
-      this.sendError(res, 'Unauthorized to archive this job', 403);
-      return;
-    }
-
-    // ✅ FIX: Use 'status' column
-    await DatabaseService.execute(
-      'UPDATE jobs SET status = $1, closed_at = NOW(), updated_at = NOW() WHERE id = $2',
-      ['archived', id]
-    );
-
-    this.sendSuccess(res, null, 'Job archived successfully');
-  } catch (error) {
-    logger.error('Error archiving job:', error);
-    this.sendError(res, 'Failed to archive job', 500, error as Error);
   }
-}
 
   async setJobAccessLevel(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -1543,7 +1543,7 @@ async getJob(req: Request, res: Response): Promise<void> {
       const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
 
       const offset = (validPage - 1) * validLimit;
-      
+
       const query = `
         SELECT j.*, c.name as company_name, c.logo_url
         FROM jobs j
@@ -1554,9 +1554,9 @@ async getJob(req: Request, res: Response): Promise<void> {
         ORDER BY j.created_at DESC
         LIMIT $2 OFFSET $3
       `;
-      
+
       const result = await DatabaseService.execute(query, [`%${location}%`, validLimit, offset]);
-      
+
       const countResult = await DatabaseService.execute(
         `SELECT COUNT(*) as total FROM jobs j
          WHERE j.status = 'active' 
@@ -1564,7 +1564,7 @@ async getJob(req: Request, res: Response): Promise<void> {
          AND j.locations::text ILIKE $1`,
         [`%${location}%`]
       );
-      
+
       const total = parseInt(countResult.rows[0]?.total || '0');
       const paginationMeta = PaginationService.getPaginationMeta(total, validPage, validLimit);
 
@@ -1610,7 +1610,7 @@ async getJob(req: Request, res: Response): Promise<void> {
       params.push(validLimit, (validPage - 1) * validLimit);
 
       const result = await DatabaseService.execute(query, params);
-      
+
       this.sendSuccess(res, { data: result.rows, pagination: { page: validPage, limit: validLimit, total: result.rows.length } });
     } catch (error) {
       logger.error('Error filtering by salary:', error);
@@ -1624,7 +1624,7 @@ async getJob(req: Request, res: Response): Promise<void> {
       const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
 
       const offset = (validPage - 1) * validLimit;
-      
+
       const result = await DatabaseService.execute(`
         SELECT j.*, c.name as company_name, c.logo_url
         FROM jobs j
@@ -1640,7 +1640,7 @@ async getJob(req: Request, res: Response): Promise<void> {
         SELECT COUNT(*) as total FROM jobs
         WHERE status = 'active' AND experience_level = $1
       `, [this.normalizeExperienceLevel(level)]);
-      
+
       const total = parseInt(countResult.rows[0]?.total || '0');
       const paginationMeta = PaginationService.getPaginationMeta(total, validPage, validLimit);
 
@@ -1871,8 +1871,8 @@ async getJob(req: Request, res: Response): Promise<void> {
           updated_at = NOW()
         WHERE id = $3
       `, [
-        JSON.stringify({ instructions, documents: normalizedDocuments }), 
-        JSON.stringify(normalizedDocuments), 
+        JSON.stringify({ instructions, documents: normalizedDocuments }),
+        JSON.stringify(normalizedDocuments),
         id
       ]);
 
@@ -2040,7 +2040,7 @@ async getJob(req: Request, res: Response): Promise<void> {
   // =====================================================
   // TEMPLATE & DEBUG METHODS
   // =====================================================
-  
+
   async getJobTemplates(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const templates = [
@@ -2313,17 +2313,17 @@ async getJob(req: Request, res: Response): Promise<void> {
   async debugUserCompany(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user?.id;
-      
+
       const userResult = await DatabaseService.execute(
         'SELECT id, email, user_type FROM users WHERE id = $1',
         [userId]
       );
-      
+
       const teamResult = await DatabaseService.execute(
         'SELECT * FROM company_team WHERE user_id = $1',
         [userId]
       );
-      
+
       let companyResult = null;
       if (userResult.rows[0]?.user_type === 'company_admin') {
         companyResult = await DatabaseService.execute(
@@ -2336,7 +2336,7 @@ async getJob(req: Request, res: Response): Promise<void> {
           [teamResult.rows[0].company_id]
         );
       }
-      
+
       let jobsResult = null;
       if (companyResult?.rows[0]?.id) {
         jobsResult = await DatabaseService.execute(
@@ -2344,7 +2344,7 @@ async getJob(req: Request, res: Response): Promise<void> {
           [companyResult.rows[0].id]
         );
       }
-      
+
       this.sendSuccess(res, {
         user: userResult.rows[0],
         team: teamResult.rows,
@@ -2385,57 +2385,57 @@ async getJob(req: Request, res: Response): Promise<void> {
     return { isValid: true };
   }
 
-private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
-  if (!user) return false;
-  
-  // System admin can edit any job
-  if (user.user_type === 'system_admin') return true;
-  
-  // User who created the job can edit it
-  if (user.id === job.created_by) return true;
-  
-  // Company admin or recruiter can edit jobs for their company
-  if (user.user_type === 'company_admin' || user.user_type === 'recruiter') {
-    // ✅ FIX: Use 'company_id' instead of 'companyId'
-    if (job.company_id && user.company_id === job.company_id) {
-      return true;
-    }
-    
-    // Additional check: verify team membership and permissions
-    try {
-      const teamResult = await DatabaseService.execute(
-        `SELECT id, role, permissions 
+  private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
+    if (!user) return false;
+
+    // System admin can edit any job
+    if (user.user_type === 'system_admin') return true;
+
+    // User who created the job can edit it
+    if (user.id === job.created_by) return true;
+
+    // Company admin or recruiter can edit jobs for their company
+    if (user.user_type === 'company_admin' || user.user_type === 'recruiter') {
+      // ✅ FIX: Use 'company_id' instead of 'companyId'
+      if (job.company_id && user.company_id === job.company_id) {
+        return true;
+      }
+
+      // Additional check: verify team membership and permissions
+      try {
+        const teamResult = await DatabaseService.execute(
+          `SELECT id, role, permissions 
          FROM company_team 
          WHERE user_id = $1 AND company_id = $2`,
-        [user.id, job.company_id]
-      );
-      
-      if (teamResult.rows.length > 0) {
-        const teamMember = teamResult.rows[0];
-        
-        // Admin role has full access
-        if (teamMember.role === 'admin') return true;
-        
-        // Recruiter role can edit jobs
-        if (teamMember.role === 'recruiter') return true;
-        
-        // Check permissions JSONB for can_post_jobs
-        if (teamMember.permissions && teamMember.permissions.can_post_jobs === true) {
-          return true;
+          [user.id, job.company_id]
+        );
+
+        if (teamResult.rows.length > 0) {
+          const teamMember = teamResult.rows[0];
+
+          // Admin role has full access
+          if (teamMember.role === 'admin') return true;
+
+          // Recruiter role can edit jobs
+          if (teamMember.role === 'recruiter') return true;
+
+          // Check permissions JSONB for can_post_jobs
+          if (teamMember.permissions && teamMember.permissions.can_post_jobs === true) {
+            return true;
+          }
         }
+      } catch (error) {
+        logger.error('Error checking team permissions:', error);
       }
-    } catch (error) {
-      logger.error('Error checking team permissions:', error);
     }
+
+    return false;
   }
-  
-  return false;
-}
 
   private async insertJobSkills(jobId: string, skills: any[]): Promise<void> {
     for (const skill of skills) {
       let skillId = skill.skill_id || skill.id;
-      
+
       if (!skillId && skill.name) {
         const skillResult = await DatabaseService.execute(
           `INSERT INTO skills (name, category, skill_type) 
@@ -2446,7 +2446,7 @@ private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
         );
         skillId = skillResult.rows[0].id;
       }
-      
+
       if (skillId) {
         await DatabaseService.execute(
           `INSERT INTO job_skills (job_id, skill_id, proficiency_level, is_required, importance) 
@@ -2472,33 +2472,33 @@ private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
   // =====================================================
   // CANDIDATE JOB BROWSING METHODS
   // =====================================================
-  
- async getJobsForCandidates(req: Request, res: Response): Promise<void> {
-  try {
-    const page = parseInt(req.query.page as string) || 1;
-    const limit = parseInt(req.query.limit as string) || 20;
-    
-    const validPage = Math.max(1, page);
-    const validLimit = Math.min(100, Math.max(1, limit));
-    const validOffset = (validPage - 1) * validLimit;
-    
-    const {
-      search,
-      location,
-      jobType,
-      workArrangement,
-      experienceLevel,
-      salaryMin,
-      salaryMax,
-      industry,
-      skills,
-      sortBy = 'recent'
-    } = req.query;
 
-    // ============================================
-    // COMPLETE JOB FIELDS FROM SCHEMA
-    // ============================================
-    let sql = `
+  async getJobsForCandidates(req: Request, res: Response): Promise<void> {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const validPage = Math.max(1, page);
+      const validLimit = Math.min(100, Math.max(1, limit));
+      const validOffset = (validPage - 1) * validLimit;
+
+      const {
+        search,
+        location,
+        jobType,
+        workArrangement,
+        experienceLevel,
+        salaryMin,
+        salaryMax,
+        industry,
+        skills,
+        sortBy = 'recent'
+      } = req.query;
+
+      // ============================================
+      // COMPLETE JOB FIELDS FROM SCHEMA
+      // ============================================
+      let sql = `
       SELECT 
         -- Job basic info
         j.id,
@@ -2523,6 +2523,7 @@ private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
         j.salary_currency,
         j.salary_period,
         j.salary_visible,
+        j.education_required,
         
         -- Benefits & Skills
         j.benefits,
@@ -2605,191 +2606,191 @@ private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
         AND j.visibility IN ('public', 'unlisted')
     `;
 
-    const params: any[] = [];
-    let paramIndex = 1;
+      const params: any[] = [];
+      let paramIndex = 1;
 
-    // ============================================
-    // FILTERS - MATCHING YOUR SCHEMA
-    // ============================================
-    
-    // Search filter (title, description, company name)
-    if (search) {
-      sql += ` AND (j.title ILIKE $${paramIndex} 
+      // ============================================
+      // FILTERS - MATCHING YOUR SCHEMA
+      // ============================================
+
+      // Search filter (title, description, company name)
+      if (search) {
+        sql += ` AND (j.title ILIKE $${paramIndex} 
                  OR j.description ILIKE $${paramIndex} 
                  OR COALESCE(c.name, '') ILIKE $${paramIndex})`;
-      params.push(`%${search}%`);
-      paramIndex++;
-    }
+        params.push(`%${search}%`);
+        paramIndex++;
+      }
 
-    // Location filter (using locations JSONB)
-    if (location) {
-      sql += ` AND (j.locations::text ILIKE $${paramIndex} 
+      // Location filter (using locations JSONB)
+      if (location) {
+        sql += ` AND (j.locations::text ILIKE $${paramIndex} 
                  OR EXISTS (SELECT 1 FROM jsonb_array_elements(j.locations) AS loc 
                            WHERE loc->>'city' ILIKE $${paramIndex}
                            OR loc->>'country' ILIKE $${paramIndex}))`;
-      params.push(`%${location}%`);
-      paramIndex++;
-    }
+        params.push(`%${location}%`);
+        paramIndex++;
+      }
 
-    // Job type filter (full-time, part-time, contract, etc.)
-    if (jobType) {
-      const jobTypes = (jobType as string).split(',');
-      sql += ` AND j.job_type = ANY($${paramIndex})`;
-      params.push(jobTypes);
-      paramIndex++;
-    }
+      // Job type filter (full-time, part-time, contract, etc.)
+      if (jobType) {
+        const jobTypes = (jobType as string).split(',');
+        sql += ` AND j.job_type = ANY($${paramIndex})`;
+        params.push(jobTypes);
+        paramIndex++;
+      }
 
-    // Work arrangement filter (remote, hybrid, onsite, flexible)
-    if (workArrangement) {
-      const arrangements = (workArrangement as string).split(',');
-      sql += ` AND j.work_arrangement = ANY($${paramIndex})`;
-      params.push(arrangements);
-      paramIndex++;
-    }
+      // Work arrangement filter (remote, hybrid, onsite, flexible)
+      if (workArrangement) {
+        const arrangements = (workArrangement as string).split(',');
+        sql += ` AND j.work_arrangement = ANY($${paramIndex})`;
+        params.push(arrangements);
+        paramIndex++;
+      }
 
-    // Experience level filter (entry, mid, senior, lead, executive)
-    if (experienceLevel) {
-      const levels = (experienceLevel as string).split(',');
-      sql += ` AND j.experience_level = ANY($${paramIndex})`;
-      params.push(levels);
-      paramIndex++;
-    }
+      // Experience level filter (entry, mid, senior, lead, executive)
+      if (experienceLevel) {
+        const levels = (experienceLevel as string).split(',');
+        sql += ` AND j.experience_level = ANY($${paramIndex})`;
+        params.push(levels);
+        paramIndex++;
+      }
 
-    // Salary range filters
-    if (salaryMin) {
-      sql += ` AND j.salary_max >= $${paramIndex}`;
-      params.push(parseFloat(salaryMin as string));
-      paramIndex++;
-    }
-    
-    if (salaryMax) {
-      sql += ` AND j.salary_min <= $${paramIndex}`;
-      params.push(parseFloat(salaryMax as string));
-      paramIndex++;
-    }
+      // Salary range filters
+      if (salaryMin) {
+        sql += ` AND j.salary_max >= $${paramIndex}`;
+        params.push(parseFloat(salaryMin as string));
+        paramIndex++;
+      }
 
-    // Industry filter
-    if (industry) {
-      const industries = (industry as string).split(',');
-      sql += ` AND (c.industry = ANY($${paramIndex}) 
+      if (salaryMax) {
+        sql += ` AND j.salary_min <= $${paramIndex}`;
+        params.push(parseFloat(salaryMax as string));
+        paramIndex++;
+      }
+
+      // Industry filter
+      if (industry) {
+        const industries = (industry as string).split(',');
+        sql += ` AND (c.industry = ANY($${paramIndex}) 
                  OR c.industries && $${paramIndex})`;
-      params.push(industries);
-      paramIndex++;
-    }
+        params.push(industries);
+        paramIndex++;
+      }
 
-    // Skills filter using job_skills table
-    if (skills) {
-      const skillArray = (skills as string).split(',').map(s => s.trim().toLowerCase());
-      sql += ` AND EXISTS (
+      // Skills filter using job_skills table
+      if (skills) {
+        const skillArray = (skills as string).split(',').map(s => s.trim().toLowerCase());
+        sql += ` AND EXISTS (
         SELECT 1 FROM job_skills js 
         JOIN skills s ON js.skill_id = s.id 
         WHERE js.job_id = j.id 
           AND LOWER(s.name) = ANY($${paramIndex})
       )`;
-      params.push(skillArray);
-      paramIndex++;
-    }
+        params.push(skillArray);
+        paramIndex++;
+      }
 
-    // ============================================
-    // SORTING OPTIONS
-    // ============================================
-    if (sortBy === 'salary_high') {
-      sql += ` ORDER BY j.salary_max DESC NULLS LAST`;
-    } else if (sortBy === 'salary_low') {
-      sql += ` ORDER BY j.salary_min ASC NULLS LAST`;
-    } else if (sortBy === 'recent') {
-      sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC`;
-    } else if (sortBy === 'applications') {
-      sql += ` ORDER BY j.application_count DESC NULLS LAST`;
-    } else if (sortBy === 'expiring_soon') {
-      sql += ` ORDER BY j.expires_at ASC NULLS LAST`;
-    } else {
-      sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC`;
-    }
+      // ============================================
+      // SORTING OPTIONS
+      // ============================================
+      if (sortBy === 'salary_high') {
+        sql += ` ORDER BY j.salary_max DESC NULLS LAST`;
+      } else if (sortBy === 'salary_low') {
+        sql += ` ORDER BY j.salary_min ASC NULLS LAST`;
+      } else if (sortBy === 'recent') {
+        sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC`;
+      } else if (sortBy === 'applications') {
+        sql += ` ORDER BY j.application_count DESC NULLS LAST`;
+      } else if (sortBy === 'expiring_soon') {
+        sql += ` ORDER BY j.expires_at ASC NULLS LAST`;
+      } else {
+        sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC`;
+      }
 
-    // ============================================
-    // PAGINATION
-    // ============================================
-    sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-    params.push(validLimit, validOffset);
+      // ============================================
+      // PAGINATION
+      // ============================================
+      sql += ` LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      params.push(validLimit, validOffset);
 
-    const result = await DatabaseService.execute(sql, params);
+      const result = await DatabaseService.execute(sql, params);
 
-    // ============================================
-    // PARSE JSON FIELDS - MATCHING SCHEMA
-    // ============================================
-    const jobsWithParsedFields = result.rows.map((job: any) => {
-      // Parse job JSON fields
-      if (job.locations && typeof job.locations === 'string') {
-        try { job.locations = JSON.parse(job.locations); } catch { job.locations = []; }
-      }
-      if (job.responsibilities && typeof job.responsibilities === 'string') {
-        try { job.responsibilities = JSON.parse(job.responsibilities); } catch { job.responsibilities = []; }
-      }
-      if (job.requirements && typeof job.requirements === 'string') {
-        try { job.requirements = JSON.parse(job.requirements); } catch { job.requirements = []; }
-      }
-      if (job.benefits && typeof job.benefits === 'string') {
-        try { job.benefits = JSON.parse(job.benefits); } catch { job.benefits = []; }
-      }
-      if (job.skills_required && typeof job.skills_required === 'string') {
-        try { job.skills_required = JSON.parse(job.skills_required); } catch { job.skills_required = []; }
-      }
-      if (job.skills_preferred && typeof job.skills_preferred === 'string') {
-        try { job.skills_preferred = JSON.parse(job.skills_preferred); } catch { job.skills_preferred = []; }
-      }
-      if (job.education_required && typeof job.education_required === 'string') {
-        try { job.education_required = JSON.parse(job.education_required); } catch { job.education_required = {}; }
-      }
-      if (job.screening_questions && typeof job.screening_questions === 'string') {
-        try { job.screening_questions = JSON.parse(job.screening_questions); } catch { job.screening_questions = []; }
-      }
-      if (job.documents && typeof job.documents === 'string') {
-        try { job.documents = JSON.parse(job.documents); } catch { job.documents = []; }
-      }
-      if (job.tags && typeof job.tags === 'string') {
-        try { job.tags = JSON.parse(job.tags); } catch { job.tags = []; }
-      }
-      if (job.metadata && typeof job.metadata === 'string') {
-        try { job.metadata = JSON.parse(job.metadata); } catch { job.metadata = {}; }
-      }
-      if (job.language_requirements && typeof job.language_requirements === 'string') {
-        try { job.language_requirements = JSON.parse(job.language_requirements); } catch { job.language_requirements = []; }
-      }
-      if (job.experience_requirements && typeof job.experience_requirements === 'string') {
-        try { job.experience_requirements = JSON.parse(job.experience_requirements); } catch { job.experience_requirements = {}; }
-      }
-      if (job.education_requirements && typeof job.education_requirements === 'string') {
-        try { job.education_requirements = JSON.parse(job.education_requirements); } catch { job.education_requirements = {}; }
-      }
-      if (job.skill_experience_requirements && typeof job.skill_experience_requirements === 'string') {
-        try { job.skill_experience_requirements = JSON.parse(job.skill_experience_requirements); } catch { job.skill_experience_requirements = {}; }
-      }
-      
-      // Parse company JSON fields
-      if (job.company_headquarters_location && typeof job.company_headquarters_location === 'string') {
-        try { job.company_headquarters_location = JSON.parse(job.company_headquarters_location); } catch { job.company_headquarters_location = {}; }
-      }
-      if (job.company_culture && typeof job.company_culture === 'string') {
-        try { job.company_culture = JSON.parse(job.company_culture); } catch { job.company_culture = {}; }
-      }
-      if (job.company_social_links && typeof job.company_social_links === 'string') {
-        try { job.company_social_links = JSON.parse(job.company_social_links); } catch { job.company_social_links = {}; }
-      }
-      if (job.company_values && typeof job.company_values === 'string') {
-        try { job.company_values = JSON.parse(job.company_values); } catch { job.company_values = []; }
-      }
-      if (job.company_industries && typeof job.company_industries === 'string') {
-        try { job.company_industries = JSON.parse(job.company_industries); } catch { job.company_industries = []; }
-      }
-      
-      return job;
-    });
+      // ============================================
+      // PARSE JSON FIELDS - MATCHING SCHEMA
+      // ============================================
+      const jobsWithParsedFields = result.rows.map((job: any) => {
+        // Parse job JSON fields
+        if (job.locations && typeof job.locations === 'string') {
+          try { job.locations = JSON.parse(job.locations); } catch { job.locations = []; }
+        }
+        if (job.responsibilities && typeof job.responsibilities === 'string') {
+          try { job.responsibilities = JSON.parse(job.responsibilities); } catch { job.responsibilities = []; }
+        }
+        if (job.requirements && typeof job.requirements === 'string') {
+          try { job.requirements = JSON.parse(job.requirements); } catch { job.requirements = []; }
+        }
+        if (job.benefits && typeof job.benefits === 'string') {
+          try { job.benefits = JSON.parse(job.benefits); } catch { job.benefits = []; }
+        }
+        if (job.skills_required && typeof job.skills_required === 'string') {
+          try { job.skills_required = JSON.parse(job.skills_required); } catch { job.skills_required = []; }
+        }
+        if (job.skills_preferred && typeof job.skills_preferred === 'string') {
+          try { job.skills_preferred = JSON.parse(job.skills_preferred); } catch { job.skills_preferred = []; }
+        }
+        if (job.education_required && typeof job.education_required === 'string') {
+          try { job.education_required = JSON.parse(job.education_required); } catch { job.education_required = {}; }
+        }
+        if (job.screening_questions && typeof job.screening_questions === 'string') {
+          try { job.screening_questions = JSON.parse(job.screening_questions); } catch { job.screening_questions = []; }
+        }
+        if (job.documents && typeof job.documents === 'string') {
+          try { job.documents = JSON.parse(job.documents); } catch { job.documents = []; }
+        }
+        if (job.tags && typeof job.tags === 'string') {
+          try { job.tags = JSON.parse(job.tags); } catch { job.tags = []; }
+        }
+        if (job.metadata && typeof job.metadata === 'string') {
+          try { job.metadata = JSON.parse(job.metadata); } catch { job.metadata = {}; }
+        }
+        if (job.language_requirements && typeof job.language_requirements === 'string') {
+          try { job.language_requirements = JSON.parse(job.language_requirements); } catch { job.language_requirements = []; }
+        }
+        if (job.experience_requirements && typeof job.experience_requirements === 'string') {
+          try { job.experience_requirements = JSON.parse(job.experience_requirements); } catch { job.experience_requirements = {}; }
+        }
+        if (job.education_requirements && typeof job.education_requirements === 'string') {
+          try { job.education_requirements = JSON.parse(job.education_requirements); } catch { job.education_requirements = {}; }
+        }
+        if (job.skill_experience_requirements && typeof job.skill_experience_requirements === 'string') {
+          try { job.skill_experience_requirements = JSON.parse(job.skill_experience_requirements); } catch { job.skill_experience_requirements = {}; }
+        }
 
-    // ============================================
-    // COUNT QUERY FOR PAGINATION
-    // ============================================
-    let countSql = `
+        // Parse company JSON fields
+        if (job.company_headquarters_location && typeof job.company_headquarters_location === 'string') {
+          try { job.company_headquarters_location = JSON.parse(job.company_headquarters_location); } catch { job.company_headquarters_location = {}; }
+        }
+        if (job.company_culture && typeof job.company_culture === 'string') {
+          try { job.company_culture = JSON.parse(job.company_culture); } catch { job.company_culture = {}; }
+        }
+        if (job.company_social_links && typeof job.company_social_links === 'string') {
+          try { job.company_social_links = JSON.parse(job.company_social_links); } catch { job.company_social_links = {}; }
+        }
+        if (job.company_values && typeof job.company_values === 'string') {
+          try { job.company_values = JSON.parse(job.company_values); } catch { job.company_values = []; }
+        }
+        if (job.company_industries && typeof job.company_industries === 'string') {
+          try { job.company_industries = JSON.parse(job.company_industries); } catch { job.company_industries = []; }
+        }
+
+        return job;
+      });
+
+      // ============================================
+      // COUNT QUERY FOR PAGINATION
+      // ============================================
+      let countSql = `
       SELECT COUNT(*) as total
       FROM jobs j
       LEFT JOIN companies c ON j.company_id = c.id
@@ -2799,109 +2800,109 @@ private async canEditJob(user: AuthUser, job: any): Promise<boolean> {
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
         AND j.visibility IN ('public', 'unlisted')
     `;
-    
-    const countParams: any[] = [];
-    let countIndex = 1;
-    
-    if (search) {
-      countSql += ` AND (j.title ILIKE $${countIndex} OR j.description ILIKE $${countIndex} OR COALESCE(c.name, '') ILIKE $${countIndex})`;
-      countParams.push(`%${search}%`);
-      countIndex++;
-    }
-    if (location) {
-      countSql += ` AND j.locations::text ILIKE $${countIndex}`;
-      countParams.push(`%${location}%`);
-      countIndex++;
-    }
-    if (jobType) {
-      const jobTypes = (jobType as string).split(',');
-      countSql += ` AND j.job_type = ANY($${countIndex})`;
-      countParams.push(jobTypes);
-      countIndex++;
-    }
-    if (workArrangement) {
-      const arrangements = (workArrangement as string).split(',');
-      countSql += ` AND j.work_arrangement = ANY($${countIndex})`;
-      countParams.push(arrangements);
-      countIndex++;
-    }
-    if (experienceLevel) {
-      const levels = (experienceLevel as string).split(',');
-      countSql += ` AND j.experience_level = ANY($${countIndex})`;
-      countParams.push(levels);
-      countIndex++;
-    }
-    if (skills) {
-      const skillArray = (skills as string).split(',').map(s => s.trim().toLowerCase());
-      countSql += ` AND EXISTS (
+
+      const countParams: any[] = [];
+      let countIndex = 1;
+
+      if (search) {
+        countSql += ` AND (j.title ILIKE $${countIndex} OR j.description ILIKE $${countIndex} OR COALESCE(c.name, '') ILIKE $${countIndex})`;
+        countParams.push(`%${search}%`);
+        countIndex++;
+      }
+      if (location) {
+        countSql += ` AND j.locations::text ILIKE $${countIndex}`;
+        countParams.push(`%${location}%`);
+        countIndex++;
+      }
+      if (jobType) {
+        const jobTypes = (jobType as string).split(',');
+        countSql += ` AND j.job_type = ANY($${countIndex})`;
+        countParams.push(jobTypes);
+        countIndex++;
+      }
+      if (workArrangement) {
+        const arrangements = (workArrangement as string).split(',');
+        countSql += ` AND j.work_arrangement = ANY($${countIndex})`;
+        countParams.push(arrangements);
+        countIndex++;
+      }
+      if (experienceLevel) {
+        const levels = (experienceLevel as string).split(',');
+        countSql += ` AND j.experience_level = ANY($${countIndex})`;
+        countParams.push(levels);
+        countIndex++;
+      }
+      if (skills) {
+        const skillArray = (skills as string).split(',').map(s => s.trim().toLowerCase());
+        countSql += ` AND EXISTS (
         SELECT 1 FROM job_skills js 
         JOIN skills s ON js.skill_id = s.id 
         WHERE js.job_id = j.id AND LOWER(s.name) = ANY($${countIndex})
       )`;
-      countParams.push(skillArray);
-      countIndex++;
-    }
-    
-    const countResult = await DatabaseService.execute(countSql, countParams);
-    const total = parseInt(countResult.rows[0]?.total || '0');
-
-    const totalPages = Math.ceil(total / validLimit);
-    const hasNextPage = validPage < totalPages;
-    const hasPrevPage = validPage > 1;
-
-    // ============================================
-    // RESPONSE WITH ALL FIELDS
-    // ============================================
-    this.sendSuccess(res, {
-      data: jobsWithParsedFields,
-      pagination: {
-        current_page: validPage,
-        per_page: validLimit,
-        total_items: total,
-        total_pages: totalPages,
-        has_next_page: hasNextPage,
-        has_prev_page: hasPrevPage,
-        next_page: hasNextPage ? validPage + 1 : null,
-        prev_page: hasPrevPage ? validPage - 1 : null,
-        from: validOffset + 1,
-        to: Math.min(validOffset + validLimit, total)
-      },
-      filters: {
-        search: search || null,
-        location: location || null,
-        job_type: jobType || null,
-        work_arrangement: workArrangement || null,
-        experience_level: experienceLevel || null,
-        salary_min: salaryMin || null,
-        salary_max: salaryMax || null,
-        industry: industry || null,
-        skills: skills || null,
-        sort_by: sortBy
+        countParams.push(skillArray);
+        countIndex++;
       }
-    });
-  } catch (error) {
-    logger.error('Error fetching jobs for candidates:', error);
-    this.sendError(res, 'Failed to fetch jobs', 500, error as Error);
-  }
-}
 
-async getJobForCandidate(req: Request, res: Response): Promise<void> {
-  try {
-    const { id } = req.params;
+      const countResult = await DatabaseService.execute(countSql, countParams);
+      const total = parseInt(countResult.rows[0]?.total || '0');
 
-    if (!id || !ValidationService.isValidUUID(id)) {
-      this.sendError(res, 'Invalid job ID format', 400);
-      return;
+      const totalPages = Math.ceil(total / validLimit);
+      const hasNextPage = validPage < totalPages;
+      const hasPrevPage = validPage > 1;
+
+      // ============================================
+      // RESPONSE WITH ALL FIELDS
+      // ============================================
+      this.sendSuccess(res, {
+        data: jobsWithParsedFields,
+        pagination: {
+          current_page: validPage,
+          per_page: validLimit,
+          total_items: total,
+          total_pages: totalPages,
+          has_next_page: hasNextPage,
+          has_prev_page: hasPrevPage,
+          next_page: hasNextPage ? validPage + 1 : null,
+          prev_page: hasPrevPage ? validPage - 1 : null,
+          from: validOffset + 1,
+          to: Math.min(validOffset + validLimit, total)
+        },
+        filters: {
+          search: search || null,
+          location: location || null,
+          job_type: jobType || null,
+          work_arrangement: workArrangement || null,
+          experience_level: experienceLevel || null,
+          salary_min: salaryMin || null,
+          salary_max: salaryMax || null,
+          industry: industry || null,
+          skills: skills || null,
+          sort_by: sortBy
+        }
+      });
+    } catch (error) {
+      logger.error('Error fetching jobs for candidates:', error);
+      this.sendError(res, 'Failed to fetch jobs', 500, error as Error);
     }
+  }
 
-    // Increment view count
-    await DatabaseService.execute(
-      'UPDATE jobs SET view_count = view_count + 1 WHERE id = $1',
-      [id]
-    );
+  async getJobForCandidate(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
 
-    // ✅ COMPLETE SELECT WITH ALL 70+ JOB FIELDS FROM YOUR SCHEMA
-    const jobResult = await DatabaseService.execute(`
+      if (!id || !ValidationService.isValidUUID(id)) {
+        this.sendError(res, 'Invalid job ID format', 400);
+        return;
+      }
+
+      // Increment view count
+      await DatabaseService.execute(
+        'UPDATE jobs SET view_count = view_count + 1 WHERE id = $1',
+        [id]
+      );
+
+      // ✅ COMPLETE SELECT WITH ALL 70+ JOB FIELDS FROM YOUR SCHEMA
+      const jobResult = await DatabaseService.execute(`
       SELECT 
         -- Job basic info (13 fields)
         j.id,
@@ -3008,181 +3009,181 @@ async getJobForCandidate(req: Request, res: Response): Promise<void> {
         AND j.visibility IN ('public', 'unlisted')
     `, [id]);
 
-    if (jobResult.rows.length === 0) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
+      if (jobResult.rows.length === 0) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
 
-    const job = jobResult.rows[0];
-    const now = new Date();
+      const job = jobResult.rows[0];
+      const now = new Date();
 
-    // ✅ CHECK IF JOB IS AVAILABLE FOR APPLICATION
-    const publishedAt = job.published_at ? new Date(job.published_at) : null;
-    const expiresAt = job.expires_at ? new Date(job.expires_at) : null;
-    
-    // Application availability flags
-    const isPublished = publishedAt !== null && publishedAt <= now;
-    const isNotPublishedYet = publishedAt !== null && publishedAt > now;
-    const isExpired = expiresAt !== null && expiresAt < now;
-    const isNotExpiredYet = expiresAt === null || expiresAt > now;
-    const isActive = job.status === 'active';
-    const isPaused = job.status === 'paused';
-    const isClosed = job.status === 'closed';
-    const isArchived = job.status === 'archived';
-    
-    // ✅ MAIN FLAG: Can user apply?
-    const canApply = isActive && isPublished && !isExpired && !isPaused && !isClosed && !isArchived;
-    
-    // ✅ Detailed status messages
-    let applicationStatus: 'available' | 'not_published' | 'expired' | 'paused' | 'closed' | 'archived' | 'unavailable' = 'available';
-    let applicationStatusMessage: string = 'You can apply for this position';
-    
-    if (!isActive) {
-      applicationStatus = 'unavailable';
-      applicationStatusMessage = 'This position is currently unavailable';
-    } else if (isNotPublishedYet) {
-      applicationStatus = 'not_published';
-      const publishDate = publishedAt?.toLocaleDateString();
-      applicationStatusMessage = `Applications open on ${publishDate}`;
-    } else if (isExpired) {
-      applicationStatus = 'expired';
-      applicationStatusMessage = 'Application deadline has passed';
-    } else if (isPaused) {
-      applicationStatus = 'paused';
-      applicationStatusMessage = 'This job posting is temporarily paused';
-    } else if (isClosed) {
-      applicationStatus = 'closed';
-      applicationStatusMessage = 'This position has been closed';
-    } else if (isArchived) {
-      applicationStatus = 'archived';
-      applicationStatusMessage = 'This job has been archived';
-    }
+      // ✅ CHECK IF JOB IS AVAILABLE FOR APPLICATION
+      const publishedAt = job.published_at ? new Date(job.published_at) : null;
+      const expiresAt = job.expires_at ? new Date(job.expires_at) : null;
 
-    // ✅ Calculate days until publish (if not published yet)
-    let daysUntilPublish: number | null = null;
-    if (isNotPublishedYet && publishedAt) {
-      daysUntilPublish = Math.ceil((publishedAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    }
-    
-    // ✅ Calculate days remaining (if not expired)
-    let daysRemaining: number | null = null;
-    if (!isExpired && expiresAt) {
-      daysRemaining = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-    }
+      // Application availability flags
+      const isPublished = publishedAt !== null && publishedAt <= now;
+      const isNotPublishedYet = publishedAt !== null && publishedAt > now;
+      const isExpired = expiresAt !== null && expiresAt < now;
+      const isNotExpiredYet = expiresAt === null || expiresAt > now;
+      const isActive = job.status === 'active';
+      const isPaused = job.status === 'paused';
+      const isClosed = job.status === 'closed';
+      const isArchived = job.status === 'archived';
 
-    // ✅ Check application limit
-    const applicationLimit = job.application_limit;
-    let hasReachedApplicationLimit = false;
-    if (applicationLimit && applicationLimit > 0) {
-      const currentApplicationCount = job.application_count || 0;
-      hasReachedApplicationLimit = currentApplicationCount >= applicationLimit;
-    }
+      // ✅ MAIN FLAG: Can user apply?
+      const canApply = isActive && isPublished && !isExpired && !isPaused && !isClosed && !isArchived;
 
-    // ✅ PARSE ALL JOB JSONB FIELDS
-    const jobJsonFields = [
-      'locations', 'responsibilities', 'qualifications', 'preferred_qualifications',
-      'requirements', 'benefits', 'skills_required', 'skills_preferred',
-      'education_required', 'screening_questions', 'documents', 'tags',
-      'metadata', 'language_requirements', 'experience_requirements',
-      'education_requirements', 'skill_experience_requirements'
-    ];
-    
-    for (const field of jobJsonFields) {
-      if (job[field]) {
-        if (typeof job[field] === 'string') {
-          try { 
-            job[field] = JSON.parse(job[field]); 
-          } catch { 
-            job[field] = field === 'tags' || field === 'locations' ? [] : {}; 
+      // ✅ Detailed status messages
+      let applicationStatus: 'available' | 'not_published' | 'expired' | 'paused' | 'closed' | 'archived' | 'unavailable' = 'available';
+      let applicationStatusMessage: string = 'You can apply for this position';
+
+      if (!isActive) {
+        applicationStatus = 'unavailable';
+        applicationStatusMessage = 'This position is currently unavailable';
+      } else if (isNotPublishedYet) {
+        applicationStatus = 'not_published';
+        const publishDate = publishedAt?.toLocaleDateString();
+        applicationStatusMessage = `Applications open on ${publishDate}`;
+      } else if (isExpired) {
+        applicationStatus = 'expired';
+        applicationStatusMessage = 'Application deadline has passed';
+      } else if (isPaused) {
+        applicationStatus = 'paused';
+        applicationStatusMessage = 'This job posting is temporarily paused';
+      } else if (isClosed) {
+        applicationStatus = 'closed';
+        applicationStatusMessage = 'This position has been closed';
+      } else if (isArchived) {
+        applicationStatus = 'archived';
+        applicationStatusMessage = 'This job has been archived';
+      }
+
+      // ✅ Calculate days until publish (if not published yet)
+      let daysUntilPublish: number | null = null;
+      if (isNotPublishedYet && publishedAt) {
+        daysUntilPublish = Math.ceil((publishedAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      }
+
+      // ✅ Calculate days remaining (if not expired)
+      let daysRemaining: number | null = null;
+      if (!isExpired && expiresAt) {
+        daysRemaining = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      }
+
+      // ✅ Check application limit
+      const applicationLimit = job.application_limit;
+      let hasReachedApplicationLimit = false;
+      if (applicationLimit && applicationLimit > 0) {
+        const currentApplicationCount = job.application_count || 0;
+        hasReachedApplicationLimit = currentApplicationCount >= applicationLimit;
+      }
+
+      // ✅ PARSE ALL JOB JSONB FIELDS
+      const jobJsonFields = [
+        'locations', 'responsibilities', 'qualifications', 'preferred_qualifications',
+        'requirements', 'benefits', 'skills_required', 'skills_preferred',
+        'education_required', 'screening_questions', 'documents', 'tags',
+        'metadata', 'language_requirements', 'experience_requirements',
+        'education_requirements', 'skill_experience_requirements'
+      ];
+
+      for (const field of jobJsonFields) {
+        if (job[field]) {
+          if (typeof job[field] === 'string') {
+            try {
+              job[field] = JSON.parse(job[field]);
+            } catch {
+              job[field] = field === 'tags' || field === 'locations' ? [] : {};
+            }
           }
-        }
-      } else {
-        if (field === 'tags' || field === 'locations' || field === 'responsibilities' || 
+        } else {
+          if (field === 'tags' || field === 'locations' || field === 'responsibilities' ||
             field === 'requirements' || field === 'benefits' || field === 'screening_questions' ||
             field === 'documents' || field === 'skills_required' || field === 'skills_preferred' ||
             field === 'language_requirements' || field === 'experience_requirements') {
-          job[field] = [];
-        } else {
+            job[field] = [];
+          } else {
+            job[field] = {};
+          }
+        }
+      }
+
+      // ✅ PARSE COMPANY JSON FIELDS
+      const companyJsonFields = [
+        'company_headquarters_location', 'company_culture', 'company_values',
+        'company_industries', 'company_social_links'
+      ];
+
+      for (const field of companyJsonFields) {
+        if (job[field] && typeof job[field] === 'string') {
+          try {
+            job[field] = JSON.parse(job[field]);
+          } catch {
+            job[field] = {};
+          }
+        } else if (!job[field]) {
           job[field] = {};
         }
       }
-    }
 
-    // ✅ PARSE COMPANY JSON FIELDS
-    const companyJsonFields = [
-      'company_headquarters_location', 'company_culture', 'company_values', 
-      'company_industries', 'company_social_links'
-    ];
-    
-    for (const field of companyJsonFields) {
-      if (job[field] && typeof job[field] === 'string') {
-        try { 
-          job[field] = JSON.parse(job[field]); 
-        } catch { 
-          job[field] = {}; 
-        }
-      } else if (!job[field]) {
-        job[field] = {};
+      // ✅ MAP TO FRONTEND-FRIENDLY FIELD NAMES
+      job.jobType = job.job_type;
+      job.workArrangement = job.work_arrangement;
+      job.experienceLevel = job.experience_level;
+      job.salaryCurrency = job.salary_currency;
+      job.salaryPeriod = job.salary_period;
+      job.salaryVisible = job.salary_visible;
+      job.publishedAt = job.published_at;
+      job.expiresAt = job.expires_at;
+      job.pausedAt = job.paused_at;
+      job.closedAt = job.closed_at;
+      job.createdAt = job.created_at;
+      job.updatedAt = job.updated_at;
+      job.deletedAt = job.deleted_at;
+      job.applicationLimit = job.application_limit;
+      job.screeningQuestions = job.screening_questions;
+      job.applicationInstructions = job.application_instructions;
+      job.requiredDocuments = job.documents;
+      job.aiMatchRequiredScore = job.ai_match_required_score;
+
+      // ✅ MAP EDUCATION REQUIREMENTS
+      if (job.education_required && Object.keys(job.education_required).length > 0) {
+        job.educationLevel = {
+          minimum_degree: job.education_required.minimum_degree || null,
+          fields_of_study: job.education_required.fields_of_study || [],
+          certifications: job.education_required.certifications || [],
+          languages: job.education_required.languages || [],
+          experience_requirements: job.education_required.experience_requirements || [],
+          age_requirement: job.education_required.age_requirement || '',
+          is_degree_required: job.education_required.is_degree_required !== false,
+          no_experience_needed: job.education_required.no_experience_needed || false,
+          no_languages_needed: job.education_required.no_languages_needed || false,
+          no_certifications_needed: job.education_required.no_certifications_needed || false,
+          no_documents_needed: job.education_required.no_documents_needed || false
+        };
+      } else {
+        job.educationLevel = {
+          minimum_degree: null,
+          fields_of_study: [],
+          certifications: [],
+          languages: [],
+          experience_requirements: [],
+          age_requirement: '',
+          is_degree_required: false,
+          no_experience_needed: false,
+          no_languages_needed: false,
+          no_certifications_needed: false,
+          no_documents_needed: false
+        };
       }
-    }
 
-    // ✅ MAP TO FRONTEND-FRIENDLY FIELD NAMES
-    job.jobType = job.job_type;
-    job.workArrangement = job.work_arrangement;
-    job.experienceLevel = job.experience_level;
-    job.salaryCurrency = job.salary_currency;
-    job.salaryPeriod = job.salary_period;
-    job.salaryVisible = job.salary_visible;
-    job.publishedAt = job.published_at;
-    job.expiresAt = job.expires_at;
-    job.pausedAt = job.paused_at;
-    job.closedAt = job.closed_at;
-    job.createdAt = job.created_at;
-    job.updatedAt = job.updated_at;
-    job.deletedAt = job.deleted_at;
-    job.applicationLimit = job.application_limit;
-    job.screeningQuestions = job.screening_questions;
-    job.applicationInstructions = job.application_instructions;
-    job.requiredDocuments = job.documents;
-    job.aiMatchRequiredScore = job.ai_match_required_score;
-    
-    // ✅ MAP EDUCATION REQUIREMENTS
-    if (job.education_required && Object.keys(job.education_required).length > 0) {
-      job.educationLevel = {
-        minimum_degree: job.education_required.minimum_degree || null,
-        fields_of_study: job.education_required.fields_of_study || [],
-        certifications: job.education_required.certifications || [],
-        languages: job.education_required.languages || [],
-        experience_requirements: job.education_required.experience_requirements || [],
-        age_requirement: job.education_required.age_requirement || '',
-        is_degree_required: job.education_required.is_degree_required !== false,
-        no_experience_needed: job.education_required.no_experience_needed || false,
-        no_languages_needed: job.education_required.no_languages_needed || false,
-        no_certifications_needed: job.education_required.no_certifications_needed || false,
-        no_documents_needed: job.education_required.no_documents_needed || false
-      };
-    } else {
-      job.educationLevel = {
-        minimum_degree: null,
-        fields_of_study: [],
-        certifications: [],
-        languages: [],
-        experience_requirements: [],
-        age_requirement: '',
-        is_degree_required: false,
-        no_experience_needed: false,
-        no_languages_needed: false,
-        no_certifications_needed: false,
-        no_documents_needed: false
-      };
-    }
+      // ✅ MAP SKILLS FIELDS
+      job.requiredSkills = Array.isArray(job.skills_required) ? job.skills_required : [];
+      job.preferredSkills = Array.isArray(job.skills_preferred) ? job.skills_preferred : [];
 
-    // ✅ MAP SKILLS FIELDS
-    job.requiredSkills = Array.isArray(job.skills_required) ? job.skills_required : [];
-    job.preferredSkills = Array.isArray(job.skills_preferred) ? job.skills_preferred : [];
-
-    // ✅ GET SKILLS FROM JOB_SKILLS TABLE
-    const skills = await DatabaseService.execute(`
+      // ✅ GET SKILLS FROM JOB_SKILLS TABLE
+      const skills = await DatabaseService.execute(`
       SELECT 
         s.id as skill_id,
         s.name as skill_name,
@@ -3199,173 +3200,173 @@ async getJobForCandidate(req: Request, res: Response): Promise<void> {
       ORDER BY js.is_required DESC, js.importance DESC, s.name
     `, [id]);
 
-    if (skills.rows.length > 0) {
-      job.skills = skills.rows;
-      job.skills_required = skills.rows.filter((s: any) => s.is_required === true);
-      job.skills_preferred = skills.rows.filter((s: any) => s.is_required === false);
-      job.requiredSkills = job.skills_required;
-      job.preferredSkills = job.skills_preferred;
-    } else {
-      job.skills = [...(job.requiredSkills || []), ...(job.preferredSkills || [])];
-    }
+      if (skills.rows.length > 0) {
+        job.skills = skills.rows;
+        job.skills_required = skills.rows.filter((s: any) => s.is_required === true);
+        job.skills_preferred = skills.rows.filter((s: any) => s.is_required === false);
+        job.requiredSkills = job.skills_required;
+        job.preferredSkills = job.skills_preferred;
+      } else {
+        job.skills = [...(job.requiredSkills || []), ...(job.preferredSkills || [])];
+      }
 
-    // ✅ ENSURE ALL ARRAY FIELDS ARE PROPERLY INITIALIZED
-    if (!job.locations) job.locations = [];
-    if (!job.responsibilities) job.responsibilities = [];
-    if (!job.requirements) job.requirements = [];
-    if (!job.benefits) job.benefits = [];
-    if (!job.tags) job.tags = [];
-    if (!job.screening_questions) job.screening_questions = [];
-    if (!job.documents) job.documents = [];
-    if (!job.language_requirements) job.language_requirements = [];
-    if (!job.experience_requirements) job.experience_requirements = [];
+      // ✅ ENSURE ALL ARRAY FIELDS ARE PROPERLY INITIALIZED
+      if (!job.locations) job.locations = [];
+      if (!job.responsibilities) job.responsibilities = [];
+      if (!job.requirements) job.requirements = [];
+      if (!job.benefits) job.benefits = [];
+      if (!job.tags) job.tags = [];
+      if (!job.screening_questions) job.screening_questions = [];
+      if (!job.documents) job.documents = [];
+      if (!job.language_requirements) job.language_requirements = [];
+      if (!job.experience_requirements) job.experience_requirements = [];
 
-    // ✅ ENSURE ALL OBJECT FIELDS ARE PROPERLY INITIALIZED
-    if (!job.metadata) job.metadata = {};
-    if (!job.education_required) job.education_required = {};
-    if (!job.education_requirements) job.education_requirements = {};
-    if (!job.skill_experience_requirements) job.skill_experience_requirements = {};
+      // ✅ ENSURE ALL OBJECT FIELDS ARE PROPERLY INITIALIZED
+      if (!job.metadata) job.metadata = {};
+      if (!job.education_required) job.education_required = {};
+      if (!job.education_requirements) job.education_requirements = {};
+      if (!job.skill_experience_requirements) job.skill_experience_requirements = {};
 
-    // ✅ ADD COMPANY VERIFICATION STATUS FLAGS
-    job.companyIsVerified = job.company_verification_status === 'verified' || job.company_verified === true;
-    job.companyVerificationLevel = job.company_verification_level || 'basic';
+      // ✅ ADD COMPANY VERIFICATION STATUS FLAGS
+      job.companyIsVerified = job.company_verification_status === 'verified' || job.company_verified === true;
+      job.companyVerificationLevel = job.company_verification_level || 'basic';
 
-    // ✅ ADD JOB STATUS FLAGS FOR FRONTEND
-    job.isActive = isActive;
-    job.isPublished = isPublished;
-    job.isNotPublishedYet = isNotPublishedYet;
-    job.isExpired = isExpired;
-    job.isPaused = isPaused;
-    job.isClosed = isClosed;
-    job.isArchived = isArchived;
-    job.isRemote = job.work_arrangement === 'remote';
-    job.isHybrid = job.work_arrangement === 'hybrid';
-    job.isOnsite = job.work_arrangement === 'onsite';
-    
-    // ✅ ADD APPLICATION AVAILABILITY FLAGS
-    job.canApply = canApply;
-    job.applicationStatus = applicationStatus;
-    job.applicationStatusMessage = applicationStatusMessage;
-    job.daysUntilPublish = daysUntilPublish;
-    job.daysRemaining = daysRemaining;
-    job.hasReachedApplicationLimit = hasReachedApplicationLimit;
-    job.currentApplicationCount = job.application_count || 0;
-    
-    // ✅ ADD PUBLISH DATE DISPLAY
-    if (isNotPublishedYet && publishedAt) {
-      job.publishDateDisplay = `Opens on ${publishedAt.toLocaleDateString()}`;
-    } else if (isPublished) {
-      job.publishDateDisplay = `Posted on ${publishedAt?.toLocaleDateString() || 'Recently'}`;
-    } else {
-      job.publishDateDisplay = 'Not yet published';
-    }
-    
-    // ✅ ADD EXPIRY DATE DISPLAY
-    if (isExpired) {
-      job.expiryDateDisplay = `Closed on ${expiresAt?.toLocaleDateString()}`;
-    } else if (expiresAt) {
-      job.expiryDateDisplay = `Closes in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} (${expiresAt.toLocaleDateString()})`;
-    } else {
-      job.expiryDateDisplay = 'No deadline';
-    }
+      // ✅ ADD JOB STATUS FLAGS FOR FRONTEND
+      job.isActive = isActive;
+      job.isPublished = isPublished;
+      job.isNotPublishedYet = isNotPublishedYet;
+      job.isExpired = isExpired;
+      job.isPaused = isPaused;
+      job.isClosed = isClosed;
+      job.isArchived = isArchived;
+      job.isRemote = job.work_arrangement === 'remote';
+      job.isHybrid = job.work_arrangement === 'hybrid';
+      job.isOnsite = job.work_arrangement === 'onsite';
 
-    // ✅ ADD SALARY DISPLAY FIELD
-    if (job.salary_min && job.salary_max) {
-      job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()} ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
-    } else if (job.salary_min) {
-      job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()}+ ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
-    } else {
-      job.salaryDisplay = 'Salary not specified';
-    }
+      // ✅ ADD APPLICATION AVAILABILITY FLAGS
+      job.canApply = canApply;
+      job.applicationStatus = applicationStatus;
+      job.applicationStatusMessage = applicationStatusMessage;
+      job.daysUntilPublish = daysUntilPublish;
+      job.daysRemaining = daysRemaining;
+      job.hasReachedApplicationLimit = hasReachedApplicationLimit;
+      job.currentApplicationCount = job.application_count || 0;
 
-    // ✅ ADD EXPERIENCE DISPLAY FIELD
-    if (job.experience_min && job.experience_max) {
-      job.experienceDisplay = `${job.experience_min}-${job.experience_max} years`;
-    } else if (job.experience_min) {
-      job.experienceDisplay = `${job.experience_min}+ years`;
-    } else if (job.experience_max) {
-      job.experienceDisplay = `Up to ${job.experience_max} years`;
-    } else {
-      job.experienceDisplay = 'Experience not specified';
-    }
+      // ✅ ADD PUBLISH DATE DISPLAY
+      if (isNotPublishedYet && publishedAt) {
+        job.publishDateDisplay = `Opens on ${publishedAt.toLocaleDateString()}`;
+      } else if (isPublished) {
+        job.publishDateDisplay = `Posted on ${publishedAt?.toLocaleDateString() || 'Recently'}`;
+      } else {
+        job.publishDateDisplay = 'Not yet published';
+      }
 
-    // ✅ ADD LOCATION DISPLAY FIELD
-    if (job.locations && job.locations.length > 0) {
-      const locationNames = job.locations.map((loc: any) => {
-        if (typeof loc === 'string') return loc;
-        if (loc.city && loc.country) return `${loc.city}, ${loc.country}`;
-        if (loc.city) return loc.city;
-        if (loc.country) return loc.country;
-        return null;
-      }).filter(Boolean);
-      job.locationDisplay = locationNames.join(', ');
-    } else {
-      job.locationDisplay = 'Location not specified';
-    }
+      // ✅ ADD EXPIRY DATE DISPLAY
+      if (isExpired) {
+        job.expiryDateDisplay = `Closed on ${expiresAt?.toLocaleDateString()}`;
+      } else if (expiresAt) {
+        job.expiryDateDisplay = `Closes in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} (${expiresAt.toLocaleDateString()})`;
+      } else {
+        job.expiryDateDisplay = 'No deadline';
+      }
 
-    // ✅ ADD APPLICATION BUTTON LABEL AND STYLES
-    if (!canApply) {
-      if (isNotPublishedYet) {
-        job.applyButtonLabel = `Opens in ${daysUntilPublish} day${daysUntilPublish !== 1 ? 's' : ''}`;
-        job.applyButtonDisabled = true;
-        job.applyButtonVariant = 'gray';
-      } else if (isExpired) {
-        job.applyButtonLabel = 'Expired';
-        job.applyButtonDisabled = true;
-        job.applyButtonVariant = 'gray';
-      } else if (isPaused) {
-        job.applyButtonLabel = 'Temporarily Paused';
-        job.applyButtonDisabled = true;
-        job.applyButtonVariant = 'gray';
-      } else if (isClosed || isArchived) {
-        job.applyButtonLabel = 'Closed';
-        job.applyButtonDisabled = true;
-        job.applyButtonVariant = 'gray';
-      } else if (hasReachedApplicationLimit) {
-        job.applyButtonLabel = 'Application Limit Reached';
-        job.applyButtonDisabled = true;
-        job.applyButtonVariant = 'gray';
+      // ✅ ADD SALARY DISPLAY FIELD
+      if (job.salary_min && job.salary_max) {
+        job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()} ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
+      } else if (job.salary_min) {
+        job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()}+ ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
+      } else {
+        job.salaryDisplay = 'Salary not specified';
+      }
+
+      // ✅ ADD EXPERIENCE DISPLAY FIELD
+      if (job.experience_min && job.experience_max) {
+        job.experienceDisplay = `${job.experience_min}-${job.experience_max} years`;
+      } else if (job.experience_min) {
+        job.experienceDisplay = `${job.experience_min}+ years`;
+      } else if (job.experience_max) {
+        job.experienceDisplay = `Up to ${job.experience_max} years`;
+      } else {
+        job.experienceDisplay = 'Experience not specified';
+      }
+
+      // ✅ ADD LOCATION DISPLAY FIELD
+      if (job.locations && job.locations.length > 0) {
+        const locationNames = job.locations.map((loc: any) => {
+          if (typeof loc === 'string') return loc;
+          if (loc.city && loc.country) return `${loc.city}, ${loc.country}`;
+          if (loc.city) return loc.city;
+          if (loc.country) return loc.country;
+          return null;
+        }).filter(Boolean);
+        job.locationDisplay = locationNames.join(', ');
+      } else {
+        job.locationDisplay = 'Location not specified';
+      }
+
+      // ✅ ADD APPLICATION BUTTON LABEL AND STYLES
+      if (!canApply) {
+        if (isNotPublishedYet) {
+          job.applyButtonLabel = `Opens in ${daysUntilPublish} day${daysUntilPublish !== 1 ? 's' : ''}`;
+          job.applyButtonDisabled = true;
+          job.applyButtonVariant = 'gray';
+        } else if (isExpired) {
+          job.applyButtonLabel = 'Expired';
+          job.applyButtonDisabled = true;
+          job.applyButtonVariant = 'gray';
+        } else if (isPaused) {
+          job.applyButtonLabel = 'Temporarily Paused';
+          job.applyButtonDisabled = true;
+          job.applyButtonVariant = 'gray';
+        } else if (isClosed || isArchived) {
+          job.applyButtonLabel = 'Closed';
+          job.applyButtonDisabled = true;
+          job.applyButtonVariant = 'gray';
+        } else if (hasReachedApplicationLimit) {
+          job.applyButtonLabel = 'Application Limit Reached';
+          job.applyButtonDisabled = true;
+          job.applyButtonVariant = 'gray';
+        } else {
+          job.applyButtonLabel = 'Apply Now';
+          job.applyButtonDisabled = true;
+          job.applyButtonVariant = 'gray';
+        }
       } else {
         job.applyButtonLabel = 'Apply Now';
-        job.applyButtonDisabled = true;
-        job.applyButtonVariant = 'gray';
+        job.applyButtonDisabled = false;
+        job.applyButtonVariant = 'green';
       }
-    } else {
-      job.applyButtonLabel = 'Apply Now';
-      job.applyButtonDisabled = false;
-      job.applyButtonVariant = 'green';
+
+      // ✅ ADD COUNTS
+      job.responsibilitiesCount = job.responsibilities?.length || 0;
+      job.benefitsCount = job.benefits?.length || 0;
+      job.screeningQuestionsCount = job.screening_questions?.length || 0;
+      job.requiredSkillsCount = job.requiredSkills?.length || 0;
+      job.preferredSkillsCount = job.preferredSkills?.length || 0;
+
+      this.sendSuccess(res, job);
+    } catch (error) {
+      logger.error('Error fetching job for candidate:', error);
+      this.sendError(res, 'Failed to fetch job details', 500, error as Error);
     }
-
-    // ✅ ADD COUNTS
-    job.responsibilitiesCount = job.responsibilities?.length || 0;
-    job.benefitsCount = job.benefits?.length || 0;
-    job.screeningQuestionsCount = job.screening_questions?.length || 0;
-    job.requiredSkillsCount = job.requiredSkills?.length || 0;
-    job.preferredSkillsCount = job.preferredSkills?.length || 0;
-
-    this.sendSuccess(res, job);
-  } catch (error) {
-    logger.error('Error fetching job for candidate:', error);
-    this.sendError(res, 'Failed to fetch job details', 500, error as Error);
   }
-}
-  
+
   // =====================================================
-// GET JOB CANDIDATES WITH AI MATCH SCORES
-// =====================================================
+  // GET JOB CANDIDATES WITH AI MATCH SCORES
+  // =====================================================
 
-async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { jobId } = req.params;
-    const { page = '1', limit = '20', sortBy = 'match_score', sortOrder = 'DESC' } = req.query;
+  async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const { page = '1', limit = '20', sortBy = 'match_score', sortOrder = 'DESC' } = req.query;
 
-    if (!jobId || !ValidationService.isValidUUID(jobId)) {
-      this.sendError(res, 'Invalid job ID format', 400);
-      return;
-    }
+      if (!jobId || !ValidationService.isValidUUID(jobId)) {
+        this.sendError(res, 'Invalid job ID format', 400);
+        return;
+      }
 
-    // Check if job exists and get job details
-    const jobCheck = await DatabaseService.execute(`
+      // Check if job exists and get job details
+      const jobCheck = await DatabaseService.execute(`
       SELECT 
         j.id, j.company_id, j.title, j.created_by, j.description,
         j.department, j.job_type, j.work_arrangement, j.locations,
@@ -3379,59 +3380,59 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
       WHERE j.id = $1
     `, [jobId]);
 
-    if (jobCheck.rows.length === 0) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
-
-    const job = jobCheck.rows[0];
-
-    const parseJson = (field: any, fallback: any = null) => {
-      if (field === null || field === undefined) return fallback;
-      if (typeof field === 'string') {
-        try { return JSON.parse(field); } catch { return fallback; }
+      if (jobCheck.rows.length === 0) {
+        this.sendError(res, 'Job not found', 404);
+        return;
       }
-      return field;
-    };
 
-    job.locations = parseJson(job.locations, []);
-    job.benefits = parseJson(job.benefits, []);
-    job.skills_required = parseJson(job.skills_required, []);
-    job.skills_preferred = parseJson(job.skills_preferred, []);
-    job.education_required = parseJson(job.education_required, {});
+      const job = jobCheck.rows[0];
 
-    // Check permissions
-    const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
-    const isOwner = job.created_by === req.user.id;
-    const isCompanyUser = job.company_id === userCompanyId;
-    const isAdmin = req.user.user_type === 'system_admin';
+      const parseJson = (field: any, fallback: any = null) => {
+        if (field === null || field === undefined) return fallback;
+        if (typeof field === 'string') {
+          try { return JSON.parse(field); } catch { return fallback; }
+        }
+        return field;
+      };
 
-    if (!isOwner && !isCompanyUser && !isAdmin) {
-      this.sendError(res, 'Access denied', 403);
-      return;
-    }
+      job.locations = parseJson(job.locations, []);
+      job.benefits = parseJson(job.benefits, []);
+      job.skills_required = parseJson(job.skills_required, []);
+      job.skills_preferred = parseJson(job.skills_preferred, []);
+      job.education_required = parseJson(job.education_required, {});
 
-    const validPage = Math.max(1, parseInt(page as string));
-    const validLimit = Math.min(100, parseInt(limit as string));
-    const offset = (validPage - 1) * validLimit;
-    const order = (sortOrder as string).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+      // Check permissions
+      const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
+      const isOwner = job.created_by === req.user.id;
+      const isCompanyUser = job.company_id === userCompanyId;
+      const isAdmin = req.user.user_type === 'system_admin';
 
-    // Validate sort column
-    let orderByClause = '';
-    if (sortBy === 'match_score') {
-      orderByClause = `ORDER BY a.match_score ${order} NULLS LAST`;
-    } else if (sortBy === 'applied_at') {
-      orderByClause = `ORDER BY a.applied_at ${order} NULLS LAST`;
-    } else if (sortBy === 'status') {
-      orderByClause = `ORDER BY a.status ${order} NULLS LAST`;
-    } else {
-      orderByClause = `ORDER BY a.match_score DESC NULLS LAST`;
-    }
+      if (!isOwner && !isCompanyUser && !isAdmin) {
+        this.sendError(res, 'Access denied', 403);
+        return;
+      }
 
-    // ============================================
-    // STEP 1: Get basic application + candidate data
-    // ============================================
-    const result = await DatabaseService.execute(`
+      const validPage = Math.max(1, parseInt(page as string));
+      const validLimit = Math.min(100, parseInt(limit as string));
+      const offset = (validPage - 1) * validLimit;
+      const order = (sortOrder as string).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
+      // Validate sort column
+      let orderByClause = '';
+      if (sortBy === 'match_score') {
+        orderByClause = `ORDER BY a.match_score ${order} NULLS LAST`;
+      } else if (sortBy === 'applied_at') {
+        orderByClause = `ORDER BY a.applied_at ${order} NULLS LAST`;
+      } else if (sortBy === 'status') {
+        orderByClause = `ORDER BY a.status ${order} NULLS LAST`;
+      } else {
+        orderByClause = `ORDER BY a.match_score DESC NULLS LAST`;
+      }
+
+      // ============================================
+      // STEP 1: Get basic application + candidate data
+      // ============================================
+      const result = await DatabaseService.execute(`
       SELECT
         a.id as application_id,
         a.application_number,
@@ -3492,15 +3493,15 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
       LIMIT $2 OFFSET $3
     `, [jobId, validLimit, offset]);
 
-    const countResult = await DatabaseService.execute(`
+      const countResult = await DatabaseService.execute(`
       SELECT COUNT(*) as total
       FROM applications a
       WHERE a.job_id = $1 AND a.deleted_at IS NULL
     `, [jobId]);
 
-    const total = parseInt(countResult.rows[0]?.total || '0');
+      const total = parseInt(countResult.rows[0]?.total || '0');
 
-    const statsResult = await DatabaseService.execute(`
+      const statsResult = await DatabaseService.execute(`
       SELECT 
         COUNT(*) as total_applications,
         COALESCE(ROUND(AVG(a.match_score)), 0) as avg_match_score,
@@ -3521,30 +3522,30 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
       WHERE a.job_id = $1 AND a.deleted_at IS NULL
     `, [jobId]);
 
-    // ============================================
-    // STEP 2: Enrich each candidate with ALL data including simulations
-    // ============================================
-    const candidates = await Promise.all(result.rows.map(async (row: any) => {
-      const candidateId = row.candidate_id;
-      const applicationId = row.application_id;
+      // ============================================
+      // STEP 2: Enrich each candidate with ALL data including simulations
+      // ============================================
+      const candidates = await Promise.all(result.rows.map(async (row: any) => {
+        const candidateId = row.candidate_id;
+        const applicationId = row.application_id;
 
-      // Parse flat JSON fields
-      row.match_details = parseJson(row.match_details, {});
-      row.ai_score = parseJson(row.ai_score, {});
-      row.screening_answers = parseJson(row.screening_answers, []);
-      row.notes = parseJson(row.notes, []);
-      row.internal_notes = parseJson(row.internal_notes, []);
-      row.application_tags = parseJson(row.application_tags, []);
-      row.current_salary = parseJson(row.current_salary, null);
-      row.expected_salary = parseJson(row.expected_salary, null);
-      row.languages = parseJson(row.languages, []);
-      row.availability = parseJson(row.availability, {});
-      row.job_preferences = parseJson(row.job_preferences, {});
-      row.privacy_settings = parseJson(row.privacy_settings, {});
+        // Parse flat JSON fields
+        row.match_details = parseJson(row.match_details, {});
+        row.ai_score = parseJson(row.ai_score, {});
+        row.screening_answers = parseJson(row.screening_answers, []);
+        row.notes = parseJson(row.notes, []);
+        row.internal_notes = parseJson(row.internal_notes, []);
+        row.application_tags = parseJson(row.application_tags, []);
+        row.current_salary = parseJson(row.current_salary, null);
+        row.expected_salary = parseJson(row.expected_salary, null);
+        row.languages = parseJson(row.languages, []);
+        row.availability = parseJson(row.availability, {});
+        row.job_preferences = parseJson(row.job_preferences, {});
+        row.privacy_settings = parseJson(row.privacy_settings, {});
 
-      // Work experience
-      try {
-        const weResult = await DatabaseService.execute(`
+        // Work experience
+        try {
+          const weResult = await DatabaseService.execute(`
           SELECT id, company, title, employment_type, location, location_type,
             to_char(start_date, 'YYYY-MM-DD') as start_date,
             to_char(end_date, 'YYYY-MM-DD') as end_date,
@@ -3554,17 +3555,17 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           WHERE user_id = $1
           ORDER BY start_date DESC
         `, [candidateId]);
-        row.work_experience = weResult.rows;
-        row.current_experience = weResult.rows.filter((e: any) => e.is_current === true);
-      } catch (e) {
-        logger.error('work_experience query failed:', e);
-        row.work_experience = [];
-        row.current_experience = [];
-      }
+          row.work_experience = weResult.rows;
+          row.current_experience = weResult.rows.filter((e: any) => e.is_current === true);
+        } catch (e) {
+          logger.error('work_experience query failed:', e);
+          row.work_experience = [];
+          row.current_experience = [];
+        }
 
-      // Education
-      try {
-        const eduResult = await DatabaseService.execute(`
+        // Education
+        try {
+          const eduResult = await DatabaseService.execute(`
           SELECT id, institution, degree, field_of_study,
             to_char(start_date, 'YYYY-MM-DD') as start_date,
             to_char(end_date, 'YYYY-MM-DD') as end_date,
@@ -3573,15 +3574,15 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           WHERE user_id = $1
           ORDER BY end_date DESC NULLS LAST
         `, [candidateId]);
-        row.education = eduResult.rows;
-      } catch (e) {
-        logger.error('education query failed:', e);
-        row.education = [];
-      }
+          row.education = eduResult.rows;
+        } catch (e) {
+          logger.error('education query failed:', e);
+          row.education = [];
+        }
 
-      // Skills
-      try {
-        const skillsResult = await DatabaseService.execute(`
+        // Skills
+        try {
+          const skillsResult = await DatabaseService.execute(`
           SELECT s.id as skill_id, s.name as skill_name, s.category, s.skill_type,
             us.proficiency_level, us.proficiency_label, us.years_experience,
             us.is_primary, us.endorsement_count, us.verified
@@ -3590,15 +3591,15 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           WHERE us.user_id = $1
           ORDER BY us.proficiency_level DESC, us.years_experience DESC NULLS LAST
         `, [candidateId]);
-        row.candidate_skills = skillsResult.rows;
-      } catch (e) {
-        logger.error('user_skills query failed:', e);
-        row.candidate_skills = [];
-      }
+          row.candidate_skills = skillsResult.rows;
+        } catch (e) {
+          logger.error('user_skills query failed:', e);
+          row.candidate_skills = [];
+        }
 
-      // Certifications
-      try {
-        const certResult = await DatabaseService.execute(`
+        // Certifications
+        try {
+          const certResult = await DatabaseService.execute(`
           SELECT id, name, issuer, credential_id, credential_url,
             to_char(issue_date, 'YYYY-MM-DD') as issue_date,
             to_char(expiry_date, 'YYYY-MM-DD') as expiry_date,
@@ -3607,15 +3608,15 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           WHERE user_id = $1 AND verified = true
           ORDER BY issue_date DESC NULLS LAST
         `, [candidateId]);
-        row.certifications = certResult.rows;
-      } catch (e) {
-        logger.error('certifications query failed:', e);
-        row.certifications = [];
-      }
+          row.certifications = certResult.rows;
+        } catch (e) {
+          logger.error('certifications query failed:', e);
+          row.certifications = [];
+        }
 
-      // Resumes
-      try {
-        const resumeResult = await DatabaseService.execute(`
+        // Resumes
+        try {
+          const resumeResult = await DatabaseService.execute(`
           SELECT id, file_name, file_url, file_size, mime_type, is_primary,
             parsed_data, parsing_confidence, skills_extracted
           FROM resumes
@@ -3623,31 +3624,31 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           ORDER BY is_primary DESC, created_at DESC
           LIMIT 5
         `, [candidateId]);
-        row.primary_resume = resumeResult.rows.filter((r: any) => r.is_primary === true);
-        row.all_resumes = resumeResult.rows;
-      } catch (e) {
-        logger.error('resumes query failed:', e);
-        row.primary_resume = [];
-        row.all_resumes = [];
-      }
+          row.primary_resume = resumeResult.rows.filter((r: any) => r.is_primary === true);
+          row.all_resumes = resumeResult.rows;
+        } catch (e) {
+          logger.error('resumes query failed:', e);
+          row.primary_resume = [];
+          row.all_resumes = [];
+        }
 
-      // Portfolio links
-      try {
-        const portfolioResult = await DatabaseService.execute(`
+        // Portfolio links
+        try {
+          const portfolioResult = await DatabaseService.execute(`
           SELECT id, platform, url, title, description, is_verified
           FROM portfolio_links
           WHERE user_id = $1
           ORDER BY display_order ASC
         `, [candidateId]);
-        row.portfolio_links = portfolioResult.rows;
-      } catch (e) {
-        logger.error('portfolio_links query failed:', e);
-        row.portfolio_links = [];
-      }
+          row.portfolio_links = portfolioResult.rows;
+        } catch (e) {
+          logger.error('portfolio_links query failed:', e);
+          row.portfolio_links = [];
+        }
 
-      // AI analysis
-      try {
-        const aiResult = await DatabaseService.execute(`
+        // AI analysis
+        try {
+          const aiResult = await DatabaseService.execute(`
           SELECT id, analysis_type, scores, insights, recommendations,
             model_version, processing_time, created_at
           FROM ai_analysis
@@ -3655,23 +3656,23 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           ORDER BY created_at DESC
           LIMIT 1
         `, [applicationId]);
-        row.ai_analysis = aiResult.rows[0] || null;
-        if (row.ai_analysis) {
-          row.ai_analysis.scores = parseJson(row.ai_analysis.scores, {});
-          row.ai_analysis.insights = parseJson(row.ai_analysis.insights, []);
-          row.ai_analysis.recommendations = parseJson(row.ai_analysis.recommendations, []);
+          row.ai_analysis = aiResult.rows[0] || null;
+          if (row.ai_analysis) {
+            row.ai_analysis.scores = parseJson(row.ai_analysis.scores, {});
+            row.ai_analysis.insights = parseJson(row.ai_analysis.insights, []);
+            row.ai_analysis.recommendations = parseJson(row.ai_analysis.recommendations, []);
+          }
+        } catch (e) {
+          logger.error('ai_analysis query failed:', e);
+          row.ai_analysis = null;
         }
-      } catch (e) {
-        logger.error('ai_analysis query failed:', e);
-        row.ai_analysis = null;
-      }
 
-      // ============================================
-      // SIMULATIONS - USE TEMPLATE TASKS AS SOURCE OF TRUTH
-      // ============================================
-      try {
-        // First, get the template task list (THIS IS THE SOURCE OF TRUTH)
-        const templateResult = await DatabaseService.execute(`
+        // ============================================
+        // SIMULATIONS - USE TEMPLATE TASKS AS SOURCE OF TRUTH
+        // ============================================
+        try {
+          // First, get the template task list (THIS IS THE SOURCE OF TRUTH)
+          const templateResult = await DatabaseService.execute(`
           SELECT st.id, st.total_tasks, st.tasks
           FROM simulation_templates st
           JOIN simulations sim ON sim.template_id = st.id
@@ -3679,16 +3680,16 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           GROUP BY st.id, st.total_tasks, st.tasks
         `, [applicationId, jobId]);
 
-        const templateTasksMap = new Map();
-        for (const tmpl of templateResult.rows) {
-          const tasksList = parseJson(tmpl.tasks, []);
-          templateTasksMap.set(tmpl.id, {
-            total_tasks: tmpl.total_tasks || tasksList.length,
-            tasks: tasksList
-          });
-        }
+          const templateTasksMap = new Map();
+          for (const tmpl of templateResult.rows) {
+            const tasksList = parseJson(tmpl.tasks, []);
+            templateTasksMap.set(tmpl.id, {
+              total_tasks: tmpl.total_tasks || tasksList.length,
+              tasks: tasksList
+            });
+          }
 
-        const simResult = await DatabaseService.execute(`
+          const simResult = await DatabaseService.execute(`
           SELECT 
             -- Simulation record
             sim.id as simulation_record_id,
@@ -3738,73 +3739,73 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           WHERE sim.application_id = $2 AND sim.job_id = $3
           ORDER BY ss.created_at DESC, ss.started_at DESC NULLS LAST
         `, [candidateId, applicationId, jobId]);
-        
-        // Process each session - USE TEMPLATE TASKS AS SOURCE OF TRUTH
-        row.simulations = simResult.rows.map((sim: any) => {
-          // Get template tasks (THIS IS THE SOURCE OF TRUTH)
-          let templateTasks = [];
-          if (sim.template_tasks) {
-            if (typeof sim.template_tasks === 'object') {
-              templateTasks = sim.template_tasks;
-            } else if (typeof sim.template_tasks === 'string') {
-              try {
-                templateTasks = JSON.parse(sim.template_tasks);
-              } catch (e) {
-                templateTasks = [];
+
+          // Process each session - USE TEMPLATE TASKS AS SOURCE OF TRUTH
+          row.simulations = simResult.rows.map((sim: any) => {
+            // Get template tasks (THIS IS THE SOURCE OF TRUTH)
+            let templateTasks = [];
+            if (sim.template_tasks) {
+              if (typeof sim.template_tasks === 'object') {
+                templateTasks = sim.template_tasks;
+              } else if (typeof sim.template_tasks === 'string') {
+                try {
+                  templateTasks = JSON.parse(sim.template_tasks);
+                } catch (e) {
+                  templateTasks = [];
+                }
               }
             }
-          }
-          
-          const totalTasks = templateTasks.length;
-          
-          return {
-            session_id: sim.session_id,
-            session_status: sim.session_status || 'not_started',
-            session_started_at: sim.session_started_at,
-            session_completed_at: sim.session_completed_at,
-            session_time_spent: sim.session_time_spent || 0,
-            session_score: sim.session_score ? parseFloat(sim.session_score) : null,
-            
-            simulation_record_id: sim.simulation_record_id,
-            template_id: sim.template_id,
-            simulation_name: sim.simulation_name,
-            simulation_description: sim.simulation_description,
-            simulation_type: sim.simulation_type,
-            difficulty: sim.difficulty,
-            duration_minutes: sim.duration_minutes,
-            total_tasks: totalTasks,
-            completed_tasks: 0,
-            scoring_rubric: parseJson(sim.scoring_rubric, {}),
-            pass_fail_criteria: parseJson(sim.pass_fail_criteria, {}),
-            
-            github_links: parseJson(sim.github_links, {}),
-            task_progress: [],
-            avg_task_score: 0,
-            
-            evaluation_id: sim.evaluation_id,
-            evaluation_overall_score: sim.evaluation_overall_score,
-            evaluation_punctuality_score: sim.evaluation_punctuality_score,
-            evaluation_communication_score: sim.evaluation_communication_score,
-            evaluation_problem_solving_score: sim.evaluation_problem_solving_score,
-            evaluation_adaptability_score: sim.evaluation_adaptability_score,
-            evaluation_collaboration_score: sim.evaluation_collaboration_score,
-            attention_to_detail_score: sim.attention_to_detail_score,
-            evaluation_initiative_score: sim.evaluation_initiative_score,
-            evaluation_status: sim.evaluation_status,
-            evaluation_completed_at: sim.evaluation_completed_at,
-            
-            overall_score: sim.session_score 
-              ? parseFloat(sim.session_score) 
-              : (sim.evaluation_overall_score || parseFloat(sim.simulation_overall_score) || 0),
-          };
-        });
-        
-        // Now fetch task_progress for each session separately
-        for (let sIdx = 0; sIdx < row.simulations.length; sIdx++) {
-          const session = row.simulations[sIdx];
-          if (!session.session_id) continue;
-          
-          const taskProgressResult = await DatabaseService.execute(`
+
+            const totalTasks = templateTasks.length;
+
+            return {
+              session_id: sim.session_id,
+              session_status: sim.session_status || 'not_started',
+              session_started_at: sim.session_started_at,
+              session_completed_at: sim.session_completed_at,
+              session_time_spent: sim.session_time_spent || 0,
+              session_score: sim.session_score ? parseFloat(sim.session_score) : null,
+
+              simulation_record_id: sim.simulation_record_id,
+              template_id: sim.template_id,
+              simulation_name: sim.simulation_name,
+              simulation_description: sim.simulation_description,
+              simulation_type: sim.simulation_type,
+              difficulty: sim.difficulty,
+              duration_minutes: sim.duration_minutes,
+              total_tasks: totalTasks,
+              completed_tasks: 0,
+              scoring_rubric: parseJson(sim.scoring_rubric, {}),
+              pass_fail_criteria: parseJson(sim.pass_fail_criteria, {}),
+
+              github_links: parseJson(sim.github_links, {}),
+              task_progress: [],
+              avg_task_score: 0,
+
+              evaluation_id: sim.evaluation_id,
+              evaluation_overall_score: sim.evaluation_overall_score,
+              evaluation_punctuality_score: sim.evaluation_punctuality_score,
+              evaluation_communication_score: sim.evaluation_communication_score,
+              evaluation_problem_solving_score: sim.evaluation_problem_solving_score,
+              evaluation_adaptability_score: sim.evaluation_adaptability_score,
+              evaluation_collaboration_score: sim.evaluation_collaboration_score,
+              attention_to_detail_score: sim.attention_to_detail_score,
+              evaluation_initiative_score: sim.evaluation_initiative_score,
+              evaluation_status: sim.evaluation_status,
+              evaluation_completed_at: sim.evaluation_completed_at,
+
+              overall_score: sim.session_score
+                ? parseFloat(sim.session_score)
+                : (sim.evaluation_overall_score || parseFloat(sim.simulation_overall_score) || 0),
+            };
+          });
+
+          // Now fetch task_progress for each session separately
+          for (let sIdx = 0; sIdx < row.simulations.length; sIdx++) {
+            const session = row.simulations[sIdx];
+            if (!session.session_id) continue;
+
+            const taskProgressResult = await DatabaseService.execute(`
             SELECT 
               stp.id,
               stp.task_index,
@@ -3822,96 +3823,96 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
             WHERE stp.session_id = $1
             ORDER BY stp.task_index
           `, [session.session_id]);
-          
-          const existingProgressMap = new Map();
-          for (const prog of taskProgressResult.rows) {
-            existingProgressMap.set(prog.task_index, prog);
-          }
-          
-          const templateInfo = templateTasksMap.get(session.template_id);
-          const templateTasksList = templateInfo?.tasks || [];
-          const totalTemplateTasks = templateTasksList.length;
-          
-          const completeTaskProgress = [];
-          let completedCount = 0;
-          let totalScoreSum = 0;
-          
-          for (let i = 0; i < totalTemplateTasks; i++) {
-            const templateTask = templateTasksList[i];
-            const existingProgress = existingProgressMap.get(i);
-            
-            if (existingProgress) {
-              const taskScore = existingProgress.score !== null && parseFloat(existingProgress.score) > 0 
-                ? parseFloat(existingProgress.score) 
-                : 0;
-              totalScoreSum += taskScore;
-              if (existingProgress.status === 'completed') {
-                completedCount++;
-              }
-              
-              completeTaskProgress.push({
-                id: existingProgress.id,
-                task_index: existingProgress.task_index,
-                task_id: templateTask?.id || null,
-                task_title: templateTask?.title || `Task ${i + 1}`,
-                task_description: templateTask?.description || '',
-                task_duration: templateTask?.duration || 0,
-                task_type: templateTask?.type || 'technical',
-                status: existingProgress.status,
-                started_at: existingProgress.started_at,
-                completed_at: existingProgress.completed_at,
-                time_spent: existingProgress.time_spent,
-                score: existingProgress.score ? parseFloat(existingProgress.score) : null,
-                feedback: existingProgress.feedback,
-                github_commit_url: existingProgress.github_commit_url,
-                answer: existingProgress.answer,
-                created_at: existingProgress.created_at,
-                updated_at: existingProgress.updated_at,
-                template_task: templateTask
-              });
-            } else {
-              completeTaskProgress.push({
-                id: null,
-                task_index: i,
-                task_id: templateTask?.id || null,
-                task_title: templateTask?.title || `Task ${i + 1}`,
-                task_description: templateTask?.description || '',
-                task_duration: templateTask?.duration || 0,
-                task_type: templateTask?.type || 'technical',
-                status: 'not_started',
-                started_at: null,
-                completed_at: null,
-                time_spent: 0,
-                score: null,
-                feedback: null,
-                github_commit_url: null,
-                answer: null,
-                created_at: null,
-                updated_at: null,
-                template_task: templateTask
-              });
-            }
-          }
-          
-          // ✅ Calculate average task score with 2 decimal places
-          const avgTaskScore = totalTemplateTasks > 0 
-            ? parseFloat((totalScoreSum / totalTemplateTasks).toFixed(2))
-            : 0;
-          
-          session.task_progress = completeTaskProgress;
-          session.completed_tasks = completedCount;
-          session.avg_task_score = avgTaskScore;
-          session.total_tasks = totalTemplateTasks;
-        }
-        
-      } catch (e) {
-        logger.error('simulations query failed:', e);
-        row.simulations = [];
-      }
 
-      // Application timeline
-      try {
-        const timelineResult = await DatabaseService.execute(`
+            const existingProgressMap = new Map();
+            for (const prog of taskProgressResult.rows) {
+              existingProgressMap.set(prog.task_index, prog);
+            }
+
+            const templateInfo = templateTasksMap.get(session.template_id);
+            const templateTasksList = templateInfo?.tasks || [];
+            const totalTemplateTasks = templateTasksList.length;
+
+            const completeTaskProgress = [];
+            let completedCount = 0;
+            let totalScoreSum = 0;
+
+            for (let i = 0; i < totalTemplateTasks; i++) {
+              const templateTask = templateTasksList[i];
+              const existingProgress = existingProgressMap.get(i);
+
+              if (existingProgress) {
+                const taskScore = existingProgress.score !== null && parseFloat(existingProgress.score) > 0
+                  ? parseFloat(existingProgress.score)
+                  : 0;
+                totalScoreSum += taskScore;
+                if (existingProgress.status === 'completed') {
+                  completedCount++;
+                }
+
+                completeTaskProgress.push({
+                  id: existingProgress.id,
+                  task_index: existingProgress.task_index,
+                  task_id: templateTask?.id || null,
+                  task_title: templateTask?.title || `Task ${i + 1}`,
+                  task_description: templateTask?.description || '',
+                  task_duration: templateTask?.duration || 0,
+                  task_type: templateTask?.type || 'technical',
+                  status: existingProgress.status,
+                  started_at: existingProgress.started_at,
+                  completed_at: existingProgress.completed_at,
+                  time_spent: existingProgress.time_spent,
+                  score: existingProgress.score ? parseFloat(existingProgress.score) : null,
+                  feedback: existingProgress.feedback,
+                  github_commit_url: existingProgress.github_commit_url,
+                  answer: existingProgress.answer,
+                  created_at: existingProgress.created_at,
+                  updated_at: existingProgress.updated_at,
+                  template_task: templateTask
+                });
+              } else {
+                completeTaskProgress.push({
+                  id: null,
+                  task_index: i,
+                  task_id: templateTask?.id || null,
+                  task_title: templateTask?.title || `Task ${i + 1}`,
+                  task_description: templateTask?.description || '',
+                  task_duration: templateTask?.duration || 0,
+                  task_type: templateTask?.type || 'technical',
+                  status: 'not_started',
+                  started_at: null,
+                  completed_at: null,
+                  time_spent: 0,
+                  score: null,
+                  feedback: null,
+                  github_commit_url: null,
+                  answer: null,
+                  created_at: null,
+                  updated_at: null,
+                  template_task: templateTask
+                });
+              }
+            }
+
+            // ✅ Calculate average task score with 2 decimal places
+            const avgTaskScore = totalTemplateTasks > 0
+              ? parseFloat((totalScoreSum / totalTemplateTasks).toFixed(2))
+              : 0;
+
+            session.task_progress = completeTaskProgress;
+            session.completed_tasks = completedCount;
+            session.avg_task_score = avgTaskScore;
+            session.total_tasks = totalTemplateTasks;
+          }
+
+        } catch (e) {
+          logger.error('simulations query failed:', e);
+          row.simulations = [];
+        }
+
+        // Application timeline
+        try {
+          const timelineResult = await DatabaseService.execute(`
           SELECT atl.id, atl.event_type, atl.event_data, atl.created_at,
             atl.ip_address, u2.email as created_by_email
           FROM application_timeline atl
@@ -3920,32 +3921,32 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           ORDER BY atl.created_at DESC
           LIMIT 20
         `, [applicationId]);
-        row.application_timeline = timelineResult.rows.map((t: any) => ({
-          ...t,
-          event_data: parseJson(t.event_data, {})
-        }));
-      } catch (e) {
-        logger.error('application_timeline query failed:', e);
-        row.application_timeline = [];
-      }
+          row.application_timeline = timelineResult.rows.map((t: any) => ({
+            ...t,
+            event_data: parseJson(t.event_data, {})
+          }));
+        } catch (e) {
+          logger.error('application_timeline query failed:', e);
+          row.application_timeline = [];
+        }
 
-      // Upcoming interviews
-      try {
-        const interviewResult = await DatabaseService.execute(`
+        // Upcoming interviews
+        try {
+          const interviewResult = await DatabaseService.execute(`
           SELECT id, reminder_type, title, description, reminder_time, status, sent_at
           FROM application_reminders
           WHERE application_id = $1 AND status = 'pending'
           ORDER BY reminder_time ASC
         `, [applicationId]);
-        row.upcoming_interviews = interviewResult.rows;
-      } catch (e) {
-        logger.error('application_reminders query failed:', e);
-        row.upcoming_interviews = [];
-      }
+          row.upcoming_interviews = interviewResult.rows;
+        } catch (e) {
+          logger.error('application_reminders query failed:', e);
+          row.upcoming_interviews = [];
+        }
 
-      // Assignments
-      try {
-        const assignResult = await DatabaseService.execute(`
+        // Assignments
+        try {
+          const assignResult = await DatabaseService.execute(`
           SELECT asgn.assignee_id, asgn.assigned_by, asgn.assigned_at, asgn.role, asgn.notes,
             u2.email as assignee_email,
             CONCAT(cp2.first_name, ' ', cp2.last_name) as assignee_name
@@ -3954,197 +3955,197 @@ async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Pro
           LEFT JOIN candidate_profiles cp2 ON u2.id = cp2.user_id
           WHERE asgn.application_id = $1 AND asgn.status = 'active'
         `, [applicationId]);
-        row.assigned_to = assignResult.rows;
-      } catch (e) {
-        logger.error('application_assignments query failed:', e);
-        row.assigned_to = [];
-      }
-
-      return row;
-    }));
-
-    const stats = statsResult.rows[0] || {};
-
-    this.sendSuccess(res, {
-      job: {
-        id: job.id,
-        title: job.title,
-        company_id: job.company_id,
-        company_name: job.company_name,
-        logo_url: job.logo_url,
-        description: job.description,
-        department: job.department,
-        job_type: job.job_type,
-        work_arrangement: job.work_arrangement,
-        locations: job.locations,
-        salary_min: job.salary_min,
-        salary_max: job.salary_max,
-        salary_currency: job.salary_currency,
-        benefits: job.benefits,
-        experience_min: job.experience_min,
-        experience_max: job.experience_max,
-        experience_level: job.experience_level,
-        skills_required: job.skills_required,
-        skills_preferred: job.skills_preferred,
-        education_required: job.education_required,
-        status: job.status,
-        published_at: job.published_at,
-        expires_at: job.expires_at
-      },
-      candidates,
-      stats: {
-        total_applications: parseInt(stats.total_applications || 0),
-        avg_match_score: Math.round(parseFloat(stats.avg_match_score || 0)),
-        max_match_score: parseInt(stats.max_match_score || 0),
-        min_match_score: parseInt(stats.min_match_score || 0),
-        high_match_count: parseInt(stats.high_match_count || 0),
-        medium_match_count: parseInt(stats.medium_match_count || 0),
-        low_match_count: parseInt(stats.low_match_count || 0),
-        by_status: {
-          submitted: parseInt(stats.submitted_count || 0),
-          under_review: parseInt(stats.under_review_count || 0),
-          shortlisted: parseInt(stats.shortlisted_count || 0),
-          interview: parseInt(stats.interview_count || 0),
-          assessment: parseInt(stats.assessment_count || 0),
-          offer: parseInt(stats.offer_count || 0),
-          hired: parseInt(stats.hired_count || 0),
-          rejected: parseInt(stats.rejected_count || 0)
+          row.assigned_to = assignResult.rows;
+        } catch (e) {
+          logger.error('application_assignments query failed:', e);
+          row.assigned_to = [];
         }
-      },
-      pagination: {
-        current_page: validPage,
-        per_page: validLimit,
-        total_items: total,
-        total_pages: Math.ceil(total / validLimit),
-        has_next_page: validPage * validLimit < total,
-        has_prev_page: validPage > 1
-      },
-      filters: {
-        sort_by: sortBy,
-        sort_order: order
+
+        return row;
+      }));
+
+      const stats = statsResult.rows[0] || {};
+
+      this.sendSuccess(res, {
+        job: {
+          id: job.id,
+          title: job.title,
+          company_id: job.company_id,
+          company_name: job.company_name,
+          logo_url: job.logo_url,
+          description: job.description,
+          department: job.department,
+          job_type: job.job_type,
+          work_arrangement: job.work_arrangement,
+          locations: job.locations,
+          salary_min: job.salary_min,
+          salary_max: job.salary_max,
+          salary_currency: job.salary_currency,
+          benefits: job.benefits,
+          experience_min: job.experience_min,
+          experience_max: job.experience_max,
+          experience_level: job.experience_level,
+          skills_required: job.skills_required,
+          skills_preferred: job.skills_preferred,
+          education_required: job.education_required,
+          status: job.status,
+          published_at: job.published_at,
+          expires_at: job.expires_at
+        },
+        candidates,
+        stats: {
+          total_applications: parseInt(stats.total_applications || 0),
+          avg_match_score: Math.round(parseFloat(stats.avg_match_score || 0)),
+          max_match_score: parseInt(stats.max_match_score || 0),
+          min_match_score: parseInt(stats.min_match_score || 0),
+          high_match_count: parseInt(stats.high_match_count || 0),
+          medium_match_count: parseInt(stats.medium_match_count || 0),
+          low_match_count: parseInt(stats.low_match_count || 0),
+          by_status: {
+            submitted: parseInt(stats.submitted_count || 0),
+            under_review: parseInt(stats.under_review_count || 0),
+            shortlisted: parseInt(stats.shortlisted_count || 0),
+            interview: parseInt(stats.interview_count || 0),
+            assessment: parseInt(stats.assessment_count || 0),
+            offer: parseInt(stats.offer_count || 0),
+            hired: parseInt(stats.hired_count || 0),
+            rejected: parseInt(stats.rejected_count || 0)
+          }
+        },
+        pagination: {
+          current_page: validPage,
+          per_page: validLimit,
+          total_items: total,
+          total_pages: Math.ceil(total / validLimit),
+          has_next_page: validPage * validLimit < total,
+          has_prev_page: validPage > 1
+        },
+        filters: {
+          sort_by: sortBy,
+          sort_order: order
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error getting job candidates with matches:', error);
+      this.sendError(res, 'Failed to fetch job candidates', 500, error as Error);
+    }
+  }
+  private async getUserCompanyId(userId: string, userType: string): Promise<string | null> {
+    if (userType !== 'company_admin' && userType !== 'recruiter') {
+      return null;
+    }
+
+    const teamResult = await DatabaseService.execute(
+      'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
+      [userId]
+    );
+
+    return teamResult.rows[0]?.company_id || null;
+  }
+
+  // =====================================================
+  // SAVED JOBS METHODS
+  // =====================================================
+
+  /**
+   * Save a job for the current user
+   * @route POST /api/v1/jobs/saved/:jobId
+   * @access Private (all authenticated users)
+   */
+  async saveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const userId = req.user.id;
+
+      if (!jobId || !ValidationService.isValidUUID(jobId)) {
+        this.sendError(res, 'Invalid job ID format', 400);
+        return;
       }
-    });
 
-  } catch (error) {
-    logger.error('Error getting job candidates with matches:', error);
-    this.sendError(res, 'Failed to fetch job candidates', 500, error as Error);
-  }
-}
-private async getUserCompanyId(userId: string, userType: string): Promise<string | null> {
-  if (userType !== 'company_admin' && userType !== 'recruiter') {
-    return null;
-  }
+      // Check if job exists
+      const jobCheck = await DatabaseService.execute(
+        `SELECT id, status FROM jobs WHERE id = $1 AND deleted_at IS NULL`,
+        [jobId]
+      );
 
-  const teamResult = await DatabaseService.execute(
-    'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
-    [userId]
-  );
-  
-  return teamResult.rows[0]?.company_id || null;
-}
+      if (jobCheck.rows.length === 0) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
 
-// =====================================================
-// SAVED JOBS METHODS
-// =====================================================
+      // Check if already saved
+      const existingSave = await DatabaseService.execute(
+        `SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2`,
+        [userId, jobId]
+      );
 
-/**
- * Save a job for the current user
- * @route POST /api/v1/jobs/saved/:jobId
- * @access Private (all authenticated users)
- */
-async saveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { jobId } = req.params;
-    const userId = req.user.id;
+      if (existingSave.rows.length > 0) {
+        this.sendError(res, 'Job already saved', 400);
+        return;
+      }
 
-    if (!jobId || !ValidationService.isValidUUID(jobId)) {
-      this.sendError(res, 'Invalid job ID format', 400);
-      return;
-    }
-
-    // Check if job exists
-    const jobCheck = await DatabaseService.execute(
-      `SELECT id, status FROM jobs WHERE id = $1 AND deleted_at IS NULL`,
-      [jobId]
-    );
-
-    if (jobCheck.rows.length === 0) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
-
-    // Check if already saved
-    const existingSave = await DatabaseService.execute(
-      `SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2`,
-      [userId, jobId]
-    );
-
-    if (existingSave.rows.length > 0) {
-      this.sendError(res, 'Job already saved', 400);
-      return;
-    }
-
-    // Save the job
-    await DatabaseService.execute(
-      `INSERT INTO saved_jobs (user_id, job_id, saved_at) 
+      // Save the job
+      await DatabaseService.execute(
+        `INSERT INTO saved_jobs (user_id, job_id, saved_at) 
        VALUES ($1, $2, NOW())`,
-      [userId, jobId]
-    );
+        [userId, jobId]
+      );
 
-    this.sendSuccess(res, { jobId, saved: true }, 'Job saved successfully');
-  } catch (error) {
-    logger.error('Error saving job:', error);
-    this.sendError(res, 'Failed to save job', 500, error as Error);
-  }
-}
-
-/**
- * Unsave a job (remove from saved)
- * @route DELETE /api/v1/jobs/saved/:jobId
- * @access Private (all authenticated users)
- */
-async unsaveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { jobId } = req.params;
-    const userId = req.user.id;
-
-    if (!jobId || !ValidationService.isValidUUID(jobId)) {
-      this.sendError(res, 'Invalid job ID format', 400);
-      return;
+      this.sendSuccess(res, { jobId, saved: true }, 'Job saved successfully');
+    } catch (error) {
+      logger.error('Error saving job:', error);
+      this.sendError(res, 'Failed to save job', 500, error as Error);
     }
-
-    const result = await DatabaseService.execute(
-      `DELETE FROM saved_jobs WHERE user_id = $1 AND job_id = $2 RETURNING 1`,
-      [userId, jobId]
-    );
-
-    if (result.rows.length === 0) {
-      this.sendError(res, 'Job not found in saved list', 404);
-      return;
-    }
-
-    this.sendSuccess(res, { jobId, saved: false }, 'Job removed from saved');
-  } catch (error) {
-    logger.error('Error unsaving job:', error);
-    this.sendError(res, 'Failed to unsave job', 500, error as Error);
   }
-}
 
-/**
- * Get all saved jobs for the current user
- * @route GET /api/v1/jobs/saved
- * @access Private (all authenticated users)
- */
-async getSavedJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const userId = req.user.id;
-    const { page = '1', limit = '20' } = req.query;
+  /**
+   * Unsave a job (remove from saved)
+   * @route DELETE /api/v1/jobs/saved/:jobId
+   * @access Private (all authenticated users)
+   */
+  async unsaveJob(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const userId = req.user.id;
 
-    const validPage = Math.max(1, parseInt(page as string));
-    const validLimit = Math.min(100, parseInt(limit as string));
-    const offset = (validPage - 1) * validLimit;
+      if (!jobId || !ValidationService.isValidUUID(jobId)) {
+        this.sendError(res, 'Invalid job ID format', 400);
+        return;
+      }
 
-    const result = await DatabaseService.execute(`
+      const result = await DatabaseService.execute(
+        `DELETE FROM saved_jobs WHERE user_id = $1 AND job_id = $2 RETURNING 1`,
+        [userId, jobId]
+      );
+
+      if (result.rows.length === 0) {
+        this.sendError(res, 'Job not found in saved list', 404);
+        return;
+      }
+
+      this.sendSuccess(res, { jobId, saved: false }, 'Job removed from saved');
+    } catch (error) {
+      logger.error('Error unsaving job:', error);
+      this.sendError(res, 'Failed to unsave job', 500, error as Error);
+    }
+  }
+
+  /**
+   * Get all saved jobs for the current user
+   * @route GET /api/v1/jobs/saved
+   * @access Private (all authenticated users)
+   */
+  async getSavedJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const { page = '1', limit = '20' } = req.query;
+
+      const validPage = Math.max(1, parseInt(page as string));
+      const validLimit = Math.min(100, parseInt(limit as string));
+      const offset = (validPage - 1) * validLimit;
+
+      const result = await DatabaseService.execute(`
       SELECT 
         j.*,
         c.name as company_name,
@@ -4163,89 +4164,89 @@ async getSavedJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
       LIMIT $2 OFFSET $3
     `, [userId, validLimit, offset]);
 
-    const countResult = await DatabaseService.execute(
-      `SELECT COUNT(*) as total FROM saved_jobs WHERE user_id = $1`,
-      [userId]
-    );
+      const countResult = await DatabaseService.execute(
+        `SELECT COUNT(*) as total FROM saved_jobs WHERE user_id = $1`,
+        [userId]
+      );
 
-    const total = parseInt(countResult.rows[0]?.total || '0');
+      const total = parseInt(countResult.rows[0]?.total || '0');
 
-    this.sendSuccess(res, {
-      data: result.rows,
-      pagination: {
-        current_page: validPage,
-        per_page: validLimit,
-        total_items: total,
-        total_pages: Math.ceil(total / validLimit),
-        has_next_page: validPage * validLimit < total,
-        has_prev_page: validPage > 1
+      this.sendSuccess(res, {
+        data: result.rows,
+        pagination: {
+          current_page: validPage,
+          per_page: validLimit,
+          total_items: total,
+          total_pages: Math.ceil(total / validLimit),
+          has_next_page: validPage * validLimit < total,
+          has_prev_page: validPage > 1
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting saved jobs:', error);
+      this.sendError(res, 'Failed to get saved jobs', 500, error as Error);
+    }
+  }
+
+  /**
+   * Check if a job is saved by the current user
+   * @route GET /api/v1/jobs/saved/:jobId/check
+   * @access Private (all authenticated users)
+   */
+  async isJobSaved(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const userId = req.user.id;
+
+      if (!jobId || !ValidationService.isValidUUID(jobId)) {
+        this.sendError(res, 'Invalid job ID format', 400);
+        return;
       }
-    });
-  } catch (error) {
-    logger.error('Error getting saved jobs:', error);
-    this.sendError(res, 'Failed to get saved jobs', 500, error as Error);
-  }
-}
 
-/**
- * Check if a job is saved by the current user
- * @route GET /api/v1/jobs/saved/:jobId/check
- * @access Private (all authenticated users)
- */
-async isJobSaved(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    const { jobId } = req.params;
-    const userId = req.user.id;
+      // Check if job exists
+      const jobCheck = await DatabaseService.execute(
+        `SELECT id FROM jobs WHERE id = $1 AND deleted_at IS NULL`,
+        [jobId]
+      );
 
-    if (!jobId || !ValidationService.isValidUUID(jobId)) {
-      this.sendError(res, 'Invalid job ID format', 400);
-      return;
+      if (jobCheck.rows.length === 0) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
+
+      // Check if saved
+      const result = await DatabaseService.execute(
+        `SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2`,
+        [userId, jobId]
+      );
+
+      this.sendSuccess(res, {
+        saved: result.rows.length > 0,
+        isSaved: result.rows.length > 0,
+        jobId
+      });
+    } catch (error) {
+      logger.error('Error checking saved job:', error);
+      this.sendError(res, 'Failed to check saved status', 500, error as Error);
     }
-
-    // Check if job exists
-    const jobCheck = await DatabaseService.execute(
-      `SELECT id FROM jobs WHERE id = $1 AND deleted_at IS NULL`,
-      [jobId]
-    );
-
-    if (jobCheck.rows.length === 0) {
-      this.sendError(res, 'Job not found', 404);
-      return;
-    }
-
-    // Check if saved
-    const result = await DatabaseService.execute(
-      `SELECT 1 FROM saved_jobs WHERE user_id = $1 AND job_id = $2`,
-      [userId, jobId]
-    );
-
-    this.sendSuccess(res, {
-      saved: result.rows.length > 0,
-      isSaved: result.rows.length > 0,
-      jobId
-    });
-  } catch (error) {
-    logger.error('Error checking saved job:', error);
-    this.sendError(res, 'Failed to check saved status', 500, error as Error);
   }
-}
 
-// =====================================================
-// SUGGESTIONS — unique values from DB for autocomplete
-// =====================================================
+  // =====================================================
+  // SUGGESTIONS — unique values from DB for autocomplete
+  // =====================================================
 
-async getSuggestions(req: Request, res: Response): Promise<void> {
-  try {
-    // Skills: from the dedicated skills table
-    const skillsResult = await DatabaseService.execute(
-      `SELECT DISTINCT name FROM skills
+  async getSuggestions(req: Request, res: Response): Promise<void> {
+    try {
+      // Skills: from the dedicated skills table
+      const skillsResult = await DatabaseService.execute(
+        `SELECT DISTINCT name FROM skills
        WHERE name IS NOT NULL AND trim(name) <> ''
        ORDER BY name LIMIT 300`,
-      []
-    );
+        []
+      );
 
-    // Helper to safely unnest JSONB arrays that may be plain arrays or {required:[]} objects
-    const unnestQuery = (col: string) => `
+      // Helper to safely unnest JSONB arrays that may be plain arrays or {required:[]} objects
+      const unnestQuery = (col: string) => `
       SELECT DISTINCT item FROM (
         SELECT jsonb_array_elements_text(
           CASE
@@ -4264,15 +4265,29 @@ async getSuggestions(req: Request, res: Response): Promise<void> {
       LIMIT 150
     `;
 
-    const [respResult, reqResult, benefitsResult] = await Promise.all([
-      DatabaseService.execute(unnestQuery('responsibilities'), []),
-      DatabaseService.execute(unnestQuery('requirements'),     []),
-      DatabaseService.execute(unnestQuery('benefits'),         []),
-    ]);
+      const [respResult, reqResult, benefitsResult] = await Promise.all([
+        DatabaseService.execute(unnestQuery('responsibilities'), []),
+        DatabaseService.execute(unnestQuery('requirements'), []),
+        DatabaseService.execute(unnestQuery('benefits'), []),
+      ]);
 
-    // Degree types stored in education_required->minimum_degree
-    const degreeTypesResult = await DatabaseService.execute(`
+      // Degree types from structured qualification entries. Older jobs may have
+      // a combined display string in minimum_degree, so keep only clean degree names.
+      const degreeTypesResult = await DatabaseService.execute(`
       SELECT DISTINCT item FROM (
+        SELECT entry->>'degree' AS item
+        FROM jobs
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE
+            WHEN jsonb_typeof(education_required->'qualification_entries') = 'array'
+              THEN education_required->'qualification_entries'
+            ELSE '[]'::jsonb
+          END
+        ) AS entry
+        WHERE education_required IS NOT NULL
+          AND jsonb_typeof(education_required) = 'object'
+          AND deleted_at IS NULL
+        UNION
         SELECT education_required->>'minimum_degree' AS item
         FROM jobs
         WHERE education_required IS NOT NULL
@@ -4280,12 +4295,29 @@ async getSuggestions(req: Request, res: Response): Promise<void> {
           AND deleted_at IS NULL
       ) t
       WHERE trim(COALESCE(item,'')) <> ''
+        AND item !~* '[[:space:]]+(in|or)[[:space:]]+'
+        AND length(item) <= 60
       ORDER BY item LIMIT 50
     `, []);
 
-    // Fields of study from education_required->fields_of_study
-    const fieldsOfStudyResult = await DatabaseService.execute(`
+      // Fields of study from structured qualification entries and legacy fields_of_study
+      const fieldsOfStudyResult = await DatabaseService.execute(`
       SELECT DISTINCT item FROM (
+        SELECT jsonb_array_elements_text(
+          CASE WHEN jsonb_typeof(entry->'fields') = 'array'
+               THEN entry->'fields'
+               ELSE '[]'::jsonb END
+        ) AS item
+        FROM jobs
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE
+            WHEN jsonb_typeof(education_required->'qualification_entries') = 'array'
+              THEN education_required->'qualification_entries'
+            ELSE '[]'::jsonb
+          END
+        ) AS entry
+        WHERE education_required IS NOT NULL AND deleted_at IS NULL
+        UNION
         SELECT jsonb_array_elements_text(
           CASE WHEN jsonb_typeof(education_required->'fields_of_study') = 'array'
                THEN education_required->'fields_of_study'
@@ -4298,52 +4330,52 @@ async getSuggestions(req: Request, res: Response): Promise<void> {
       ORDER BY item LIMIT 150
     `, []);
 
-    this.sendSuccess(res, {
-      skills:          skillsResult.rows.map((r: any) => r.name).filter(Boolean),
-      responsibilities: respResult.rows.map((r: any) => r.item).filter(Boolean),
-      requirements:    reqResult.rows.map((r: any) => r.item).filter(Boolean),
-      benefits:        benefitsResult.rows.map((r: any) => r.item).filter(Boolean),
-      degreeTypes:     degreeTypesResult.rows.map((r: any) => r.item).filter(Boolean),
-      fieldsOfStudy:   fieldsOfStudyResult.rows.map((r: any) => r.item).filter(Boolean),
-    });
-  } catch (error) {
-    logger.error('Error fetching suggestions:', error);
-    this.sendError(res, 'Failed to fetch suggestions', 500, error as Error);
+      this.sendSuccess(res, {
+        skills: skillsResult.rows.map((r: any) => r.name).filter(Boolean),
+        responsibilities: respResult.rows.map((r: any) => r.item).filter(Boolean),
+        requirements: reqResult.rows.map((r: any) => r.item).filter(Boolean),
+        benefits: benefitsResult.rows.map((r: any) => r.item).filter(Boolean),
+        degreeTypes: degreeTypesResult.rows.map((r: any) => r.item).filter(Boolean),
+        fieldsOfStudy: fieldsOfStudyResult.rows.map((r: any) => r.item).filter(Boolean),
+      });
+    } catch (error) {
+      logger.error('Error fetching suggestions:', error);
+      this.sendError(res, 'Failed to fetch suggestions', 500, error as Error);
+    }
   }
-}
 
 
-async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promise<void> {
-  try {
-    // Get company ID from the authenticated user
-    let companyId: string | null = null;
-    console.log('========== GET COMPANY DASHBOARD STATS CALLED ==========');
-    console.log('User:', { 
-      id: req.user.id, 
-      type: req.user.user_type, 
-      company_id: req.user.company_id 
-    });
-    console.log('Headers:', req.headers.authorization?.substring(0, 50) + '...');
-    
-    if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
-      const teamResult = await DatabaseService.execute(
-        'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
-        [req.user.id]
-      );
-      if (teamResult.rows.length > 0) {
-        companyId = teamResult.rows[0].company_id;
-      } else {
-        companyId = req.user.company_id ? String(req.user.company_id) : null;
+  async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      // Get company ID from the authenticated user
+      let companyId: string | null = null;
+      console.log('========== GET COMPANY DASHBOARD STATS CALLED ==========');
+      console.log('User:', {
+        id: req.user.id,
+        type: req.user.user_type,
+        company_id: req.user.company_id
+      });
+      console.log('Headers:', req.headers.authorization?.substring(0, 50) + '...');
+
+      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+        const teamResult = await DatabaseService.execute(
+          'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
+          [req.user.id]
+        );
+        if (teamResult.rows.length > 0) {
+          companyId = teamResult.rows[0].company_id;
+        } else {
+          companyId = req.user.company_id ? String(req.user.company_id) : null;
+        }
       }
-    }
 
-    if (!companyId) {
-      this.sendError(res, 'Company not found for this user', 404);
-      return;
-    }
+      if (!companyId) {
+        this.sendError(res, 'Company not found for this user', 404);
+        return;
+      }
 
-    // Get Active Jobs count
-    const activeJobsResult = await DatabaseService.execute(`
+      // Get Active Jobs count
+      const activeJobsResult = await DatabaseService.execute(`
       SELECT COUNT(*) as count
       FROM jobs
       WHERE company_id = $1 
@@ -4352,8 +4384,8 @@ async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promis
         AND (expires_at IS NULL OR expires_at > NOW())
     `, [companyId]);
 
-    // Get Total Applications count
-    const totalApplicationsResult = await DatabaseService.execute(`
+      // Get Total Applications count
+      const totalApplicationsResult = await DatabaseService.execute(`
       SELECT COUNT(*) as count
       FROM applications a
       JOIN jobs j ON a.job_id = j.id
@@ -4361,8 +4393,8 @@ async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promis
         AND a.deleted_at IS NULL
     `, [companyId]);
 
-    // Get Qualified Candidates count (match_score >= 70)
-    const qualifiedCandidatesResult = await DatabaseService.execute(`
+      // Get Qualified Candidates count (match_score >= 70)
+      const qualifiedCandidatesResult = await DatabaseService.execute(`
       SELECT COUNT(DISTINCT a.user_id) as count
       FROM applications a
       JOIN jobs j ON a.job_id = j.id
@@ -4371,8 +4403,8 @@ async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promis
         AND a.match_score >= 70
     `, [companyId]);
 
-    // Get Interviews Scheduled count
-    const interviewsScheduledResult = await DatabaseService.execute(`
+      // Get Interviews Scheduled count
+      const interviewsScheduledResult = await DatabaseService.execute(`
       SELECT COUNT(*) as count
       FROM applications a
       JOIN jobs j ON a.job_id = j.id
@@ -4381,8 +4413,8 @@ async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promis
         AND a.status = 'interview'
     `, [companyId]);
 
-    // Optional: Get additional stats for more insights
-    const additionalStats = await DatabaseService.execute(`
+      // Optional: Get additional stats for more insights
+      const additionalStats = await DatabaseService.execute(`
       SELECT 
         COUNT(CASE WHEN j.status = 'active' THEN 1 END) as active_jobs,
         COUNT(CASE WHEN j.status = 'draft' THEN 1 END) as draft_jobs,
@@ -4401,18 +4433,656 @@ async getCompanyDashboardStats(req: AuthenticatedRequest, res: Response): Promis
       WHERE j.company_id = $1 AND j.deleted_at IS NULL
     `, [companyId]);
 
-    this.sendSuccess(res, {
-      active_jobs: parseInt(activeJobsResult.rows[0]?.count || '0'),
-      total_applications: parseInt(totalApplicationsResult.rows[0]?.count || '0'),
-      qualified_candidates: parseInt(qualifiedCandidatesResult.rows[0]?.count || '0'),
-      interviews_scheduled: parseInt(interviewsScheduledResult.rows[0]?.count || '0'),
-      additional: additionalStats.rows[0] || {}
-    });
-  } catch (error) {
-    logger.error('Error getting company dashboard stats:', error);
-    this.sendError(res, 'Failed to fetch dashboard statistics', 500, error as Error);
+      this.sendSuccess(res, {
+        active_jobs: parseInt(activeJobsResult.rows[0]?.count || '0'),
+        total_applications: parseInt(totalApplicationsResult.rows[0]?.count || '0'),
+        qualified_candidates: parseInt(qualifiedCandidatesResult.rows[0]?.count || '0'),
+        interviews_scheduled: parseInt(interviewsScheduledResult.rows[0]?.count || '0'),
+        additional: additionalStats.rows[0] || {}
+      });
+    } catch (error) {
+      logger.error('Error getting company dashboard stats:', error);
+      this.sendError(res, 'Failed to fetch dashboard statistics', 500, error as Error);
+    }
   }
-}
+
+
+  /**
+   * Get all candidates who applied to a job with complete details including simulations, tasks, and marks
+   * @route GET /api/v1/jobs/:jobId/candidates/complete
+   * @access Private (Recruiters, Company Admins)
+   */
+  async getJobCandidatesComplete(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      const {
+        page = '1',
+        limit = '50',
+        sortBy = 'overall_score',
+        sortOrder = 'DESC',
+        minScore,
+        maxScore,
+        status,
+        hasSimulation
+      } = req.query;
+
+      // Validate job exists and user has access
+      if (!jobId || !ValidationService.isValidUUID(jobId)) {
+        this.sendError(res, 'Invalid job ID format', 400);
+        return;
+      }
+
+      // Check permissions
+      const jobAccess = await DatabaseService.execute(`
+      SELECT j.id, j.company_id, j.created_by, j.title, j.status,
+             c.name as company_name, c.logo_url
+      FROM jobs j
+      LEFT JOIN companies c ON j.company_id = c.id
+      WHERE j.id = $1 AND j.deleted_at IS NULL
+    `, [jobId]);
+
+      if (jobAccess.rows.length === 0) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
+
+      const job = jobAccess.rows[0];
+      const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
+      const isOwner = job.created_by === req.user.id;
+      const isCompanyUser = job.company_id === userCompanyId;
+      const isAdmin = req.user.user_type === 'system_admin';
+
+      if (!isOwner && !isCompanyUser && !isAdmin) {
+        this.sendError(res, 'Access denied to this job', 403);
+        return;
+      }
+
+      // Pagination setup
+      const validPage = Math.max(1, parseInt(page as string));
+      const validLimit = Math.min(100, parseInt(limit as string));
+      const offset = (validPage - 1) * validLimit;
+
+      // Build filter conditions
+      let whereConditions = ['a.job_id = $1', 'a.deleted_at IS NULL'];
+      const queryParams: any[] = [jobId];
+      let paramIndex = 2;
+
+      if (status && status !== 'all') {
+        whereConditions.push(`a.status = $${paramIndex++}`);
+        queryParams.push(status);
+      }
+
+      if (minScore) {
+        whereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) >= $${paramIndex++}`);
+        queryParams.push(parseFloat(minScore as string));
+      }
+
+      if (maxScore) {
+        whereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) <= $${paramIndex++}`);
+        queryParams.push(parseFloat(maxScore as string));
+      }
+
+      if (hasSimulation === 'true') {
+        whereConditions.push(`s.id IS NOT NULL`);
+      } else if (hasSimulation === 'false') {
+        whereConditions.push(`s.id IS NULL`);
+      }
+
+      const whereClause = whereConditions.join(' AND ');
+
+      // Determine sort column
+      let orderByColumn = '';
+      switch (sortBy) {
+        case 'overall_score':
+          orderByColumn = 'candidate_overall_score';
+          break;
+        case 'applied_at':
+          orderByColumn = 'a.applied_at';
+          break;
+        case 'completion_rate':
+          orderByColumn = 'candidate_completion_rate';
+          break;
+        case 'name':
+          orderByColumn = 'candidate_name';
+          break;
+        default:
+          orderByColumn = 'candidate_overall_score';
+      }
+      const orderDirection = sortOrder === 'ASC' ? 'ASC' : 'DESC';
+
+      // ============================================
+      // MAIN QUERY - Get ALL candidates with complete data
+      // ============================================
+      const result = await DatabaseService.execute(`
+      WITH candidate_data AS (
+        SELECT DISTINCT ON (a.user_id)
+          -- Application info
+          a.id as application_id,
+          a.application_number,
+          a.status as application_status,
+          a.current_stage,
+          a.applied_at,
+          a.updated_at as application_updated_at,
+          a.match_score as ai_match_score,
+          a.match_details,
+          a.rating as recruiter_rating,
+          a.ai_score,
+          a.screening_answers,
+          a.notes,
+          a.internal_notes,
+          a.tags as application_tags,
+          a.interview_date,
+          a.feedback as recruiter_feedback,
+          a.withdrawn_at,
+          a.withdrawn_reason,
+          a.rejection_reason,
+          a.source,
+          a.source_details,
+          a.referrer_id,
+          
+          -- Candidate profile
+          u.id as candidate_id,
+          u.email as candidate_email,
+          u.user_type,
+          u.status as user_status,
+          u.created_at as candidate_joined_date,
+          u.last_login_at,
+          cp.first_name,
+          cp.last_name,
+          CONCAT(cp.first_name, ' ', cp.last_name) as candidate_name,
+          cp.phone,
+          cp.country,
+          cp.city,
+          cp.timezone,
+          cp.profile_photo_url,
+          cp.headline,
+          cp.summary,
+          cp.linkedin_url,
+          cp.github_url,
+          cp.portfolio_url,
+          cp.website_url,
+          cp.profile_completion,
+          cp.willing_to_relocate,
+          cp.willing_to_travel,
+          cp.notice_period_days,
+          cp.current_salary,
+          cp.expected_salary,
+          cp.currency,
+          cp.languages,
+          cp.availability,
+          cp.job_preferences,
+          
+          -- Most recent simulation for this job
+          s.id as simulation_id,
+          s.status as simulation_status,
+          s.overall_score as simulation_overall_score,
+          s.punctuality_score,
+          s.communication_score,
+          s.problem_solving_score,
+          s.adaptability_score,
+          s.collaboration_score,
+          s.attention_score,
+          s.initiative_score,
+          s.feedback as simulation_feedback,
+          s.strengths,
+          s.improvements,
+          s.completed_at as simulation_completed_at,
+          s.time_spent as simulation_time_spent,
+          s.blockchain_tx_id,
+          s.blockchain_hash,
+          
+          -- Latest session for this simulation
+          ss.id as session_id,
+          ss.status as session_status,
+          ss.started_at,
+          ss.completed_at as session_completed_at,
+          ss.time_spent as session_time_spent,
+          ss.score as session_score,
+          ss.github_links,
+          ss.submission_results,
+          
+          -- Evaluation data
+          e.id as evaluation_id,
+          e.overall_score as evaluation_overall_score,
+          e.punctuality_score as evaluation_punctuality_score,
+          e.communication_score as evaluation_communication_score,
+          e.problem_solving_score as evaluation_problem_solving_score,
+          e.adaptability_score as evaluation_adaptability_score,
+          e.collaboration_score as evaluation_collaboration_score,
+          e.attention_to_detail_score,
+          e.initiative_score as evaluation_initiative_score,
+          e.status as evaluation_status,
+          e.completed_at as evaluation_completed_at,
+          
+          -- Template info
+          st.id as template_id,
+          st.name as simulation_name,
+          st.type as simulation_type,
+          st.difficulty,
+          st.duration_minutes,
+          st.total_tasks,
+          st.tasks as template_tasks,
+          st.scoring_rubric,
+          st.pass_fail_criteria,
+          
+          -- Calculate overall score (simulation > evaluation > match_score)
+          COALESCE(s.overall_score, e.overall_score, a.match_score, 0) as candidate_overall_score,
+          
+          -- Calculate completion rate from session_task_progress
+          (
+            SELECT COUNT(*) FILTER (WHERE status = 'completed') * 100.0 / NULLIF(COUNT(*), 0)
+            FROM session_task_progress stp
+            WHERE stp.session_id = ss.id
+          ) as candidate_completion_rate,
+          
+          -- Get task progress count
+          (
+            SELECT COUNT(*)
+            FROM session_task_progress stp
+            WHERE stp.session_id = ss.id AND stp.status = 'completed'
+          ) as tasks_completed_count,
+          
+          -- Get total tasks count from template
+          st.total_tasks as total_tasks_count
+
+        FROM applications a
+        INNER JOIN users u ON a.user_id = u.id
+        LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
+        LEFT JOIN simulations s ON s.application_id = a.id AND s.job_id = a.job_id
+        LEFT JOIN simulation_templates st ON s.template_id = st.id
+        LEFT JOIN simulation_sessions ss ON ss.simulation_id = s.id AND ss.session_type = 'candidate'
+        LEFT JOIN evaluations e ON e.simulation_id = s.id AND e.candidate_id = u.id
+        WHERE ${whereClause}
+        ORDER BY a.user_id, s.created_at DESC NULLS LAST
+      )
+      SELECT 
+        cd.*,
+        -- Get all education records as JSON
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', ed.id,
+                'institution', ed.institution,
+                'degree', ed.degree,
+                'field_of_study', ed.field_of_study,
+                'start_date', ed.start_date,
+                'end_date', ed.end_date,
+                'is_current', ed.is_current,
+                'grade', ed.grade,
+                'grade_scale', ed.grade_scale,
+                'description', ed.description,
+                'verified', ed.verified
+              ) ORDER BY ed.end_date DESC NULLS LAST
+            )
+            FROM education ed
+            WHERE ed.user_id = cd.candidate_id
+          ),
+          '[]'::jsonb
+        ) as education,
+        
+        -- Get all work experience as JSON
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', we.id,
+                'company', we.company,
+                'title', we.title,
+                'employment_type', we.employment_type,
+                'location', we.location,
+                'start_date', we.start_date,
+                'end_date', we.end_date,
+                'is_current', we.is_current,
+                'description', we.description,
+                'industry', we.industry
+              ) ORDER BY we.start_date DESC
+            )
+            FROM work_experience we
+            WHERE we.user_id = cd.candidate_id
+          ),
+          '[]'::jsonb
+        ) as work_experience,
+        
+        -- Get all skills as JSON
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'skill_id', us.skill_id,
+                'skill_name', s2.name,
+                'proficiency_level', us.proficiency_level,
+                'proficiency_label', us.proficiency_label,
+                'years_experience', us.years_experience,
+                'is_primary', us.is_primary,
+                'endorsement_count', us.endorsement_count,
+                'verified', us.verified
+              ) ORDER BY us.proficiency_level DESC
+            )
+            FROM user_skills us
+            JOIN skills s2 ON us.skill_id = s2.id
+            WHERE us.user_id = cd.candidate_id
+          ),
+          '[]'::jsonb
+        ) as skills,
+        
+        -- Get all certifications as JSON
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', cert.id,
+                'name', cert.name,
+                'issuer', cert.issuer,
+                'issue_date', cert.issue_date,
+                'expiry_date', cert.expiry_date,
+                'credential_id', cert.credential_id,
+                'credential_url', cert.credential_url,
+                'verified', cert.verified
+              ) ORDER BY cert.issue_date DESC
+            )
+            FROM certifications cert
+            WHERE cert.user_id = cd.candidate_id AND cert.verified = true
+          ),
+          '[]'::jsonb
+        ) as certifications,
+        
+        -- Get all resumes as JSON with file URLs
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', r.id,
+                'file_name', r.file_name,
+                'file_url', CONCAT('/uploads/', r.file_key),
+                'file_size', r.file_size,
+                'is_primary', r.is_primary,
+                'uploaded_at', r.created_at
+              ) ORDER BY r.is_primary DESC
+            )
+            FROM resumes r
+            WHERE r.user_id = cd.candidate_id
+          ),
+          '[]'::jsonb
+        ) as resumes,
+        
+        -- Get ALL task progress with detailed marks
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'task_index', stp.task_index,
+                'task_name', COALESCE(st.tasks->stp.task_index->>'title', 'Task ' || (stp.task_index + 1)),
+                'status', stp.status,
+                'score', stp.score,
+                'feedback', stp.feedback,
+                'time_spent_seconds', stp.time_spent,
+                'time_spent_formatted', CONCAT(FLOOR(stp.time_spent / 60), 'm ', (stp.time_spent % 60), 's'),
+                'started_at', stp.started_at,
+                'completed_at', stp.completed_at,
+                'github_commit_url', stp.github_commit_url,
+                'has_code', CASE WHEN stp.answer->>'code' IS NOT NULL THEN true ELSE false END,
+                'has_essay', CASE WHEN stp.answer->>'essay' IS NOT NULL THEN true ELSE false END,
+                'proficiency_level', 
+                  CASE 
+                    WHEN stp.score >= 90 THEN 'Master'
+                    WHEN stp.score >= 75 THEN 'Expert'
+                    WHEN stp.score >= 60 THEN 'Advanced'
+                    WHEN stp.score >= 40 THEN 'Intermediate'
+                    WHEN stp.score > 0 THEN 'Beginner'
+                    ELSE 'Not Started'
+                  END
+              ) ORDER BY stp.task_index
+            )
+            FROM session_task_progress stp
+            LEFT JOIN simulation_templates st ON st.id = cd.template_id
+            WHERE stp.session_id = cd.session_id
+          ),
+          '[]'::jsonb
+        ) as task_progress,
+        
+        -- Get AI analysis feedback
+        COALESCE(
+          (
+            SELECT jsonb_build_object(
+              'summary', eaf.summary,
+              'detailed_analysis', eaf.detailed_analysis,
+              'strengths', eaf.strengths,
+              'areas_for_improvement', eaf.areas_for_improvement,
+              'recommendations', eaf.recommendations,
+              'confidence', eaf.confidence
+            )
+            FROM evaluation_ai_feedback eaf
+            WHERE eaf.evaluation_id = cd.evaluation_id
+          ),
+          NULL
+        ) as ai_feedback,
+        
+        -- Get behavioral metrics
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'metric', ebm.metric,
+                'score', ebm.score,
+                'description', ebm.description,
+                'improvement_suggestion', ebm.improvement_suggestion
+              )
+            )
+            FROM evaluation_behavioral_metrics ebm
+            WHERE ebm.evaluation_id = cd.evaluation_id
+          ),
+          '[]'::jsonb
+        ) as behavioral_metrics,
+        
+        -- Get application timeline
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'event_type', atl.event_type,
+                'event_data', atl.event_data,
+                'created_at', atl.created_at,
+                'created_by_email', u2.email
+              ) ORDER BY atl.created_at DESC
+            )
+            FROM application_timeline atl
+            LEFT JOIN users u2 ON atl.created_by = u2.id
+            WHERE atl.application_id = cd.application_id
+          ),
+          '[]'::jsonb
+        ) as application_timeline,
+        
+        -- Get application reminders (interviews)
+        COALESCE(
+          (
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', ar.id,
+                'title', ar.title,
+                'description', ar.description,
+                'reminder_time', ar.reminder_time,
+                'status', ar.status,
+                'reminder_type', ar.reminder_type
+              ) ORDER BY ar.reminder_time
+            )
+            FROM application_reminders ar
+            WHERE ar.application_id = cd.application_id AND ar.status = 'pending'
+          ),
+          '[]'::jsonb
+        ) as upcoming_interviews
+
+      FROM candidate_data cd
+      ORDER BY ${orderByColumn} ${orderDirection}
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
+    `, [...queryParams, validLimit, offset]);
+
+      // ============================================
+      // COUNT QUERY for pagination
+      // ============================================
+      const countParams: any[] = [jobId];
+      let countIdx = 2;
+      let countWhereConditions = ['a.job_id = $1', 'a.deleted_at IS NULL'];
+
+      if (status && status !== 'all') {
+        countWhereConditions.push(`a.status = $${countIdx++}`);
+        countParams.push(status);
+      }
+      if (minScore) {
+        countWhereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) >= $${countIdx++}`);
+        countParams.push(parseFloat(minScore as string));
+      }
+      if (maxScore) {
+        countWhereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) <= $${countIdx++}`);
+        countParams.push(parseFloat(maxScore as string));
+      }
+      if (hasSimulation === 'true') {
+        countWhereConditions.push(`s.id IS NOT NULL`);
+      } else if (hasSimulation === 'false') {
+        countWhereConditions.push(`s.id IS NULL`);
+      }
+
+      const countResult = await DatabaseService.execute(`
+      SELECT COUNT(DISTINCT a.user_id) as total
+      FROM applications a
+      LEFT JOIN simulations s ON s.application_id = a.id AND s.job_id = a.job_id
+      LEFT JOIN evaluations e ON e.simulation_id = s.id
+      WHERE ${countWhereConditions.join(' AND ')}
+    `, countParams);
+
+      const total = parseInt(countResult.rows[0]?.total || '0');
+
+      // ============================================
+      // STATISTICS for this job
+      // ============================================
+      const statsResult = await DatabaseService.execute(`
+      SELECT 
+        COUNT(DISTINCT a.user_id) as total_applicants,
+        COUNT(DISTINCT CASE WHEN a.status = 'submitted' THEN a.user_id END) as submitted,
+        COUNT(DISTINCT CASE WHEN a.status = 'under_review' THEN a.user_id END) as under_review,
+        COUNT(DISTINCT CASE WHEN a.status = 'shortlisted' THEN a.user_id END) as shortlisted,
+        COUNT(DISTINCT CASE WHEN a.status = 'interview' THEN a.user_id END) as interviewing,
+        COUNT(DISTINCT CASE WHEN a.status = 'offer' THEN a.user_id END) as offers,
+        COUNT(DISTINCT CASE WHEN a.status = 'hired' THEN a.user_id END) as hired,
+        COUNT(DISTINCT CASE WHEN a.status = 'rejected' THEN a.user_id END) as rejected,
+        ROUND(AVG(COALESCE(s.overall_score, e.overall_score, a.match_score, 0))) as avg_score,
+        MAX(COALESCE(s.overall_score, e.overall_score, a.match_score, 0)) as max_score,
+        MIN(COALESCE(s.overall_score, e.overall_score, a.match_score, 0)) as min_score,
+        COUNT(DISTINCT CASE WHEN s.id IS NOT NULL THEN a.user_id END) as with_simulation,
+        COUNT(DISTINCT CASE WHEN s.id IS NULL THEN a.user_id END) as without_simulation
+      FROM applications a
+      LEFT JOIN simulations s ON s.application_id = a.id AND s.job_id = a.job_id
+      LEFT JOIN evaluations e ON e.simulation_id = s.id
+      WHERE a.job_id = $1 AND a.deleted_at IS NULL
+    `, [jobId]);
+
+      const stats = statsResult.rows[0] || {};
+
+      // Parse JSON fields for each candidate
+      const parsedCandidates = result.rows.map((row: any) => ({
+        ...row,
+        match_details: row.match_details ? (typeof row.match_details === 'string' ? JSON.parse(row.match_details) : row.match_details) : null,
+        ai_score: row.ai_score ? (typeof row.ai_score === 'string' ? JSON.parse(row.ai_score) : row.ai_score) : null,
+        screening_answers: row.screening_answers ? (typeof row.screening_answers === 'string' ? JSON.parse(row.screening_answers) : row.screening_answers) : [],
+        notes: row.notes ? (typeof row.notes === 'string' ? JSON.parse(row.notes) : row.notes) : [],
+        internal_notes: row.internal_notes ? (typeof row.internal_notes === 'string' ? JSON.parse(row.internal_notes) : row.internal_notes) : [],
+        application_tags: row.application_tags || [],
+        current_salary: row.current_salary ? (typeof row.current_salary === 'string' ? JSON.parse(row.current_salary) : row.current_salary) : null,
+        expected_salary: row.expected_salary ? (typeof row.expected_salary === 'string' ? JSON.parse(row.expected_salary) : row.expected_salary) : null,
+        languages: row.languages || [],
+        availability: row.availability || {},
+        job_preferences: row.job_preferences || {},
+        github_links: row.github_links ? (typeof row.github_links === 'string' ? JSON.parse(row.github_links) : row.github_links) : null,
+        submission_results: row.submission_results ? (typeof row.submission_results === 'string' ? JSON.parse(row.submission_results) : row.submission_results) : null,
+        strengths: row.strengths || [],
+        improvements: row.improvements || [],
+        template_tasks: row.template_tasks ? (typeof row.template_tasks === 'string' ? JSON.parse(row.template_tasks) : row.template_tasks) : [],
+        scoring_rubric: row.scoring_rubric ? (typeof row.scoring_rubric === 'string' ? JSON.parse(row.scoring_rubric) : row.scoring_rubric) : {},
+        pass_fail_criteria: row.pass_fail_criteria ? (typeof row.pass_fail_criteria === 'string' ? JSON.parse(row.pass_fail_criteria) : row.pass_fail_criteria) : {},
+      }));
+
+      /// Calculate rank for each candidate
+      let rankedCandidates = parsedCandidates;
+      if (sortBy === 'overall_score' && sortOrder === 'DESC') {
+        type RankedCandidate = typeof parsedCandidates[0] & { rank: number | null };
+
+        let currentRank = 1;
+        let previousScore: number | null = null;
+
+        rankedCandidates = parsedCandidates.reduce((acc: RankedCandidate[], candidate: any, index: number) => {
+          const currentScore: number = typeof candidate.candidate_overall_score === 'number'
+            ? candidate.candidate_overall_score
+            : Number(candidate.candidate_overall_score) || 0;
+
+          if (index > 0 && currentScore !== previousScore) {
+            currentRank = index + 1;
+          }
+
+          previousScore = currentScore;
+          acc.push({
+            ...candidate,
+            rank: currentScore > 0 ? currentRank : null
+          });
+
+          return acc;
+        }, []);
+      }
+
+      // Final response
+      this.sendSuccess(res, {
+        job: {
+          id: job.id,
+          title: job.title,
+          company_id: job.company_id,
+          company_name: job.company_name,
+          logo_url: job.logo_url,
+          status: job.status
+        },
+        candidates: rankedCandidates,
+        stats: {
+          total_applicants: parseInt(stats.total_applicants || '0'),
+          by_status: {
+            submitted: parseInt(stats.submitted || '0'),
+            under_review: parseInt(stats.under_review || '0'),
+            shortlisted: parseInt(stats.shortlisted || '0'),
+            interviewing: parseInt(stats.interviewing || '0'),
+            offers: parseInt(stats.offers || '0'),
+            hired: parseInt(stats.hired || '0'),
+            rejected: parseInt(stats.rejected || '0')
+          },
+          scores: {
+            average: Math.round(parseFloat(stats.avg_score || '0')),
+            max: Math.round(parseFloat(stats.max_score || '0')),
+            min: Math.round(parseFloat(stats.min_score || '0'))
+          },
+          simulations: {
+            with_simulation: parseInt(stats.with_simulation || '0'),
+            without_simulation: parseInt(stats.without_simulation || '0')
+          }
+        },
+        pagination: {
+          current_page: validPage,
+          per_page: validLimit,
+          total_items: total,
+          total_pages: Math.ceil(total / validLimit),
+          has_next_page: validPage * validLimit < total,
+          has_prev_page: validPage > 1
+        },
+        filters: {
+          sort_by: sortBy,
+          sort_order: sortOrder,
+          min_score: minScore || null,
+          max_score: maxScore || null,
+          status: status || 'all',
+          has_simulation: hasSimulation || 'all'
+        }
+      });
+
+    } catch (error) {
+      logger.error('Error getting job candidates complete:', error);
+      this.sendError(res, 'Failed to fetch candidates', 500, error as Error);
+    }
+  }
 
 }
 

@@ -1,4 +1,4 @@
-// JobApplicationModal.jsx - COMPLETE VERSION WITH PAGE RELOAD ON SUCCESS
+// JobApplicationModal.tsx - COMPLETE VERSION WITH ALL DETAILS (FULLY FIXED)
 import React, { useState, useEffect } from 'react';
 import {
   X, CheckCircle, AlertCircle, Upload, FileText, User, Briefcase,
@@ -6,12 +6,107 @@ import {
   Send, ChevronRight, ChevronLeft, Plus, Trash2, Eye, Download,
   MessageSquare, HelpCircle, Building2, Info, AlertTriangle, Edit3,
   Check, ThumbsUp, ThumbsDown, Code, GraduationCap, Link, Globe,
-  Twitter, Linkedin, Github, ExternalLink, Heart
+  Linkedin, Github, ExternalLink, Heart, Target, Zap, Sparkles
 } from 'lucide-react';
 import { submitApplication } from '../../services/applicationAPI';
 
 // ============================================
-// COMPLETE PROFILE NORMALIZER - HANDLES ALL DATA SHAPES
+// TYPE DEFINITIONS
+// ============================================
+
+interface UploadProgressType {
+  [key: number]: number;
+}
+
+interface AnswersType {
+  [key: number]: string;
+}
+
+interface ErrorsType {
+  [key: number | string]: string | null;
+}
+
+interface DocumentType {
+  id: number;
+  file: File;
+  name: string;
+  size: number;
+  type: string;
+  preview: string;
+  documentType: string;
+  uploaded: boolean;
+}
+
+interface ProfileType {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  city: string;
+  country: string;
+  headline: string;
+  summary: string;
+  dateOfBirth: string | null;
+  profilePhotoUrl: string;
+  skills: string[];
+  skillDetails: Array<{ name: string; proficiency_level: number; proficiency_label: string }>;
+  education: any[];
+  workExperience: any[];
+  resumes: any[];
+  languages: any[];
+  portfolioLinks: any[];
+}
+
+interface MatchDetailsType {
+  criteria_scores?: {
+    skills_match?: number;
+    qualifications_match?: number;
+    experience_match?: number;
+    preferences_match?: number;
+  };
+  skills_breakdown?: {
+    matched_skills?: string[];
+    missing_skills?: string[];
+    total_required?: number;
+    total_matched?: number;
+    individual_scores?: number[];
+  };
+  qualifications_breakdown?: {
+    candidate_degrees?: string[];
+    candidate_fields?: string[];
+    candidate_combined?: string[];
+    job_degree_required?: string;
+    job_allowed_fields?: string[];
+    best_similarity?: number;
+    best_matched_field?: string | null;
+    match_type?: string;
+    match_quality?: string;      // ✅ Add this
+    explanation?: string;         // ✅ Add this
+  };
+  experience_breakdown?: {
+    total_years?: number;
+    candidate_years?: number;     // ✅ Add this
+    required_years?: number;
+    gap_years?: number;
+    match_type?: string;
+    total_requirements?: number;
+    matched_requirements?: number;
+    specific_matches?: Array<{
+      requirement_title?: string;
+      requirement_years?: number;
+      matched_title?: string;
+      candidate_years?: number;
+      similarity?: number;
+      years_score?: number;
+      combined_score?: number;
+    }>;
+    unmatched_requirements?: string[];
+  };
+  preferences_breakdown?: any;
+}
+
+// ============================================
+// COMPLETE PROFILE NORMALIZER
 // ============================================
 
 const JobApplicationModal = ({
@@ -19,36 +114,44 @@ const JobApplicationModal = ({
   onClose,
   job,
   candidateProfile: candidateProfileProp,
-  matchScore: matchScoreProp = 78.7,
+  matchScore: matchScoreProp = 0,
+  matchDetails: matchDetailsProp = null,
   requiredDocuments = ['Resume', 'Cover Letter'],
-  onSuccess, // NEW: Callback for successful submission
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  job: any;
+  candidateProfile?: any;
+  matchScore?: number;
+  matchDetails?: MatchDetailsType | null;
+  requiredDocuments?: string[];
+  onSuccess?: (data?: any) => void;
 }) => {
-  const [currentStep, setCurrentStep] = useState(1);
-  const [answers, setAnswers] = useState({});
-  const [documents, setDocuments] = useState([]);
-  const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [reviewMode, setReviewMode] = useState(false);
-  const [showAllSkills, setShowAllSkills] = useState(false);
-  const [showAllEducation, setShowAllEducation] = useState(false);
-  const [showAllExperience, setShowAllExperience] = useState(false);
-  const [successMessage, setSuccessMessage] = useState(null); // NEW: Success message state
+  const [currentStep, setCurrentStep] = useState<number>(1);
+  const [answers, setAnswers] = useState<AnswersType>({});
+  const [documents, setDocuments] = useState<(DocumentType | null)[]>([]);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [errors, setErrors] = useState<ErrorsType>({});
+  const [reviewMode, setReviewMode] = useState<boolean>(false);
+  const [showAllSkills, setShowAllSkills] = useState<boolean>(false);
+  const [showAllEducation, setShowAllEducation] = useState<boolean>(false);
+  const [showAllExperience, setShowAllExperience] = useState<boolean>(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<UploadProgressType>({});
 
-  // Normalize profile data - HANDLES ALL THREE SHAPES
+  // Normalize profile data
   const profile = normaliseProfile(candidateProfileProp);
-  const matchScore = matchScoreProp ?? 78.7;
+  const matchScore = matchScoreProp ?? 0;
+  const matchDetails = matchDetailsProp;
   const screeningQuestions = job?.screening_questions || job?.screeningQuestions || [];
   const totalSteps = 4;
 
   // ─── COMPLETE PROFILE NORMALISER ─────────────────────────────────────────
-  function normaliseProfile(raw) {
+  function normaliseProfile(raw: any): ProfileType | null {
     if (!raw) return null;
 
-    const personalInfo = 
-      raw?.profile?.personal_info ||
-      raw?.profile ||
-      raw ||
-      {};
+    const personalInfo = raw?.profile?.personal_info || raw?.profile || raw || {};
 
     const firstName = personalInfo?.first_name || raw?.firstName || '';
     const lastName = personalInfo?.last_name || raw?.lastName || '';
@@ -59,29 +162,19 @@ const JobApplicationModal = ({
     const headline = personalInfo?.headline || raw?.headline || '';
     const summary = personalInfo?.summary || raw?.summary || '';
     const dateOfBirth = personalInfo?.date_of_birth || raw?.dateOfBirth || null;
-    const gender = personalInfo?.gender || raw?.gender || '';
     const profilePhotoUrl = personalInfo?.profile_photo_url || raw?.profilePhotoUrl || '';
-    const timezone = personalInfo?.timezone || raw?.timezone || '';
-
-    const workPreferences = raw?.profile?.work_preferences || raw?.work_preferences || {};
-    const jobPreferences = raw?.profile?.job_preferences || raw?.job_preferences || {};
-    const availability = raw?.profile?.availability || raw?.availability || {};
 
     const rawSkills = raw?.skills || raw?.profile?.skills || [];
-    const skills = rawSkills.map(extractSkillName).filter(Boolean);
-    
-    const skillDetails = rawSkills.map(skill => ({
+    const skills = rawSkills.map((skill: any) => extractSkillName(skill)).filter(Boolean);
+
+    const skillDetails = rawSkills.map((skill: any) => ({
       name: extractSkillName(skill),
       proficiency_level: skill?.proficiency_level || skill?.proficiencyLevel || 3,
       proficiency_label: skill?.proficiency_label || skill?.proficiencyLabel || 'Advanced',
-      years_experience: skill?.years_experience || skill?.yearsExperience || 0,
-      is_primary: skill?.is_primary || skill?.isPrimary || false,
-      category: skill?.category || '',
-      skill_type: skill?.skill_type || skill?.skillType || 'technical'
-    })).filter(s => s.name);
+    })).filter((s: any) => s.name);
 
     const rawEducation = raw?.education || [];
-    const education = rawEducation.map(edu => ({
+    const education = rawEducation.map((edu: any) => ({
       id: edu?.id,
       institution: edu?.institution || '',
       degree: edu?.degree || '',
@@ -90,107 +183,88 @@ const JobApplicationModal = ({
       end_date: edu?.end_date || edu?.endDate,
       is_current: edu?.is_current || edu?.isCurrent || false,
       grade: edu?.grade || '',
-      grade_scale: edu?.grade_scale || edu?.gradeScale || '4',
       description: edu?.description || '',
-      activities: edu?.activities || '',
-      verified: edu?.verified || false
     }));
 
     const rawWork = raw?.workExperience || raw?.work_experience || [];
-    const workExperience = rawWork.map(exp => ({
+    const workExperience = rawWork.map((exp: any) => ({
       id: exp?.id,
       company: exp?.company || '',
       title: exp?.title || '',
       employment_type: exp?.employment_type || exp?.employmentType || 'full-time',
       location: exp?.location || '',
-      location_type: exp?.location_type || exp?.locationType || 'onsite',
       start_date: exp?.start_date || exp?.startDate,
       end_date: exp?.end_date || exp?.endDate,
       is_current: exp?.is_current || exp?.isCurrent || false,
       description: exp?.description || '',
       achievements: exp?.achievements || [],
       skills: exp?.skills || [],
-      industry: exp?.industry || '',
-      team_size: exp?.team_size || exp?.teamSize,
-      reports_to: exp?.reports_to || exp?.reportsTo
-    }));
-
-    const rawPortfolio = raw?.portfolio_links || raw?.portfolioLinks || [];
-    const portfolioLinks = rawPortfolio.map(link => ({
-      id: link?.id,
-      platform: link?.platform || '',
-      url: link?.url || '',
-      title: link?.title || '',
-      description: link?.description || '',
-      is_verified: link?.is_verified || link?.isVerified || false
     }));
 
     const rawResumes = raw?.resumes || [];
-    const resumes = rawResumes.map(resume => ({
+    const resumes = rawResumes.map((resume: any) => ({
       id: resume?.id,
       file_name: resume?.file_name || resume?.fileName || '',
       file_url: resume?.file_url || resume?.fileUrl || '',
-      file_size: resume?.file_size || resume?.fileSize || 0,
       is_primary: resume?.is_primary || resume?.isPrimary || false,
-      uploaded_at: resume?.uploaded_at || resume?.uploadedAt
     }));
 
     const languages = raw?.profile?.languages || raw?.languages || [];
-    const socialLinks = raw?.profile?.links || raw?.socialLinks || {};
-    const statistics = raw?.statistics || {};
+    const portfolioLinks = raw?.portfolio_links || raw?.portfolioLinks || [];
 
     return {
       firstName, lastName, email, phone, city, country, headline, summary,
-      dateOfBirth, gender, profilePhotoUrl, timezone,
-      workPreferences, jobPreferences, availability,
+      dateOfBirth, profilePhotoUrl,
       skills, skillDetails,
       education, workExperience,
-      portfolioLinks, resumes,
-      languages, socialLinks, statistics
+      resumes, languages, portfolioLinks
     };
   }
 
-  function extractSkillName(skill) {
+  function extractSkillName(skill: any): string {
     if (!skill) return '';
     if (typeof skill === 'string') return skill;
     if (typeof skill === 'object') {
-      return skill.skill_name || skill.name || skill.skillName || 
-             skill.title || skill.skill || '';
+      return skill.skill_name || skill.name || skill.skillName || skill.title || '';
     }
     return '';
   }
 
-  function safeStr(value, fallback = 'Not specified') {
+  function safeStr(value: any, fallback: string = 'Not specified'): string {
     if (!value) return fallback;
     if (typeof value === 'string') return value;
     if (typeof value === 'number') return String(value);
     return fallback;
   }
 
-  function formatDate(dateString) {
+  function formatDate(dateString: string | null): string {
     if (!dateString) return 'Present';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return String(dateString);
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
   }
 
-  function formatFullDate(dateString) {
+  function formatFullDate(dateString: string | null): string {
     if (!dateString) return 'Not specified';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return String(dateString);
-    return d.toLocaleDateString('en-US', { 
-      year: 'numeric', month: 'long', day: 'numeric' 
-    });
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   }
 
-  function calculateExperienceYears(workExperiences) {
+  function calculateExperienceYears(workExperiences: any[] | undefined): number {
+    if (!workExperiences || workExperiences.length === 0) return 0;
+
     let totalYears = 0;
     workExperiences.forEach(exp => {
-      if (exp.start_date) {
-        const start = new Date(exp.start_date);
-        const end = exp.is_current ? new Date() : (exp.end_date ? new Date(exp.end_date) : new Date());
-        const years = (end - start) / (1000 * 60 * 60 * 24 * 365);
-        totalYears += years;
+      if (exp && exp.start_date) {
+        try {
+          const start = new Date(exp.start_date);
+          const end = exp.is_current ? new Date() : (exp.end_date ? new Date(exp.end_date) : new Date());
+          const years = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+          if (years > 0) totalYears += years;
+        } catch (e) {
+          console.error('Error calculating experience years:', e);
+        }
       }
     });
     return Math.round(totalYears * 10) / 10;
@@ -204,46 +278,79 @@ const JobApplicationModal = ({
       setDocuments([]);
       setErrors({});
       setReviewMode(false);
-      setShowAllSkills(false);
-      setShowAllEducation(false);
-      setShowAllExperience(false);
       setSuccessMessage(null);
+      setUploadProgress({});
     }
   }, [isOpen]);
 
-  // Auto-close success message after 3 seconds
+  // Auto-close success message
   useEffect(() => {
     if (successMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage(null);
-      }, 3000);
+      const timer = setTimeout(() => setSuccessMessage(null), 3000);
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
 
   if (!isOpen || !job) return null;
 
+  // Check minimum match score (70% requirement)
+  if (matchScore < 70 && matchScore > 0) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl max-w-md w-full m-4">
+          <div className="border-b p-4 flex justify-between items-center">
+            <h2 className="text-xl font-bold">Application Not Available</h2>
+            <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+          </div>
+          <div className="p-6 text-center">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-10 h-10 text-red-600" />
+            </div>
+            <p className="text-gray-700 mb-4">
+              Your match score is <strong className="text-red-600">{matchScore}%</strong>, which is below the required <strong className="text-blue-600">70%</strong> minimum.
+            </p>
+            <div className="bg-yellow-50 p-4 rounded-lg text-left mb-4">
+              <h3 className="font-semibold text-yellow-800 mb-2">To improve your match:</h3>
+              <ul className="space-y-1 text-sm text-yellow-700">
+                <li>• Update your profile with more relevant skills</li>
+                <li>• Add work experience in this field</li>
+                <li>• Complete your education details</li>
+                <li>• Add certifications and portfolio links</li>
+              </ul>
+            </div>
+            <button onClick={onClose} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const documentTemplates = requiredDocuments.map(doc => ({
     name: doc,
     required: true,
     acceptedTypes: ['.pdf', '.doc', '.docx'],
     maxSize: 5 * 1024 * 1024,
-    description: doc === 'Resume' ? 'Upload your CV/Resume' : 
-                  doc === 'Cover Letter' ? 'Write a cover letter' : 
-                  `Upload your ${doc.toLowerCase()}`
+    description: doc === 'Resume' ? 'Upload your CV/Resume (PDF, DOC, DOCX)' :
+      doc === 'Cover Letter' ? 'Upload your cover letter' :
+        `Upload your ${doc.toLowerCase()}`
   }));
 
-  const handleAnswerChange = (questionId, value) => {
+  const handleAnswerChange = (questionId: number, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
     if (errors[questionId]) setErrors(prev => ({ ...prev, [questionId]: null }));
   };
 
-  const handleFileUpload = (docIndex, file) => {
+  const handleFileUpload = (docIndex: number, file: File) => {
     if (!file) return;
     if (file.size > 5 * 1024 * 1024) {
       alert(`${file.name} exceeds 5 MB limit`);
       return;
     }
+
+    setUploadProgress(prev => ({ ...prev, [docIndex]: 0 }));
+
     const reader = new FileReader();
     reader.onloadend = () => {
       setDocuments(prev => {
@@ -254,28 +361,30 @@ const JobApplicationModal = ({
           name: file.name,
           size: file.size,
           type: file.type,
-          preview: reader.result,
-          documentType: documentTemplates[docIndex]?.name,
+          preview: reader.result as string,
+          documentType: documentTemplates[docIndex]?.name || '',
           uploaded: true,
         };
         return newDocs;
       });
+      setUploadProgress(prev => ({ ...prev, [docIndex]: 100 }));
     };
     reader.readAsDataURL(file);
   };
 
-  const removeDocument = (docIndex) => {
+  const removeDocument = (docIndex: number) => {
     setDocuments(prev => {
       const newDocs = [...prev];
       newDocs[docIndex] = null;
       return newDocs;
     });
+    setUploadProgress(prev => ({ ...prev, [docIndex]: 0 }));
   };
 
-  const validateStep = () => {
-    const newErrors = {};
+  const validateStep = (): boolean => {
+    const newErrors: ErrorsType = {};
     if (currentStep === 3 && screeningQuestions.length > 0) {
-      screeningQuestions.forEach((q, idx) => {
+      screeningQuestions.forEach((q: any, idx: number) => {
         if (q.required && (!answers[idx] || String(answers[idx]).trim() === '')) {
           newErrors[idx] = 'This question requires an answer';
         }
@@ -297,25 +406,26 @@ const JobApplicationModal = ({
   const handleReview = () => { if (validateStep()) setReviewMode(true); };
   const handleBackFromReview = () => setReviewMode(false);
 
-  // UPDATED handleSubmit with success message and auto-reload
   const handleSubmit = async () => {
     if (!validateStep()) return;
     setSubmitting(true);
-    setSuccessMessage(null);
-    
+
     try {
-      // IMPORTANT: Convert matchScore to integer to avoid PostgreSQL error
+      // Transform documents to match expected format
+      const formattedDocuments = documentTemplates.map((doc, idx) => {
+        const uploadedDoc = documents[idx];
+        return {
+          name: doc.name,
+          url: uploadedDoc?.preview || '',
+          type: getDocumentType(doc.name) as 'resume' | 'cover_letter' | 'portfolio' | 'certificate'
+        };
+      }).filter(doc => doc.url);
+
       const applicationData = {
         jobId: job.id,
         additionalInfo: {
           screeningAnswers: answers,
-          documents: documents.map((doc, idx) => ({
-            type: documentTemplates[idx]?.name,
-            name: doc?.name || '',
-            size: doc?.size || 0,
-            uploaded: !!doc,
-          })),
-          // Round matchScore to nearest integer
+          documents: formattedDocuments,
           matchScore: Math.round(matchScore),
           submittedAt: new Date().toISOString(),
         },
@@ -323,20 +433,12 @@ const JobApplicationModal = ({
 
       console.log('📤 Submitting application:', applicationData);
       const result = await submitApplication(applicationData);
-      
+
       if (result?.success) {
-        // Show success message
-        setSuccessMessage('✅ Application submitted successfully! Redirecting...');
-        
-        // Call onSuccess callback if provided
-        if (onSuccess) {
-          onSuccess(result.data);
-        }
-        
-        // Close the modal after a short delay
+        setSuccessMessage('✅ Application submitted successfully!');
+        if (onSuccess) onSuccess(result.data);
         setTimeout(() => {
           onClose();
-          // RELOAD THE PAGE to refresh the dashboard
           window.location.reload();
         }, 1500);
       } else {
@@ -344,44 +446,24 @@ const JobApplicationModal = ({
       }
     } catch (error) {
       console.error('Submission error:', error);
-      setSuccessMessage(null);
-      alert('Failed to submit application: ' + (error?.message || 'Unknown error'));
+      alert('Failed to submit application: ' + ((error as Error)?.message || 'Unknown error'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  // Low match score screen
-  if (matchScore < 40) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl max-w-md w-full m-4">
-          <div className="border-b p-4 flex justify-between items-center">
-            <h2 className="text-xl font-bold">Application Not Recommended</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
-          </div>
-          <div className="p-6 text-center">
-            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-10 h-10 text-red-600" />
-            </div>
-            <p className="text-gray-700 mb-4">Your match score is <strong className="text-red-600">{matchScore}%</strong>, below 40%.</p>
-            <div className="bg-yellow-50 p-4 rounded-lg text-left mb-4">
-              <h3 className="font-semibold text-yellow-800 mb-2">To improve:</h3>
-              <ul className="space-y-1 text-sm text-yellow-700">
-                <li>• Update your profile with more skills</li>
-                <li>• Add relevant work experience</li>
-                <li>• Complete your education details</li>
-              </ul>
-            </div>
-            <button onClick={onClose} className="w-full py-2 bg-blue-600 text-white rounded-lg">Close</button>
-          </div>
-        </div>
-      </div>
-    );
+  // Helper function to get document type
+  function getDocumentType(documentName: string): string {
+    const lowerName = documentName.toLowerCase();
+    if (lowerName.includes('resume') || lowerName.includes('cv')) return 'resume';
+    if (lowerName.includes('cover')) return 'cover_letter';
+    if (lowerName.includes('portfolio')) return 'portfolio';
+    if (lowerName.includes('certificate') || lowerName.includes('cert')) return 'certificate';
+    return 'resume';
   }
 
   // ============================================
-  // STEP 1: COMPLETE PROFILE REVIEW
+  // STEP 1: COMPLETE CANDIDATE PROFILE
   // ============================================
   const renderStep1 = () => {
     if (!profile) {
@@ -389,25 +471,32 @@ const JobApplicationModal = ({
         <div className="text-center py-8 text-gray-500">
           <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
           <p>Profile data not available. Please complete your profile first.</p>
+          <button
+            onClick={() => window.location.href = '/dashboard?view=profile'}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            Go to Profile
+          </button>
         </div>
       );
     }
 
     const totalExperience = calculateExperienceYears(profile.workExperience);
-    const skillsToShow = showAllSkills ? profile.skills : profile.skills.slice(0, 10);
-    const educationToShow = showAllEducation ? profile.education : profile.education.slice(0, 3);
-    const experienceToShow = showAllExperience ? profile.workExperience : profile.workExperience.slice(0, 3);
+    const skillsToShow = showAllSkills ? profile.skills || [] : (profile.skills || []).slice(0, 10);
+    const educationToShow = showAllEducation ? profile.education || [] : (profile.education || []).slice(0, 3);
+    const experienceToShow = showAllExperience ? profile.workExperience || [] : (profile.workExperience || []).slice(0, 3);
 
     return (
       <div className="space-y-6">
         <div className="border-b pb-4">
           <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <User className="w-5 h-5 text-blue-600" />
-            Complete Profile Review
+            Your Profile Summary
           </h2>
-          <p className="text-sm text-gray-500">Review all your information before applying</p>
+          <p className="text-sm text-gray-500">Review your information before applying</p>
         </div>
 
+        {/* Personal Info */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5">
           <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <User className="w-4 h-4 text-blue-600" />
@@ -424,31 +513,29 @@ const JobApplicationModal = ({
           {profile.summary && (
             <div className="mt-3 pt-3 border-t border-blue-100">
               <span className="text-gray-500 text-sm">Summary:</span>
-              <p className="text-sm text-gray-700 mt-1">{profile.summary}</p>
+              <p className="text-sm text-gray-700 mt-1 line-clamp-3">{profile.summary}</p>
             </div>
           )}
         </div>
 
-        {profile.skills.length > 0 && (
+        {/* Skills */}
+        {profile.skills && profile.skills.length > 0 && (
           <div className="bg-gray-50 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Code className="w-4 h-4 text-blue-600" />
-              Skills & Competencies ({profile.skills.length})
+              Your Skills ({profile.skills.length})
             </h3>
             <div className="flex flex-wrap gap-2">
-              {skillsToShow.map((skillName, idx) => {
-                const skillDetail = profile.skillDetails.find(s => s.name === skillName);
+              {skillsToShow.map((skillName: string, idx: number) => {
+                const skillDetail = profile.skillDetails?.find(s => s.name === skillName);
                 return (
-                  <div key={idx} className="group relative">
-                    <span className={`px-3 py-1.5 text-sm rounded-full flex items-center gap-1 ${
-                      skillDetail?.proficiency_level >= 4 ? 'bg-green-100 text-green-800 border border-green-300' :
-                      skillDetail?.proficiency_level >= 3 ? 'bg-blue-100 text-blue-800 border border-blue-300' :
-                      'bg-gray-100 text-gray-700 border border-gray-200'
+                  <span key={idx} className={`px-3 py-1.5 text-sm rounded-full ${(skillDetail?.proficiency_level ?? 3) >= 4 ? 'bg-green-100 text-green-800 border border-green-300' :
+                      (skillDetail?.proficiency_level ?? 3) >= 3 ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                        'bg-gray-100 text-gray-700 border border-gray-200'
                     }`}>
-                      {skillName}
-                      {skillDetail?.proficiency_level >= 4 && <Star className="w-3 h-3 text-green-600" />}
-                    </span>
-                  </div>
+                    {skillName}
+                    {(skillDetail?.proficiency_level ?? 3) >= 4 && <Star className="w-3 h-3 inline ml-1 text-green-600" />}
+                  </span>
                 );
               })}
             </div>
@@ -460,24 +547,25 @@ const JobApplicationModal = ({
           </div>
         )}
 
-        {profile.workExperience.length > 0 && (
+        {/* Work Experience */}
+        {profile.workExperience && profile.workExperience.length > 0 && (
           <div className="bg-gray-50 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <Briefcase className="w-4 h-4 text-blue-600" />
-              Work Experience ({profile.workExperience.length} positions)
+              Work Experience ({profile.workExperience.length})
             </h3>
-            {experienceToShow.map((exp, idx) => (
+            {experienceToShow.map((exp: any, idx: number) => (
               <div key={idx} className="mb-4 last:mb-0 pb-3 last:pb-0 border-b last:border-b-0 border-gray-200">
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-semibold text-gray-900">{exp.title}</p>
-                    <p className="text-gray-600 text-sm">{exp.company}</p>
+                    <p className="font-semibold text-gray-900">{exp.title || 'Position not specified'}</p>
+                    <p className="text-gray-600 text-sm">{exp.company || 'Company not specified'}</p>
                   </div>
                   <span className="text-xs text-gray-500">
                     {formatDate(exp.start_date)} – {exp.is_current ? 'Present' : formatDate(exp.end_date)}
                   </span>
                 </div>
-                {exp.description && <p className="text-sm text-gray-600 mt-2">{exp.description}</p>}
+                {exp.description && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{exp.description}</p>}
               </div>
             ))}
             {profile.workExperience.length > 3 && (
@@ -488,23 +576,24 @@ const JobApplicationModal = ({
           </div>
         )}
 
-        {profile.education.length > 0 && (
+        {/* Education */}
+        {profile.education && profile.education.length > 0 && (
           <div className="bg-gray-50 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
               <GraduationCap className="w-4 h-4 text-blue-600" />
-              Education ({profile.education.length} entries)
+              Education ({profile.education.length})
             </h3>
-            {educationToShow.map((edu, idx) => (
+            {educationToShow.map((edu: any, idx: number) => (
               <div key={idx} className="mb-3 last:mb-0 pb-2 last:pb-0 border-b last:border-b-0 border-gray-200">
                 <p className="font-semibold text-gray-900">
-                  {edu.degree}{edu.field_of_study ? ` in ${edu.field_of_study}` : ''}
+                  {edu.degree || 'Degree not specified'}{edu.field_of_study ? ` in ${edu.field_of_study}` : ''}
                 </p>
-                <p className="text-gray-600 text-sm">{edu.institution}</p>
+                <p className="text-gray-600 text-sm">{edu.institution || 'Institution not specified'}</p>
                 <div className="flex justify-between items-center mt-1">
                   <span className="text-xs text-gray-500">
                     {formatDate(edu.start_date)} – {edu.is_current ? 'Present' : formatDate(edu.end_date)}
                   </span>
-                  {edu.grade && <span className="text-xs text-gray-500">Grade: {edu.grade}/{edu.grade_scale}</span>}
+                  {edu.grade && <span className="text-xs text-gray-500">Grade: {edu.grade}</span>}
                 </div>
               </div>
             ))}
@@ -515,218 +604,467 @@ const JobApplicationModal = ({
             )}
           </div>
         )}
+
+        {/* Languages */}
+        {profile.languages && profile.languages.length > 0 && (
+          <div className="bg-gray-50 rounded-xl p-5">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-blue-600" />
+              Languages
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {profile.languages.map((lang: any, idx: number) => (
+                <span key={idx} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
+                  {typeof lang === 'string' ? lang : lang.name || 'Language'}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Portfolio Links */}
+        {profile.portfolioLinks && profile.portfolioLinks.length > 0 && (
+          <div className="bg-gray-50 rounded-xl p-5">
+            <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Link className="w-4 h-4 text-blue-600" />
+              Portfolio & Links
+            </h3>
+            <div className="space-y-2">
+              {profile.portfolioLinks.slice(0, 5).map((link: any, idx: number) => (
+                <div key={idx} className="flex items-center gap-2">
+                  {link.platform === 'github' && <Github className="w-4 h-4 text-gray-600" />}
+                  {link.platform === 'linkedin' && <Linkedin className="w-4 h-4 text-blue-600" />}
+                  {(!link.platform || link.platform === 'personal') && <Link className="w-4 h-4 text-gray-600" />}
+                  <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">
+                    {link.title || link.url}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
 
-  // ============================================
-  // STEP 2: COMPLETE JOB DETAILS
-  // ============================================
-  const renderStep2 = () => {
-    const jobTitle = job.title || job.job_title;
-    const companyName = job.company_name || job.companyName || job.company?.name;
-    const location = job.location || (job.locations?.[0]?.city) || 'Remote';
-    const salaryRange = job.salary_range || (job.salary_min && job.salary_max ? `${job.salary_currency || 'USD'} ${job.salary_min?.toLocaleString()} - ${job.salary_max?.toLocaleString()}` : 'Competitive');
-    const jobType = job.job_type || job.jobType;
-    const workArrangement = job.work_arrangement || job.workArrangement;
-    const description = job.description;
-    const requirements = job.requirements || [];
-    const responsibilities = job.responsibilities || [];
-    const benefits = job.benefits || [];
-    const skillsRequired = job.skills_required || job.skillsRequired || [];
-    const tags = job.tags || [];
-    
-    const publishedAt = job.published_at || job.publishedAt;
-    const expiresAt = job.expires_at || job.expiresAt;
-    const postedDate = publishedAt ? new Date(publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Recently';
-    
-    const companyLogo = job.company_logo || job.companyLogo || job.company?.logo_url;
-    const companyIndustry = job.company_industry || job.companyIndustry || job.company?.industry;
-    const companySize = job.company_size || job.companySize || job.company?.size;
-    const companyDescription = job.company_description || job.companyDescription || job.company?.description;
-    const isVerified = job.company_verified || job.company?.verification_badge;
-    
-    const applicationCount = job.application_count || job.applications || 0;
-    const viewCount = job.view_count || job.views || 0;
+// ============================================
+// STEP 2: COMPLETE JOB DETAILS WITH MATCH INFO
+// ============================================
+const renderStep2 = () => {
+  const jobTitle = job.title || job.job_title;
+  const companyName = job.company_name || job.companyName || job.company?.name;
+  const location = job.location || (job.locations?.[0]?.city) || 'Remote';
+  const salaryRange = job.salary_range || (job.salary_min && job.salary_max ? `${job.salary_currency || 'USD'} ${job.salary_min?.toLocaleString()} - ${job.salary_max?.toLocaleString()}` : 'Competitive');
+  const jobType = job.job_type || job.jobType;
+  const workArrangement = job.work_arrangement || job.workArrangement;
+  const description = job.description;
+  const requirements = job.requirements || [];
+  const responsibilities = job.responsibilities || [];
+  const benefits = job.benefits || [];
+  const skillsRequired = job.skills_required || job.skillsRequired || [];
+  const tags = job.tags || [];
+  const publishedAt = job.published_at || job.publishedAt;
+  const expiresAt = job.expires_at || job.expiresAt;
+  const postedDate = publishedAt ? formatFullDate(publishedAt) : 'Recently';
+  const companyLogo = job.company_logo || job.companyLogo || job.company?.logo_url;
+  const companyIndustry = job.company_industry || job.companyIndustry || job.company?.industry;
+  const companySize = job.company_size || job.companySize || job.company?.size;
+  const applicationCount = job.application_count || job.applications || 0;
 
-    return (
-      <div className="space-y-6">
-        <div className="border-b pb-4">
-          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            <Briefcase className="w-5 h-5 text-blue-600" />
-            Complete Job Details
-          </h2>
-        </div>
+  // Get match breakdowns
+  const criteria = matchDetails?.criteria_scores || {};
+  const skillsBD = matchDetails?.skills_breakdown || {};
+  const qualsBD = matchDetails?.qualifications_breakdown || {};
+  const expBD = matchDetails?.experience_breakdown || {};
+  
+  // Get individual scores
+  const skillsMatchScore = criteria.skills_match ?? 0;
+  const qualsMatchScore = criteria.qualifications_match ?? 0;
+  const expMatchScore = criteria.experience_match ?? 0;
+  const prefsMatchScore = criteria.preferences_match ?? 0;
 
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5">
-          <div className="flex items-start gap-4">
-            {companyLogo ? (
-              <img src={companyLogo} alt={companyName} className="w-16 h-16 rounded-lg object-cover" />
-            ) : (
-              <Building2 className="w-16 h-16 text-gray-400" />
-            )}
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-gray-900">{jobTitle}</h3>
-              <div className="flex items-center gap-2 mt-1">
-                <span className="font-medium text-gray-700">{companyName}</span>
-                {isVerified && (
-                  <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                    <Shield className="w-3 h-3" /> Verified
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-3 mt-3 text-sm">
-                <span className="flex items-center gap-1 text-gray-600"><MapPin className="w-4 h-4" />{location}</span>
-                <span className="flex items-center gap-1 text-gray-600"><DollarSign className="w-4 h-4" />{salaryRange}</span>
-                <span className="flex items-center gap-1 text-gray-600"><Briefcase className="w-4 h-4" />{jobType} • {workArrangement}</span>
-              </div>
+  return (
+    <div className="space-y-6">
+      <div className="border-b pb-4">
+        <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+          <Briefcase className="w-5 h-5 text-blue-600" />
+          Job Details & Match Analysis
+        </h2>
+      </div>
+
+      {/* Job Header */}
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5">
+        <div className="flex items-start gap-4">
+          {companyLogo ? (
+            <img src={companyLogo} alt={companyName} className="w-16 h-16 rounded-lg object-cover" />
+          ) : (
+            <Building2 className="w-16 h-16 text-gray-400" />
+          )}
+          <div className="flex-1">
+            <h3 className="text-xl font-bold text-gray-900">{jobTitle}</h3>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="font-medium text-gray-700">{companyName}</span>
+              {companyIndustry && <span className="text-xs text-gray-500">• {companyIndustry}</span>}
+              {companySize && <span className="text-xs text-gray-500">• {companySize}</span>}
+            </div>
+            <div className="flex flex-wrap gap-3 mt-3 text-sm">
+              <span className="flex items-center gap-1 text-gray-600"><MapPin className="w-4 h-4" />{location}</span>
+              <span className="flex items-center gap-1 text-gray-600"><DollarSign className="w-4 h-4" />{salaryRange}</span>
+              <span className="flex items-center gap-1 text-gray-600"><Briefcase className="w-4 h-4" />{jobType} • {workArrangement}</span>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className={`p-4 rounded-xl ${matchScore >= 70 ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+      {/* Match Score Card */}
+      {matchScore > 0 && (
+        <div className={`p-4 rounded-xl ${matchScore >= 80 ? 'bg-green-50 border border-green-200' : matchScore >= 70 ? 'bg-blue-50 border border-blue-200' : 'bg-yellow-50 border border-yellow-200'}`}>
           <div className="flex items-center gap-3">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${matchScore >= 70 ? 'bg-green-200' : 'bg-yellow-200'}`}>
-              <Star className={`w-7 h-7 ${matchScore >= 70 ? 'text-green-600' : 'text-yellow-600'}`} />
+            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${matchScore >= 80 ? 'bg-green-200' : matchScore >= 70 ? 'bg-blue-200' : 'bg-yellow-200'}`}>
+              <Target className={`w-7 h-7 ${matchScore >= 80 ? 'text-green-600' : matchScore >= 70 ? 'text-blue-600' : 'text-yellow-600'}`} />
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-bold text-lg">AI Match Score: {Math.round(matchScore)}%</h3>
               <p className="text-sm">
                 {matchScore >= 90 ? '🏆 Excellent match! You are highly qualified.' :
-                 matchScore >= 75 ? '✅ Good match. You meet many requirements.' :
-                 matchScore >= 60 ? '📈 Fair match. Consider highlighting relevant skills.' :
-                 '⚠️ Low match. Update your profile for better matches.'}
+                  matchScore >= 80 ? '✅ Great match! You meet most requirements.' :
+                    matchScore >= 70 ? '📈 Good match. You meet the minimum requirements.' :
+                      '⚠️ Low match. Consider updating your profile.'}
               </p>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-500" />
+      {/* 4-Factor Breakdown */}
+      {matchScore > 0 && (
+        <div className="bg-gray-50 rounded-xl p-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <Target className="w-4 h-4 text-purple-500" />
+            Match Breakdown
+          </h4>
+          <div className="space-y-3">
+            {/* Skills Factor */}
             <div>
-              <p className="text-xs text-gray-500">Posted on</p>
-              <p className="text-sm font-medium">{postedDate}</p>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="flex items-center gap-1"><Code className="w-3 h-3 text-green-600" /> Skills</span>
+                <span className="font-semibold">
+                  {skillsBD.total_matched || 0}/{skillsBD.total_required || 0} ({Math.round(skillsMatchScore)}%)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${skillsMatchScore}%` }} 
+                />
+              </div>
+              {skillsBD.matched_skills && skillsBD.matched_skills.length > 0 && (
+                <p className="text-xs text-green-600 mt-1">
+                  ✓ Matched: {skillsBD.matched_skills.slice(0, 5).join(', ')}
+                  {skillsBD.matched_skills.length > 5 && ` +${skillsBD.matched_skills.length - 5} more`}
+                </p>
+              )}
+              {skillsBD.missing_skills && skillsBD.missing_skills.length > 0 && (
+                <p className="text-xs text-red-500 mt-0.5">
+                  ✗ Missing: {skillsBD.missing_skills.slice(0, 3).join(', ')}
+                  {skillsBD.missing_skills.length > 3 && ` +${skillsBD.missing_skills.length - 3} more`}
+                </p>
+              )}
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-gray-500" />
+
+            {/* Qualifications Factor */}
             <div>
-              <p className="text-xs text-gray-500">Applications close</p>
-              <p className="text-sm font-medium">{expiresAt ? new Date(expiresAt).toLocaleDateString() : 'Not specified'}</p>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3 text-purple-600" /> Qualifications</span>
+                <span className="font-semibold">{Math.round(qualsMatchScore)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-purple-500 h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${qualsMatchScore}%` }} 
+                />
+              </div>
+              {qualsBD.candidate_degrees && qualsBD.candidate_degrees.length > 0 && (
+                <p className="text-xs text-purple-600 mt-1">
+                  🎓 Your degree: {qualsBD.candidate_degrees[0]}
+                </p>
+              )}
+              {qualsBD.job_degree_required && (
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Required: {qualsBD.job_degree_required}
+                </p>
+              )}
+              {qualsBD.best_matched_field && (
+                <p className="text-xs text-green-600 mt-0.5">
+                  ✓ Best match: {qualsBD.best_matched_field}
+                </p>
+              )}
+            </div>
+
+            {/* Experience Factor */}
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-yellow-600" /> Experience</span>
+                <span className="font-semibold">
+                  {expBD.total_years?.toFixed(1) || expBD.candidate_years?.toFixed(1) || 0} / {expBD.required_years || 0} yrs ({Math.round(expMatchScore)}%)
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-yellow-500 h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${expMatchScore}%` }} 
+                />
+              </div>
+              {expBD.gap_years > 0 && (
+                <p className="text-xs text-orange-600 mt-1">
+                  ⚠️ Experience gap: {expBD.gap_years.toFixed(1)} years
+                </p>
+              )}
+              {expBD.specific_matches && expBD.specific_matches.length > 0 && (
+                <p className="text-xs text-green-600 mt-0.5">
+                  ✓ Matched: {expBD.specific_matches[0]?.requirement_title} ({expBD.specific_matches[0]?.candidate_years?.toFixed(1)}/{expBD.specific_matches[0]?.requirement_years} yrs)
+                </p>
+              )}
+            </div>
+
+            {/* Preferences Factor */}
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-blue-600" /> Preferences</span>
+                <span className="font-semibold">{Math.round(prefsMatchScore)}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-blue-500 h-2 rounded-full transition-all duration-500" 
+                  style={{ width: `${prefsMatchScore}%` }} 
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 mt-1 text-xs">
+                {matchDetails?.preferences_breakdown?.type_match > 0.7 && (
+                  <span className="text-green-600">✓ Job type matches</span>
+                )}
+                {matchDetails?.preferences_breakdown?.industry_match > 0.7 && (
+                  <span className="text-green-600">✓ Industry matches</span>
+                )}
+                {matchDetails?.preferences_breakdown?.salary_match > 0.7 && (
+                  <span className="text-green-600">✓ Salary range matches</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
+      )}
 
-        {(viewCount > 0 || applicationCount > 0) && (
-          <div className="grid grid-cols-2 gap-4">
-            <div className="text-center p-3 bg-gray-50 rounded-xl">
-              <Eye className="w-5 h-5 text-gray-500 mx-auto mb-1" />
-              <p className="text-xl font-bold">{viewCount.toLocaleString()}</p>
-              <p className="text-xs text-gray-500">Views</p>
-            </div>
-            <div className="text-center p-3 bg-gray-50 rounded-xl">
-              <Users className="w-5 h-5 text-gray-500 mx-auto mb-1" />
-              <p className="text-xl font-bold">{applicationCount.toLocaleString()}</p>
-              <p className="text-xs text-gray-500">Applicants</p>
-            </div>
-          </div>
-        )}
-
+      {/* Required Skills with Match Status */}
+      {skillsRequired.length > 0 && (
         <div>
-          <h3 className="font-semibold text-lg mb-2">Job Description</h3>
-          <div className="text-gray-700 text-sm whitespace-pre-wrap">{description}</div>
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <Code className="w-4 h-4 text-blue-600" />
+            Required Skills
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {skillsRequired.map((skill: any, idx: number) => {
+              const skillName = typeof skill === 'string' ? skill : skill.name || skill.skill_name;
+              const matchedSkillsList = skillsBD.matched_skills || [];
+              const isMatched = matchedSkillsList.some((ms: string) => 
+                ms.toLowerCase() === skillName.toLowerCase() || 
+                skillName.toLowerCase().includes(ms.toLowerCase()) ||
+                ms.toLowerCase().includes(skillName.toLowerCase())
+              );
+              return (
+                <span 
+                  key={idx} 
+                  className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1 ${
+                    isMatched 
+                      ? 'bg-green-100 text-green-800 border border-green-300' 
+                      : 'bg-red-50 text-red-700 border border-red-200'
+                  }`}
+                >
+                  {skillName}
+                  {isMatched ? <CheckCircle className="w-3 h-3 text-green-600" /> : <X className="w-3 h-3 text-red-500" />}
+                </span>
+              );
+            })}
+          </div>
         </div>
+      )}
 
-        {responsibilities.length > 0 && (
-          <div>
-            <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-600" />
-              Key Responsibilities
-            </h3>
-            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-              {responsibilities.map((resp, idx) => <li key={idx}>{resp}</li>)}
-            </ul>
+      {/* Missing Skills Warning */}
+      {skillsBD.missing_skills && skillsBD.missing_skills.length > 0 && (
+        <div className="bg-yellow-50 rounded-lg p-3">
+          <p className="text-sm text-yellow-800 font-medium mb-1 flex items-center gap-1">
+            <AlertTriangle className="w-4 h-4" />
+            Skills you're missing ({skillsBD.missing_skills.length}):
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {skillsBD.missing_skills.slice(0, 5).map((skill: string, idx: number) => (
+              <span key={idx} className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">{skill}</span>
+            ))}
+            {skillsBD.missing_skills.length > 5 && (
+              <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">
+                +{skillsBD.missing_skills.length - 5} more
+              </span>
+            )}
           </div>
-        )}
+        </div>
+      )}
 
-        {requirements.length > 0 && (
-          <div>
-            <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-orange-600" />
-              Requirements
-            </h3>
-            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-              {requirements.map((req, idx) => <li key={idx}>{req}</li>)}
-            </ul>
-          </div>
-        )}
-
-        {skillsRequired.length > 0 && (
-          <div>
-            <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-              <Code className="w-4 h-4 text-blue-600" />
-              Required Skills
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {skillsRequired.map((skill, idx) => {
-                const skillName = typeof skill === 'string' ? skill : skill.name || skill.skill_name;
-                const isMatched = profile?.skills?.includes(skillName);
-                return (
-                  <span key={idx} className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1 ${
-                    isMatched ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-gray-100 text-gray-700 border border-gray-200'
-                  }`}>
-                    {skillName}
-                    {isMatched && <CheckCircle className="w-3 h-3 text-green-600" />}
-                  </span>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {benefits.length > 0 && (
-          <div>
-            <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-              <Award className="w-4 h-4 text-purple-600" />
-              Benefits & Perks
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {benefits.map((benefit, idx) => (
-                <span key={idx} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">{benefit}</span>
+      {/* Education Qualification Match with Fields of Study */}
+      {(qualsBD.job_degree_required || qualsBD.qualification_entries?.length > 0) && (
+        <div className="bg-blue-50 rounded-lg p-3">
+          <p className="text-sm text-blue-800 font-medium mb-1 flex items-center gap-1">
+            <GraduationCap className="w-4 h-4" />
+            Education & Qualifications Match
+          </p>
+          
+          {/* Required Degree */}
+          {qualsBD.job_degree_required && (
+            <p className="text-sm">📋 Job requires: <strong>{qualsBD.job_degree_required}</strong></p>
+          )}
+          
+          {/* Candidate's Degree */}
+          {qualsBD.candidate_degrees && qualsBD.candidate_degrees.length > 0 && (
+            <p className="text-sm mt-1">🎓 Your degree: <strong>{qualsBD.candidate_degrees.join(', ')}</strong></p>
+          )}
+          
+          {/* Candidate's Field */}
+          {qualsBD.candidate_fields && qualsBD.candidate_fields.length > 0 && (
+            <p className="text-sm mt-1">📚 Your field: <strong>{qualsBD.candidate_fields.join(', ')}</strong></p>
+          )}
+          
+          {/* ✅ FIELDS OF STUDY FROM QUALIFICATION ENTRIES */}
+          {qualsBD.qualification_entries && qualsBD.qualification_entries.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-blue-200">
+              <p className="text-xs font-semibold text-blue-700 mb-2">📖 Accepted qualifications:</p>
+              {qualsBD.qualification_entries.map((entry: any, idx: number) => (
+                <div key={idx} className="mb-2">
+                  <p className="text-xs font-medium text-gray-800">{entry.degree}:</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {entry.fields_of_study && entry.fields_of_study.map((field: string, fIdx: number) => (
+                      <span key={fIdx} className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                        {field}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+          
+          {/* Best Match Info */}
+          {qualsBD.best_matched_field && (
+            <div className="mt-2 pt-2 border-t border-blue-200">
+              <p className="text-xs text-green-700 font-medium">✓ Best match: {qualsBD.best_matched_field}</p>
+              <p className="text-xs text-blue-600 mt-0.5">Match type: {qualsBD.match_type}</p>
+              <p className="text-xs text-gray-500">Similarity: {(qualsBD.best_similarity * 100).toFixed(0)}%</p>
+            </div>
+          )}
+          
+          {/* Match Quality & Explanation */}
+          {qualsBD.match_quality && (
+            <p className="text-xs text-green-600 mt-1">Quality: {qualsBD.match_quality}</p>
+          )}
+          {qualsBD.explanation && (
+            <p className="text-xs text-gray-600 mt-1">ℹ️ {qualsBD.explanation}</p>
+          )}
+        </div>
+      )}
 
-        {tags.length > 0 && (
+      {/* Experience Gap Warning */}
+      {expBD.gap_years && expBD.gap_years > 0 && (
+        <div className="bg-orange-50 rounded-lg p-3">
+          <p className="text-sm text-orange-800 font-medium flex items-center gap-1">
+            <AlertCircle className="w-4 h-4" />
+            Experience Gap: {expBD.gap_years.toFixed(1)} years
+          </p>
+          <p className="text-xs text-orange-700 mt-1">
+            You have {(expBD.total_years || expBD.candidate_years || 0).toFixed(1)} years, job requires {expBD.required_years || 0}+ years
+          </p>
+        </div>
+      )}
+
+      {/* Job Description */}
+      {description && (
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-2">Job Description</h3>
+          <div className="text-gray-700 text-sm whitespace-pre-wrap line-clamp-4">{description}</div>
+        </div>
+      )}
+
+      {/* Key Responsibilities */}
+      {responsibilities.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-green-600" />
+            Key Responsibilities ({responsibilities.length})
+          </h3>
+          <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+            {responsibilities.slice(0, 5).map((resp: string, idx: number) => (
+              <li key={idx} className="text-sm">{resp}</li>
+            ))}
+            {responsibilities.length > 5 && (
+              <li className="text-gray-400 text-sm">+{responsibilities.length - 5} more</li>
+            )}
+          </ul>
+        </div>
+      )}
+
+      {/* Benefits */}
+      {benefits.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <Award className="w-4 h-4 text-purple-600" />
+            Benefits & Perks
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {benefits.slice(0, 6).map((benefit: string, idx: number) => (
+              <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">{benefit}</span>
+            ))}
+            {benefits.length > 6 && (
+              <span className="text-xs text-gray-400">+{benefits.length - 6} more</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Meta Info */}
+      <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
+        <div>
+          <p className="text-xs text-gray-500">Posted on</p>
+          <p className="text-sm font-medium">{postedDate}</p>
+        </div>
+        <div>
+          <p className="text-xs text-gray-500">Applications close</p>
+          <p className="text-sm font-medium">{expiresAt ? formatFullDate(expiresAt) : 'Not specified'}</p>
+        </div>
+        {applicationCount > 0 && (
           <div>
-            <h3 className="font-semibold text-lg mb-2">Tags</h3>
-            <div className="flex flex-wrap gap-2">
-              {tags.map((tag, idx) => (
-                <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">#{tag}</span>
-              ))}
-            </div>
+            <p className="text-xs text-gray-500">Applicants</p>
+            <p className="text-sm font-medium">{applicationCount}</p>
           </div>
         )}
-
-        {companyDescription && (
-          <div className="bg-gray-50 rounded-xl p-4">
-            <h3 className="font-semibold text-lg mb-2 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-gray-600" />
-              About {companyName}
-            </h3>
-            <p className="text-sm text-gray-600">{companyDescription}</p>
-            <div className="flex flex-wrap gap-3 mt-3 text-sm">
-              {companyIndustry && <span className="text-gray-500">Industry: {companyIndustry}</span>}
-              {companySize && <span className="text-gray-500">• Size: {companySize}</span>}
-            </div>
+        {job.department && (
+          <div>
+            <p className="text-xs text-gray-500">Department</p>
+            <p className="text-sm font-medium">{job.department}</p>
           </div>
         )}
       </div>
-    );
-  };
 
+      {/* Tags */}
+      {tags.length > 0 && (
+        <div>
+          <h3 className="font-semibold text-gray-900 mb-2">Tags</h3>
+          <div className="flex flex-wrap gap-2">
+            {tags.map((tag: string, idx: number) => (
+              <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">#{tag}</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
   // ============================================
   // STEP 3: SCREENING QUESTIONS
   // ============================================
@@ -741,7 +1079,7 @@ const JobApplicationModal = ({
       </div>
 
       {screeningQuestions.length > 0 ? (
-        screeningQuestions.map((q, idx) => (
+        screeningQuestions.map((q: any, idx: number) => (
           <div key={idx} className="space-y-2">
             <label className="font-medium text-gray-700">
               {safeStr(q.question || q.text)}
@@ -753,9 +1091,8 @@ const JobApplicationModal = ({
                 value={answers[idx] || ''}
                 onChange={(e) => handleAnswerChange(idx, e.target.value)}
                 rows={3}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${
-                  errors[idx] ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors[idx] ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 placeholder="Type your answer here..."
               />
             )}
@@ -765,9 +1102,8 @@ const JobApplicationModal = ({
                 type="number"
                 value={answers[idx] || ''}
                 onChange={(e) => handleAnswerChange(idx, e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg ${
-                  errors[idx] ? 'border-red-500' : 'border-gray-300'
-                }`}
+                className={`w-full px-3 py-2 border rounded-lg ${errors[idx] ? 'border-red-500' : 'border-gray-300'
+                  }`}
                 placeholder="Enter number..."
               />
             )}
@@ -785,7 +1121,7 @@ const JobApplicationModal = ({
 
             {q.type === 'multiple_choice' && q.options?.length > 0 && (
               <div className="flex flex-col gap-2">
-                {q.options.map((opt, oIdx) => (
+                {q.options.map((opt: string, oIdx: number) => (
                   <label key={oIdx} className="flex items-center gap-2 cursor-pointer">
                     <input type="radio" name={`q-${idx}`} value={safeStr(opt)} checked={answers[idx] === safeStr(opt)} onChange={(e) => handleAnswerChange(idx, e.target.value)} />
                     <span>{safeStr(opt)}</span>
@@ -816,13 +1152,13 @@ const JobApplicationModal = ({
           <FileText className="w-5 h-5 text-blue-600" />
           Required Documents
         </h2>
-        <p className="text-sm text-gray-500">Upload the following documents (Max 5 MB each)</p>
+        <p className="text-sm text-gray-500">Upload the following documents (Max 5 MB each, PDF, DOC, DOCX)</p>
       </div>
 
       {documentTemplates.map((doc, idx) => (
         <div key={idx} className="border rounded-lg p-4">
           <div className="flex justify-between items-start gap-4">
-            <div>
+            <div className="flex-1">
               <h3 className="font-semibold text-gray-900">{doc.name}</h3>
               <p className="text-sm text-gray-500">{doc.description}</p>
               {doc.required && <span className="text-xs text-red-500">Required</span>}
@@ -831,8 +1167,10 @@ const JobApplicationModal = ({
             {documents[idx] ? (
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-green-600" />
-                <span className="text-sm text-gray-600 truncate max-w-[140px]">{documents[idx].name}</span>
-                <button onClick={() => removeDocument(idx)} className="p-1 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                <span className="text-sm text-gray-600 truncate max-w-[150px]">{documents[idx]?.name}</span>
+                <button onClick={() => removeDocument(idx)} className="p-1 text-gray-400 hover:text-red-500">
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             ) : (
               <label className="cursor-pointer px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 flex items-center gap-2">
@@ -842,6 +1180,14 @@ const JobApplicationModal = ({
               </label>
             )}
           </div>
+          {uploadProgress[idx] > 0 && uploadProgress[idx] < 100 && (
+            <div className="mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-1">
+                <div className="bg-blue-600 h-1 rounded-full" style={{ width: `${uploadProgress[idx]}%` }} />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Uploading... {uploadProgress[idx]}%</p>
+            </div>
+          )}
           {errors[`doc_${idx}`] && <p className="text-red-500 text-sm mt-2">{errors[`doc_${idx}`]}</p>}
         </div>
       ))}
@@ -861,8 +1207,9 @@ const JobApplicationModal = ({
         <p className="text-sm text-gray-500">Please review all information before submitting</p>
       </div>
 
+      {/* Candidate Summary */}
       <div className="bg-gray-50 rounded-lg p-4">
-        <h3 className="font-semibold mb-2">Candidate Information</h3>
+        <h3 className="font-semibold mb-2 flex items-center gap-2"><User className="w-4 h-4" /> Your Information</h3>
         {profile ? (
           <div className="grid grid-cols-2 gap-2 text-sm">
             <p><span className="text-gray-500">Name:</span> {profile.firstName} {profile.lastName}</p>
@@ -873,28 +1220,31 @@ const JobApplicationModal = ({
         ) : <p className="text-sm text-gray-500">Profile data not available</p>}
       </div>
 
-      {profile?.skills.length > 0 && (
+      {/* Skills Summary */}
+      {profile?.skills && profile.skills.length > 0 && (
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-semibold mb-2">Your Skills</h3>
           <div className="flex flex-wrap gap-2">
-            {profile.skills.slice(0, 10).map((skill, idx) => (
+            {profile.skills.slice(0, 10).map((skill: string, idx: number) => (
               <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">{skill}</span>
             ))}
           </div>
         </div>
       )}
 
+      {/* Job Summary */}
       <div className="bg-gray-50 rounded-lg p-4">
-        <h3 className="font-semibold mb-2">Job Details</h3>
+        <h3 className="font-semibold mb-2 flex items-center gap-2"><Briefcase className="w-4 h-4" /> Job Details</h3>
         <p><span className="text-gray-500">Position:</span> {job.title}</p>
         <p><span className="text-gray-500">Company:</span> {job.company_name}</p>
         <p><span className="text-gray-500">Match Score:</span> <strong className="text-blue-600">{Math.round(matchScore)}%</strong></p>
       </div>
 
+      {/* Screening Answers */}
       {screeningQuestions.length > 0 && (
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-semibold mb-2">Your Answers</h3>
-          {screeningQuestions.map((q, idx) => (
+          {screeningQuestions.slice(0, 3).map((q: any, idx: number) => (
             <div key={idx} className="mb-2">
               <p className="text-sm font-medium">{safeStr(q.question || q.text)}</p>
               <p className="text-sm text-gray-700 ml-2">Answer: {answers[idx] || <em className="text-gray-400">Not answered</em>}</p>
@@ -903,18 +1253,20 @@ const JobApplicationModal = ({
         </div>
       )}
 
+      {/* Documents */}
       <div className="bg-gray-50 rounded-lg p-4">
         <h3 className="font-semibold mb-2">Uploaded Documents</h3>
         {documentTemplates.map((doc, idx) => (
           <div key={idx} className="flex items-center gap-2 text-sm py-1">
             {documents[idx] ? <Check className="w-4 h-4 text-green-600" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
             <span className={documents[idx] ? 'text-gray-800' : 'text-red-600'}>
-              {doc.name} {documents[idx] ? `— ${documents[idx].name}` : '— Not uploaded'}
+              {doc.name} {documents[idx] ? `— ${documents[idx]?.name}` : '— Not uploaded'}
             </span>
           </div>
         ))}
       </div>
 
+      {/* Confirmation */}
       <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
         <p className="text-sm text-yellow-800 flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
@@ -939,7 +1291,7 @@ const JobApplicationModal = ({
           <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
         </div>
 
-        {/* Success Message Banner */}
+        {/* Success Message */}
         {successMessage && (
           <div className="mx-4 mt-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center gap-2 animate-pulse">
             <CheckCircle className="w-5 h-5 text-green-600" />
@@ -953,10 +1305,9 @@ const JobApplicationModal = ({
             <div className="flex items-center justify-between">
               {[1, 2, 3, 4].map((step) => (
                 <div key={step} className="flex items-center flex-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    step === currentStep ? 'bg-blue-600 text-white' :
-                    step < currentStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
-                  }`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step === currentStep ? 'bg-blue-600 text-white' :
+                      step < currentStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+                    }`}>
                     {step < currentStep ? <CheckCircle className="w-5 h-5" /> : step}
                   </div>
                   {step < 4 && <div className={`flex-1 h-1 mx-2 rounded ${step < currentStep ? 'bg-green-500' : 'bg-gray-200'}`} />}

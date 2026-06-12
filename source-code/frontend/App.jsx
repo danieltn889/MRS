@@ -1,6 +1,6 @@
-// App.jsx - REMOVE the Router wrapper
+// App.jsx - COMPLETE with GitHub OAuth Callback Route
 import React from 'react';
-import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom'; // Remove BrowserRouter import
+import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
 import SignUp from './components/SignUp';
 import CompanySignUp from './components/CompanySignUp';
 import Login from './components/Login';
@@ -15,6 +15,7 @@ import CompanyProfile from './components/company/CompanyProfile';
 import SimulationExecutor from './components/SimulationExecutor';
 import SimulationSessionViewer from './components/SimulationSessionViewer';
 import SessionReportComponent from './components/SessionReport';
+import { GitHubCallback } from './pages/Auth/GitHubCallback';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import JobDetails from './components/jobs/JobDetails';
@@ -61,6 +62,9 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* GitHub OAuth Callback Route - MUST come before default routes */}
+      <Route path="/auth/github/callback" element={<GitHubCallback />} />
+
       {/* Default Home Route */}
       <Route 
         path="/" 
@@ -119,7 +123,7 @@ function AppRoutes() {
       {/* Email Verification Routes */}
       <Route path="/verify-email" element={<EmailVerification />} />
       
-      {/* ✅ FIX: Wrap JobDetails with ProtectedRoute */}
+      {/* Job Details Route */}
       <Route 
         path="/jobs/:id" 
         element={
@@ -144,7 +148,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <SimulationSessionViewer 
-              onBack={() => navigate('/dashboard')}
+              onBack={() => navigate('/')}
               onResume={(sessionId, simulationId) => {
                 navigate(`/simulation/execute/${sessionId}`);
               }}
@@ -202,8 +206,8 @@ function AppRoutes() {
       {/* Company Profile Route */}
       <Route path="/company-profile" element={<ProtectedRoute><CompanyProfile /></ProtectedRoute>} />
 
-      {/* Default route */}
-      <Route path="/*" element={<Navigate to={isAuthenticated ? "/" : "/"} replace />} />
+      {/* Default route for any unmatched paths */}
+      <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/"} replace />} />
     </Routes>
   );
 }
@@ -212,7 +216,6 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        {/* NO Router here - Router is in main.jsx */}
         <AppRoutes />
       </AuthProvider>
     </ThemeProvider>

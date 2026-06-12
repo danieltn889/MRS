@@ -155,7 +155,7 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <SimulationSessionViewer 
-              onBack={() => navigate('/dashboard')}
+              onBack={() => navigate('/')}
               onResume={(sessionId, simulationId) => {
                 navigate(`/simulation/execute/${sessionId}`);
               }}
@@ -208,7 +208,7 @@ function AppRoutes() {
       />
 
       {/* Protected Dashboard Route */}
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard onSignUp={handleSignUp} onLogin={handleLogin} /></ProtectedRoute>} />
+      <Route path="/" element={<ProtectedRoute><Dashboard onSignUp={handleSignUp} onLogin={handleLogin} /></ProtectedRoute>} />
 
       {/* Company Profile Route */}
       <Route path="/company-profile" element={<ProtectedRoute><CompanyProfile /></ProtectedRoute>} />

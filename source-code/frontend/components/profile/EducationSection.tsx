@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, GraduationCap, Calendar } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Plus, Edit, Trash2, Save, X, GraduationCap, Calendar, ChevronDown } from 'lucide-react';
 import { addEducation, updateEducation, deleteEducation } from '../../services/candidateAPI';
 
 interface EducationItem {
@@ -33,6 +33,162 @@ interface EducationFormData {
   gradeScale: string;
   description: string;
 }
+
+// Degree options
+const DEGREE_OPTIONS = [
+  // Standard Degrees
+  "Bachelor's Degree",
+  "Master's Degree",
+  "PhD / Doctorate",
+  "Associate Degree",
+  "High School Diploma",
+  "Professional Certificate",
+  "Vocational Training",
+  "No Degree Required",
+  
+  // Bachelor's Degrees
+  "Bachelor of Science (BSc)",
+  "Bachelor of Arts (BA)",
+  "Bachelor of Business Administration (BBA)",
+  "Bachelor of Commerce (BCom)",
+  "Bachelor of Engineering (BEng)",
+  "Bachelor of Laws (LLB)",
+  "Bachelor of Education (BEd)",
+  "Bachelor of Architecture (BArch)",
+  "Bachelor of Fine Arts (BFA)",
+  "Bachelor of Social Work (BSW)",
+  
+  // Master's Degrees
+  "Master of Business Administration (MBA)",
+  "Master of Science (MSc)",
+  "Master of Arts (MA)",
+  "Master of Engineering (MEng)",
+  "Master of Laws (LLM)",
+  "Master of Education (MEd)",
+  "Master of Public Administration (MPA)",
+  "Master of Public Health (MPH)",
+  "Master of Social Work (MSW)",
+  "Master of Fine Arts (MFA)",
+  
+  // Doctorate Degrees
+  "Doctor of Philosophy (PhD)",
+  "Doctor of Medicine (MD)",
+  "Doctor of Dental Surgery (DDS)",
+  "Doctor of Pharmacy (PharmD)",
+  "Doctor of Psychology (PsyD)",
+  "Doctor of Education (EdD)",
+  "Doctor of Business Administration (DBA)",
+  "Doctor of Juridical Science (JSD)",
+  
+  // Other Certifications
+  "Postgraduate Diploma",
+  "Advanced Certificate",
+  "Executive Education",
+  "Certificate Program",
+  "Diploma Program",
+  "Foundation Degree",
+  "Trade School Certificate",
+  "Bootcamp Graduate",
+  "Self-taught"
+];
+
+// Custom Combobox Component
+interface ComboboxProps {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  placeholder?: string;
+  required?: boolean;
+}
+
+const Combobox: React.FC<ComboboxProps> = ({ value, onChange, options, placeholder, required }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+  const [filteredOptions, setFilteredOptions] = useState<string[]>(options);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setInputValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setInputValue(newValue);
+    onChange(newValue);
+    
+    // Filter options based on input
+    const filtered = options.filter(opt => 
+      opt.toLowerCase().includes(newValue.toLowerCase())
+    );
+    setFilteredOptions(filtered);
+    setIsOpen(true);
+  };
+
+  const handleSelectOption = (option: string) => {
+    setInputValue(option);
+    onChange(option);
+    setIsOpen(false);
+  };
+
+  const handleFocus = () => {
+    setFilteredOptions(options);
+    setIsOpen(true);
+  };
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <div className="relative">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={handleInputChange}
+          onFocus={handleFocus}
+          placeholder={placeholder}
+          required={required}
+          className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        />
+        <button
+          type="button"
+          onClick={() => setIsOpen(!isOpen)}
+          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+        >
+          <ChevronDown size={16} />
+        </button>
+      </div>
+      
+      {isOpen && filteredOptions.length > 0 && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+          {filteredOptions.map((option, index) => (
+            <button
+              key={index}
+              type="button"
+              onClick={() => handleSelectOption(option)}
+              className="w-full text-left px-3 py-2 hover:bg-blue-50 transition-colors text-sm"
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+      
+      {isOpen && filteredOptions.length === 0 && inputValue && (
+        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3 text-sm text-gray-500">
+          Press Enter to use "{inputValue}"
+        </div>
+      )}
+    </div>
+  );
+};
 
 const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
   const [isAdding, setIsAdding] = useState(false);
@@ -227,13 +383,12 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Degree *
                 </label>
-                <input
-                  type="text"
-                  required
+                <Combobox
                   value={formData.degree}
-                  onChange={(e) => setFormData({...formData, degree: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Bachelor of Science"
+                  onChange={(value) => setFormData({...formData, degree: value})}
+                  options={DEGREE_OPTIONS}
+                  placeholder="Select or type your degree"
+                  required
                 />
               </div>
             </div>
@@ -375,7 +530,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                   <div className="flex items-center gap-3 mb-2">
                     <GraduationCap size={20} className="text-blue-600" />
                     <h3 className="text-lg font-semibold text-gray-900">
-                      {edu.degree} in {edu.field_of_study}
+                      {edu.degree} {edu.field_of_study && `in ${edu.field_of_study}`}
                     </h3>
                   </div>
 

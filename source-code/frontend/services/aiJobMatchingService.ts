@@ -1,6 +1,6 @@
 // services/aiJobMatchingService.ts
 
-const API_GATEWAY_URL = 'http://localhost:8000';
+const API_GATEWAY_URL = 'http://localhost:8080/matcher';  // ← FIXED: Use gateway port 8080
 
 interface JobMatch {
   id: string;
@@ -231,12 +231,12 @@ export const getJobMatchForCandidate = async (
 /**
  * Get AI job matches with timeout protection
  * @param candidateId - The candidate's UUID
- * @param timeoutMs - Timeout in milliseconds (default 30000)
+ * @param timeoutMs - Timeout in milliseconds (default 60000 - increased to 60 seconds)
  * @returns Promise with job matches
  */
 export const getJobMatchesFromAIWithTimeout = async (
   candidateId: string, 
-  timeoutMs: number = 30000
+  timeoutMs: number = 60000  // Increased from 30000 to 60000
 ): Promise<AIMatchResponse> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -287,13 +287,13 @@ export const getJobMatchesFromAIWithTimeout = async (
  * Get match score for a specific job with timeout
  * @param candidateId - The candidate's UUID
  * @param jobId - The job's UUID
- * @param timeoutMs - Timeout in milliseconds (default 30000)
+ * @param timeoutMs - Timeout in milliseconds (default 60000 - increased to 60 seconds)
  * @returns Promise with match details
  */
 export const getJobMatchForCandidateWithTimeout = async (
   candidateId: string,
   jobId: string,
-  timeoutMs: number = 30000
+  timeoutMs: number = 60000  // Increased from 30000 to 60000
 ): Promise<SingleJobMatchResponse> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);

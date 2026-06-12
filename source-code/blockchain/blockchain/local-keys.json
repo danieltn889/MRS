@@ -1,7 +1,7 @@
 {
-  "network": "localhost",
+  "network": "hardhat",
   "chainId": 1337,
-  "generatedAt": "2026-06-06T13:46:11.619Z",
+  "generatedAt": "2026-06-11T04:04:24.419Z",
   "warning": "⚠️ THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ⚠️",
   "neverUseOnMainnet": "Never use these keys on Mainnet or any live network!",
   "accounts": [
@@ -9,7 +9,7 @@
       "index": 0,
       "address": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
       "privateKey": "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-      "balance": "9999.999193785499078612"
+      "balance": "9999.9982723975"
     },
     {
       "index": 1,

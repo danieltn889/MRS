@@ -9,10 +9,13 @@ interface Props {
 }
 
 const STATIC_TASK_TITLES = [
+  'Build a User Profile Card Component',
+  'Create a GET API Endpoint for User List',
+  'Fix the Broken Todo List Application',
+  'Complete End-to-End Feature Implementation',
   'Debug a production API error',
   'Design a database schema for an e-commerce system',
   'Review and refactor legacy code for readability',
-  'Build a responsive UI component from a Figma mockup',
   'Write unit tests for a given module',
   'Resolve a customer escalation under time pressure',
   'Prioritise a backlog of feature requests',
@@ -124,34 +127,50 @@ const LANGUAGES = [
 
 const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestions = [] }) => {
   const allTaskSuggestions = [...new Set([...taskSuggestions, ...STATIC_TASK_TITLES])];
-  const usedTitles = simulation.tasks.map(t => t.title);
+  
+  // FIX: Create a map of used titles excluding the current task
+  const getUsedTitlesExcept = (currentTaskId: string) => 
+    simulation.tasks.filter(t => t.id !== currentTaskId).map(t => t.title);
+  
   const updateTask = (taskId: string, updates: Partial<SimulationTask>) =>
-    setSimulation(prev =>
-      prev ? { ...prev, tasks: prev.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t) } : null
-    );
+    setSimulation(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        tasks: prev.tasks.map(t => t.id === taskId ? { ...t, ...updates } : t)
+      };
+    });
 
   const deleteTask = (taskId: string) =>
     setSimulation(prev => prev ? { ...prev, tasks: prev.tasks.filter(t => t.id !== taskId) } : null);
 
   const addTask = () => {
     const newTask: SimulationTask = {
-      id: Date.now().toString(),
+      id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       title: '',
       description: '',
       type: 'technical',
       duration: 15,
       instructions: '',
       resources: [],
-      evaluation: { criteria: [], automatedScoring: false, weight: 10, timeBonus: false, qualityThreshold: 70 },
+      evaluation: { 
+        criteria: [], 
+        automatedScoring: false, 
+        weight: 10, 
+        timeBonus: false, 
+        qualityThreshold: 70 
+      },
       order: simulation.tasks.length + 1,
     };
     setSimulation(prev => prev ? { ...prev, tasks: [...prev.tasks, newTask] } : null);
   };
 
   const addCriterion = (taskId: string) => {
-    const task = simulation.tasks.find(t => t.id === taskId)!;
+    const task = simulation.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
     const criterion: EvaluationCriterion = {
-      id: Date.now().toString(),
+      id: `criterion-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: '',
       description: '',
       type: 'scale',
@@ -159,25 +178,36 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
       required: true,
       weight: 25,
     };
-    updateTask(taskId, { evaluation: { ...task.evaluation, criteria: [...task.evaluation.criteria, criterion] } });
+    updateTask(taskId, { 
+      evaluation: { 
+        ...task.evaluation, 
+        criteria: [...(task.evaluation?.criteria || []), criterion] 
+      } 
+    });
   };
 
   const updateCriterion = (taskId: string, criterionId: string, patch: Partial<EvaluationCriterion>) => {
-    const task = simulation.tasks.find(t => t.id === taskId)!;
+    const task = simulation.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
     updateTask(taskId, {
       evaluation: {
         ...task.evaluation,
-        criteria: task.evaluation.criteria.map(c => c.id === criterionId ? { ...c, ...patch } : c),
+        criteria: (task.evaluation?.criteria || []).map(c => 
+          c.id === criterionId ? { ...c, ...patch } : c
+        ),
       },
     });
   };
 
   const deleteCriterion = (taskId: string, criterionId: string) => {
-    const task = simulation.tasks.find(t => t.id === taskId)!;
+    const task = simulation.tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
     updateTask(taskId, {
       evaluation: {
         ...task.evaluation,
-        criteria: task.evaluation.criteria.filter(c => c.id !== criterionId),
+        criteria: (task.evaluation?.criteria || []).filter(c => c.id !== criterionId),
       },
     });
   };
@@ -245,11 +275,11 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                       Task Title <span className="text-red-400">*</span>
                     </label>
                     <TaskTitleInput
-                      value={task.title}
+                      value={task.title || ''}
                       suggestions={allTaskSuggestions}
-                      usedTitles={usedTitles.filter(t => t !== task.title)}
+                      usedTitles={getUsedTitlesExcept(task.id)}
                       onChange={v => updateTask(task.id, { title: v })}
-                      hasError={!task.title.trim()}
+                      hasError={!task.title?.trim()}
                     />
                   </div>
                   <div>
@@ -258,7 +288,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                       type="number"
                       min={5}
                       max={120}
-                      value={task.duration}
+                      value={task.duration || 15}
                       onChange={e => updateTask(task.id, { duration: Number(e.target.value) })}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
@@ -270,11 +300,11 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                     Description <span className="text-red-400">*</span>
                   </label>
                   <textarea
-                    value={task.description}
+                    value={task.description || ''}
                     onChange={e => updateTask(task.id, { description: e.target.value })}
                     rows={2}
                     className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none ${
-                      !task.description.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      !task.description?.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'
                     }`}
                     placeholder="What does the candidate need to accomplish?"
                   />
@@ -283,7 +313,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1.5">Instructions</label>
                   <textarea
-                    value={task.instructions}
+                    value={task.instructions || ''}
                     onChange={e => updateTask(task.id, { instructions: e.target.value })}
                     rows={3}
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
@@ -304,7 +334,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                           <label className="block text-xs font-semibold text-blue-800 mb-1.5">Project Type</label>
                           <select
                             value={task.data?.projectType || 'single_file'}
-                            onChange={e => updateTask(task.id, { data: { ...task.data, projectType: e.target.value } })}
+                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), projectType: e.target.value } })}
                             className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                           >
                             <option value="single_file">Single File</option>
@@ -316,7 +346,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                           <label className="block text-xs font-semibold text-blue-800 mb-1.5">Language</label>
                           <select
                             value={task.data?.language || 'javascript'}
-                            onChange={e => updateTask(task.id, { data: { ...task.data, language: e.target.value } })}
+                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), language: e.target.value } })}
                             className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                           >
                             {LANGUAGES.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
@@ -326,7 +356,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                           <label className="block text-xs font-semibold text-blue-800 mb-1.5">Code Mode</label>
                           <select
                             value={task.data?.codeMode || 'starter_code'}
-                            onChange={e => updateTask(task.id, { data: { ...task.data, codeMode: e.target.value } })}
+                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), codeMode: e.target.value } })}
                             className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
                           >
                             <option value="starter_code">Provide Starter Code</option>
@@ -339,7 +369,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                           <label className="block text-xs font-semibold text-blue-800 mb-1.5">Starter Code</label>
                           <textarea
                             value={task.data?.starterCode || ''}
-                            onChange={e => updateTask(task.id, { data: { ...task.data, starterCode: e.target.value } })}
+                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), starterCode: e.target.value } })}
                             rows={5}
                             className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm font-mono bg-gray-900 text-green-400 focus:ring-2 focus:ring-blue-400 resize-none placeholder:text-gray-600"
                             placeholder="// Paste or type your starter code here…"
@@ -362,15 +392,14 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                       + Add Criterion
                     </button>
                   </div>
-                  {task.evaluation.criteria.length === 0 ? (
+                  {!task.evaluation?.criteria || task.evaluation.criteria.length === 0 ? (
                     <div className="p-6 text-center bg-purple-50">
                       <p className="text-xs text-purple-400">No criteria yet — add one to define how this task is scored.</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-100">
                       {task.evaluation.criteria.map((criterion, ci) => {
-                        const totalWeight = task.evaluation.criteria.reduce((s, c) => s + c.weight, 0);
-                        const weightOk = totalWeight === 100;
+                        const totalWeight = (task.evaluation?.criteria || []).reduce((s, c) => s + (c.weight || 0), 0);
                         return (
                           <div key={criterion.id} className="p-4 bg-white hover:bg-gray-50 transition-colors">
                             <div className="flex items-start gap-3">
@@ -382,13 +411,13 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                   <input
                                     type="text"
-                                    value={criterion.name}
+                                    value={criterion.name || ''}
                                     onChange={e => updateCriterion(task.id, criterion.id, { name: e.target.value })}
-                                    className={`col-span-1 md:col-span-2 px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent ${!criterion.name.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
+                                    className={`col-span-1 md:col-span-2 px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent ${!criterion.name?.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
                                     placeholder="Criterion name (e.g. Code quality)…"
                                   />
                                   <select
-                                    value={criterion.type}
+                                    value={criterion.type || 'scale'}
                                     onChange={e => updateCriterion(task.id, criterion.id, { type: e.target.value as EvaluationCriterion['type'] })}
                                     className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-400"
                                   >
@@ -399,7 +428,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                                   </select>
                                 </div>
                                 <textarea
-                                  value={criterion.description}
+                                  value={criterion.description || ''}
                                   onChange={e => updateCriterion(task.id, criterion.id, { description: e.target.value })}
                                   rows={1}
                                   className="w-full px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-400 resize-none"
@@ -410,14 +439,14 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                                   <label className="text-xs font-medium text-gray-500 shrink-0">Weight</label>
                                   <input
                                     type="range" min={0} max={100}
-                                    value={criterion.weight}
+                                    value={criterion.weight ?? 25}
                                     onChange={e => updateCriterion(task.id, criterion.id, { weight: Number(e.target.value) })}
                                     className="flex-1 accent-purple-600"
                                   />
                                   <div className="flex items-center gap-1 shrink-0">
                                     <input
                                       type="number" min={0} max={100}
-                                      value={criterion.weight}
+                                      value={criterion.weight ?? 25}
                                       onChange={e => updateCriterion(task.id, criterion.id, { weight: Number(e.target.value) })}
                                       className="w-14 text-center px-1.5 py-1 border border-gray-200 rounded-lg text-sm font-bold text-purple-700 focus:ring-2 focus:ring-purple-400"
                                     />
@@ -438,8 +467,8 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                     </div>
                   )}
                   {/* Weight total indicator */}
-                  {task.evaluation.criteria.length > 0 && (() => {
-                    const total = task.evaluation.criteria.reduce((s, c) => s + c.weight, 0);
+                  {task.evaluation?.criteria && task.evaluation.criteria.length > 0 && (() => {
+                    const total = task.evaluation.criteria.reduce((s, c) => s + (c.weight || 0), 0);
                     return (
                       <div className={`px-4 py-2 text-xs font-semibold flex items-center justify-between ${total === 100 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
                         <span>Total weight: {total}%</span>
