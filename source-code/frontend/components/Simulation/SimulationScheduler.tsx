@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, Calendar, Clock, CheckCircle, AlertCircle, Timer, RefreshCw } from 'lucide-react';
 import { getMySimulations } from '../../services/simulationAPI';
 
-// Add proper interface for the simulation object
+// Proper interface for the simulation object
 interface Simulation {
   id: string;
   simulationName?: string;
@@ -22,7 +22,7 @@ interface Simulation {
 }
 
 interface SimulationSchedulerProps {
-  simulations?: Simulation[];  // Changed from any to proper type
+  simulations?: Simulation[];
   onStartSimulation?: (simulation: any) => void;
   onRefresh?: () => void;
 }
@@ -35,6 +35,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
   const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [loading, setLoading] = useState(false);
   const [activeSim, setActiveSim] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Fetch simulations from API
   const fetchSimulations = async () => {
@@ -44,13 +45,12 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
       
       if (response.success && response.data) {
         const rawData = response.data.data || response.data;
-        // FIX: Ensure each simulation has a unique ID
         const mappedSimulations: Simulation[] = (Array.isArray(rawData) ? rawData : []).map((sim, index) => ({
-          id: sim.id || `sim-${Date.now()}-${index}-${Math.random()}`,
-          simulationName: sim.simulationName,
+          id: sim.id || `sim-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          simulationName: sim.simulationName || sim.title || 'Untitled Simulation',
           title: sim.simulationName || sim.title || 'Untitled Simulation',
-          description: sim.description,
-          duration: sim.duration,
+          description: sim.description || '',
+          duration: sim.duration || 45,
           status: resolveStatus(sim),
           score: sim.score,
           scheduledAt: sim.scheduledAt,
@@ -65,8 +65,9 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
         setSimulations(mappedSimulations);
         
         // Set first simulation as active if available
-        if (mappedSimulations.length > 0 && !activeSim) {
-          setActiveSim(mappedSimulations[0].id);
+        if (mappedSimulations.length > 0) {
+          const firstActive = mappedSimulations.find(s => s.status !== 'completed' && s.status !== 'expired');
+          setActiveSim(firstActive?.id || mappedSimulations[0].id);
         }
       }
     } catch (error) {
@@ -78,7 +79,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
 
   // Helper to resolve status
   const resolveStatus = (sim: any): Simulation['status'] => {
-    if (sim.completedAt || (sim.score !== undefined && sim.score !== null)) return 'completed';
+    if (sim.completedAt || (sim.score !== undefined && sim.score !== null && sim.score > 0)) return 'completed';
     if (sim.sessionId && sim.startedAt && !sim.completedAt) return 'in_progress';
     if (sim.status === 'expired') return 'expired';
     return 'not_started';
@@ -110,19 +111,21 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
   // Handle review simulation
   const handleReviewSimulation = (sim: Simulation) => {
     console.log('Reviewing simulation:', sim.id);
-    window.location.href = '/results';
+    // Navigate to results with simulation ID
+    window.location.href = `/results?simulationId=${sim.id}`;
   };
 
-  // Load simulations on mount
+  // Load simulations on mount and when refreshKey changes
   useEffect(() => {
     fetchSimulations();
-  }, []);
+  }, [refreshKey]);
 
   // Helper function to format date
   const formatDate = (dateString?: string): string => {
     if (!dateString) return 'Date not set';
     try {
       const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Date not set';
       return date.toLocaleDateString('en-US', { 
         month: 'short', 
         day: 'numeric',
@@ -149,7 +152,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
 
   // Refresh simulations
   const handleRefresh = async () => {
-    await fetchSimulations();
+    setRefreshKey(prev => prev + 1);
     if (onRefresh) onRefresh();
   };
 
@@ -175,8 +178,12 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Simulations</h3>
-          <button onClick={handleRefresh} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-            <RefreshCw size={16} className="text-gray-500" />
+          <button 
+            onClick={handleRefresh} 
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            disabled={loading}
+          >
+            <RefreshCw size={16} className={`text-gray-500 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
         <div className="flex items-center justify-center py-8">
@@ -191,8 +198,12 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Simulations</h3>
-          <button onClick={handleRefresh} className="p-1 hover:bg-gray-100 rounded-full transition-colors" title="Refresh">
-            <RefreshCw size={16} className="text-gray-500" />
+          <button 
+            onClick={handleRefresh} 
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors" 
+            title="Refresh"
+          >
+            <RefreshCw size={16} className="text-gray-500 hover:text-blue-600 transition-colors" />
           </button>
         </div>
         <div className="text-center py-8">
@@ -210,7 +221,11 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Simulations</h3>
-        <button onClick={handleRefresh} className="p-1 hover:bg-gray-100 rounded-full transition-colors" title="Refresh">
+        <button 
+          onClick={handleRefresh} 
+          className="p-1 hover:bg-gray-100 rounded-full transition-colors" 
+          title="Refresh"
+        >
           <RefreshCw size={16} className="text-gray-500 hover:text-blue-600 transition-colors" />
         </button>
       </div>
@@ -269,10 +284,12 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
                         <span className="truncate">Applied: {formatDate(sim.appliedAt)}</span>
                       </div>
                     ) : null}
-                    <div className="flex items-center gap-1">
-                      <Clock size={12} className="flex-shrink-0" />
-                      <span>{sim.duration || 45} min</span>
-                    </div>
+                    {sim.duration && (
+                      <div className="flex items-center gap-1">
+                        <Clock size={12} className="flex-shrink-0" />
+                        <span>{sim.duration} min</span>
+                      </div>
+                    )}
                     {sim.companyName && (
                       <div className="flex items-center gap-1">
                         <span className="text-gray-400">•</span>

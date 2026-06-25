@@ -1,12 +1,14 @@
 import React from 'react';
-import { Simulation, PassFailCriteria } from '../types/simulationTypes';
+import { Simulation, PassFailCriteria, TaskPriority } from '../types/simulationTypes';
 
 interface Props {
   simulation: Simulation;
   setSimulation: React.Dispatch<React.SetStateAction<Simulation | null>>;
+  currentStep?: number;
+  totalSteps?: number;
 }
 
-// Default pass/fail criteria
+// Default pass/fail criteria with all tasks mandatory
 const DEFAULT_PASS_FAIL: PassFailCriteria = {
   overallScore: { minimum: 70, maximum: 100 },
   sectionScores: [],
@@ -15,92 +17,452 @@ const DEFAULT_PASS_FAIL: PassFailCriteria = {
   timeManagement: { completionRequired: true, timeBonus: false },
   qualityStandards: [],
   automatedRules: [],
+  taskPriority: {
+    mode: 'sequential',
+    weightDistribution: 'equal',
+    taskWeights: {},
+    mandatoryTasks: [],
+    optionalTasks: [],
+  },
 };
 
-const Step5PassFail: React.FC<Props> = ({ simulation, setSimulation }) => {
+// Default task priority with all tasks mandatory
+const getDefaultTaskPriority = (taskIds: string[]): TaskPriority => ({
+  mode: 'sequential',
+  weightDistribution: 'equal',
+  taskWeights: {},
+  mandatoryTasks: taskIds,
+  optionalTasks: [],
+});
+
+const Step5PassFail: React.FC<Props> = ({ 
+  simulation, 
+  setSimulation, 
+  currentStep = 5, 
+  totalSteps = 9 
+}) => {
   // Initialize passFailCriteria if undefined
   React.useEffect(() => {
     if (!simulation.passFailCriteria) {
-      setSimulation(prev => prev ? {
-        ...prev,
-        passFailCriteria: { ...DEFAULT_PASS_FAIL }
-      } : null);
+      const allTaskIds = simulation.tasks.map(task => task.id);
+      setSimulation({
+        ...simulation,
+        passFailCriteria: {
+          ...DEFAULT_PASS_FAIL,
+          taskPriority: getDefaultTaskPriority(allTaskIds),
+        }
+      });
     }
-  }, [simulation.passFailCriteria, setSimulation]);
+  }, [simulation.passFailCriteria, simulation.tasks, simulation, setSimulation]);
 
   // Use default if criteria is undefined
   const criteria = simulation.passFailCriteria || DEFAULT_PASS_FAIL;
 
-  const setPFC = (patch: Partial<PassFailCriteria>) =>
-    setSimulation(prev =>
-      prev ? { 
-        ...prev, 
-        passFailCriteria: { 
-          ...(prev.passFailCriteria || DEFAULT_PASS_FAIL), 
-          ...patch 
-        } 
-      } : null
-    );
+  const setPFC = (patch: Partial<PassFailCriteria>) => {
+    setSimulation({
+      ...simulation,
+      passFailCriteria: {
+        ...(simulation.passFailCriteria || DEFAULT_PASS_FAIL),
+        ...patch
+      }
+    });
+  };
+
+  // Get task priority with defaults - ensure mode is always defined
+  const taskPriority: TaskPriority = criteria.taskPriority || getDefaultTaskPriority(
+    simulation.tasks.map(task => task.id)
+  );
 
   // Safely get overall score with defaults
   const overallScore = criteria.overallScore || { minimum: 70, maximum: 100 };
   const timeManagement = criteria.timeManagement || { completionRequired: true, timeBonus: false };
-  const criticalTasks = criteria.criticalTasks || [];
+
+  // Update task priority settings - ensure mode is always provided
+  const updateTaskPriority = (patch: Partial<TaskPriority>) => {
+    setPFC({
+      taskPriority: { 
+        ...taskPriority, 
+        ...patch,
+        mode: patch.mode || taskPriority.mode, // Ensure mode is always defined
+      }
+    });
+  };
+
+  // Toggle task weight
+  const toggleTaskWeight = (taskId: string) => {
+    const weights = { ...(taskPriority.taskWeights || {}) };
+    if (weights[taskId]) {
+      delete weights[taskId];
+    } else {
+      weights[taskId] = 1;
+    }
+    updateTaskPriority({ taskWeights: weights });
+  };
+
+  // Update task weight value
+  const updateTaskWeightValue = (taskId: string, value: number) => {
+    const weights = { ...(taskPriority.taskWeights || {}), [taskId]: Math.max(0, Math.min(10, value)) };
+    updateTaskPriority({ taskWeights: weights });
+  };
+
+  // Toggle task between mandatory and optional (MUTUALLY EXCLUSIVE)
+  const toggleTaskCategory = (taskId: string, category: 'mandatory' | 'optional') => {
+    const currentMandatory = taskPriority.mandatoryTasks || [];
+    const currentOptional = taskPriority.optionalTasks || [];
+    
+    let newMandatory = [...currentMandatory];
+    let newOptional = [...currentOptional];
+    
+    if (category === 'mandatory') {
+      if (newMandatory.includes(taskId)) {
+        newMandatory = newMandatory.filter(id => id !== taskId);
+      } else {
+        newMandatory.push(taskId);
+        newOptional = newOptional.filter(id => id !== taskId);
+      }
+    } else if (category === 'optional') {
+      if (newOptional.includes(taskId)) {
+        newOptional = newOptional.filter(id => id !== taskId);
+      } else {
+        newOptional.push(taskId);
+        newMandatory = newMandatory.filter(id => id !== taskId);
+      }
+    }
+    
+    updateTaskPriority({ 
+      mandatoryTasks: newMandatory,
+      optionalTasks: newOptional 
+    });
+  };
+
+  // Make ALL tasks mandatory
+  const makeAllTasksMandatory = () => {
+    const allTaskIds = simulation.tasks.map(task => task.id);
+    updateTaskPriority({ 
+      mandatoryTasks: allTaskIds,
+      optionalTasks: []
+    });
+  };
+
+  // Make ALL tasks optional
+  const makeAllTasksOptional = () => {
+    const allTaskIds = simulation.tasks.map(task => task.id);
+    updateTaskPriority({ 
+      optionalTasks: allTaskIds,
+      mandatoryTasks: []
+    });
+  };
+
+  // Clear all assignments
+  const clearAllAssignments = () => {
+    updateTaskPriority({ 
+      mandatoryTasks: [],
+      optionalTasks: []
+    });
+  };
+
+  // Check if a task is in mandatory or optional
+  const getTaskStatus = (taskId: string) => {
+    const isMandatory = taskPriority.mandatoryTasks?.includes(taskId) || false;
+    const isOptional = taskPriority.optionalTasks?.includes(taskId) || false;
+    return { isMandatory, isOptional };
+  };
 
   return (
     <div className="p-6 space-y-6">
-      <div>
-        <h3 className="text-lg font-bold text-gray-900">Pass / Fail Criteria</h3>
-        <p className="text-sm text-gray-500 mt-0.5">Define the standards candidates must meet to pass this simulation.</p>
-      </div>
-
-      {/* Overall score */}
-      <div className="bg-gray-50 rounded-xl p-5 space-y-4">
-        <h4 className="text-sm font-semibold text-gray-700">Overall Score Requirements</h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Task Priority Section */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <div className="flex items-start justify-between">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Minimum Score (%)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={overallScore.minimum}
-              onChange={e =>
-                setPFC({ 
-                  overallScore: { 
-                    ...overallScore, 
-                    minimum: Number(e.target.value) 
-                  } 
-                })
-              }
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
+            <h3 className="text-lg font-bold text-gray-900">Task Priority</h3>
+            <p className="text-sm text-gray-500 mt-0.5">Define the standards candidates must meet to pass this simulation.</p>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Maximum Score (%)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={overallScore.maximum}
-              onChange={e =>
-                setPFC({ 
-                  overallScore: { 
-                    ...overallScore, 
-                    maximum: Number(e.target.value) 
-                  } 
-                })
-              }
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
+          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
+            Step {currentStep}/{totalSteps}
+          </span>
+        </div>
+
+        {/* Bulk Actions */}
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={makeAllTasksMandatory}
+            className="px-3 py-1.5 text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 rounded-lg transition-colors"
+          >
+            🔒 Make All Mandatory
+          </button>
+          <button
+            onClick={makeAllTasksOptional}
+            className="px-3 py-1.5 text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-lg transition-colors"
+          >
+            🔓 Make All Optional
+          </button>
+          <button
+            onClick={clearAllAssignments}
+            className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            🗑️ Clear All
+          </button>
+        </div>
+
+        {/* Priority Mode Selection */}
+        <div className="mt-4">
+          <label className="text-sm font-medium text-gray-700 block mb-2">
+            Priority Mode
+          </label>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { value: 'sequential' as const, label: 'Sequential', desc: 'Complete in order' },
+              { value: 'parallel' as const, label: 'Parallel', desc: 'Any order, all required' },
+              { value: 'weighted' as const, label: 'Weighted', desc: 'Custom importance' },
+            ].map((mode) => (
+              <button
+                key={mode.value}
+                onClick={() => updateTaskPriority({ mode: mode.value })}
+                className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  taskPriority.mode === mode.value
+                    ? 'border-purple-500 bg-purple-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="font-medium text-sm text-gray-900">{mode.label}</div>
+                <div className="text-xs text-gray-500 mt-0.5">{mode.desc}</div>
+              </button>
+            ))}
           </div>
         </div>
-        {overallScore.minimum > overallScore.maximum && (
-          <p className="text-xs text-red-500 mt-1">Minimum score cannot be greater than maximum score</p>
+
+        {/* Weight Distribution (only for weighted mode) */}
+        {taskPriority.mode === 'weighted' && (
+          <div className="mt-3 space-y-3">
+            <label className="text-sm font-medium text-gray-700 block">
+              Weight Distribution
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={taskPriority.weightDistribution === 'equal'}
+                  onChange={() => updateTaskPriority({ weightDistribution: 'equal' })}
+                  className="text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-sm text-gray-700">Equal weights</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  checked={taskPriority.weightDistribution === 'custom'}
+                  onChange={() => updateTaskPriority({ weightDistribution: 'custom' })}
+                  className="text-purple-600 focus:ring-purple-500"
+                />
+                <span className="text-sm text-gray-700">Custom weights</span>
+              </label>
+            </div>
+
+            {/* Custom weight sliders */}
+            {taskPriority.weightDistribution === 'custom' && simulation.tasks.length > 0 && (
+              <div className="mt-3 space-y-3">
+                {simulation.tasks.map(task => (
+                  <div key={task.id} className="flex items-center gap-4 p-2 bg-gray-50 rounded-lg">
+                    <span className="text-sm text-gray-700 w-32 truncate">
+                      {task.title || `Task ${task.order}`}
+                    </span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={taskPriority.taskWeights?.[task.id] || 0}
+                      onChange={(e) => updateTaskWeightValue(task.id, parseFloat(e.target.value))}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
+                    />
+                    <span className="text-sm font-mono w-8 text-center">
+                      {taskPriority.taskWeights?.[task.id] || 0}x
+                    </span>
+                    <button
+                      onClick={() => toggleTaskWeight(task.id)}
+                      className={`px-2 py-1 text-xs rounded ${
+                        taskPriority.taskWeights?.[task.id] && taskPriority.taskWeights[task.id] > 0
+                          ? 'bg-purple-100 text-purple-700'
+                          : 'bg-gray-100 text-gray-500'
+                      }`}
+                    >
+                      {taskPriority.taskWeights?.[task.id] && taskPriority.taskWeights[task.id] > 0 ? 'Active' : 'Inactive'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Mandatory vs Optional Tasks - MUTUALLY EXCLUSIVE */}
+        <div className="mt-3 space-y-2">
+          <label className="text-sm font-medium text-gray-700 block">
+            Task Requirements (Mutually Exclusive)
+          </label>
+          <p className="text-xs text-gray-500 mb-2">
+            A task can only be in ONE category. Click a task to move it between categories.
+          </p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {/* Mandatory Tasks Column */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-red-600">●</span>
+                <span className="text-xs font-medium text-gray-700">Mandatory</span>
+                <span className="text-xs text-gray-400">({taskPriority.mandatoryTasks?.length || 0})</span>
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto border border-red-200 rounded-lg p-2 bg-red-50">
+                {simulation.tasks.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No tasks available</p>
+                ) : (
+                  simulation.tasks.map(task => {
+                    const { isMandatory, isOptional } = getTaskStatus(task.id);
+                    
+                    return (
+                      <div 
+                        key={task.id} 
+                        className={`flex items-center gap-2 text-xs p-2 rounded transition-all cursor-pointer ${
+                          isMandatory 
+                            ? 'bg-red-200 text-gray-800 border-2 border-red-400 shadow-sm' 
+                            : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
+                        }`}
+                        onClick={() => toggleTaskCategory(task.id, 'mandatory')}
+                      >
+                        <span className={isMandatory ? 'text-red-600' : 'text-gray-400'}>
+                          {isMandatory ? '🔒' : '○'}
+                        </span>
+                        <span className={isMandatory ? 'font-medium' : ''}>
+                          {task.title || `Task ${task.order}`}
+                        </span>
+                        {task.duration && (
+                          <span className="text-xs text-gray-400 ml-auto">
+                            {task.duration} min
+                          </span>
+                        )}
+                        {isOptional && (
+                          <span className="text-xs bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded">
+                            in Optional
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <p className="text-xs text-red-500">
+                {taskPriority.mandatoryTasks?.length === 0 && simulation.tasks.length > 0 && 
+                  '⚠️ No mandatory tasks selected'}
+              </p>
+            </div>
+            
+            {/* Optional Tasks Column */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-blue-600">○</span>
+                <span className="text-xs font-medium text-gray-700">Optional</span>
+                <span className="text-xs text-gray-400">({taskPriority.optionalTasks?.length || 0})</span>
+              </div>
+              <div className="space-y-1 max-h-48 overflow-y-auto border border-blue-200 rounded-lg p-2 bg-blue-50">
+                {simulation.tasks.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No tasks available</p>
+                ) : (
+                  simulation.tasks.map(task => {
+                    const { isMandatory, isOptional } = getTaskStatus(task.id);
+                    
+                    return (
+                      <div 
+                        key={task.id} 
+                        className={`flex items-center gap-2 text-xs p-2 rounded transition-all cursor-pointer ${
+                          isOptional 
+                            ? 'bg-blue-200 text-gray-800 border-2 border-blue-400 shadow-sm' 
+                            : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
+                        }`}
+                        onClick={() => toggleTaskCategory(task.id, 'optional')}
+                      >
+                        <span className={isOptional ? 'text-blue-600' : 'text-gray-400'}>
+                          {isOptional ? '○' : '•'}
+                        </span>
+                        <span className={isOptional ? 'font-medium' : ''}>
+                          {task.title || `Task ${task.order}`}
+                        </span>
+                        {task.duration && (
+                          <span className="text-xs text-gray-400 ml-auto">
+                            {task.duration} min
+                          </span>
+                        )}
+                        {isMandatory && (
+                          <span className="text-xs bg-red-200 text-red-700 px-1.5 py-0.5 rounded">
+                            in Mandatory
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <p className="text-xs text-blue-500">
+                {taskPriority.optionalTasks?.length === 0 && simulation.tasks.length > 0 && 
+                  '💡 Click a task to make it optional'}
+              </p>
+            </div>
+          </div>
+          
+          {/* Legend */}
+          <div className="flex gap-4 text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
+            <span>💡 Click on any task to toggle its category</span>
+            <span>|</span>
+            <span>🔒 = Mandatory</span>
+            <span>○ = Optional</span>
+            <span>• = Unassigned</span>
+          </div>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="flex flex-wrap gap-4 pt-2 border-t border-gray-100">
+          <div className="text-xs">
+            <span className="text-gray-500">Total Tasks:</span>
+            <span className="font-medium ml-1">{simulation.tasks.length}</span>
+          </div>
+          <div className="text-xs">
+            <span className="text-gray-500">Mandatory:</span>
+            <span className="font-medium ml-1 text-red-600">{taskPriority.mandatoryTasks?.length || 0}</span>
+          </div>
+          <div className="text-xs">
+            <span className="text-gray-500">Optional:</span>
+            <span className="font-medium ml-1 text-blue-600">{taskPriority.optionalTasks?.length || 0}</span>
+          </div>
+          
+          {taskPriority.mode === 'weighted' && (
+            <div className="text-xs">
+              <span className="text-gray-500">Active Weights:</span>
+              <span className="font-medium ml-1">
+                {Object.keys(taskPriority.taskWeights || {}).filter(k => (taskPriority.taskWeights?.[k] || 0) > 0).length}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Warning if no tasks are mandatory */}
+        {taskPriority.mandatoryTasks?.length === 0 && simulation.tasks.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
+            <p className="text-xs text-yellow-700">
+              ⚠️ No tasks are marked as mandatory. Consider making at least one task mandatory for the simulation to be meaningful.
+            </p>
+          </div>
+        )}
+
+        {/* Info if all tasks are assigned */}
+        {(taskPriority.mandatoryTasks?.length + taskPriority.optionalTasks?.length) === simulation.tasks.length && simulation.tasks.length > 0 && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
+            <p className="text-xs text-green-700">
+              ✅ All {simulation.tasks.length} tasks have been assigned!
+            </p>
+          </div>
         )}
       </div>
 
-      {/* Time management */}
+      {/* Time management section */}
       <div className="bg-gray-50 rounded-xl p-5 space-y-3">
         <h4 className="text-sm font-semibold text-gray-700">Time Management</h4>
         <label className="flex items-center gap-3 cursor-pointer">
@@ -138,46 +500,6 @@ const Step5PassFail: React.FC<Props> = ({ simulation, setSimulation }) => {
         </label>
       </div>
 
-      {/* Critical tasks */}
-      <div className="bg-gray-50 rounded-xl p-5 space-y-3">
-        <h4 className="text-sm font-semibold text-gray-700">Critical Tasks (Must Pass)</h4>
-        {simulation.tasks.length === 0 ? (
-          <p className="text-sm text-gray-400 italic">Add tasks in Step 3 first.</p>
-        ) : (
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {simulation.tasks.map(task => (
-              <label key={task.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-white rounded-lg transition-colors">
-                <input
-                  type="checkbox"
-                  checked={criticalTasks.includes(task.id)}
-                  onChange={e => {
-                    const existing = criticalTasks;
-                    const next = e.target.checked
-                      ? [...existing, task.id]
-                      : existing.filter(id => id !== task.id);
-                    setPFC({ criticalTasks: next });
-                  }}
-                  className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 w-4 h-4"
-                />
-                <span className="text-sm text-gray-700">
-                  {task.title || `Task ${task.order}`}
-                </span>
-                {task.duration && (
-                  <span className="text-xs text-gray-400 ml-auto">
-                    {task.duration} min
-                  </span>
-                )}
-              </label>
-            ))}
-          </div>
-        )}
-        {criticalTasks.length > 0 && (
-          <p className="text-xs text-amber-600 mt-2">
-            ⚠️ {criticalTasks.length} critical task{criticalTasks.length !== 1 ? 's' : ''} — candidate must pass all to complete the simulation.
-          </p>
-        )}
-      </div>
-
       {/* Summary Card */}
       <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100">
         <h4 className="text-sm font-semibold text-purple-800 mb-3">Summary</h4>
@@ -195,8 +517,16 @@ const Step5PassFail: React.FC<Props> = ({ simulation, setSimulation }) => {
             <span className="font-semibold">{timeManagement.timeBonus ? 'Enabled' : 'Disabled'}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-gray-600">Critical Tasks:</span>
-            <span className="font-semibold">{criticalTasks.length} task{criticalTasks.length !== 1 ? 's' : ''}</span>
+            <span className="text-gray-600">Mandatory Tasks:</span>
+            <span className="font-semibold text-red-600">{taskPriority.mandatoryTasks?.length || 0} tasks</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Optional Tasks:</span>
+            <span className="font-semibold text-blue-600">{taskPriority.optionalTasks?.length || 0} tasks</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-gray-600">Priority Mode:</span>
+            <span className="font-semibold capitalize">{taskPriority.mode}</span>
           </div>
         </div>
       </div>

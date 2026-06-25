@@ -1,6 +1,7 @@
 // services/aiJobMatchingService.ts
 
 const API_GATEWAY_URL = 'http://localhost:8080/matcher';  // ← FIXED: Use gateway port 8080
+const AI_MATCH_TIMEOUT_MS = 300000;
 
 interface JobMatch {
   id: string;
@@ -231,12 +232,12 @@ export const getJobMatchForCandidate = async (
 /**
  * Get AI job matches with timeout protection
  * @param candidateId - The candidate's UUID
- * @param timeoutMs - Timeout in milliseconds (default 60000 - increased to 60 seconds)
+ * @param timeoutMs - Timeout in milliseconds (default 300000 - 5 minutes)
  * @returns Promise with job matches
  */
 export const getJobMatchesFromAIWithTimeout = async (
   candidateId: string, 
-  timeoutMs: number = 60000  // Increased from 30000 to 60000
+  timeoutMs: number = AI_MATCH_TIMEOUT_MS
 ): Promise<AIMatchResponse> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -268,7 +269,7 @@ export const getJobMatchesFromAIWithTimeout = async (
     if (error.name === 'AbortError') {
       return {
         success: false,
-        error: 'Request timeout - please try again',
+        error: 'AI matching is still loading. Please try again in a moment.',
         matches: [],
         total_jobs_matched: 0
       };
@@ -287,13 +288,13 @@ export const getJobMatchesFromAIWithTimeout = async (
  * Get match score for a specific job with timeout
  * @param candidateId - The candidate's UUID
  * @param jobId - The job's UUID
- * @param timeoutMs - Timeout in milliseconds (default 60000 - increased to 60 seconds)
+ * @param timeoutMs - Timeout in milliseconds (default 300000 - 5 minutes)
  * @returns Promise with match details
  */
 export const getJobMatchForCandidateWithTimeout = async (
   candidateId: string,
   jobId: string,
-  timeoutMs: number = 60000  // Increased from 30000 to 60000
+  timeoutMs: number = AI_MATCH_TIMEOUT_MS
 ): Promise<SingleJobMatchResponse> => {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -325,7 +326,7 @@ export const getJobMatchForCandidateWithTimeout = async (
     if (error.name === 'AbortError') {
       return {
         success: false,
-        error: 'Request timeout - please try again'
+        error: 'AI matching is still loading. Please try again in a moment.'
       };
     }
     

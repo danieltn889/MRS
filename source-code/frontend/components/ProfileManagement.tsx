@@ -745,27 +745,6 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
             <FieldError msg={errors.location} />
           </div>
         </div>
-
-        {/* Headline + Years Experience */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Professional Headline</label>
-            <input type="text" name="headline" value={formData.headline} onChange={handleChange}
-              className={inputClass('headline')} placeholder="e.g. Full Stack Developer" maxLength={120} />
-            <div className="flex justify-between items-center mt-1">
-              <FieldError msg={errors.headline} />
-              <span className="text-xs text-gray-400 ml-auto">{formData.headline.length}/120</span>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Years of Experience</label>
-            <input type="number" name="yearsExperience" min="0" max="50"
-              value={formData.yearsExperience} onChange={handleChange}
-              className={inputClass('yearsExperience')} placeholder="0" />
-            <FieldError msg={errors.yearsExperience} />
-          </div>
-        </div>
-
         {/* Bio */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Bio</label>

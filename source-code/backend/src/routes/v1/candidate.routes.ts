@@ -36,7 +36,10 @@ import {
   getSkillsList,
   updateProfile,
   setPrimaryResume,
-  getFullCandidateProfileById
+  getFullCandidateProfileById,
+  downloadProofFile,
+  uploadProofFile,
+  viewProofFile  // ✅ Add this import
 } from '../../controllers/candidate.controller.js';
 import multer from 'multer';
 import path from 'path';
@@ -57,8 +60,9 @@ const router: Router = express.Router();
 const uploadDir = path.join(__dirname, '../../../uploads');
 const resumesDir = path.join(uploadDir, 'resumes');
 const photosDir = path.join(uploadDir, 'photos');
+const documentsDir = path.join(uploadDir, 'candidate-documents');
 
-[uploadDir, resumesDir, photosDir].forEach(dir => {
+[uploadDir, resumesDir, photosDir, documentsDir].forEach(dir => {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
@@ -81,6 +85,14 @@ const photoStorage = multer.diskStorage({
   }
 });
 
+const documentStorage = multer.diskStorage({
+  destination: (_req: any, _file, cb) => cb(null, documentsDir),
+  filename: (req: any, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `document-${(req as AuthenticatedRequest).user?.id}-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
 const resumeUpload = multer({
   storage: resumeStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
@@ -94,6 +106,22 @@ const photoUpload = multer({
   storage: photoStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => cb(null, file.mimetype.startsWith('image/'))
+});
+
+const documentUpload = multer({
+  storage: documentStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/jpeg',
+      'image/png',
+      'image/jpg'
+    ];
+    cb(null, allowed.includes(file.mimetype));
+  }
 });
 
 // =====================================================
@@ -121,6 +149,35 @@ router.post('/profile/photo', protect, authorize('candidate'), photoUpload.singl
   } catch (error) {
     logger.error('Upload profile photo error:', error);
     res.status(500).json({ success: false, message: 'Failed to upload profile photo' });
+  }
+});
+
+router.post('/documents', protect, authorize('candidate'), documentUpload.single('document'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, message: 'No document file provided' });
+      return;
+    }
+
+    const fileKey = `candidate-documents/${req.file.filename}`;
+    const uploadedAt = new Date().toISOString();
+
+    res.status(201).json({
+      success: true,
+      message: 'Document uploaded successfully',
+      data: {
+        file_name: req.file.originalname,
+        file_key: fileKey,
+        file_url: getFullFileUrl(fileKey),
+        file_size: req.file.size,
+        mime_type: req.file.mimetype,
+        uploaded_at: uploadedAt,
+        document_type: req.body.documentType || 'candidate_document'
+      }
+    });
+  } catch (error) {
+    logger.error('Upload candidate document error:', error);
+    res.status(500).json({ success: false, message: 'Failed to upload document' });
   }
 });
 
@@ -256,6 +313,7 @@ router.delete('/portfolio/:id', protect, authorize('candidate'), [
 
 router.post('/resume', protect, authorize('candidate'), resumeUpload.single('resume'), withAuth(uploadResume));
 
+// Resume download route - check if this exists
 router.get('/resume/:id/download', protect, authorize('candidate'), [
   param('id').isUUID(),
   validateRequest
@@ -393,7 +451,36 @@ router.get('/search', protect, authorize('recruiter', 'company_admin'), [
 
 // @route   GET /api/v1/candidates/full-profile/:userId
 // @desc    Get complete candidate profile with all sections by user ID
-// @access  Private (Recruiters, Company Admins, or own profile)
-router.get('/full-profile/:userId', protect, withAuth(getFullCandidateProfileById));
+// @access  Public for ML matcher lookup by candidate user ID
+router.get('/full-profile/:userId', getFullCandidateProfileById as any);
+
+// =====================================================
+// PROOF FILE ROUTES
+// =====================================================
+
+// Upload proof file
+router.post(
+  '/proof/upload',
+  protect,
+  authorize('candidate'),
+  documentUpload.single('file'),
+  withAuth(uploadProofFile)
+);
+
+// View proof file (opens in browser for PDFs and images)
+router.get(
+  '/proof/view/:fileName',
+  protect,
+  authorize('candidate'),
+  withAuth(viewProofFile)  // ✅ Added view endpoint
+);
+
+// Download proof file (forces download)
+router.get(
+  '/proof/download/:fileName',
+  protect,
+  authorize('candidate'),
+  withAuth(downloadProofFile)
+);
 
 export default router;

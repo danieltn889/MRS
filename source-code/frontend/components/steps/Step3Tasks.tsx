@@ -320,67 +320,6 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                     placeholder="Detailed step-by-step instructions for the candidate…"
                   />
                 </div>
-
-                {/* ── Code Task Configuration ── */}
-                {task.type === 'technical' && (
-                  <div className="rounded-xl overflow-hidden border border-blue-200">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600">
-                      <Code size={14} className="text-white" />
-                      <h4 className="text-sm font-semibold text-white">Code Task Configuration</h4>
-                    </div>
-                    <div className="p-4 bg-blue-50 space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-blue-800 mb-1.5">Project Type</label>
-                          <select
-                            value={task.data?.projectType || 'single_file'}
-                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), projectType: e.target.value } })}
-                            className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                          >
-                            <option value="single_file">Single File</option>
-                            <option value="multi_file">Multi-File Project</option>
-                            <option value="full_project">Full Project</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-blue-800 mb-1.5">Language</label>
-                          <select
-                            value={task.data?.language || 'javascript'}
-                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), language: e.target.value } })}
-                            className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                          >
-                            {LANGUAGES.map(l => <option key={l} value={l}>{l.toUpperCase()}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-blue-800 mb-1.5">Code Mode</label>
-                          <select
-                            value={task.data?.codeMode || 'starter_code'}
-                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), codeMode: e.target.value } })}
-                            className="w-full px-3 py-2 border border-blue-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-400 focus:border-transparent"
-                          >
-                            <option value="starter_code">Provide Starter Code</option>
-                            <option value="candidate_creates">Candidate Creates From Scratch</option>
-                          </select>
-                        </div>
-                      </div>
-                      {task.data?.codeMode !== 'candidate_creates' && (
-                        <div>
-                          <label className="block text-xs font-semibold text-blue-800 mb-1.5">Starter Code</label>
-                          <textarea
-                            value={task.data?.starterCode || ''}
-                            onChange={e => updateTask(task.id, { data: { ...(task.data || {}), starterCode: e.target.value } })}
-                            rows={5}
-                            className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm font-mono bg-gray-900 text-green-400 focus:ring-2 focus:ring-blue-400 resize-none placeholder:text-gray-600"
-                            placeholder="// Paste or type your starter code here…"
-                            spellCheck={false}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {/* ── Evaluation Criteria ── */}
                 <div className="rounded-xl overflow-hidden border border-gray-200">
                   <div className="flex items-center justify-between px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600">

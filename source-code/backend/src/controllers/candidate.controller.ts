@@ -29,6 +29,7 @@ const fieldMapping: { [key: string]: string } = {
   teamSize: 'team_size',
   reportsTo: 'reports_to',
   reasonForLeaving: 'reason_for_leaving',
+  verificationMethod: 'verification_method',
   skillId: 'skill_id',
   skillName: 'name'
 };
@@ -127,7 +128,7 @@ export const addEducation = async (req: AuthenticatedRequest, res: Response): Pr
   try {
     await client.query('BEGIN');
 
-    const {
+    let {
       institution,
       institution_id,
       degree,
@@ -154,11 +155,92 @@ export const addEducation = async (req: AuthenticatedRequest, res: Response): Pr
       return;
     }
 
+    // 🔥 FIX: Handle skills as PostgreSQL array (text[])
+    if (skills) {
+      if (typeof skills === 'string') {
+        try {
+          const parsed = JSON.parse(skills);
+          if (Array.isArray(parsed)) {
+            skills = parsed;
+          } else {
+            skills = [skills];
+          }
+        } catch {
+          const cleaned = skills
+            .replace(/^\[|\]$/g, '')
+            .replace(/^"|"$/g, '')
+            .split(/","|", "|",|","|"|,\s*/)
+            .filter((s: string) => s && s.trim().length > 0)
+            .map((s: string) => s.trim());
+          skills = cleaned;
+        }
+      } else if (!Array.isArray(skills)) {
+        skills = [String(skills)];
+      }
+      // Clean each skill
+      skills = skills.map((skill: any) => {
+        let cleaned = String(skill)
+          .replace(/^\[|\]$/g, '')
+          .replace(/^"|"$/g, '')
+          .trim();
+        return cleaned;
+      }).filter((s: string) => s && s.length > 0);
+    } else {
+      skills = [];
+    }
+
+    // 🔥 FIX: Handle attachments as JSONB
+    if (attachments) {
+      if (typeof attachments === 'string') {
+        try {
+          attachments = JSON.parse(attachments);
+        } catch {
+          attachments = [];
+        }
+      }
+      if (!Array.isArray(attachments)) {
+        attachments = [];
+      }
+      attachments = attachments.map((att: any) => {
+        if (typeof att === 'string') {
+          try {
+            return JSON.parse(att);
+          } catch {
+            return { file_name: att };
+          }
+        }
+        return att;
+      });
+    } else {
+      attachments = [];
+    }
+
+    // 🔥 FIX: Handle activities as JSONB
+    if (activities) {
+      if (typeof activities === 'string') {
+        try {
+          activities = JSON.parse(activities);
+        } catch {
+          activities = [];
+        }
+      }
+      if (!Array.isArray(activities)) {
+        activities = [];
+      }
+    } else {
+      activities = [];
+    }
+
     // Handle endDate for current education
     let processedEndDate = endDate;
     if (isCurrent && (!endDate || endDate === '')) {
       processedEndDate = null;
     }
+
+    // Convert skills to PostgreSQL array format
+    const skillsArray = skills.length > 0
+      ? `{${skills.map((s: string) => `"${s.replace(/"/g, '\\"')}"`).join(',')}}`
+      : '{}';
 
     const result = await client.query(`
       INSERT INTO education (
@@ -168,8 +250,8 @@ export const addEducation = async (req: AuthenticatedRequest, res: Response): Pr
       RETURNING *
     `, [
       req.user!.id, institution, institution_id, degree, fieldOfStudy, startDate, processedEndDate,
-      isCurrent || false, grade, gradeScale, description, activities, skills || [], 
-      attachments || [], displayOrder || 0
+      isCurrent || false, grade, gradeScale, description, JSON.stringify(activities),
+      skillsArray, JSON.stringify(attachments), displayOrder || 0
     ]);
 
     await client.query('COMMIT');
@@ -219,6 +301,80 @@ export const updateEducation = async (req: AuthenticatedRequest, res: Response):
       updates.endDate = null;
     }
 
+    // 🔥 FIX: Handle skills as PostgreSQL array (text[])
+    if (updates.skills !== undefined) {
+      // If it's a string, try to parse it as JSON or clean it
+      if (typeof updates.skills === 'string') {
+        try {
+          // Try to parse as JSON first
+          const parsed = JSON.parse(updates.skills);
+          if (Array.isArray(parsed)) {
+            updates.skills = parsed;
+          } else {
+            updates.skills = [updates.skills];
+          }
+        } catch {
+          // If not valid JSON, clean the string and split
+          const cleaned = updates.skills
+            .replace(/^\[|\]$/g, '') // Remove outer brackets
+            .replace(/^"|"$/g, '') // Remove outer quotes
+            .split(/","|", "|",|","|"|,\s*/)
+            .filter((s: string) => s && s.trim().length > 0)
+            .map((s: string) => s.trim());
+          updates.skills = cleaned;
+        }
+      } else if (!Array.isArray(updates.skills)) {
+        // If it's not an array, convert to array
+        updates.skills = [String(updates.skills)];
+      }
+      // Clean each skill - remove any array brackets or quotes
+      updates.skills = updates.skills.map((skill: any) => {
+        let cleaned = String(skill)
+          .replace(/^\[|\]$/g, '')
+          .replace(/^"|"$/g, '')
+          .trim();
+        return cleaned;
+      }).filter((s: string) => s && s.length > 0);
+    }
+
+    // 🔥 FIX: Handle attachments as JSONB
+    if (updates.attachments !== undefined) {
+      if (typeof updates.attachments === 'string') {
+        try {
+          updates.attachments = JSON.parse(updates.attachments);
+        } catch {
+          updates.attachments = [];
+        }
+      }
+      if (!Array.isArray(updates.attachments)) {
+        updates.attachments = [];
+      }
+      updates.attachments = updates.attachments.map((att: any) => {
+        if (typeof att === 'string') {
+          try {
+            return JSON.parse(att);
+          } catch {
+            return { file_name: att };
+          }
+        }
+        return att;
+      });
+    }
+
+    // 🔥 FIX: Handle activities as JSONB
+    if (updates.activities !== undefined) {
+      if (typeof updates.activities === 'string') {
+        try {
+          updates.activities = JSON.parse(updates.activities);
+        } catch {
+          updates.activities = [];
+        }
+      }
+      if (!Array.isArray(updates.activities)) {
+        updates.activities = [];
+      }
+    }
+
     const updateFields: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
@@ -227,7 +383,30 @@ export const updateEducation = async (req: AuthenticatedRequest, res: Response):
       if (updates[key] !== undefined) {
         const dbField = fieldMapping[key] || camelToSnake(key);
         updateFields.push(`${dbField} = $${paramIndex}`);
-        values.push(updates[key]);
+        let value = updates[key];
+
+        // Handle different field types
+        if (dbField === 'skills') {
+          // For PostgreSQL text[] array, use array format
+          if (Array.isArray(value)) {
+            value = `{${value.map((s: string) => `"${s.replace(/"/g, '\\"')}"`).join(',')}}`;
+          } else if (typeof value === 'string') {
+            // If it's already a string, clean it
+            const cleaned = value
+              .replace(/^\{|\}$/g, '')
+              .replace(/^\[|\]$/g, '')
+              .split(/,\s*/)
+              .map((s: string) => s.trim().replace(/^"|"$/g, ''));
+            value = `{${cleaned.map((s: string) => `"${s.replace(/"/g, '\\"')}"`).join(',')}}`;
+          }
+        } else if (['attachments', 'activities'].includes(dbField)) {
+          // For JSONB fields, stringify
+          if (typeof value === 'object' && value !== null) {
+            value = JSON.stringify(value);
+          }
+        }
+
+        values.push(value);
         paramIndex++;
       }
     });
@@ -265,7 +444,6 @@ export const updateEducation = async (req: AuthenticatedRequest, res: Response):
     client.release();
   }
 };
-
 export const deleteEducation = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const client = await getClient();
   try {
@@ -308,7 +486,7 @@ export const addWorkExperience = async (req: AuthenticatedRequest, res: Response
   try {
     await client.query('BEGIN');
 
-    const {
+    let {
       company,
       company_id,
       title,
@@ -325,6 +503,8 @@ export const addWorkExperience = async (req: AuthenticatedRequest, res: Response
       teamSize,
       reportsTo,
       reasonForLeaving,
+      attachments,
+      verificationMethod,
       displayOrder
     } = req.body;
 
@@ -336,6 +516,13 @@ export const addWorkExperience = async (req: AuthenticatedRequest, res: Response
         message: 'Missing required fields: company, title, employmentType, startDate are required'
       });
       return;
+    }
+
+    // 🔥 FIX: TRUNCATE TITLE IF TOO LONG - Prevents VARCHAR(100) error
+    if (title && title.length > 100) {
+      const originalTitle = title;
+      title = title.substring(0, 100);
+      logger.warn(`⚠️ Title truncated from ${originalTitle.length} to 100 characters: ${title}`);
     }
 
     // Handle endDate for current positions
@@ -371,13 +558,13 @@ export const addWorkExperience = async (req: AuthenticatedRequest, res: Response
       INSERT INTO work_experience (
         user_id, company, company_id, title, employment_type, location, location_type,
         start_date, end_date, is_current, description, achievements, skills,
-        industry, team_size, reports_to, reason_for_leaving, display_order
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        industry, team_size, reports_to, reason_for_leaving, attachments, verification_method, display_order
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *
     `, [
       req.user!.id, company, company_id, title, employmentType, location, locationType,
       startDate, processedEndDate, isCurrent || false, description, achievements || [], skills || [],
-      industry, teamSize, reportsTo, reasonForLeaving, displayOrder || 0
+      industry, teamSize, reportsTo, reasonForLeaving, attachments || [], verificationMethod, displayOrder || 0
     ]);
 
     await client.query('COMMIT');
@@ -420,6 +607,35 @@ export const updateWorkExperience = async (req: AuthenticatedRequest, res: Respo
         message: 'Work experience entry not found'
       });
       return;
+    }
+
+    // 🔥 FIX: TRUNCATE TITLE IF TOO LONG
+    if (updates.title && updates.title.length > 100) {
+      const originalTitle = updates.title;
+      updates.title = updates.title.substring(0, 100);
+      logger.warn(`⚠️ Title truncated from ${originalTitle.length} to 100 characters: ${updates.title}`);
+    }
+
+    // 🔥 FIX: TRUNCATE VERIFICATION METHOD IF TOO LONG
+    if (updates.verificationMethod && updates.verificationMethod.length > 100) {
+      try {
+        // Try to parse and truncate the file name if it's JSON
+        const parsed = JSON.parse(updates.verificationMethod);
+        if (parsed.files && parsed.files.length > 0) {
+          // Truncate each file name to keep total under 100 chars
+          parsed.files = parsed.files.map((file: any) => ({
+            ...file,
+            file_name: file.file_name && file.file_name.length > 50
+              ? file.file_name.substring(0, 47) + '...'
+              : file.file_name
+          }));
+          updates.verificationMethod = JSON.stringify(parsed);
+        }
+      } catch {
+        // If not JSON, just truncate the string
+        updates.verificationMethod = updates.verificationMethod.substring(0, 100);
+      }
+      logger.warn(`⚠️ Verification method truncated to: ${updates.verificationMethod}`);
     }
 
     // Handle endDate for current positions
@@ -471,6 +687,240 @@ export const updateWorkExperience = async (req: AuthenticatedRequest, res: Respo
     });
   } finally {
     client.release();
+  }
+};
+
+
+// =====================================================
+// PROOF FILE MANAGEMENT - COMPLETE FIXED VERSION
+// =====================================================
+
+// Add this function to handle proof file uploads
+export const uploadProofFile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.file) {
+      res.status(400).json({
+        success: false,
+        message: 'No file uploaded'
+      });
+      return;
+    }
+
+    const file = req.file;
+    const userId = req.user!.id;
+    const fileKey = `proofs/${userId}/${Date.now()}-${file.originalname}`;
+
+    const fileData = {
+      file_name: file.originalname,
+      file_key: fileKey,
+      file_size: file.size,
+      file_type: file.mimetype,
+      uploaded_at: new Date().toISOString(),
+      file_url: getFullFileUrl(fileKey)
+    };
+
+    res.status(201).json({
+      success: true,
+      data: fileData,
+      message: 'File uploaded successfully'
+    });
+  } catch (error) {
+    logger.error('Error uploading proof file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload file'
+    });
+  }
+};
+
+// Add this function to view proof files (opens in browser)
+export const viewProofFile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { fileName } = req.params;
+
+    if (!fileName) {
+      res.status(400).json({
+        success: false,
+        message: 'File name is required'
+      });
+      return;
+    }
+
+    const userId = req.user!.id;
+    const uploadPath = process.env.UPLOAD_PATH || './uploads';
+
+    // Try to find the file
+    const possiblePaths = [
+      path.join(uploadPath, 'proofs', userId, fileName),
+      path.join(uploadPath, 'proofs', userId, decodeURIComponent(fileName)),
+      path.join(uploadPath, fileName),
+      path.join(uploadPath, decodeURIComponent(fileName)),
+    ];
+
+    let filePath = null;
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        filePath = possiblePath;
+        break;
+      }
+    }
+
+    if (!filePath) {
+      // Search in user's proof directory
+      const userProofDir = path.join(uploadPath, 'proofs', userId);
+      if (fs.existsSync(userProofDir)) {
+        const files = fs.readdirSync(userProofDir);
+        const matchingFile = files.find(f =>
+          f.includes(fileName) ||
+          fileName.includes(f) ||
+          f.includes(decodeURIComponent(fileName))
+        );
+        if (matchingFile) {
+          filePath = path.join(userProofDir, matchingFile);
+        }
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+      return;
+    }
+
+    // Get the original filename
+    const baseFileName = path.basename(filePath);
+    const originalNameMatch = baseFileName.match(/^\d+-(.+)$/);
+    // ✅ FIX: Ensure actualFileName is always a string with proper fallback
+    let actualFileName: string = baseFileName;
+    if (originalNameMatch && originalNameMatch[1]) {
+      actualFileName = originalNameMatch[1];
+    }
+
+    // ✅ FIX: Double-check that actualFileName is valid
+    if (!actualFileName || actualFileName.length === 0) {
+      actualFileName = baseFileName;
+    }
+
+    // Get MIME type based on file extension
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.txt': 'text/plain',
+      '.csv': 'text/csv',
+      '.xls': 'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.zip': 'application/zip',
+      '.rar': 'application/x-rar-compressed',
+      '.7z': 'application/x-7z-compressed',
+    };
+    const mimeType = mimeTypes[ext] || 'application/octet-stream';
+
+    // Set headers for viewing (inline) instead of downloading
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(actualFileName)}"`);
+
+    // Send the file
+    res.sendFile(filePath);
+  } catch (error) {
+    logger.error('Error viewing proof file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to view file'
+    });
+  }
+};
+
+// Add this function to download proof files - FULLY FIXED
+export const downloadProofFile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const { fileName } = req.params;
+
+    // Check if fileName exists
+    if (!fileName) {
+      res.status(400).json({
+        success: false,
+        message: 'File name is required'
+      });
+      return;
+    }
+
+    const userId = req.user!.id;
+    const uploadPath = process.env.UPLOAD_PATH || './uploads';
+
+    // Try multiple possible paths
+    const possiblePaths = [
+      path.join(uploadPath, 'proofs', userId, fileName),
+      path.join(uploadPath, 'proofs', userId, decodeURIComponent(fileName)),
+      path.join(uploadPath, 'proofs', userId, fileName.replace(/^.*[\\\/]/, '')),
+      path.join(uploadPath, 'proofs', userId, fileName.split('-').slice(2).join('-')),
+      path.join(uploadPath, fileName),
+      path.join(uploadPath, decodeURIComponent(fileName)),
+    ];
+
+    let filePath = null;
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        filePath = possiblePath;
+        break;
+      }
+    }
+
+    if (!filePath) {
+      // Try to find the file by searching in the user's proof directory
+      const userProofDir = path.join(uploadPath, 'proofs', userId);
+      if (fs.existsSync(userProofDir)) {
+        const files = fs.readdirSync(userProofDir);
+        const matchingFile = files.find(f =>
+          f.includes(fileName) ||
+          fileName.includes(f) ||
+          f.includes(decodeURIComponent(fileName))
+        );
+        if (matchingFile) {
+          filePath = path.join(userProofDir, matchingFile);
+        }
+      }
+    }
+
+    if (!filePath || !fs.existsSync(filePath)) {
+      res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+      return;
+    }
+
+    // Get the original filename (remove timestamp prefix if present)
+    const baseFileName = path.basename(filePath);
+    // Try to extract original name by removing timestamp pattern
+    const originalNameMatch = baseFileName.match(/^proof-\d+-(.+)$/);
+    // ✅ FIX: Ensure actualFileName is always a string
+    let actualFileName: string = baseFileName;
+    if (originalNameMatch && originalNameMatch[1]) {
+      actualFileName = originalNameMatch[1];
+    }
+
+    // ✅ FIX: Double-check that actualFileName is valid
+    if (!actualFileName || actualFileName.length === 0) {
+      actualFileName = baseFileName;
+    }
+
+    // Send the file with the original name
+    res.download(filePath, actualFileName);
+  } catch (error) {
+    logger.error('Error downloading proof file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to download file'
+    });
   }
 };
 
@@ -619,7 +1069,7 @@ export const addSkill = async (req: AuthenticatedRequest, res: Response): Promis
         user_id, skill_id, proficiency_level, years_experience, is_primary, last_used, skill_context
       ) VALUES ($1, $2, $3, $4, $5, $6, $7)
     `, [
-      req.user!.id, finalSkillId, proficiencyLevel || 3, yearsExperience, isPrimary || false, 
+      req.user!.id, finalSkillId, proficiencyLevel || 3, yearsExperience, isPrimary || false,
       parsedLastUsed, skillContext
     ]);
 
@@ -685,18 +1135,18 @@ export const updateSkill = async (req: AuthenticatedRequest, res: Response): Pro
 
     // Parse lastUsed if provided
     // In updateSkill function, replace the date parsing section
-let parsedLastUsed = lastUsed;
-if (lastUsed && typeof lastUsed === 'string' && lastUsed.includes('/')) {
-  const parts = lastUsed.split('/');
-  if (parts.length === 3) {
-    const day = parts[0];
-    const month = parts[1];
-    const year = parts[2];
-    if (day && month && year) {
-      parsedLastUsed = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    let parsedLastUsed = lastUsed;
+    if (lastUsed && typeof lastUsed === 'string' && lastUsed.includes('/')) {
+      const parts = lastUsed.split('/');
+      if (parts.length === 3) {
+        const day = parts[0];
+        const month = parts[1];
+        const year = parts[2];
+        if (day && month && year) {
+          parsedLastUsed = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+      }
     }
-  }
-}
 
     // If skillName is provided and different, handle skill name change
     if (skillName && skillName.trim() && skillName.trim() !== currentSkill.current_skill_name) {
@@ -744,7 +1194,7 @@ if (lastUsed && typeof lastUsed === 'string' && lastUsed.includes('/')) {
             is_primary, last_used, skill_context
           ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         `, [
-          req.user!.id, finalSkillId, 
+          req.user!.id, finalSkillId,
           proficiencyLevel !== undefined ? proficiencyLevel : currentSkill.proficiency_level,
           yearsExperience !== undefined ? yearsExperience : currentSkill.years_experience,
           isPrimary !== undefined ? isPrimary : currentSkill.is_primary,
@@ -1123,9 +1573,12 @@ export const uploadResume = async (req: AuthenticatedRequest, res: Response): Pr
 
     const isPrimary = req.body.isPrimary === 'true' || req.body.isPrimary === true;
     const file = req.file;
+    const parsedData = req.body.parsedData
+      ? JSON.parse(req.body.parsedData)
+      : (req.body.extractedText ? { extractedText: req.body.extractedText } : null);
 
     // Use the filename generated by multer
-    const fileKey = `resumes/${file.filename}`;
+    const fileKey = file.filename;
 
     // If this resume is set as primary, unset other primary resumes
     if (isPrimary) {
@@ -1137,9 +1590,9 @@ export const uploadResume = async (req: AuthenticatedRequest, res: Response): Pr
 
     const result = await query(`
       INSERT INTO resumes (
-        user_id, file_name, file_key, file_size, mime_type, is_primary, version
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, file_name, file_key, file_size, mime_type, is_primary, version, created_at
+        user_id, file_name, file_key, file_size, mime_type, is_primary, version, parsed_data
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, file_name, file_key, file_size, mime_type, is_primary, version, parsed_data, created_at
     `, [
       req.user!.id,
       file.originalname,
@@ -1147,7 +1600,8 @@ export const uploadResume = async (req: AuthenticatedRequest, res: Response): Pr
       file.size,
       file.mimetype,
       isPrimary,
-      1
+      1,
+      parsedData
     ]);
 
     const resume = result.rows[0];
@@ -1192,7 +1646,7 @@ export const deleteResume = async (req: AuthenticatedRequest, res: Response): Pr
     if (resume.file_key) {
       const uploadPath = process.env.UPLOAD_PATH || './uploads';
       const filePath = path.join(uploadPath, resume.file_key);
-      
+
       if (fs.existsSync(filePath)) {
         fs.unlinkSync(filePath);
       }
@@ -1257,12 +1711,12 @@ export const setPrimaryResume = async (req: AuthenticatedRequest, res: Response)
 export const downloadResume = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    
+
     const result = await query(
       'SELECT file_key, file_name, mime_type FROM resumes WHERE id = $1 AND user_id = $2',
       [id, req.user!.id]
     );
-    
+
     if (result.rows.length === 0) {
       res.status(404).json({
         success: false,
@@ -1270,19 +1724,30 @@ export const downloadResume = async (req: AuthenticatedRequest, res: Response): 
       });
       return;
     }
-    
+
     const resume = result.rows[0];
     const uploadPath = process.env.UPLOAD_PATH || './uploads';
-    const filePath = path.join(uploadPath, resume.file_key);
-    
+
+    // ✅ Include 'resumes' subfolder in the path
+    const filePath = path.join(uploadPath, 'resumes', resume.file_key);
+
+    // Check if file exists
     if (!fs.existsSync(filePath)) {
+      // Try alternative location (without resumes folder)
+      const altPath = path.join(uploadPath, resume.file_key);
+      if (fs.existsSync(altPath)) {
+        // If file is in root uploads, move it or serve from there
+        res.download(altPath, resume.file_name);
+        return;
+      }
+
       res.status(404).json({
         success: false,
         message: 'File not found on server'
       });
       return;
     }
-    
+
     res.download(filePath, resume.file_name);
   } catch (error) {
     logger.error('Error downloading resume:', error);
@@ -1383,12 +1848,29 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
       uploaded_at: resume.uploaded_at
     }));
 
+    const parsedEducation = educationResult.rows.map((edu: any) => ({
+      ...edu,
+      attachments: edu.attachments
+        ? (typeof edu.attachments === 'string' ? JSON.parse(edu.attachments) : edu.attachments)
+        : []
+    }));
+
+    const parsedWorkExperience = workExperienceResult.rows.map((work: any) => ({
+      ...work,
+      achievements: work.achievements || [],
+      skills: work.skills || [],
+      attachments: work.attachments
+        ? (typeof work.attachments === 'string' ? JSON.parse(work.attachments) : work.attachments)
+        : []
+    }));
+
     res.json({
       success: true,
       data: {
         profile: profile,
-        education: educationResult.rows,
-        workExperience: workExperienceResult.rows,
+        education: parsedEducation,
+        workExperience: parsedWorkExperience,
+        experience: parsedWorkExperience,
         skills: skillsResult.rows,
         portfolioLinks: portfolioResult.rows,
         resumes: resumesWithUrl
@@ -1520,6 +2002,8 @@ export const updatePrivacySettings = async (req: AuthenticatedRequest, res: Resp
   }
 };
 
+// In profileController.js - FIXED updateProfile function
+
 export const updateProfile = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const updates = req.body;
@@ -1528,26 +2012,75 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     let paramIndex = 1;
     const jsonbFields = ['current_salary', 'expected_salary', 'languages', 'metadata'];
 
-    // List of allowed fields for profile update
-    const allowedFields = [
+    console.log('📝 Updating profile with data:', updates);
+
+    // ✅ Field mapping from frontend to database column names
+    const fieldMapping: { [key: string]: string } = {
+      firstName: 'first_name',
+      lastName: 'last_name',
+      phone: 'phone',
+      location: 'city',        // ✅ Map 'location' to 'city' column
+      bio: 'summary',          // ✅ Map 'bio' to 'summary' column
+      headline: 'headline',
+      country: 'country',
+      city: 'city',
+      timezone: 'timezone',
+      dateOfBirth: 'date_of_birth',
+      gender: 'gender',
+      linkedinUrl: 'linkedin_url',
+      githubUrl: 'github_url',
+      portfolioUrl: 'portfolio_url',
+      websiteUrl: 'website_url',
+      willingToRelocate: 'willing_to_relocate',
+      willingToTravel: 'willing_to_travel',
+      noticePeriodDays: 'notice_period_days',
+      currentSalary: 'current_salary',
+      expectedSalary: 'expected_salary',
+      currency: 'currency',
+      profilePhotoUrl: 'profile_photo_url',
+      profilePhotoKey: 'profile_photo_key',
+      summary: 'summary',
+      yearsExperience: 'years_experience',
+      languages: 'languages',
+      metadata: 'metadata',
+    };
+
+    // Allowed database columns
+    const allowedDbColumns = [
       'first_name', 'last_name', 'phone', 'country', 'city', 'timezone',
       'date_of_birth', 'gender', 'profile_photo_url', 'profile_photo_key',
       'linkedin_url', 'github_url', 'portfolio_url', 'website_url',
       'willing_to_relocate', 'willing_to_travel', 'notice_period_days',
       'current_salary', 'expected_salary', 'currency', 'headline', 'summary',
-      'languages', 'metadata'
+      'languages', 'metadata', 'years_experience'
     ];
 
     Object.keys(updates).forEach(key => {
-      const snakeKey = camelToSnake(key);
-      if (updates[key] !== undefined && allowedFields.includes(snakeKey)) {
-        updateFields.push(`${snakeKey} = $${paramIndex}`);
-        values.push(jsonbFields.includes(snakeKey) ? JSON.stringify(updates[key]) : updates[key]);
-        paramIndex++;
+      // Map frontend field to database column
+      const dbField = fieldMapping[key] || camelToSnake(key);
+
+      // Skip if not allowed
+      if (!allowedDbColumns.includes(dbField)) {
+        console.log(`⚠️ Skipping field: ${key} -> ${dbField} (not in allowed list)`);
+        return;
       }
+
+      // Skip undefined values
+      if (updates[key] === undefined) return;
+
+      updateFields.push(`${dbField} = $${paramIndex}`);
+
+      // Handle JSONB fields
+      if (jsonbFields.includes(dbField)) {
+        values.push(JSON.stringify(updates[key]));
+      } else {
+        values.push(updates[key]);
+      }
+      paramIndex++;
     });
 
     if (updateFields.length === 0) {
+      console.log('⚠️ No valid fields to update');
       res.status(400).json({
         success: false,
         message: 'No valid fields to update'
@@ -1556,6 +2089,9 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     }
 
     values.push(req.user!.id);
+    console.log(`📝 Updating fields: ${updateFields.join(', ')}`);
+    console.log('📝 Values:', values);
+
     const result = await query(
       `UPDATE candidate_profiles 
        SET ${updateFields.join(', ')}, updated_at = NOW() 
@@ -1571,12 +2107,15 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
       return;
     }
 
+    console.log('✅ Profile updated successfully:', result.rows[0]);
+
     res.json({
       success: true,
       message: 'Profile updated successfully',
       data: result.rows[0]
     });
   } catch (error) {
+    console.error('❌ Error updating profile:', error);
     logger.error('Error updating profile:', error);
     res.status(500).json({
       success: false,
@@ -1731,9 +2270,16 @@ export const getProfileCompletionStatus = async (req: AuthenticatedRequest, res:
   try {
     const userId = req.user!.id;
 
-    // Get profile data
+    // ✅ JOIN with users table to get email, user_type, and status
     const profileResult = await query(`
-      SELECT cp.* FROM candidate_profiles cp WHERE cp.user_id = $1
+      SELECT 
+        cp.*,
+        u.email,
+        u.user_type,
+        u.status as user_status
+      FROM candidate_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.user_id = $1
     `, [userId]);
 
     if (profileResult.rows.length === 0) {
@@ -1745,6 +2291,17 @@ export const getProfileCompletionStatus = async (req: AuthenticatedRequest, res:
     }
 
     const profile = profileResult.rows[0];
+
+    // 📊 Log for debugging
+    console.log('🔍 Profile data:', {
+      first_name: profile.first_name,
+      last_name: profile.last_name,
+      city: profile.city,
+      email: profile.email,        // ✅ Now available from JOIN
+      phone: profile.phone,
+      user_type: profile.user_type, // ✅ Now available from JOIN
+      user_status: profile.user_status // ✅ Now available from JOIN
+    });
 
     // Check each section from database tables
     const educationResult = await query(`SELECT COUNT(*) as count FROM education WHERE user_id = $1`, [userId]);
@@ -1759,31 +2316,52 @@ export const getProfileCompletionStatus = async (req: AuthenticatedRequest, res:
     const resumeCount = parseInt(resumeResult.rows[0].count);
     const portfolioCount = parseInt(portfolioResult.rows[0].count);
 
-    // Check preferences section (job_preferences in JSONB)
-    const hasPreferences = !!(profile.job_preferences && 
+    // Check preferences section
+    const hasPreferences = !!(profile.job_preferences &&
       (profile.job_preferences.preferred_job_types?.length > 0 ||
-       profile.job_preferences.preferred_locations?.length > 0 ||
-       profile.job_preferences.preferred_industries?.length > 0 ||
-       profile.job_preferences.salary_min ||
-       profile.job_preferences.salary_max));
+        profile.job_preferences.preferred_locations?.length > 0 ||
+        profile.job_preferences.preferred_industries?.length > 0 ||
+        profile.job_preferences.salary_min ||
+        profile.job_preferences.salary_max));
 
-    // Check privacy section (privacy_settings in JSONB)
-    const hasPrivacySettings = !!(profile.privacy_settings && 
+    // Check privacy section
+    const hasPrivacySettings = !!(profile.privacy_settings &&
       Object.keys(profile.privacy_settings).length > 0 &&
       (profile.privacy_settings.profile_visibility !== undefined ||
-       profile.privacy_settings.show_education !== undefined));
+        profile.privacy_settings.show_education !== undefined));
 
-    // Check each section - USING FRONTEND NAMES (basicInfo instead of personalInfo)
-    const hasBasicInfo = !!(profile.first_name && profile.last_name && profile.headline && profile.city);
+    // ✅ All fields now available from the JOIN
+    const hasBasicInfo = !!(
+      profile.first_name &&
+      profile.last_name &&
+      profile.city &&
+      profile.email &&        // ✅ Now available
+      profile.phone &&
+      profile.user_type &&    // ✅ Now available
+      profile.user_status     // ✅ Now available
+    );
+
     const hasSkills = skillsCount > 0;
     const hasExperience = experienceCount > 0;
     const hasEducation = educationCount > 0;
     const hasPortfolio = portfolioCount > 0;
     const hasResume = resumeCount > 0;
 
+    // Log section statuses
+    console.log('📊 Section Status:', {
+      hasBasicInfo,
+      hasSkills,
+      hasExperience,
+      hasEducation,
+      hasPortfolio,
+      hasResume,
+      hasPreferences,
+      hasPrivacySettings
+    });
+
     // Calculate percentage (8 sections total)
     const sections = {
-      basicInfo: hasBasicInfo,        // Changed from personalInfo to basicInfo
+      basicInfo: hasBasicInfo,
       skills: hasSkills,
       experience: hasExperience,
       education: hasEducation,
@@ -1794,8 +2372,14 @@ export const getProfileCompletionStatus = async (req: AuthenticatedRequest, res:
     };
 
     const completedCount = Object.values(sections).filter(Boolean).length;
-    const totalSections = Object.keys(sections).length; // 8 total
+    const totalSections = Object.keys(sections).length;
     const completionPercentage = Math.round((completedCount / totalSections) * 100);
+
+    console.log('📊 Completion Calculation:', {
+      completedCount,
+      totalSections,
+      completionPercentage
+    });
 
     const completionStatus = {
       completionPercentage,
@@ -1837,7 +2421,7 @@ export const getProfileCompletionStatus = async (req: AuthenticatedRequest, res:
 export const downloadProfileData = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const userId = req.user!.id;
-    
+
     // Fetch all user data
     const profileData = await query(`
       SELECT 
@@ -1899,32 +2483,50 @@ export const controlProfilePrivacy = async (req: AuthenticatedRequest, res: Resp
 };
 
 
+// profileController.js - FIXED getFullCandidateProfileById
+
 export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
-    const currentUserId = req.user!.id;
-    const userType = req.user!.user_type;
-    
-    // Convert to strings for safe comparison
-    const userIdStr = String(userId);
-    const currentUserIdStr = String(currentUserId);
-    
-    // Permission check - only allow own profile or recruiters/company admins
-    if (currentUserIdStr !== userIdStr && !['recruiter', 'company_admin'].includes(userType)) {
-      res.status(403).json({
-        success: false,
-        message: 'Access denied. You can only view your own profile.'
-      });
-      return;
-    }
+
+    console.log('📌 getFullCandidateProfileById called');
+    console.log('📌 userId:', userId);
 
     if (!userId) {
+      console.log('❌ No userId provided');
       res.status(400).json({
         success: false,
         message: 'User ID is required'
       });
       return;
     }
+
+    // ✅ Check if the requesting user is the owner (if authenticated)
+    let isOwner = false;
+    if (req.user) {
+      console.log('📌 User authenticated:', req.user.id);
+      const currentUserId = req.user.id;
+      const userType = req.user.user_type;
+
+      const userIdStr = String(userId);
+      const currentUserIdStr = String(currentUserId);
+      isOwner = currentUserIdStr === userIdStr;
+      console.log('📌 isOwner:', isOwner);
+
+      // Permission check - only allow own profile or recruiters/company admins
+      if (!isOwner && !['recruiter', 'company_admin'].includes(userType)) {
+        console.log('❌ Access denied for user:', currentUserIdStr, 'trying to access:', userIdStr);
+        res.status(403).json({
+          success: false,
+          message: 'Access denied. You can only view your own profile.'
+        });
+        return;
+      }
+    } else {
+      console.log('📌 No user authenticated, public access');
+    }
+
+    console.log('📌 Fetching profile from database...');
 
     // Get basic profile info
     const profileResult = await query(`
@@ -1973,7 +2575,10 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       WHERE cp.user_id = $1
     `, [userId]);
 
+    console.log('📌 Profile query result rows:', profileResult.rows.length);
+
     if (profileResult.rows.length === 0) {
+      console.log('❌ No profile found for userId:', userId);
       res.status(404).json({
         success: false,
         message: 'Candidate profile not found'
@@ -1982,22 +2587,30 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
     }
 
     const profile = profileResult.rows[0];
+    console.log('📌 Profile found for user:', profile.email);
 
-    // Parse JSON fields from profile
-    profile.current_salary = profile.current_salary ? 
-      (typeof profile.current_salary === 'string' ? JSON.parse(profile.current_salary) : profile.current_salary) : null;
-    profile.expected_salary = profile.expected_salary ? 
-      (typeof profile.expected_salary === 'string' ? JSON.parse(profile.expected_salary) : profile.expected_salary) : null;
-    profile.languages = profile.languages ? 
-      (typeof profile.languages === 'string' ? JSON.parse(profile.languages) : profile.languages) : [];
-    profile.privacy_settings = profile.privacy_settings ? 
-      (typeof profile.privacy_settings === 'string' ? JSON.parse(profile.privacy_settings) : profile.privacy_settings) : {};
-    profile.job_preferences = profile.job_preferences ? 
-      (typeof profile.job_preferences === 'string' ? JSON.parse(profile.job_preferences) : profile.job_preferences) : {};
-    profile.availability = profile.availability ? 
-      (typeof profile.availability === 'string' ? JSON.parse(profile.availability) : profile.availability) : {};
-    profile.metadata = profile.metadata ? 
-      (typeof profile.metadata === 'string' ? JSON.parse(profile.metadata) : profile.metadata) : {};
+    // ✅ Safe JSON parsing function
+    const safeJSONParse = (value: any): any => {
+      if (!value) return null;
+      if (typeof value === 'object') return value;
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        console.log('⚠️ Failed to parse JSON:', value);
+        return null;
+      }
+    };
+
+    // Parse JSON fields from profile with safe parsing
+    profile.current_salary = safeJSONParse(profile.current_salary);
+    profile.expected_salary = safeJSONParse(profile.expected_salary);
+    profile.languages = safeJSONParse(profile.languages) || [];
+    profile.privacy_settings = safeJSONParse(profile.privacy_settings) || {};
+    profile.job_preferences = safeJSONParse(profile.job_preferences) || {};
+    profile.availability = safeJSONParse(profile.availability) || {};
+    profile.metadata = safeJSONParse(profile.metadata) || {};
+
+    console.log('📌 Fetching education...');
 
     // Get education
     const educationResult = await query(`
@@ -2027,13 +2640,17 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY is_current DESC, start_date DESC, end_date DESC NULLS FIRST, display_order ASC
     `, [userId]);
 
+    console.log('📌 Education rows:', educationResult.rows.length);
+
     // Parse JSON fields in education
     const parsedEducation = educationResult.rows.map((edu: any) => ({
       ...edu,
       skills: edu.skills || [],
-      attachments: edu.attachments ? 
-        (typeof edu.attachments === 'string' ? JSON.parse(edu.attachments) : edu.attachments) : []
+      attachments: edu.attachments ?
+        (typeof edu.attachments === 'string' ? safeJSONParse(edu.attachments) : edu.attachments) : []
     }));
+
+    console.log('📌 Fetching work experience...');
 
     // Get work experience
     const workExperienceResult = await query(`
@@ -2055,6 +2672,7 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
         team_size,
         reports_to,
         reason_for_leaving,
+        attachments,
         verified,
         verification_method,
         verification_date,
@@ -2066,12 +2684,18 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY is_current DESC, start_date DESC, end_date DESC NULLS FIRST, display_order ASC
     `, [userId]);
 
+    console.log('📌 Work experience rows:', workExperienceResult.rows.length);
+
     // Parse JSON fields in work experience
     const parsedWorkExperience = workExperienceResult.rows.map((work: any) => ({
       ...work,
       achievements: work.achievements || [],
-      skills: work.skills || []
+      skills: work.skills || [],
+      attachments: work.attachments ?
+        (typeof work.attachments === 'string' ? safeJSONParse(work.attachments) : work.attachments) : []
     }));
+
+    console.log('📌 Fetching skills...');
 
     // Get skills with full details
     const skillsResult = await query(`
@@ -2104,14 +2728,18 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY us.is_primary DESC, us.proficiency_level DESC, s.name ASC
     `, [userId]);
 
+    console.log('📌 Skills rows:', skillsResult.rows.length);
+
     // Parse verification evidence
     const parsedSkills = skillsResult.rows.map((skill: any) => ({
       ...skill,
-      verification_evidence: skill.verification_evidence ? 
-        (typeof skill.verification_evidence === 'string' ? JSON.parse(skill.verification_evidence) : skill.verification_evidence) : null,
-      skill_metadata: skill.skill_metadata ? 
-        (typeof skill.skill_metadata === 'string' ? JSON.parse(skill.skill_metadata) : skill.skill_metadata) : {}
+      verification_evidence: skill.verification_evidence ?
+        (typeof skill.verification_evidence === 'string' ? safeJSONParse(skill.verification_evidence) : skill.verification_evidence) : null,
+      skill_metadata: skill.skill_metadata ?
+        (typeof skill.skill_metadata === 'string' ? safeJSONParse(skill.skill_metadata) : skill.skill_metadata) : {}
     }));
+
+    console.log('📌 Fetching portfolio links...');
 
     // Get portfolio links
     const portfolioResult = await query(`
@@ -2133,12 +2761,16 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY display_order ASC, created_at ASC
     `, [userId]);
 
+    console.log('📌 Portfolio rows:', portfolioResult.rows.length);
+
     // Parse portfolio metadata
     const parsedPortfolio = portfolioResult.rows.map((portfolio: any) => ({
       ...portfolio,
-      metadata: portfolio.metadata ? 
-        (typeof portfolio.metadata === 'string' ? JSON.parse(portfolio.metadata) : portfolio.metadata) : {}
+      metadata: portfolio.metadata ?
+        (typeof portfolio.metadata === 'string' ? safeJSONParse(portfolio.metadata) : portfolio.metadata) : {}
     }));
+
+    console.log('📌 Fetching resumes...');
 
     // Get resumes
     const resumesResult = await query(`
@@ -2160,6 +2792,8 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY is_primary DESC, created_at DESC
     `, [userId]);
 
+    console.log('📌 Resumes rows:', resumesResult.rows.length);
+
     // Transform resumes to include file_url and parse parsed_data
     const resumesWithUrl = resumesResult.rows.map((resume: any) => ({
       id: resume.id,
@@ -2170,13 +2804,15 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       mime_type: resume.mime_type,
       is_primary: resume.is_primary,
       version: resume.version,
-      parsed_data: resume.parsed_data ? 
-        (typeof resume.parsed_data === 'string' ? JSON.parse(resume.parsed_data) : resume.parsed_data) : null,
+      parsed_data: resume.parsed_data ?
+        (typeof resume.parsed_data === 'string' ? safeJSONParse(resume.parsed_data) : resume.parsed_data) : null,
       parsing_confidence: resume.parsing_confidence,
       skills_extracted: resume.skills_extracted || [],
       uploaded_at: resume.uploaded_at,
       updated_at: resume.updated_at
     }));
+
+    console.log('📌 Fetching certifications...');
 
     // Get certifications
     const certificationsResult = await query(`
@@ -2203,27 +2839,40 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       ORDER BY issue_date DESC, display_order ASC
     `, [userId]);
 
+    console.log('📌 Certifications rows:', certificationsResult.rows.length);
+
     // Parse certifications JSON fields
     const parsedCertifications = certificationsResult.rows.map((cert: any) => ({
       ...cert,
       skills: cert.skills || [],
-      attachments: cert.attachments ? 
-        (typeof cert.attachments === 'string' ? JSON.parse(cert.attachments) : cert.attachments) : []
+      attachments: cert.attachments ?
+        (typeof cert.attachments === 'string' ? safeJSONParse(cert.attachments) : cert.attachments) : []
     }));
 
-    // Calculate profile completion statistics
-    const totalSections = 8; // Basic Info, Education, Experience, Skills, Resume, Portfolio, Certifications, Preferences
+    console.log('📌 Calculating statistics...');
+
+    // ============================================
+    // ✅ FIXED: Calculate profile completion with 8 sections
+    // Matching the frontend expectations
+    // ============================================
+    const totalSections = 8;
     let completedSections = 0;
-    
-    const hasBasicInfo = !!(profile.first_name && profile.last_name && profile.headline);
+
+    // Check each section (using frontend-friendly names)
+    const hasBasicInfo = !!(profile.first_name && profile.last_name && profile.city);
     const hasEducation = educationResult.rows.length > 0;
     const hasExperience = workExperienceResult.rows.length > 0;
     const hasSkills = skillsResult.rows.length > 0;
     const hasResume = resumesResult.rows.length > 0;
     const hasPortfolio = portfolioResult.rows.length > 0;
     const hasCertifications = certificationsResult.rows.length > 0;
-    const hasPreferences = profile.job_preferences && Object.keys(profile.job_preferences).length > 0;
-    
+    const hasPreferences = profile.job_preferences &&
+      Object.keys(profile.job_preferences).length > 0 &&
+      (profile.job_preferences.preferred_job_types?.length > 0 ||
+        profile.job_preferences.preferred_locations?.length > 0 ||
+        profile.job_preferences.preferred_industries?.length > 0);
+
+    // Count completed sections
     if (hasBasicInfo) completedSections++;
     if (hasEducation) completedSections++;
     if (hasExperience) completedSections++;
@@ -2232,14 +2881,28 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
     if (hasPortfolio) completedSections++;
     if (hasCertifications) completedSections++;
     if (hasPreferences) completedSections++;
-    
+
     const completionPercentage = Math.round((completedSections / totalSections) * 100);
+
+    console.log('📊 Profile Completion:', {
+      completionPercentage,
+      completedSections,
+      totalSections,
+      hasBasicInfo,
+      hasEducation,
+      hasExperience,
+      hasSkills,
+      hasResume,
+      hasPortfolio,
+      hasCertifications,
+      hasPreferences
+    });
 
     // Calculate total years of experience
     let totalYearsExperience = 0;
     let currentJobYears = 0;
     let mostRecentJob = null;
-    
+
     workExperienceResult.rows.forEach((exp: any) => {
       const start = new Date(exp.start_date);
       const end = exp.is_current ? new Date() : (exp.end_date ? new Date(exp.end_date) : start);
@@ -2255,7 +2918,7 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       }
     });
 
-    // Get top skills (proficiency level 4 or 5)
+    // Get top skills
     const topSkills = skillsResult.rows
       .filter((skill: any) => skill.proficiency_level >= 4)
       .map((skill: any) => skill.skill_name);
@@ -2300,9 +2963,13 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       WHERE user_id = $1
     `, [userId]);
 
+    console.log('📌 Sending response...');
+
+    // ✅ Return response with isOwner flag and all data
     res.json({
       success: true,
       data: {
+        isOwner: isOwner,
         profile: {
           personal_info: {
             user_id: profile.user_id,
@@ -2370,9 +3037,9 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
             completed_sections: completedSections,
             total_sections: totalSections,
             sections_status: {
-              basic_info: hasBasicInfo,
+              basicInfo: hasBasicInfo,
               education: hasEducation,
-              work_experience: hasExperience,
+              workExperience: hasExperience,
               skills: hasSkills,
               resume: hasResume,
               portfolio: hasPortfolio,
@@ -2380,9 +3047,9 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
               preferences: hasPreferences
             },
             missing_sections: [
-              !hasBasicInfo && 'basic_info',
+              !hasBasicInfo && 'basicInfo',
               !hasEducation && 'education',
-              !hasExperience && 'work_experience',
+              !hasExperience && 'workExperience',
               !hasSkills && 'skills',
               !hasResume && 'resume',
               !hasPortfolio && 'portfolio',
@@ -2415,11 +3082,15 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       }
     });
 
+    console.log('✅ Response sent successfully!');
+
   } catch (error) {
+    console.error('🔥 ERROR in getFullCandidateProfileById:', error);
     logger.error('Error getting full candidate profile:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get candidate profile'
+      message: 'Failed to get candidate profile',
+      error: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 };

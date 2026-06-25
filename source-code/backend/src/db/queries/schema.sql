@@ -239,6 +239,7 @@ CREATE TABLE work_experience (
     team_size           INTEGER,
     reports_to          VARCHAR(255),
     reason_for_leaving  VARCHAR(255),
+    attachments         JSONB DEFAULT '[]'::JSONB,
     verified            BOOLEAN DEFAULT FALSE,
     verification_method VARCHAR(100),
     verification_date   TIMESTAMP WITH TIME ZONE,
@@ -2930,3 +2931,26 @@ WHERE NOT EXISTS (SELECT 1 FROM faqs WHERE question = 'How are my simulation res
 -- =====================================================
 -- END OF SCHEMA
 -- =====================================================
+
+
+-- Ensure attachments column exists in both tables
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE education ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::JSONB;
+
+-- Ensure other columns exist
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS achievements TEXT[];
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS skills TEXT[];
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS verification_method VARCHAR(100);
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS verification_date TIMESTAMP WITH TIME ZONE;
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+
+-- Education table
+ALTER TABLE education ADD COLUMN IF NOT EXISTS activities TEXT;
+ALTER TABLE education ADD COLUMN IF NOT EXISTS skills TEXT[];
+ALTER TABLE education ADD COLUMN IF NOT EXISTS attachments JSONB DEFAULT '[]'::JSONB;
+ALTER TABLE education ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE;
+ALTER TABLE education ADD COLUMN IF NOT EXISTS verification_method VARCHAR(100);
+ALTER TABLE education ADD COLUMN IF NOT EXISTS verification_date TIMESTAMP WITH TIME ZONE;
+ALTER TABLE education ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;

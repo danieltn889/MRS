@@ -3,8 +3,8 @@ import {
   Upload, FileText, Download, Trash2, Star, StarOff,
   Eye, CheckCircle, AlertCircle, X, BookOpen, Copy, Check,
 } from 'lucide-react';
-import JSZip from 'jszip';
 import { uploadResume, deleteResume, setPrimaryResume, downloadResume } from '../../services/candidateAPI';
+import { extractTextFromFile } from '../../utils/documentTextExtractor';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -19,6 +19,12 @@ interface Resume {
   uploaded_at: string;
   created_at?: string;
   mime_type?: string;
+  parsed_data?: {
+    extractedText?: string;
+    extractionMethod?: string;
+    pageCount?: number;
+    extractedAt?: string;
+  } | null;
 }
 
 interface ResumeSectionProps {
@@ -50,6 +56,9 @@ const fileIcon = (name: string) => {
 
 const isWordDoc = (name: string) =>
   /\.(doc|docx)$/i.test(name);
+
+const canReadResume = (name: string) =>
+  isWordDoc(name) || /\.pdf$/i.test(name);
 
 // ── Delete Confirmation Modal ──────────────────────────────────────────────────
 
@@ -108,23 +117,6 @@ const UploadSuccessModal = ({
 );
 
 // ── DOCX text extractor (uses jszip — no extra package needed) ─────────────────
-
-async function extractDocxText(blob: Blob): Promise<string> {
-  const zip  = await JSZip.loadAsync(blob);
-  const xml  = await zip.file('word/document.xml')?.async('string');
-  if (!xml) return '';
-
-  const doc        = new DOMParser().parseFromString(xml, 'text/xml');
-  const paragraphs = Array.from(doc.getElementsByTagNameNS('*', 'p'));
-
-  return paragraphs
-    .map(p => {
-      const runs = Array.from(p.getElementsByTagNameNS('*', 't'));
-      return runs.map(t => t.textContent ?? '').join('');
-    })
-    .filter(Boolean)
-    .join('\n');
-}
 
 // ── Content Viewer Modal ───────────────────────────────────────────────────────
 
@@ -266,7 +258,21 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
     const timer = setInterval(() => setUploadProgress(p => Math.min(p + 10, 90)), 200);
 
     try {
-      await uploadResume(file, resumes.length === 0);
+      let parsedData: Resume['parsed_data'] | undefined;
+
+      try {
+        const extracted = await extractTextFromFile(file, file.name);
+        parsedData = {
+          extractedText: extracted.text,
+          extractionMethod: extracted.method,
+          pageCount: extracted.pageCount,
+          extractedAt: new Date().toISOString(),
+        };
+      } catch (extractError) {
+        console.warn('Resume content extraction failed:', extractError);
+      }
+
+      const uploadResponse = await uploadResume(file, resumes.length === 0, parsedData);
       clearInterval(timer);
       setUploadProgress(100);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -275,6 +281,20 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
         setUploading(false);
         setUploadProgress(0);
         setSuccessModal({ name: file.name, size: file.size });
+        if (parsedData?.extractedText) {
+          setContentModal({
+            resume: uploadResponse?.data || {
+              id: 'new-upload',
+              file_name: file.name,
+              file_url: '',
+              file_size: file.size,
+              is_primary: resumes.length === 0,
+              uploaded_at: new Date().toISOString(),
+              parsed_data: parsedData,
+            },
+            content: parsedData.extractedText,
+          });
+        }
       }, 600);
     } catch (err: any) {
       clearInterval(timer);
@@ -309,24 +329,21 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
   // ── Read Content ─────────────────────────────────────────────────────────────
 
   const handleReadContent = async (resume: Resume) => {
-    if (!isWordDoc(resume.file_name || '') && !/\.pdf$/i.test(resume.file_name || '')) {
+    if (!canReadResume(resume.file_name || '')) {
       setReadError('Content extraction is only supported for PDF and Word documents.');
       return;
     }
     setReadError('');
     setReading(resume.id);
     try {
-      const blob = await downloadResume(resume.id);
-      let text   = '';
-
-      if (isWordDoc(resume.file_name || '')) {
-        text = await extractDocxText(blob);
-      } else {
-        // PDF: extraction requires pdf.js — inform the user
-        text = '[PDF text extraction is not yet supported in this view.\nUse the Download button to open the file locally.]';
+      if (resume.parsed_data?.extractedText) {
+        setContentModal({ resume, content: resume.parsed_data.extractedText });
+        return;
       }
 
-      setContentModal({ resume, content: text });
+      const blob = await downloadResume(resume.id);
+      const extracted = await extractTextFromFile(blob, resume.file_name);
+      setContentModal({ resume, content: extracted.text });
     } catch (err: any) {
       setReadError(err?.message || 'Could not read the file content.');
     } finally {
@@ -334,7 +351,7 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
     }
   };
 
-  // ── Preview ───────────────────────────────────────────────────────────────────
+  // Preview ───────────────────────────────────────────────────────────────────
 
   // Google Docs Viewer is a remote service — it cannot reach localhost or 127.x.
   const isLocalUrl = (url: string) =>
@@ -569,7 +586,7 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
                   </button>
 
                   {/* Read Content */}
-                  {isWordDoc(resume.file_name || '') && (
+                  {canReadResume(resume.file_name || '') && (
                     <button
                       onClick={() => handleReadContent(resume)}
                       disabled={reading === resume.id}
@@ -629,7 +646,7 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
             <li>• Supported formats: <strong>PDF, DOC, DOCX</strong></li>
             <li>• Maximum file size: <strong>10 MB</strong></li>
             <li>• Keep your resume up to date with your latest experience</li>
-            <li>• Mark one resume as <strong>Primary</strong> — it's used by default for job applications</li>
+            <li>• Mark one resume as <strong>Primary</strong> it's used by default for job applications</li>
             <li>• Upload multiple versions for different job types</li>
             <li>• Use <strong>Preview</strong> to view your file · <strong>Download</strong> to save a copy</li>
           </ul>

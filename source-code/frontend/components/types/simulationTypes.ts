@@ -106,6 +106,16 @@ export interface AutomatedRule {
   priority: 'low' | 'medium' | 'high';
 }
 
+// ✅ ADD THIS - Task Priority Interface
+export interface TaskPriority {
+  mode: 'sequential' | 'parallel' | 'weighted';
+  weightDistribution: 'equal' | 'custom';
+  taskWeights: Record<string, number>;
+  mandatoryTasks: string[];  // Task IDs that are mandatory
+  optionalTasks: string[];   // Task IDs that are optional
+}
+
+// ✅ UPDATE - PassFailCriteria with taskPriority
 export interface PassFailCriteria {
   overallScore: { minimum: number; maximum: number };
   sectionScores: SectionScore[];
@@ -114,6 +124,7 @@ export interface PassFailCriteria {
   timeManagement: { completionRequired: boolean; timeBonus: boolean };
   qualityStandards: QualityStandard[];
   automatedRules: AutomatedRule[];
+  taskPriority?: TaskPriority;  // ✅ ADD THIS
 }
 
 export interface DailyWindow {

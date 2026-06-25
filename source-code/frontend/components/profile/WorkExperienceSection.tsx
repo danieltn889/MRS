@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, Briefcase, Calendar, MapPin, Building } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { 
+  Plus, Edit, Trash2, Save, X, Briefcase, Calendar, MapPin, Building, 
+  Upload, FileText, CheckCircle, Loader, AlertCircle, Eye, Download, 
+  File, Image, FileArchive
+} from 'lucide-react';
 import { addWorkExperience, updateWorkExperience, deleteWorkExperience } from '../../services/candidateAPI';
 
 // =====================================================
@@ -23,6 +27,7 @@ interface WorkExperienceItem {
   team_size?: number | string | null;
   reports_to?: string;
   reason_for_leaving?: string;
+  verification_method?: string;
   display_order?: number;
 }
 
@@ -44,14 +49,19 @@ interface FormData {
   startDate: string;
   endDate: string;
   isCurrent: boolean;
-  description: string;
-  achievements: string[];
-  skills: string[];
   industry: string;
-  teamSize: string;
-  reportsTo: string;
   reasonForLeaving: string;
+  proofFiles: File[];
+  existingProof: string;
   displayOrder: number;
+}
+
+interface ProofFile {
+  file_name: string;
+  file_size?: number;
+  file_type?: string;
+  uploaded_at?: string;
+  file_url?: string;
 }
 
 // =====================================================
@@ -78,6 +88,24 @@ const getLocationTypeLabel = (type: string): string => {
   return labels[type] || type;
 };
 
+const getFileIcon = (fileName: string): React.ReactNode => {
+  const extension = fileName.split('.').pop()?.toLowerCase() || '';
+  switch (extension) {
+    case 'pdf': return <FileText size={16} className="text-red-500" />;
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+    case 'webp': return <Image size={16} className="text-green-500" />;
+    case 'doc':
+    case 'docx': return <FileText size={16} className="text-blue-500" />;
+    case 'zip':
+    case 'rar':
+    case '7z': return <FileArchive size={16} className="text-yellow-500" />;
+    default: return <File size={16} className="text-gray-500" />;
+  }
+};
+
 // =====================================================
 // COMPONENT
 // =====================================================
@@ -94,17 +122,20 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     startDate: '',
     endDate: '',
     isCurrent: false,
-    description: '',
-    achievements: [''],
-    skills: [''],
     industry: '',
-    teamSize: '',
-    reportsTo: '',
     reasonForLeaving: '',
+    proofFiles: [],
+    existingProof: '',
     displayOrder: 0
   });
   const [loading, setLoading] = useState<boolean>(false);
   const [dateError, setDateError] = useState<string>('');
+  const [proofUploadStatus, setProofUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [proofUploadProgress, setProofUploadProgress] = useState<number>(0);
+  const [proofUploadMessage, setProofUploadMessage] = useState<string>('');
+  const [viewingProofFile, setViewingProofFile] = useState<ProofFile | null>(null);
+  const [isProofModalOpen, setIsProofModalOpen] = useState<boolean>(false);
+  const proofInputRef = useRef<HTMLInputElement>(null);
 
   const experience = profile?.workExperience || profile?.experience || [];
 
@@ -119,16 +150,16 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       startDate: '',
       endDate: '',
       isCurrent: false,
-      description: '',
-      achievements: [''],
-      skills: [''],
       industry: '',
-      teamSize: '',
-      reportsTo: '',
       reasonForLeaving: '',
+      proofFiles: [],
+      existingProof: '',
       displayOrder: 0
     });
     setDateError('');
+    setProofUploadStatus('idle');
+    setProofUploadProgress(0);
+    setProofUploadMessage('');
   };
 
   const validateDateRange = (): string | null => {
@@ -167,10 +198,83 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       return 'End date must be after start date.';
     }
 
-    // Removed the 1-year minimum requirement - allows short-term positions
     return null;
   };
 
+  const formatFileSize = (bytes: number): string => {
+    if (!bytes) return '0 B';
+    const units = ['B', 'KB', 'MB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+  };
+
+  const handleProofSelect = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setProofUploadStatus('uploading');
+    setProofUploadProgress(25);
+    setProofUploadMessage('Checking proof files...');
+    await new Promise(resolve => setTimeout(resolve, 150));
+
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/jpg',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ];
+    const validFiles = files.filter(file => allowedTypes.includes(file.type) && file.size <= 10 * 1024 * 1024);
+
+    if (validFiles.length !== files.length) {
+      setProofUploadStatus('error');
+      setProofUploadProgress(0);
+      setProofUploadMessage('Some files were skipped. Only PDF, Word, JPG and PNG files under 10MB are supported.');
+      alert('Only PDF, Word, JPG and PNG proof files under 10MB are supported.');
+    }
+
+    if (validFiles.length === 0) {
+      if (proofInputRef.current) proofInputRef.current.value = '';
+      return;
+    }
+
+    setProofUploadProgress(70);
+    setProofUploadMessage('Preparing proof files...');
+    await new Promise(resolve => setTimeout(resolve, 150));
+    setFormData(prev => ({
+      ...prev,
+      proofFiles: [...prev.proofFiles, ...validFiles].slice(0, 3)
+    }));
+    setProofUploadProgress(100);
+    setProofUploadStatus('success');
+    setProofUploadMessage('Proof files ready. Save to add them to your experience.');
+
+    if (proofInputRef.current) proofInputRef.current.value = '';
+  };
+
+  const removeProofFile = (index: number): void => {
+    setFormData(prev => ({
+      ...prev,
+      proofFiles: prev.proofFiles.filter((_, fileIndex) => fileIndex !== index)
+    }));
+    if (formData.proofFiles.length <= 1) {
+      setProofUploadStatus('idle');
+      setProofUploadProgress(0);
+      setProofUploadMessage('');
+    }
+  };
+
+  const truncateTitle = (title: string): string => {
+    if (title && title.length > 100) {
+      return title.substring(0, 100);
+    }
+    return title;
+  };
+
+  // =====================================================
+  // ✅ UPDATED: handleSubmit - only sends the fields you want
+  // =====================================================
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
 
@@ -184,25 +288,44 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     setLoading(true);
 
     try {
-      const submitData = {
+      const truncatedTitle = truncateTitle(formData.title);
+      
+      if (formData.title.length > 100) {
+        console.warn(`⚠️ Title truncated from ${formData.title.length} to 100 characters: ${truncatedTitle}`);
+      }
+
+      // ✅ Build submit data with only the fields you want
+      const submitData: any = {
         company: formData.company,
-        company_id: formData.companyId || undefined,
-        title: formData.title,
+        title: truncatedTitle,
         employmentType: formData.employmentType,
-        location: formData.location || undefined,
         locationType: formData.locationType,
         startDate: formData.startDate,
-        endDate: formData.isCurrent ? null : formData.endDate || null,
         isCurrent: formData.isCurrent,
-        description: formData.description || undefined,
-        achievements: formData.achievements.filter(a => a && a.trim()),
-        skills: formData.skills.filter(s => s && s.trim()),
-        industry: formData.industry || undefined,
-        teamSize: formData.teamSize ? parseInt(formData.teamSize) : undefined,
-        reportsTo: formData.reportsTo || undefined,
-        reasonForLeaving: formData.reasonForLeaving || undefined,
-        displayOrder: formData.displayOrder
       };
+
+      // ✅ Add optional fields only if they have values
+      if (formData.companyId) submitData.company_id = formData.companyId;
+      if (formData.location) submitData.location = formData.location;
+      if (formData.endDate && !formData.isCurrent) submitData.endDate = formData.endDate;
+      if (formData.industry) submitData.industry = formData.industry;
+      if (formData.reasonForLeaving) submitData.reasonForLeaving = formData.reasonForLeaving;
+      if (formData.displayOrder) submitData.displayOrder = formData.displayOrder;
+
+      // ✅ Handle verification method
+      if (formData.proofFiles.length > 0) {
+        submitData.verificationMethod = JSON.stringify({
+          type: 'work_proof',
+          files: formData.proofFiles.map(file => ({
+            file_name: file.name,
+            file_size: file.size,
+            file_type: file.type,
+            uploaded_at: new Date().toISOString()
+          }))
+        });
+      } else if (formData.existingProof) {
+        submitData.verificationMethod = formData.existingProof;
+      }
 
       if (editingId) {
         await updateWorkExperience(editingId, submitData);
@@ -223,6 +346,9 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     }
   };
 
+  // =====================================================
+  // ✅ UPDATED: handleEdit - only loads the fields you want
+  // =====================================================
   const handleEdit = (exp: WorkExperienceItem): void => {
     setFormData({
       company: exp.company || '',
@@ -234,13 +360,10 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       startDate: exp.start_date ? exp.start_date.split('T')[0] : '',
       endDate: exp.end_date ? exp.end_date.split('T')[0] : '',
       isCurrent: exp.is_current || false,
-      description: exp.description || '',
-      achievements: Array.isArray(exp.achievements) && exp.achievements.length ? exp.achievements : [''],
-      skills: Array.isArray(exp.skills) && exp.skills.length ? exp.skills : [''],
       industry: exp.industry || '',
-      teamSize: exp.team_size?.toString() || '',
-      reportsTo: exp.reports_to || '',
       reasonForLeaving: exp.reason_for_leaving || '',
+      proofFiles: [],
+      existingProof: exp.verification_method || '',
       displayOrder: exp.display_order || 0
     });
     setEditingId(String(exp.id));
@@ -266,88 +389,187 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     resetForm();
   };
 
-  const addAchievement = (): void => {
-    setFormData({
-      ...formData,
-      achievements: [...formData.achievements, '']
-    });
-  };
-
-  const updateAchievement = (index: number, value: string): void => {
-    const newAchievements = [...formData.achievements];
-    newAchievements[index] = value;
-    setFormData({
-      ...formData,
-      achievements: newAchievements
-    });
-  };
-
-  const removeAchievement = (index: number): void => {
-    setFormData({
-      ...formData,
-      achievements: formData.achievements.filter((_, i) => i !== index)
-    });
-  };
-
-  const addSkill = (): void => {
-    setFormData({
-      ...formData,
-      skills: [...formData.skills, '']
-    });
-  };
-
-  const updateSkill = (index: number, value: string): void => {
-    const newSkills = [...formData.skills];
-    newSkills[index] = value;
-    setFormData({
-      ...formData,
-      skills: newSkills
-    });
-  };
-
-  const removeSkill = (index: number): void => {
-    setFormData({
-      ...formData,
-      skills: formData.skills.filter((_, i) => i !== index)
-    });
-  };
-
   const getYear = (dateValue?: string | null): string => {
     if (!dateValue) return 'N/A';
     const date = new Date(dateValue);
     return isNaN(date.getTime()) ? 'N/A' : date.getFullYear().toString();
   };
 
+  const getProofFiles = (value?: string): ProofFile[] => {
+    if (!value) return [];
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed?.files) ? parsed.files : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const openProofViewer = (file: ProofFile): void => {
+    setViewingProofFile(file);
+    setIsProofModalOpen(true);
+  };
+
+  const closeProofViewer = (): void => {
+    setIsProofModalOpen(false);
+    setViewingProofFile(null);
+  };
+
+  const downloadProofFile = async (file: ProofFile): Promise<void> => {
+    if (!file.file_name) {
+      alert('File name not available');
+      return;
+    }
+
+    try {
+      const uploadedFile = formData.proofFiles.find(f => f.name === file.file_name);
+      
+      if (uploadedFile) {
+        const url = URL.createObjectURL(uploadedFile);
+        if (uploadedFile.type === 'application/pdf') {
+          window.open(url, '_blank');
+        } else {
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = uploadedFile.name;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        }
+        return;
+      }
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Please log in to download files');
+        return;
+      }
+
+      const isPDF = file.file_name.toLowerCase().endsWith('.pdf');
+      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.file_name);
+
+      if (isPDF || isImage) {
+        const viewUrl = `/api/v1/candidates/proof/view/${encodeURIComponent(file.file_name)}`;
+        window.open(viewUrl, '_blank');
+      } else {
+        const downloadUrl = `/api/v1/candidates/proof/download/${encodeURIComponent(file.file_name)}`;
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = file.file_name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      alert('Failed to download file. Please try again.');
+    }
+  };
+
+  const renderProofModal = (): React.ReactNode => {
+    if (!isProofModalOpen || !viewingProofFile) return null;
+
+    const isImage = viewingProofFile.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+    const isPDF = viewingProofFile.file_name?.match(/\.pdf$/i);
+    const fileExtension = viewingProofFile.file_name?.split('.').pop()?.toUpperCase() || 'FILE';
+
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeProofViewer}>
+        <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+            <div className="flex items-center gap-3 min-w-0">
+              {getFileIcon(viewingProofFile.file_name || '')}
+              <span className="font-medium text-gray-900 truncate max-w-md">{viewingProofFile.file_name}</span>
+              {viewingProofFile.file_size && (
+                <span className="text-xs text-gray-500 whitespace-nowrap">({formatFileSize(viewingProofFile.file_size)})</span>
+              )}
+              <span className="text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{fileExtension}</span>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button onClick={() => downloadProofFile(viewingProofFile)} className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                <Download size={16} /> Download
+              </button>
+              <button onClick={closeProofViewer} className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+          </div>
+          
+          <div className="p-6 overflow-auto max-h-[calc(90vh-80px)] bg-gray-50">
+            {isImage ? (
+              <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
+                <div className="text-center p-8">
+                  <Image size={80} className="text-gray-300 mx-auto mb-6" />
+                  <p className="text-gray-600 font-medium">Image Preview</p>
+                  <p className="text-sm text-gray-400 mt-1">{viewingProofFile.file_name}</p>
+                  <div className="mt-6 flex gap-3 justify-center">
+                    <button onClick={() => downloadProofFile(viewingProofFile)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                      <Download size={16} /> Download Image
+                    </button>
+                    <button onClick={closeProofViewer} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
+                  </div>
+                </div>
+              </div>
+            ) : isPDF ? (
+              <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
+                <div className="text-center p-8">
+                  <FileText size={80} className="text-red-400 mx-auto mb-6" />
+                  <p className="text-gray-600 font-medium">PDF Document</p>
+                  <p className="text-sm text-gray-400 mt-1">{viewingProofFile.file_name}</p>
+                  <div className="mt-6 flex gap-3 justify-center">
+                    <button onClick={() => downloadProofFile(viewingProofFile)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2">
+                      <Download size={16} /> Download PDF
+                    </button>
+                    <button onClick={closeProofViewer} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
+                <div className="text-center p-8">
+                  <File size={80} className="text-gray-300 mx-auto mb-6" />
+                  <p className="text-gray-600 font-medium">Document</p>
+                  <p className="text-sm text-gray-400 mt-1">{viewingProofFile.file_name}</p>
+                  <div className="mt-6 flex gap-3 justify-center">
+                    <button onClick={() => downloadProofFile(viewingProofFile)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
+                      <Download size={16} /> Download File
+                    </button>
+                    <button onClick={closeProofViewer} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
+      {renderProofModal()}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Work Experience</h2>
           <p className="text-sm text-gray-600">Add your professional experience</p>
         </div>
         {!isAdding && (
-          <button
-            onClick={() => setIsAdding(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={18} />
-            Add Experience
+          <button onClick={() => setIsAdding(true)} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus size={18} /> Add Experience
           </button>
         )}
       </div>
 
-      {/* Experience Form */}
       {isAdding && (
         <div className="bg-gray-50 p-6 rounded-lg border">
-          <h3 className="text-lg font-medium mb-4">
-            {editingId ? 'Edit Work Experience' : 'Add Work Experience'}
-          </h3>
+          <h3 className="text-lg font-medium mb-4">{editingId ? 'Edit Work Experience' : 'Add Work Experience'}</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Company *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Company *</label>
                 <input
                   type="text"
                   required
@@ -358,25 +580,25 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Job Title *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Job Title *</label>
                 <input
                   type="text"
                   required
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Software Engineer"
+                  placeholder="e.g., Senior Software Engineer"
+                  maxLength={250}
                 />
+                <p className={`text-xs mt-1 ${formData.title.length > 100 ? 'text-orange-500' : 'text-gray-400'}`}>
+                  {formData.title.length}/100 characters {formData.title.length > 100 && '⚠️ Will be shortened'}
+                </p>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Employment Type
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Employment Type</label>
                 <select
                   value={formData.employmentType}
                   onChange={(e) => setFormData({...formData, employmentType: e.target.value})}
@@ -391,9 +613,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Location Type
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location Type</label>
                 <select
                   value={formData.locationType}
                   onChange={(e) => setFormData({...formData, locationType: e.target.value})}
@@ -408,9 +628,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Location
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                 <input
                   type="text"
                   value={formData.location}
@@ -420,9 +638,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Industry
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
                 <input
                   type="text"
                   value={formData.industry}
@@ -435,9 +651,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Start Date *
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
                 <input
                   type="date"
                   required
@@ -448,9 +662,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  End Date
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
                 <input
                   type="date"
                   value={formData.endDate}
@@ -463,9 +675,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
             </div>
 
             {dateError && (
-              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                {dateError}
-              </div>
+              <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{dateError}</div>
             )}
 
             <div className="flex items-center gap-2">
@@ -476,129 +686,12 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 onChange={(e) => setFormData({...formData, isCurrent: e.target.checked, endDate: e.target.checked ? '' : formData.endDate})}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <label htmlFor="isCurrent" className="text-sm text-gray-700 cursor-pointer">
-                I currently work here
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Job Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({...formData, description: e.target.value})}
-                rows={4}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Describe your role, responsibilities, and impact..."
-              />
-            </div>
-
-            {/* Achievements */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Key Achievements
-                </label>
-                <button
-                  type="button"
-                  onClick={addAchievement}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  + Add Achievement
-                </button>
-              </div>
-              {formData.achievements.map((achievement, index) => (
-                <div key={index} className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={achievement}
-                    onChange={(e) => updateAchievement(index, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., Increased team productivity by 30%"
-                  />
-                  {formData.achievements.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeAchievement(index)}
-                      className="p-2 text-red-500 hover:text-red-700"
-                    >
-                      <X size={18} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Skills Used */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Skills Used
-                </label>
-                <button
-                  type="button"
-                  onClick={addSkill}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  + Add Skill
-                </button>
-              </div>
-              {formData.skills.map((skill, index) => (
-                <div key={index} className="flex gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={skill}
-                    onChange={(e) => updateSkill(index, e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., React, Node.js, Project Management"
-                  />
-                  {formData.skills.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeSkill(index)}
-                      className="p-2 text-red-500 hover:text-red-700"
-                    >
-                      <X size={18} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Team Size
-                </label>
-                <input
-                  type="number"
-                  value={formData.teamSize}
-                  onChange={(e) => setFormData({...formData, teamSize: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., 5"
-                  min="1"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reports To
-                </label>
-                <input
-                  type="text"
-                  value={formData.reportsTo}
-                  onChange={(e) => setFormData({...formData, reportsTo: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Engineering Manager"
-                />
-              </div>
+              <label htmlFor="isCurrent" className="text-sm text-gray-700 cursor-pointer">I currently work here</label>
             </div>
 
             {!formData.isCurrent && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Reason for Leaving (Optional)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Leaving (Optional)</label>
                 <textarea
                   value={formData.reasonForLeaving}
                   onChange={(e) => setFormData({...formData, reasonForLeaving: e.target.value})}
@@ -609,22 +702,88 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
               </div>
             )}
 
-            <div className="flex gap-3 pt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                <Save size={18} />
-                {loading ? 'Saving...' : 'Save'}
-              </button>
+            <div className="border-t border-gray-200 pt-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Work Proof or Certificate</label>
+              <input
+                ref={proofInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                onChange={handleProofSelect}
+                className="hidden"
+              />
               <button
                 type="button"
-                onClick={handleCancel}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                onClick={() => proofInputRef.current?.click()}
+                disabled={proofUploadStatus === 'uploading'}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
-                <X size={18} />
-                Cancel
+                {proofUploadStatus === 'uploading' ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}
+                {proofUploadStatus === 'uploading' ? 'Uploading proof...' : 'Upload proof'}
+              </button>
+              <p className="mt-1 text-xs text-gray-500">Employment letter, contract, recommendation, payslip, or certificate. Max 3 files, 10MB each.</p>
+
+              {proofUploadStatus !== 'idle' && (
+                <div className={`mt-3 rounded-lg border px-3 py-2 ${
+                  proofUploadStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' :
+                  proofUploadStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' :
+                  'bg-blue-50 border-blue-200 text-blue-700'
+                }`}>
+                  <div className="flex items-center gap-2 text-sm">
+                    {proofUploadStatus === 'uploading' && <Loader size={16} className="animate-spin" />}
+                    {proofUploadStatus === 'success' && <CheckCircle size={16} />}
+                    {proofUploadStatus === 'error' && <AlertCircle size={16} />}
+                    <span className="flex-1">{proofUploadMessage}</span>
+                    {proofUploadStatus === 'uploading' && <span className="text-xs font-medium">{proofUploadProgress}%</span>}
+                  </div>
+                  {proofUploadStatus === 'uploading' && (
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100">
+                      <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${proofUploadProgress}%` }} />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {formData.existingProof && formData.proofFiles.length === 0 && getProofFiles(formData.existingProof).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {getProofFiles(formData.existingProof).map((file, index) => (
+                    <div key={`${file.file_name}-${index}`} className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      {getFileIcon(file.file_name)}
+                      <span className="flex-1 truncate">{file.file_name}</span>
+                      {file.file_size && <span className="text-xs text-green-600">{formatFileSize(file.file_size)}</span>}
+                      <button onClick={() => openProofViewer(file)} className="text-blue-600 hover:text-blue-800 transition-colors" title="View file">
+                        <Eye size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {formData.proofFiles.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {formData.proofFiles.map((file, index) => (
+                    <div key={`${file.name}-${index}`} className="flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-2">
+                      {getFileIcon(file.name)}
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-gray-500">{formatFileSize(file.size)}</span>
+                      <button onClick={() => openProofViewer({ file_name: file.name, file_size: file.size, file_type: file.type })} className="text-blue-600 hover:text-blue-800 transition-colors" title="View file">
+                        <Eye size={16} />
+                      </button>
+                      <button onClick={() => removeProofFile(index)} className="text-gray-400 hover:text-red-600 transition-colors">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button type="submit" disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                <Save size={18} /> {loading ? 'Saving...' : 'Save'}
+              </button>
+              <button type="button" onClick={handleCancel} className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
+                <X size={18} /> Cancel
               </button>
             </div>
           </form>
@@ -640,97 +799,82 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
             <p className="text-sm">Add your professional experience to complete your profile</p>
           </div>
         ) : (
-          experience.map((exp) => (
-            <div key={exp.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2 flex-wrap">
-                    <Briefcase size={20} className="text-green-600" />
-                    <h3 className="text-lg font-semibold text-gray-900">{exp.title}</h3>
-                    {exp.is_current && (
-                      <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                        Current
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 text-gray-600 mb-2 flex-wrap">
-                    <Building size={16} />
-                    <span className="font-medium">{exp.company}</span>
-                    {exp.industry && <span>• {exp.industry}</span>}
-                  </div>
-
-                  <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
-                    <div className="flex items-center gap-1">
-                      <Calendar size={16} />
-                      {getYear(exp.start_date)} - {exp.is_current ? 'Present' : getYear(exp.end_date)}
+          experience.map((exp) => {
+            const proofFiles = getProofFiles(exp.verification_method);
+            return (
+              <div key={exp.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
+                      <Briefcase size={20} className="text-green-600" />
+                      <h3 className="text-lg font-semibold text-gray-900">{exp.title}</h3>
+                      {exp.is_current && (
+                        <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Current</span>
+                      )}
                     </div>
-                    {exp.location && (
+
+                    <div className="flex items-center gap-2 text-gray-600 mb-2 flex-wrap">
+                      <Building size={16} />
+                      <span className="font-medium">{exp.company}</span>
+                      {exp.industry && <span>• {exp.industry}</span>}
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
                       <div className="flex items-center gap-1">
-                        <MapPin size={16} />
-                        {exp.location}
+                        <Calendar size={16} />
+                        {getYear(exp.start_date)} - {exp.is_current ? 'Present' : getYear(exp.end_date)}
+                      </div>
+                      {exp.location && (
+                        <div className="flex items-center gap-1">
+                          <MapPin size={16} /> {exp.location}
+                        </div>
+                      )}
+                      <span className="capitalize">{getEmploymentTypeLabel(exp.employment_type || '')}</span>
+                      {exp.location_type && (
+                        <span className="capitalize">{getLocationTypeLabel(exp.location_type)}</span>
+                      )}
+                    </div>
+
+                    {proofFiles.length > 0 && (
+                      <div className="mb-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 className="text-sm font-medium text-green-800 mb-2 flex items-center gap-2">
+                          <CheckCircle size={15} /> Proof Files ({proofFiles.length})
+                        </h4>
+                        <div className="space-y-1">
+                          {proofFiles.map((file, index) => (
+                            <div key={`${file.file_name}-${index}`} className="flex items-center gap-2 text-xs text-green-700 bg-white/70 rounded-lg px-3 py-2 border border-green-100">
+                              {getFileIcon(file.file_name)}
+                              <span className="flex-1 truncate font-medium">{file.file_name}</span>
+                              {file.file_size && (
+                                <span className="text-green-600 whitespace-nowrap">({formatFileSize(file.file_size)})</span>
+                              )}
+                              <div className="flex items-center gap-1 ml-2">
+                                <button onClick={() => openProofViewer(file)} className="p-1 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors" title="View file">
+                                  <Eye size={14} />
+                                </button>
+                                <button onClick={() => downloadProofFile(file)} className="p-1 text-green-600 hover:text-green-800 hover:bg-green-50 rounded transition-colors" title="Download file">
+                                  <Download size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
-                    <span className="capitalize">{getEmploymentTypeLabel(exp.employment_type || '')}</span>
-                    {exp.location_type && (
-                      <span className="capitalize">{getLocationTypeLabel(exp.location_type)}</span>
-                    )}
                   </div>
 
-                  {exp.description && (
-                    <p className="text-gray-700 text-sm mb-3 whitespace-pre-line">{exp.description}</p>
-                  )}
-
-                  {exp.achievements && exp.achievements.length > 0 && exp.achievements[0] && (
-                    <div className="mb-3">
-                      <h4 className="text-sm font-medium text-gray-700 mb-1">Key Achievements:</h4>
-                      <ul className="text-sm text-gray-600 space-y-1">
-                        {exp.achievements.map((achievement, idx) => (
-                          achievement && achievement.trim() && (
-                            <li key={idx} className="flex items-start gap-2">
-                              <span className="text-green-500 mt-1">•</span>
-                              {achievement}
-                            </li>
-                          )
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {exp.skills && exp.skills.length > 0 && exp.skills.some(s => s && s.trim()) && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {exp.skills.map((skill, idx) => (
-                        skill && skill.trim() && (
-                          <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                            {skill}
-                          </span>
-                        )
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 ml-4">
-                  <button
-                    onClick={() => handleEdit(exp)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="Edit"
-                    type="button"
-                  >
-                    <Edit size={18} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(exp.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Delete"
-                    type="button"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex gap-2 ml-4">
+                    <button onClick={() => handleEdit(exp)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit" type="button">
+                      <Edit size={18} />
+                    </button>
+                    <button onClick={() => handleDelete(exp.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete" type="button">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
     </div>

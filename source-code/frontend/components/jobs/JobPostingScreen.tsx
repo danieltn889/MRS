@@ -161,8 +161,6 @@ const ComboBox = ({ value, onChange, options, placeholder, hasError }: {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-
-
   return (
     <div ref={ref} style={{ position: 'relative' }}>
       <div style={{ position: 'relative' }}>
@@ -1136,27 +1134,25 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     update(field, skills);
   };
 
-  const goNext = () => {
+  // ── FREE NAVIGATION — validate for warnings only, never block ──────────────
+  const goToStep = (step: number) => {
     setTouched(true);
-    const e = validate(formData, currentStep, isEditing);
-    setErrors(e);
-    if (Object.keys(e).length > 0) return;
-    setCurrentStep(s => Math.min(STEPS.length, s + 1));
+    setErrors(validate(formData, currentStep, isEditing));
+    setCurrentStep(step);
+    // Scroll form content back to top
+    window.scrollTo({ top: 120, behavior: 'smooth' });
   };
 
-  const goPrev = () => {
-    setCurrentStep(s => Math.max(1, s - 1));
-    setErrors({});
-  };
+  const goNext = () => goToStep(Math.min(STEPS.length, currentStep + 1));
+  const goPrev = () => goToStep(Math.max(1, currentStep - 1));
 
-  // ─── FIXED loadJob ──────────────────────────────────────────────────────────
+  // ─── loadJob ──────────────────────────────────────────────────────────────
   const loadJob = async () => {
     try {
       setPageLoading(true);
       const { data: job } = await getJob(jobId!);
       const edObj: any = parseJsonField(job.education_required ?? job.educationLevel, {});
 
-      // ── Qualification entries ──
       let qualificationEntries: QualificationEntry[] = [];
       if (edObj.qualification_entries && Array.isArray(edObj.qualification_entries) && edObj.qualification_entries.length > 0) {
         qualificationEntries = edObj.qualification_entries.map((entry: any, i: number) => ({
@@ -1175,16 +1171,10 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         }
       }
 
-      // ── FIXED: Experience requirements — check all possible locations ──
       let experienceRequirements: ExperienceRequirement[] = [];
-
-      // Priority 1: inside educationLevel.experience_requirements
       const expFromEd = edObj.experience_requirements;
-      // Priority 2: top-level experience_requirements (snake_case from API)
       const expFromTopSnake = job.experience_requirements;
-      // Priority 3: top-level experienceRequirements (camelCase)
       const expFromTopCamel = job.experienceRequirements;
-
       const expSource =
         Array.isArray(expFromEd) && expFromEd.length > 0 ? expFromEd
           : Array.isArray(expFromTopSnake) && expFromTopSnake.length > 0 ? expFromTopSnake
@@ -1200,12 +1190,10 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         }))
         .filter((e: ExperienceRequirement) => Boolean(e.title));
 
-      // ── Locations ──
       const locations: string[] = Array.isArray(job.locations)
         ? job.locations.map((l: any) => typeof l === 'string' ? l : l.is_remote ? 'Remote' : `${l.city || ''}, ${l.country || ''}`.trim().replace(/^,|,$/g, ''))
         : [''];
 
-      // ── Determine salaryType from saved data ──
       const hasSalaryMin = job.salary_min != null;
       const hasSalaryMax = job.salary_max != null;
       let salaryType: 'range' | 'above' | 'under' | 'negotiable' = 'range';
@@ -1235,7 +1223,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         requiredSkills: toArray(job.skills_required),
         preferredSkills: toArray(job.skills_preferred),
         experienceLevel: job.experience_level || 'mid',
-        experienceRequirements,   // ← now correctly populated
+        experienceRequirements,
         languages: toArray(edObj.languages ?? job.language_requirements).map((l: any, i: number) => ({
           id: l.id ? String(l.id) : String(Date.now() + i),
           name: typeof l === 'string' ? l : l.name || '',
@@ -1263,7 +1251,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         publishedAt: job.published_at ? new Date(job.published_at).toISOString().split('T')[0] : DEFAULT_FORM_DATA.publishedAt,
         expiresAt: job.expires_at ? new Date(job.expires_at).toISOString().split('T')[0] : DEFAULT_FORM_DATA.expiresAt,
         visibility: job.visibility || 'public',
-
         applicationLimit: job.application_limit?.toString() || '100000',
         tags: job.tags || [],
         noExperienceNeeded: edObj.no_experience_needed || false,
@@ -1282,13 +1269,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
   };
 
   const handleSave = async (action: 'draft' | 'publish') => {
-    // Reset all editing states
     setEditingExpIdx(null);
     setEditingLangIdx(null);
     setEditingCertIdx(null);
     setEditingDocIdx(null);
 
-    // ✅ Auto-commit any pending new experience entry
     let finalFormData = { ...formData };
 
     if (newExp.title.trim()) {
@@ -1296,12 +1281,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         ...finalFormData,
         experienceRequirements: [
           ...finalFormData.experienceRequirements,
-          {
-            id: `${Date.now()}-auto`,
-            title: newExp.title,
-            years: newExp.years,
-            description: newExp.description || '',
-          },
+          { id: `${Date.now()}-auto`, title: newExp.title, years: newExp.years, description: newExp.description || '' },
         ],
         noExperienceNeeded: false,
       };
@@ -1309,17 +1289,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
       setNewExp({ title: '', years: '', description: '' });
     }
 
-    // ✅ Auto-commit any pending new certification
     if (newCert.name.trim()) {
       finalFormData = {
         ...finalFormData,
         certifications: [
           ...finalFormData.certifications,
-          {
-            id: `${Date.now()}-cert`,
-            name: newCert.name,
-            issuer: newCert.issuer || '',
-          },
+          { id: `${Date.now()}-cert`, name: newCert.name, issuer: newCert.issuer || '' },
         ],
         noCertificationsNeeded: false,
       };
@@ -1327,17 +1302,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
       setNewCert({ name: '', issuer: '' });
     }
 
-    // ✅ Auto-commit any pending new document
     if (newDoc.name.trim()) {
       finalFormData = {
         ...finalFormData,
         requiredDocuments: [
           ...finalFormData.requiredDocuments,
-          {
-            id: `${Date.now()}-doc`,
-            name: newDoc.name,
-            is_required: newDoc.is_required,
-          },
+          { id: `${Date.now()}-doc`, name: newDoc.name, is_required: newDoc.is_required },
         ],
         noDocumentsNeeded: false,
       };
@@ -1345,18 +1315,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
       setNewDoc({ name: '', is_required: true });
     }
 
-    // ✅ Auto-commit any pending new language
     if (newLang.name.trim()) {
       finalFormData = {
         ...finalFormData,
         languages: [
           ...finalFormData.languages,
-          {
-            id: `${Date.now()}-lang`,
-            name: newLang.name,
-            proficiency: newLang.proficiency,
-            is_required: newLang.is_required,
-          },
+          { id: `${Date.now()}-lang`, name: newLang.name, proficiency: newLang.proficiency, is_required: newLang.is_required },
         ],
         noLanguagesNeeded: false,
       };
@@ -1407,7 +1371,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         qualificationEntries = [{ degree: finalFormData.qualifications, fields_of_study: [] }];
       }
 
-      // Build experience requirements without id field for API
       const experienceRequirements: Omit<ExperienceRequirement, 'id'>[] =
         !finalFormData.noExperienceNeeded && finalFormData.experienceRequirements.length > 0
           ? finalFormData.experienceRequirements.map(exp => ({
@@ -1444,7 +1407,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         };
       })();
 
-      // Build qualifications text for display
       const qualificationsText = finalFormData.qualifications?.trim() ||
         (finalFormData.qualificationEntries.length > 0
           ? finalFormData.qualificationEntries.map(e =>
@@ -1502,7 +1464,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         aiMatchRequiredScore: finalFormData.aiMatchRequiredScore || 70,
       };
 
-      // Debug log to see what's being sent
       console.log('📤 Sending job data:', {
         certifications: jobData.educationLevel.certifications,
         requiredDocuments: jobData.requiredDocuments,
@@ -1526,6 +1487,20 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      setLoading(true);
+      await deleteJob(jobId!);
+      alert('Job deleted.');
+      onBack();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || 'Failed to delete job.');
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (pageLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg, fontFamily: font }}>
       <div style={{ textAlign: 'center' }}>
@@ -1542,8 +1517,13 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     <div style={{ minHeight: '100vh', background: C.bg, fontFamily: font }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
-      {/* Top bar */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '0 32px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 100, boxShadow: C.shadow }}>
+      {/* ── Top bar (sticky) ── */}
+      <div style={{
+        background: C.surface, borderBottom: `1px solid ${C.border}`,
+        padding: '0 32px', height: 64,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        position: 'sticky', top: 0, zIndex: 100, boxShadow: C.shadow,
+      }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button onClick={onBack} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'none', cursor: 'pointer', fontSize: 13, color: C.textMuted }}>
             <ArrowLeft size={15} /> Back
@@ -1552,7 +1532,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
           <h1 style={{ fontSize: 17, fontWeight: 700, color: C.text }}>
             {isPreview ? 'Preview Job Posting' : isEditing ? 'Edit Job Posting' : 'New Job Posting'}
           </h1>
-          {!isPreview && <span style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>Step {currentStep} of {STEPS.length}</span>}
+          {!isPreview && (
+            <span style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>
+              Step {currentStep} of {STEPS.length}
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {!isPreview ? (
@@ -1576,34 +1560,87 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         </div>
       </div>
 
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 24px' }}>
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 24px 120px 24px' }}>
         {!isPreview ? (
           <>
-            {/* Step progress */}
-            <div style={{ display: 'flex', gap: 0, marginBottom: 28, background: C.surface, borderRadius: C.radius, border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: C.shadow }}>
-              {STEPS.map((step, i) => {
-                const active = currentStep === step.id;
-                const done = currentStep > step.id;
-                return (
-                  <button key={step.id} onClick={() => { if (done || active) setCurrentStep(step.id); }}
-                    style={{ flex: 1, padding: '13px 6px', border: 'none', background: active ? C.primary : done ? C.primaryGhost : 'transparent', color: active ? '#fff' : done ? C.primary : C.textMuted, cursor: (done || active) ? 'pointer' : 'default', fontSize: 12, fontWeight: 600, borderRight: i < STEPS.length - 1 ? `1px solid ${C.border}` : 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, transition: 'all .15s' }}>
-                    <span style={{ width: 22, height: 22, borderRadius: '50%', fontSize: 11, background: active ? 'rgba(255,255,255,.25)' : done ? C.primary : C.border, color: done || active ? '#fff' : C.textMuted, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
-                      {done ? <Check size={12} /> : step.id}
-                    </span>
-                    {step.shortTitle}
-                  </button>
-                );
-              })}
+            {/* ── Step tabs — STICKY below top bar ── */}
+            <div style={{
+              position: 'sticky',
+              top: 64,
+              zIndex: 90,
+              background: C.bg,
+              paddingTop: 12,
+              paddingBottom: 12,
+              marginBottom: 4,
+            }}>
+              <div style={{
+                display: 'flex', gap: 0,
+                background: C.surface, borderRadius: C.radius,
+                border: `1px solid ${C.border}`, overflow: 'hidden', boxShadow: C.shadow,
+              }}>
+                {STEPS.map((step, i) => {
+                  const active = currentStep === step.id;
+                  const done = currentStep > step.id;
+                  const hasStepError = touched && Object.keys(errors).some(k => {
+                    const stepMap: any = {
+                      title: 1, description: 1, locations: 1,
+                      salaryMin: 2, salaryMax: 2,
+                      requiredSkills: 3,
+                      screeningQuestions: 5, publishedAt: 5, expiresAt: 5, applicationLimit: 5,
+                    };
+                    return stepMap[k] === step.id;
+                  });
+                  return (
+                    <button
+                      key={step.id}
+                      onClick={() => goToStep(step.id)}
+                      style={{
+                        flex: 1, padding: '13px 6px', border: 'none',
+                        background: active ? C.primary : done ? C.primaryGhost : 'transparent',
+                        color: active ? '#fff' : done ? C.primary : C.textMuted,
+                        cursor: 'pointer',
+                        fontSize: 12, fontWeight: 600,
+                        borderRight: i < STEPS.length - 1 ? `1px solid ${C.border}` : 'none',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                        transition: 'all .15s',
+                        position: 'relative',
+                      }}
+                    >
+                      <span style={{
+                        width: 22, height: 22, borderRadius: '50%', fontSize: 11,
+                        background: active ? 'rgba(255,255,255,.25)' : done ? C.primary : C.border,
+                        color: done || active ? '#fff' : C.textMuted,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
+                      }}>
+                        {done ? <Check size={12} /> : step.id}
+                      </span>
+                      {step.shortTitle}
+                      {/* Red dot indicator if this step has errors */}
+                      {hasStepError && !active && (
+                        <span style={{
+                          position: 'absolute', top: 6, right: 8,
+                          width: 7, height: 7, borderRadius: '50%',
+                          background: C.danger, border: '1.5px solid #fff',
+                        }} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
+            {/* Error warning banner */}
             {touched && hasErrors && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: C.dangerGhost, border: `1px solid ${C.danger}30`, borderRadius: 10, marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: C.dangerGhost, border: `1px solid ${C.danger}30`, borderRadius: 10, marginBottom: 16 }}>
                 <AlertCircle size={16} color={C.danger} />
-                <span style={{ fontSize: 13, color: C.danger, fontWeight: 500 }}>Please fix the errors below before continuing.</span>
+                <span style={{ fontSize: 13, color: C.danger, fontWeight: 500 }}>
+                  Some fields need attention — you can still navigate freely, but fix them before publishing.
+                </span>
               </div>
             )}
 
-            <div style={{ background: C.surface, borderRadius: C.radius, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: 32 }}>
+            {/* Form card — extra bottom padding so sticky nav doesn't overlap content */}
+            <div style={{ background: C.surface, borderRadius: C.radius, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: 32, paddingBottom: 40 }}>
 
               {/* ── STEP 1 ── */}
               {currentStep === 1 && (
@@ -1765,7 +1802,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </Sel>
                   </FormField>
 
-                  {/* Experience Requirements */}
                   <SectionCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontWeight: 600, fontSize: 14, color: C.text }}>Specific Experience Requirements</span>
@@ -1847,7 +1883,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     )}
                   </SectionCard>
 
-                  {/* Required Skills */}
                   <FormField label="Required Skills" required error={errors.requiredSkills} hint="Click a skill chip to edit its proficiency level.">
                     <SkillInput
                       skills={formData.requiredSkills}
@@ -1858,26 +1893,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                       color={C.primary}
                       placeholder="Search skills (e.g. React, Python)…" />
                   </FormField>
-
-                  {/* Preferred Skills */}
-                  <FormField label="Preferred Skills (optional)" hint="Nice-to-have skills. Click a skill chip to edit its proficiency level.">
-                    <SkillInput
-                      skills={formData.preferredSkills}
-                      onAdd={name => addSkill(name, false)}
-                      onRemove={i => update('preferredSkills', formData.preferredSkills.filter((_, idx) => idx !== i))}
-                      onUpdateProficiency={(i, level) => updateSkillProficiency(i, level, false)}
-                      suggestions={liveSkills}
-                      color={C.success}
-                      placeholder="Search preferred skills…" />
-                  </FormField>
                 </FormSection>
               )}
 
               {/* ── STEP 4 ── */}
               {currentStep === 4 && (
                 <FormSection title="Languages & Documents" icon={<FileText size={16} color={C.primary} />}>
-
-                  {/* Languages */}
                   <SectionCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontWeight: 600, fontSize: 14 }}>Language Requirements</span>
@@ -1955,7 +1976,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     )}
                   </SectionCard>
 
-                  {/* Certifications */}
                   <SectionCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontWeight: 600, fontSize: 14 }}>Certifications</span>
@@ -2007,11 +2027,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                               if (!newCert.name.trim()) return alert('Enter a certification name.');
                               setFormData(prev => ({
                                 ...prev,
-                                certifications: [...prev.certifications, {
-                                  id: Date.now().toString(),
-                                  name: newCert.name,
-                                  issuer: newCert.issuer || ''
-                                }],
+                                certifications: [...prev.certifications, { id: Date.now().toString(), name: newCert.name, issuer: newCert.issuer || '' }],
                                 noCertificationsNeeded: false
                               }));
                               setNewCert({ name: '', issuer: '' });
@@ -2024,7 +2040,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     )}
                   </SectionCard>
 
-                  {/* Required Documents */}
                   <SectionCard>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontWeight: 600, fontSize: 14 }}>Required Documents</span>
@@ -2077,11 +2092,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                               if (!newDoc.name.trim()) return alert('Enter a document name.');
                               setFormData(prev => ({
                                 ...prev,
-                                requiredDocuments: [...prev.requiredDocuments, {
-                                  id: Date.now().toString(),
-                                  name: newDoc.name,
-                                  is_required: newDoc.is_required
-                                }],
+                                requiredDocuments: [...prev.requiredDocuments, { id: Date.now().toString(), name: newDoc.name, is_required: newDoc.is_required }],
                                 noDocumentsNeeded: false
                               }));
                               setNewDoc({ name: '', is_required: true });
@@ -2174,13 +2185,6 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                             style={{ ...addBtnStyle, fontSize: 12, padding: '5px 10px' }}><Plus size={12} /> Add Option</button>
                         </div>
                       )}
-
-                      <div style={{ marginTop: 10 }}>
-                        <input value={q.help_text || ''}
-                          onChange={e => update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, help_text: e.target.value } : x))}
-                          placeholder="Help text shown to applicants (optional)"
-                          style={{ ...inputBase, fontSize: 13, color: C.textMuted, padding: '7px 12px' }} />
-                      </div>
                     </div>
                   ))}
 
@@ -2316,14 +2320,62 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 </FormSection>
               )}
 
-              {/* Navigation */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 32, paddingTop: 24, borderTop: `1px solid ${C.border}` }}>
-                <button onClick={goPrev} disabled={currentStep === 1} style={{ ...ghostBtnStyle, opacity: currentStep === 1 ? 0.4 : 1 }}>
+            </div>{/* end form card */}
+
+            {/* ── Bottom navigation — STICKY at bottom of viewport ── */}
+            <div style={{
+              position: 'sticky',
+              bottom: 0,
+              zIndex: 95,
+              background: C.surface,
+              borderTop: `1px solid ${C.border}`,
+              boxShadow: '0 -4px 20px rgba(0,0,0,.08)',
+              padding: '14px 32px',
+            }}>
+              <div style={{
+                maxWidth: 860,
+                margin: '0 auto',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}>
+                <button
+                  onClick={goPrev}
+                  disabled={currentStep === 1}
+                  style={{ ...ghostBtnStyle, opacity: currentStep === 1 ? 0.4 : 1 }}
+                >
                   <ChevronLeft size={16} /> Previous
                 </button>
-                <span style={{ fontSize: 12, color: C.textMuted }}>Step {currentStep} of {STEPS.length}</span>
+
+                {/* Step dots — quick visual indicator */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {STEPS.map(step => (
+                    <button
+                      key={step.id}
+                      onClick={() => goToStep(step.id)}
+                      title={step.shortTitle}
+                      style={{
+                        width: currentStep === step.id ? 24 : 8,
+                        height: 8,
+                        borderRadius: 4,
+                        border: 'none',
+                        background: currentStep === step.id
+                          ? C.primary
+                          : currentStep > step.id
+                            ? `${C.primary}60`
+                            : C.border,
+                        cursor: 'pointer',
+                        transition: 'all .2s',
+                        padding: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+
                 {currentStep < STEPS.length ? (
-                  <button onClick={goNext} style={primaryBtnStyle}>Next <ChevronRight size={16} /></button>
+                  <button onClick={goNext} style={primaryBtnStyle}>
+                    Next <ChevronRight size={16} />
+                  </button>
                 ) : (
                   <button onClick={() => handleSave('publish')} disabled={loading} style={primaryBtnStyle}>
                     {loading ? <Loader2 size={14} style={{ animation: 'spin .8s linear infinite' }} /> : null}
@@ -2332,6 +2384,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 )}
               </div>
             </div>
+
           </>
         ) : (
           /* ── PREVIEW ── */

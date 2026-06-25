@@ -102,6 +102,25 @@ export const uploadProfilePhoto = async (photoFile: File) => {
   }
 };
 
+export const uploadCandidateDocument = async (documentFile: File, documentType: string = 'candidate_document') => {
+  try {
+    const formData = new FormData();
+    formData.append('document', documentFile);
+    formData.append('documentType', documentType);
+
+    const response = await fetch(`${API_BASE_URL}/candidates/documents`, {
+      method: 'POST',
+      headers: getFormDataHeaders(),
+      body: formData,
+    });
+
+    return await handleResponse(response);
+  } catch (error: any) {
+    console.error('Error uploading candidate document:', error);
+    throw error;
+  }
+};
+
 /**
  * Complete profile (mark as complete)
  * @returns {Promise<Object>} Profile completion result
@@ -510,11 +529,17 @@ export const deletePortfolioLink = async (id: string) => {
  * @param {boolean} isPrimary - Whether this should be the primary resume
  * @returns {Promise<Object>} Upload response with file URL
  */
-export const uploadResume = async (resumeFile: File, isPrimary: boolean = false) => {
+export const uploadResume = async (resumeFile: File, isPrimary: boolean = false, parsedData?: any) => {
   try {
     const formData = new FormData();
     formData.append('resume', resumeFile);
     formData.append('isPrimary', String(isPrimary));
+    if (parsedData) {
+      formData.append('parsedData', JSON.stringify(parsedData));
+      if (parsedData.extractedText) {
+        formData.append('extractedText', parsedData.extractedText);
+      }
+    }
 
     const response = await fetch(`${API_BASE_URL}/candidates/resume`, {
       method: 'POST',
@@ -534,25 +559,51 @@ export const uploadResume = async (resumeFile: File, isPrimary: boolean = false)
  * @param {string} id - Resume ID
  * @returns {Promise<Blob>} Resume file blob
  */
-export const downloadResume = async (id: string) => {
+export const downloadResume = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const token = localStorage.getItem('authToken');
-    const response = await fetch(`${API_BASE_URL}/candidates/resume/${id}/download`, {
-      method: 'GET',
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-      },
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    const { id } = req.params;
+    
+    // Log to debug
+    console.log('Downloading resume with ID:', id);
+    console.log('User ID:', req.user!.id);
+    
+    const result = await query(
+      'SELECT file_key, file_name, mime_type FROM resumes WHERE id = $1 AND user_id = $2',
+      [id, req.user!.id]
+    );
+    
+    console.log('Query result:', result.rows);
+    
+    if (result.rows.length === 0) {
+      res.status(404).json({
+        success: false,
+        message: 'Resume not found'
+      });
+      return;
     }
-
-    return await response.blob();
-  } catch (error: any) {
-    console.error('Error downloading resume:', error);
-    throw error;
+    
+    const resume = result.rows[0];
+    const uploadPath = process.env.UPLOAD_PATH || './uploads';
+    const filePath = path.join(uploadPath, resume.file_key);
+    
+    console.log('Looking for file at:', filePath);
+    
+    if (!fs.existsSync(filePath)) {
+      console.log('File not found at:', filePath);
+      res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+      return;
+    }
+    
+    res.download(filePath, resume.file_name);
+  } catch (error) {
+    logger.error('Error downloading resume:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to download resume'
+    });
   }
 };
 
@@ -693,6 +744,7 @@ export default {
   getCandidateProfile,
   updateCandidateProfile,
   uploadProfilePhoto,
+  uploadCandidateDocument,
   completeProfile,
   getProfileCompletionStatus,
   

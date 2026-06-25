@@ -22,9 +22,6 @@ const OPTIONS = [
   { key: 'allowPause',     label: 'Allow candidates to pause and resume' },
   { key: 'showTimer',      label: 'Display countdown timer' },
   { key: 'randomizeTasks', label: 'Randomize task order' },
-  { key: 'allowHints',     label: 'Provide hints during tasks' },
-  { key: 'recordScreen',   label: 'Record screen activity' },
-  { key: 'recordAudio',    label: 'Record audio during simulation' },
 ];
 
 const Step6Settings: React.FC<Props> = ({ simulation, setSimulation }) => {
@@ -88,69 +85,7 @@ const Step6Settings: React.FC<Props> = ({ simulation, setSimulation }) => {
         </div>
       </div>
 
-      {/* Time Limit */}
-      <div className={`rounded-xl border p-4 space-y-3 ${timeLimitErr ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
-        <div className="flex items-center justify-between">
-          <label className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <Clock size={15} className="text-purple-500" />
-            Time Limit (minutes)
-            <span className="text-xs font-normal text-gray-400">— optional</span>
-          </label>
-          {/* Total task time badge */}
-          {totalTaskMins > 0 && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-purple-100 text-purple-700 font-medium">
-              Total task time: {totalTaskMins} min
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
-          <input
-            type="number" min={0}
-            value={timeLimitVal || ''}
-            onChange={e => setSettings({ timeLimit: Number(e.target.value) || 0 })}
-            placeholder="Leave blank for no limit"
-            className={`flex-1 px-3 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent transition-all ${
-              timeLimitErr ? 'border-red-400 bg-white' : 'border-gray-200 bg-white'
-            }`}
-          />
-          {timeLimitSet && !timeLimitErr && (
-            <div className="flex items-center gap-1.5 text-green-600 text-sm font-medium shrink-0">
-              <CheckCircle size={15} /> Valid
-            </div>
-          )}
-          {timeLimitSet && (
-            <button
-              onClick={() => setSettings({ timeLimit: 0 })}
-              className="text-xs text-gray-400 hover:text-red-500 shrink-0 transition-colors"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-
-        {timeLimitErr && (
-          <div className="flex items-center gap-2 text-sm text-red-700">
-            <AlertCircle size={14} className="shrink-0" />
-            Time limit ({timeLimitVal} min) is less than total task duration ({totalTaskMins} min).
-            Must be <strong>≥ {totalTaskMins} min</strong>.
-          </div>
-        )}
-
-        {!timeLimitSet && totalTaskMins > 0 && (
-          <p className="text-xs text-gray-400">
-            No limit set — candidates will have unlimited time.
-            Recommended minimum: <strong>{totalTaskMins} min</strong> (total task time).
-          </p>
-        )}
-
-        {timeLimitSet && !timeLimitErr && (
-          <p className="text-xs text-gray-500">
-            Candidates have <strong>{timeLimitVal} min</strong> to complete all tasks
-            ({timeLimitVal - totalTaskMins} min buffer above task total).
-          </p>
-        )}
-      </div>
+      
 
       {/* Tools */}
       <div className="bg-gray-50 rounded-xl p-5">

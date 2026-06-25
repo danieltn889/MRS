@@ -29,10 +29,7 @@ interface SkillsSectionProps {
 interface FormData {
   skillName: string;
   proficiencyLevel: number;
-  yearsExperience: number;
   isPrimary: boolean;
-  lastUsed: string;
-  skillContext: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -118,11 +115,12 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
 
   // form state
   const [formData, setFormData] = useState<FormData>({
-    skillName: '', proficiencyLevel: 3, yearsExperience: 0,
-    isPrimary: false, lastUsed: '', skillContext: '',
+    skillName: '',
+    proficiencyLevel: 3,
+    isPrimary: false,
   });
-  const [fieldError, setFieldError]   = useState('');  // skill name inline error
-  const [formError, setFormError]     = useState('');  // submit-level error
+  const [fieldError, setFieldError]   = useState('');
+  const [formError, setFormError]     = useState('');
 
   const skills: UserSkill[] = profile?.skills || [];
 
@@ -143,7 +141,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
   };
 
   const resetForm = () => {
-    setFormData({ skillName: '', proficiencyLevel: 3, yearsExperience: 0, isPrimary: false, lastUsed: '', skillContext: '' });
+    setFormData({ skillName: '', proficiencyLevel: 3, isPrimary: false });
     setFieldError('');
     setFormError('');
   };
@@ -191,10 +189,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
       const payload = {
         skillName: formData.skillName.trim(),
         proficiencyLevel: formData.proficiencyLevel,
-        yearsExperience: formData.yearsExperience,
         isPrimary: formData.isPrimary,
-        lastUsed: formData.lastUsed || null,
-        skillContext: formData.skillContext,
       };
 
       if (editingId) {
@@ -224,10 +219,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
     setFormData({
       skillName: getSkillName(skill),
       proficiencyLevel: skill.proficiency_level || 3,
-      yearsExperience: skill.years_experience || 0,
       isPrimary: skill.is_primary || false,
-      lastUsed: skill.last_used ? skill.last_used.split('T')[0] : '',
-      skillContext: skill.skill_context || '',
     });
     setFieldError('');
     setFormError('');
@@ -353,7 +345,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                 )}
               </div>
 
-              {/* Proficiency Level */}
+              {/* ✅ Proficiency Level - All labels on one line */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Proficiency Level
@@ -374,29 +366,13 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                     <div key={n} className={`flex-1 h-1.5 rounded-full transition-colors ${n <= formData.proficiencyLevel ? profBar(formData.proficiencyLevel) : 'bg-gray-200'}`} />
                   ))}
                 </div>
+                {/* ✅ All labels in one horizontal line */}
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
-                  <span>Beginner</span><span>Intermediate</span><span>Advanced</span><span>Expert</span><span>Master</span>
-                </div>
-              </div>
-
-              {/* Years + Last Used */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Years of Experience</label>
-                  <input type="number" min="0" max="50" step="0.5"
-                    value={formData.yearsExperience}
-                    onChange={e => setFormData(p => ({ ...p, yearsExperience: parseFloat(e.target.value) || 0 }))}
-                    className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Last Used</label>
-                  <input type="date"
-                    value={formData.lastUsed}
-                    onChange={e => setFormData(p => ({ ...p, lastUsed: e.target.value }))}
-                    max={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <span>Beginner</span>
+                  <span>Intermediate</span>
+                  <span>Advanced</span>
+                  <span>Expert</span>
+                  <span>Master</span>
                 </div>
               </div>
 
@@ -412,20 +388,6 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                   <p className="text-xs text-gray-400">Primary skills appear first and are highlighted on your profile</p>
                 </div>
               </label>
-
-              {/* Context */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Skill Context <span className="font-normal text-gray-400">(optional)</span></label>
-                <textarea
-                  value={formData.skillContext}
-                  onChange={e => setFormData(p => ({ ...p, skillContext: e.target.value }))}
-                  rows={3}
-                  maxLength={400}
-                  className="w-full px-3 py-2.5 border border-gray-300 bg-white rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g. Used daily for frontend development at Company X"
-                />
-                <p className="text-xs text-gray-400 text-right mt-0.5">{formData.skillContext.length}/400</p>
-              </div>
 
               {/* Form-level error */}
               {formError && (
@@ -511,26 +473,12 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                     </div>
                   </div>
 
-                  {/* Meta */}
-                  <div className="space-y-1.5 text-xs text-gray-500">
-                    {skill.years_experience != null && skill.years_experience > 0 && (
-                      <div className="flex justify-between">
-                        <span>Experience</span>
-                        <span className="font-semibold text-gray-700">{skill.years_experience} yrs</span>
-                      </div>
-                    )}
-                    {skill.last_used && (
-                      <div className="flex justify-between">
-                        <span>Last used</span>
-                        <span className="font-semibold text-gray-700">{new Date(skill.last_used).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {skill.skill_context && (
-                    <p className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-600 line-clamp-2">
-                      {skill.skill_context}
-                    </p>
+                  {/* Primary badge at bottom too */}
+                  {skill.is_primary && (
+                    <div className="mt-2 flex items-center gap-1">
+                      <Star size={12} className="text-blue-600" fill="currentColor" />
+                      <span className="text-xs text-blue-600 font-medium">Primary Skill</span>
+                    </div>
                   )}
                 </div>
               ))}
@@ -545,8 +493,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
             <ul className="text-xs text-blue-700 space-y-1">
               <li>• Add skills relevant to the roles you're targeting</li>
               <li>• Mark your strongest skills as <strong>Primary</strong></li>
-              <li>• Include context to show how you've applied each skill</li>
-              <li>• Keep skills up to date as you grow</li>
+              <li>• Keep your skills up to date as you grow</li>
             </ul>
           </div>
         )}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, DollarSign, AlertCircle, CheckCircle, X, Info } from 'lucide-react';
+import { Save, AlertCircle, CheckCircle, X, DollarSign, Info } from 'lucide-react';
 import { updateCandidateProfile, updateJobPreferences } from '../../services/candidateAPI';
 
 // =====================================================
@@ -38,7 +38,7 @@ interface CompletionStatus {
   };
 }
 
-interface PreferencesProfileData {
+interface ProfileData {
   profile?: {
     job_preferences?: JobPreferences;
     first_name?: string;
@@ -62,12 +62,11 @@ interface PreferencesSectionProps {
   profile: ProfileData | null;
   onUpdate: () => void;
   completionStatus?: any;
-  onCompletionUpdate?: () => void;  // ADD THIS
+  onCompletionUpdate?: () => void;
 }
 
 interface FormData {
   preferredJobTypes: string[];
-  preferredIndustries: string[];
   preferredLocations: string[];
   preferredLanguages: string[];
   salaryMin: string;
@@ -92,7 +91,6 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
   const [loading, setLoading] = useState<boolean>(false);
   const [formData, setFormData] = useState<FormData>({
     preferredJobTypes: [],
-    preferredIndustries: [],
     preferredLocations: [],
     preferredLanguages: [],
     salaryMin: '',
@@ -114,7 +112,6 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
   const [saveMessage, setSaveMessage]   = useState('');
 
   const [customInputs, setCustomInputs] = useState({
-    industry: '',
     location: '',
     language: ''
   });
@@ -125,7 +122,6 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     if (prefs) {
       setFormData({
         preferredJobTypes: normalizeStringArray(prefs.preferred_job_types || prefs.job_types),
-        preferredIndustries: normalizeStringArray(prefs.preferred_industries || prefs.industries),
         preferredLocations: normalizeStringArray(prefs.preferred_locations || prefs.locations),
         preferredLanguages: normalizeStringArray(prefs.preferred_languages || prefs.languages || profile?.profile?.languages),
         salaryMin: prefs.salary_min?.toString() || '',
@@ -169,15 +165,29 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     values.map((value) => value.trim()).filter(Boolean)
   ));
 
+  // ✅ UPDATED: Validate salary - allow either min OR max independently
   const validateSalary = (min: string, max: string): { min: string; max: string; range: string } => {
     const errors = { min: '', max: '', range: '' };
+    
+    // If both are empty, it's valid (optional)
+    if (!min && !max) {
+      return errors;
+    }
+
     const minVal = min ? parseInt(min) : null;
     const maxVal = max ? parseInt(max) : null;
 
-    if (min && minVal !== null && minVal < 0)   errors.min = 'Minimum salary cannot be negative';
-    if (max && maxVal !== null && maxVal < 0)   errors.max = 'Maximum salary cannot be negative';
-    if (min && maxVal === null && !errors.min)   errors.range = 'Maximum not set — enter a maximum or clear the minimum to leave salary unset';
-    if (max && minVal === null && !errors.max)   errors.range = 'Minimum not set — enter a minimum or clear the maximum to leave salary unset';
+    // Validate min if provided
+    if (minVal !== null && minVal < 0) {
+      errors.min = 'Minimum salary cannot be negative';
+    }
+    
+    // Validate max if provided
+    if (maxVal !== null && maxVal < 0) {
+      errors.max = 'Maximum salary cannot be negative';
+    }
+
+    // Only validate range if BOTH are provided
     if (minVal !== null && maxVal !== null) {
       if (minVal > maxVal) {
         errors.max = 'Maximum must be greater than the minimum';
@@ -186,6 +196,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
         errors.range = 'Minimum equals maximum — a range gives employers more flexibility';
       }
     }
+    
     return errors;
   };
 
@@ -214,10 +225,8 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     try {
       const submitData = {
         preferred_job_types: formData.preferredJobTypes,
-        preferred_industries: uniqueValues(formData.preferredIndustries),
         preferred_locations: uniqueValues(formData.preferredLocations),
         preferred_languages: uniqueValues(formData.preferredLanguages),
-        industries: uniqueValues(formData.preferredIndustries),
         locations: uniqueValues(formData.preferredLocations),
         languages: uniqueValues(formData.preferredLanguages),
         salary_min: formData.salaryMin ? parseInt(formData.salaryMin) : null,
@@ -252,7 +261,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
   };
 
   const handleCheckboxChange = (
-    field: keyof Pick<FormData, 'preferredJobTypes' | 'preferredIndustries' | 'preferredLocations' | 'preferredLanguages'>, 
+    field: keyof Pick<FormData, 'preferredJobTypes' | 'preferredLocations' | 'preferredLanguages'>, 
     value: string, 
     checked: boolean
   ): void => {
@@ -272,17 +281,9 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     }
   };
 
-  const addCustomLocation = (): void => {
-    addCustomValue('preferredLocations', 'location');
-  };
-
-  const removeLocation = (location: string): void => {
-    removeValue('preferredLocations', location);
-  };
-
   const addCustomValue = (
-    field: 'preferredIndustries' | 'preferredLocations' | 'preferredLanguages',
-    inputKey: 'industry' | 'location' | 'language'
+    field: 'preferredLocations' | 'preferredLanguages',
+    inputKey: 'location' | 'language'
   ): void => {
     const value = customInputs[inputKey].trim();
     if (!value) return;
@@ -297,7 +298,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
   };
 
   const removeValue = (
-    field: 'preferredIndustries' | 'preferredLocations' | 'preferredLanguages',
+    field: 'preferredLocations' | 'preferredLanguages',
     value: string
   ): void => {
     setFormData({
@@ -308,8 +309,8 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
 
   const renderTagInput = (
     label: string,
-    field: 'preferredIndustries' | 'preferredLocations' | 'preferredLanguages',
-    inputKey: 'industry' | 'location' | 'language',
+    field: 'preferredLocations' | 'preferredLanguages',
+    inputKey: 'location' | 'language',
     placeholder: string,
     commonValues: string[] = []
   ) => (
@@ -375,11 +376,6 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
 
   const jobTypes = [
     'Full-time', 'Part-time', 'Contract', 'Freelance', 'Internship', 'Temporary'
-  ];
-
-  const industries = [
-    'Technology', 'Healthcare', 'Finance', 'Education', 'Manufacturing',
-    'Retail', 'Consulting', 'Media', 'Government', 'Non-profit', 'Other'
   ];
 
   const commonLocations = [
@@ -450,96 +446,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
           </div>
         </div>
 
-        {/* Industries */}
-        {false && <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Preferred Industries
-          </label>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            {industries.map((industry) => (
-              <label key={industry} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.preferredIndustries.includes(industry)}
-                  onChange={(e) => handleCheckboxChange('preferredIndustries', industry, e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-sm text-gray-700">{industry}</span>
-              </label>
-            ))}
-          </div>
-        </div>}
-
-        {renderTagInput(
-          'Preferred Industries',
-          'preferredIndustries',
-          'industry',
-          'Type an industry, e.g. FinTech, Tourism, Agriculture',
-          industries
-        )}
-
-        {/* Locations */}
-        {false && <div>
-          <div className="flex items-center justify-between mb-3">
-            <label className="block text-sm font-medium text-gray-700">
-              Preferred Locations
-            </label>
-            <button
-              type="button"
-              onClick={addCustomLocation}
-              className="text-sm text-blue-600 hover:text-blue-800"
-            >
-              + Add Custom Location
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {/* Common Locations */}
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Common locations:</p>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {commonLocations.map((location) => (
-                  <label key={location} className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.preferredLocations.includes(location)}
-                      onChange={(e) => handleCheckboxChange('preferredLocations', location, e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{location}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Custom Locations */}
-            {formData.preferredLocations.filter(loc => !commonLocations.includes(loc)).length > 0 && (
-              <div>
-                <p className="text-sm text-gray-600 mb-2">Custom locations:</p>
-                <div className="flex flex-wrap gap-2">
-                  {formData.preferredLocations
-                    .filter(loc => !commonLocations.includes(loc))
-                    .map((location) => (
-                      <span
-                        key={location}
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-blue-100 text-blue-800 text-sm rounded-full"
-                      >
-                        {location}
-                        <button
-                          type="button"
-                          onClick={() => removeLocation(location)}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>}
-
+        {/* Locations - Using Tag Input */}
         {renderTagInput(
           'Preferred Locations',
           'preferredLocations',
@@ -548,6 +455,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
           commonLocations
         )}
 
+        {/* Languages - Using Tag Input */}
         {renderTagInput(
           'Preferred Languages',
           'preferredLanguages',
@@ -556,10 +464,10 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
           commonLanguages
         )}
 
-        {/* Salary Range */}
+        {/* ✅ Salary Range - Now OPTIONAL - Can set either min OR max independently */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-3">
-            Salary Expectations
+            Salary Expectations <span className="text-xs font-normal text-gray-400">(Optional - set either minimum or maximum)</span>
           </label>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -575,7 +483,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
                   className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
                     salaryErrors.min ? 'border-red-400 bg-red-50' : 'border-gray-300'
                   }`}
-                  placeholder="e.g. 1 000 000"
+                  placeholder="Set minimum only"
                   min="0"
                   step="1000"
                 />
@@ -587,29 +495,6 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
               )}
             </div>
 
-            {/* Maximum */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Maximum (annual)</label>
-              <div className="relative">
-                <DollarSign size={16} className="absolute left-3 top-3 text-gray-400" />
-                <input
-                  type="number"
-                  value={formData.salaryMax}
-                  onChange={e => handleSalaryChange('salaryMax', e.target.value)}
-                  className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                    salaryErrors.max ? 'border-red-400 bg-red-50' : 'border-gray-300'
-                  }`}
-                  placeholder="e.g. 2 000 000"
-                  min="0"
-                  step="1000"
-                />
-              </div>
-              {salaryErrors.max && (
-                <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
-                  <AlertCircle size={12} />{salaryErrors.max}
-                </p>
-              )}
-            </div>
 
             {/* Currency */}
             <div>
@@ -624,7 +509,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
                 <option value="GBP">GBP (£)</option>
                 <option value="CAD">CAD (C$)</option>
                 <option value="AUD">AUD (A$)</option>
-                <option value="Rwf">Rwandan Franc (RWF)</option>
+                <option value="RWF">Rwandan Franc (RWF)</option>
               </select>
             </div>
           </div>
@@ -636,12 +521,32 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
             const cur = formData.salaryCurrency;
             const fmt = (n: number) => n.toLocaleString();
 
-            // Not set at all
+            // Not set at all - optional
             if (!formData.salaryMin && !formData.salaryMax) {
               return (
                 <div className="mt-3 flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500">
                   <Info size={15} className="text-gray-400 shrink-0" />
                   Salary not set — employers won't see a salary expectation on your profile.
+                </div>
+              );
+            }
+
+            // ✅ Only MINIMUM set
+            if (min !== null && max === null) {
+              return (
+                <div className="mt-3 flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+                  <Info size={15} className="shrink-0" />
+                  Minimum set to <strong>{cur} {fmt(min)}</strong> — employers will see this as your minimum expectation.
+                </div>
+              );
+            }
+
+            // ✅ Only MAXIMUM set
+            if (max !== null && min === null) {
+              return (
+                <div className="mt-3 flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
+                  <Info size={15} className="shrink-0" />
+                  Maximum set to <strong>{cur} {fmt(max)}</strong> — employers will see this as your maximum expectation.
                 </div>
               );
             }
@@ -659,7 +564,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
               );
             }
 
-            // Valid range — show visual bar
+            // ✅ Both set - valid range
             if (min !== null && max !== null && min <= max) {
               return (
                 <div className="mt-4 px-4 py-4 bg-green-50 border border-green-200 rounded-xl">
@@ -674,7 +579,6 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
                       <p className="text-sm font-bold text-green-800">{cur} {fmt(max)}</p>
                     </div>
                   </div>
-                  {/* Bar */}
                   <div className="relative h-2 bg-green-200 rounded-full overflow-hidden">
                     <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-green-600 rounded-full" />
                   </div>
@@ -760,42 +664,6 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
               </div>
             )}
           </div>
-        </div>
-
-        {/* Job Level */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Preferred Job Level
-          </label>
-          <select
-            value={formData.jobLevel}
-            onChange={(e) => setFormData({...formData, jobLevel: e.target.value})}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="entry">Entry Level</option>
-            <option value="junior">Junior</option>
-            <option value="mid">Mid Level</option>
-            <option value="senior">Senior Level</option>
-            <option value="lead">Lead/Principal</option>
-            <option value="executive">Executive</option>
-          </select>
-        </div>
-
-        {/* Keywords */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Keywords (for job matching)
-          </label>
-          <textarea
-            value={formData.keywords}
-            onChange={(e) => setFormData({...formData, keywords: e.target.value})}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Enter keywords related to your skills, technologies, or job titles you're interested in (comma-separated)"
-          />
-          <p className="text-xs text-gray-500 mt-1">
-            Example: "React, Python, Project Management, Remote, Full-stack Development"
-          </p>
         </div>
 
         {/* Save status banner */}

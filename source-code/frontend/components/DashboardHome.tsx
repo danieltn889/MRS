@@ -17,9 +17,9 @@ import JobApplicationModal from './jobs/JobApplicationModal';
 import appliedJobsManager from '../src/utils/AppliedJobsManager';
 import { getJobMatchesFromAI } from '../services/aiJobMatchingService';
 import { saveJob, unsaveJob, loadSavedJobsFromAPI } from '../services/jobStorageService';
-import { 
-  formatNumber, formatDate, formatFullDate, getDaysRemaining, 
-  getExpiryStatusColor, getMatchColor, getScoreColor, transformMatchData 
+import {
+  formatNumber, formatDate, formatFullDate, getDaysRemaining,
+  getExpiryStatusColor, getMatchColor, getScoreColor, transformMatchData
 } from '../utils/jobHelpers';
 
 const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:3001/api/v1';
@@ -30,7 +30,6 @@ interface DashboardHomeProps {
   onViewChange?: (view: string) => void;
 }
 
-// Update the AIMatch interface to include all missing properties
 interface AIMatch {
   id: string;
   title: string;
@@ -52,7 +51,6 @@ interface AIMatch {
   qualificationsBreakdown?: any;
   preferencesBreakdown?: any;
   rawJob?: any;
-  // Add missing properties
   benefits?: string[];
   tags?: string[];
   publishedAt?: string;
@@ -101,7 +99,7 @@ interface CompanyDashboardStats {
   total_applications: number;
   qualified_candidates: number;
   interviews_scheduled: number;
-  additional: AdditionalStats;  // Made required, not optional
+  additional: AdditionalStats;
 }
 
 const DEFAULT_ADDITIONAL_STATS: AdditionalStats = {
@@ -120,7 +118,15 @@ const DEFAULT_ADDITIONAL_STATS: AdditionalStats = {
 const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewChange }) => {
   const [allJobs, setAllJobs] = useState<any[]>([]);
   const [aiMatches, setAiMatches] = useState<AIMatch[]>([]);
-  const [loading, setLoading] = useState(true);
+
+  // ✅ Three distinct loading phases so we never show stale UI
+  // pageLoading  = true while we don't know ANYTHING yet (first paint)
+  // profileLoading = true while fetching profile/completion data
+  // matchesLoading  = true while AI matching is in-flight
+  const [pageLoading, setPageLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+
   const [jobError, setJobError] = useState<string | null>(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [selectedMatchForApply, setSelectedMatchForApply] = useState<AIMatch | null>(null);
@@ -132,10 +138,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
   const [selectedMatch, setSelectedMatch] = useState<AIMatch | null>(null);
   const [fullCandidateProfile, setFullCandidateProfile] = useState<any>(null);
   const [completionStatus, setCompletionStatus] = useState<any>(null);
-  const [profileLoading, setProfileLoading] = useState(true);
   const [realSimulations, setRealSimulations] = useState<Simulation[]>([]);
-  
-  // Company dashboard stats state - Fixed with proper default
+
+  // Company dashboard stats state
   const [companyStats, setCompanyStats] = useState<CompanyDashboardStats>({
     active_jobs: 0,
     total_applications: 0,
@@ -147,56 +152,33 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
   // Check user type
   const userTypeValue = user?.userType || user?.user_type || '';
-  const isCompanyUser = userTypeValue === 'recruiter' || 
-                        userTypeValue === 'company_admin' || 
-                        userTypeValue === 'company' ||
-                        userTypeValue === 'Company Admin' ||
-                        userTypeValue === 'Recruiter';
+  const isCompanyUser = userTypeValue === 'recruiter' ||
+    userTypeValue === 'company_admin' ||
+    userTypeValue === 'company' ||
+    userTypeValue === 'Company Admin' ||
+    userTypeValue === 'Recruiter';
 
-  // Debug logging
-  useEffect(() => {
-    console.log('🔍 DashboardHome Debug:', {
-      user: user,
-      userTypeValue: userTypeValue,
-      isCompanyUser: isCompanyUser,
-      userId: user?.id
-    });
-  }, [user, userTypeValue, isCompanyUser]);
+  // ✅ Derive completion percentage from state (used for display only)
+  const completionPercentage = completionStatus?.completionPercentage ||
+    fullCandidateProfile?.profile?.profile_completion ||
+    0;
 
-  // Fetch company dashboard statistics - FIXED with proper additional object
+  const isProfileReady = completionPercentage >= 80;
+
+  // Fetch company dashboard statistics
   const fetchCompanyDashboardStats = async () => {
-    if (!isCompanyUser) {
-      console.log('⚠️ Not a company user, skipping stats fetch');
-      return;
-    }
-    
+    if (!isCompanyUser) return;
     setStatsLoading(true);
     try {
       const token = localStorage.getItem('authToken');
-      console.log('🔑 Auth token present:', !!token);
-      console.log('🔑 Auth token value (first 20 chars):', token?.substring(0, 20));
-      
-      if (!token) {
-        console.error('❌ No auth token found');
-        setStatsLoading(false);
-        return;
-      }
+      if (!token) { setStatsLoading(false); return; }
 
-      const url = `${API_BASE_URL}/jobs/company/stats`;
-      console.log('📡 Fetching company stats from:', url);
-      
-      const response = await fetch(url, {
+      const response = await fetch(`${API_BASE_URL}/jobs/company/stats`, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       });
 
-      console.log('📊 Response status:', response.status);
-      
       if (response.status === 401) {
-        console.error('❌ Unauthorized - token may be expired');
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
         setStatsLoading(false);
@@ -204,10 +186,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       }
 
       const result = await response.json();
-      console.log('📦 Full API Response:', JSON.stringify(result, null, 2));
-      
       if (result.success && result.data) {
-        console.log('✅ Stats received:', result.data);
         setCompanyStats({
           active_jobs: result.data.active_jobs || 0,
           total_applications: result.data.total_applications || 0,
@@ -226,37 +205,20 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             rejected: result.data.additional.rejected || 0
           } : DEFAULT_ADDITIONAL_STATS
         });
-      } else {
-        console.error('❌ Failed to fetch company stats:', result.message || 'Unknown error');
-        setCompanyStats({
-          active_jobs: 0,
-          total_applications: 0,
-          qualified_candidates: 0,
-          interviews_scheduled: 0,
-          additional: DEFAULT_ADDITIONAL_STATS
-        });
       }
     } catch (error) {
       console.error('❌ Error fetching company dashboard stats:', error);
-      setCompanyStats({
-        active_jobs: 0,
-        total_applications: 0,
-        qualified_candidates: 0,
-        interviews_scheduled: 0,
-        additional: DEFAULT_ADDITIONAL_STATS
-      });
     } finally {
       setStatsLoading(false);
     }
   };
 
-  // Fetch AI job matches with timeout
+  // ✅ Fetch AI job matches — accepts percentage directly to avoid stale state reads
   const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 300000) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
-      timeoutId = setTimeout(() => reject(new Error('Request timeout - please try again')), timeoutMs);
+      timeoutId = setTimeout(() => reject(new Error('AI matching is still loading. Please try again in a moment.')), timeoutMs);
     });
-    
     try {
       const result = await Promise.race([promise, timeoutPromise]);
       if (timeoutId) clearTimeout(timeoutId);
@@ -267,238 +229,248 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
   };
 
- const fetchAiJobMatches = async () => {
-  if (isCompanyUser) {
-    console.log('Company user - skipping AI matches');
-    setLoading(false);
-    return;
-  }
-  
-  try {
-    const candidateId = user?.id;
-    if (!candidateId) {
-      console.log('❌ No candidate ID found');
-      setJobError('User ID not found. Please log in again.');
-      setLoading(false);
+  // ✅ KEY FIX: accept resolvedPercentage as param so we don't rely on stale state
+  const fetchAiJobMatches = async (resolvedPercentage: number) => {
+    if (isCompanyUser) return;
+
+    if (resolvedPercentage < 80) {
+      console.log(`⚠️ Profile ${resolvedPercentage}% not complete enough (< 80%)`);
+      setJobError(`📝 Complete your profile (${resolvedPercentage}%) to unlock AI-powered job matches!`);
       return;
     }
-    
-    console.log('📊 Fetching AI matches for candidate:', candidateId);
-    
-    const data = await fetchWithTimeout(getJobMatchesFromAI(candidateId), 30000);
-    
-    console.log('📊 API Response:', data);
-    
-    if (data && data.success && data.matches) {
-      // ✅ Set candidate info from AI response
-      if (data.candidate) {
-        setCandidateInfo({
-          name: data.candidate.name || data.candidate.full_name || 'Candidate',
-          level: data.candidate.level || 'Professional',
-          total_experience_years: data.candidate.total_experience_years || 0,
-          skills: data.candidate.skills || []
-        });
-      }
-      
-      // ✅ Transform matches - COLLECT ALL DATA HERE
-      const transformedMatches = data.matches.map((match: any) => {
-        const jobData = match.job || {};
-        const companyData = jobData.company || {};
-        
-        // ✅ Extract all breakdowns
-        const criteriaScores = match.criteria_scores || {};
-        const skillsBD = match.skills_breakdown || {};
-        const expBD = match.experience_breakdown || {};
-        const qualsBD = match.qualifications_breakdown || {};
-        const prefsBD = match.preferences_breakdown || {};
-        
-        return {
-          // ========== BASIC JOB INFO ==========
-          id: jobData.id || match.id,
-          title: jobData.title || match.title,
-          company: companyData.name || jobData.company_name || match.company || 'Unknown Company',
-          location: jobData.locations?.[0]?.city || jobData.location || match.location || 'Location not specified',
-          salary: match.salary,
-          type: jobData.job_type || match.type || 'Full-time',
-          workArrangement: jobData.work_arrangement || match.workArrangement || 'Onsite',
-          description: jobData.description || match.description,
-          requirements: jobData.requirements || match.requirements || [],
-          skills: jobData.skills_required?.map((s: any) => typeof s === 'string' ? s : s.name) || match.skills || [],
-          screeningQuestions: jobData.screening_questions || match.screeningQuestions || [],
-          expiresAt: jobData.expires_at || match.expiresAt,
-          publishedAt: jobData.published_at || match.publishedAt,
-          
-          // ========== MATCH SCORES ==========
-          matchScore: match.match_score || match.matchScore || 0,
-          matchLevel: match.match_level || match.matchLevel || '',
-          
-          // ========== 4-FACTOR CRITERIA SCORES ==========
-          criteriaScores: {
-            skills_match: criteriaScores.skills_match || 0,
-            qualifications_match: criteriaScores.qualifications_match || 0,
-            experience_match: criteriaScores.experience_match || 0,
-            preferences_match: criteriaScores.preferences_match || 0
-          },
-          
-          // ========== SKILLS BREAKDOWN ==========
-          skillsBreakdown: {
-            matched_skills: skillsBD.matched_skills || [],
-            missing_skills: skillsBD.missing_skills || [],
-            total_required: skillsBD.total_required || 0,
-            total_matched: skillsBD.total_matched || 0,
-            individual_scores: skillsBD.individual_scores || []
-          },
-          
-          // ========== EXPERIENCE BREAKDOWN ==========
-          experienceBreakdown: {
-            match_type: expBD.match_type || 'unknown',
-            total_requirements: expBD.total_requirements || 0,
-            matched_requirements: expBD.matched_requirements || 0,
-            specific_matches: expBD.specific_matches || [],
-            unmatched_requirements: expBD.unmatched_requirements || [],
-            total_years: expBD.total_years || 0,
-            required_years: expBD.required_years || 0,
-            gap_years: expBD.gap_years || 0,
-            candidate_years: expBD.candidate_years || 0
-          },
-          
-          // ========== QUALIFICATIONS BREAKDOWN (DEGREES & FIELDS) ==========
-          qualificationsBreakdown: {
-            candidate_degrees: qualsBD.candidate_degrees || [],
-            candidate_fields: qualsBD.candidate_fields || [],
-            candidate_combined: qualsBD.candidate_combined || [],
-            candidate_certifications: qualsBD.candidate_certifications || [],
-            job_degree_required: qualsBD.job_degree_required || '',
-            job_allowed_fields: qualsBD.job_allowed_fields || [],
-            job_certifications: qualsBD.job_certifications || [],
-            best_similarity: qualsBD.best_similarity || 0,
-            best_matched_field: qualsBD.best_matched_field || null,
-            best_matched_candidate_value: qualsBD.best_matched_candidate_value || '',
-            best_job_requirement: qualsBD.best_job_requirement || '',
-            match_type: qualsBD.match_type || 'none',
-            match_quality: qualsBD.match_quality || '',
-            explanation: qualsBD.explanation || '',
-            is_degree_required: qualsBD.is_degree_required || false,
-            component_scores: qualsBD.component_scores || {}
-          },
-          
-          // ========== PREFERENCES BREAKDOWN ==========
-          preferencesBreakdown: {
-            missing_job_data: prefsBD.missing_job_data || [],
-            type_match: prefsBD.type_match || 0,
-            type_match_details: prefsBD.type_match_details || [],
-            type_match_note: prefsBD.type_match_note || null,
-            remote_match: prefsBD.remote_match || 0,
-            remote_match_note: prefsBD.remote_match_note || null,
-            location_match: prefsBD.location_match || 0,
-            location_match_details: prefsBD.location_match_details || null,
-            location_match_note: prefsBD.location_match_note || null,
-            industry_match: prefsBD.industry_match || 0,
-            industry_match_details: prefsBD.industry_match_details || [],
-            industry_match_note: prefsBD.industry_match_note || null,
-            salary_match: prefsBD.salary_match || 0,
-            salary_match_details: prefsBD.salary_match_details || {},
-            salary_match_note: prefsBD.salary_match_note || null,
-            language_match: prefsBD.language_match || 0,
-            language_match_details: prefsBD.language_match_details || [],
-            language_match_note: prefsBD.language_match_note || null,
-            candidate_job_types: prefsBD.candidate_job_types || [],
-            candidate_locations: prefsBD.candidate_locations || [],
-            candidate_industries: prefsBD.candidate_industries || [],
-            candidate_languages: prefsBD.candidate_languages || [],
-            candidate_salary_min: prefsBD.candidate_salary_min || 0,
-            candidate_salary_max: prefsBD.candidate_salary_max || 0,
-            candidate_remote_preference: prefsBD.candidate_remote_preference || 'flexible'
-          },
-          
-          // ========== RAW JOB DATA (for detailed view) ==========
-          rawJob: jobData,
-          
-          // ========== EXTRA FIELDS ==========
-          benefits: jobData.benefits || [],
-          tags: jobData.tags || [],
-          experienceLevel: jobData.experience_level || '',
-          department: jobData.department || '',
-          status: jobData.status || 'active',
-          responsibilities: jobData.responsibilities || [],
-          applications: jobData.application_count || 0,
-          viewCount: jobData.view_count || 0,
-          companyLogo: companyData.logo_url || '',
-          companyVerified: companyData.verified || false,
-          companyIndustry: companyData.industry || '',
-          companySize: companyData.size || '',
-          companyWebsite: companyData.website || '',
-          companyDescription: companyData.description || ''
-        };
-      });
-      
-      console.log('✅ Transformed matches:', transformedMatches.length);
-      console.log('📊 Sample match data:', {
-        matchScore: transformedMatches[0]?.matchScore,
-        qualificationsBreakdown: transformedMatches[0]?.qualificationsBreakdown,
-        experienceBreakdown: transformedMatches[0]?.experienceBreakdown,
-        skillsBreakdown: transformedMatches[0]?.skillsBreakdown,
-        preferencesBreakdown: transformedMatches[0]?.preferencesBreakdown
-      });
-      
-      setAiMatches(transformedMatches);
-      setJobError(null);
-    } else {
-      console.log('No matches found');
-      setAiMatches([]);
-      setJobError(data?.message || 'No job matches found. Complete your profile for better recommendations.');
-    }
-  } catch (error: any) {
-    console.error('Error fetching AI matches:', error);
-    setJobError(error.message || 'Failed to load job matches. Please try again later.');
-    setAiMatches([]);
-  } finally {
-    setLoading(false);
-  }
-};
 
-  const fetchFullCandidateProfile = async () => {
+    const candidateId = user?.id;
+    if (!candidateId) {
+      setJobError('User ID not found. Please log in again.');
+      return;
+    }
+
+    setMatchesLoading(true);
+    setJobError(null);
+
     try {
-      setProfileLoading(true);
-      if (isCompanyUser) {
-        setProfileLoading(false);
-        return;
-      }
-      const token = localStorage.getItem('authToken');
-      if (!token || !user?.id) {
-        setProfileLoading(false);
-        return;
-      }
-      const response = await fetch(`${API_BASE_URL}/candidates/full-profile/${user.id}`, {
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
-      });
-      if (response.status === 401) {
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('user');
-        setProfileLoading(false);
-        return;
-      }
-      const data = await response.json();
-      if (data.success) {
-        setFullCandidateProfile(data.data);
-        const statusResponse = await getProfileCompletionStatus();
-        if (statusResponse.success && statusResponse.data) {
-          setCompletionStatus(statusResponse.data);
+      console.log('📊 Fetching AI matches for candidate:', candidateId);
+      const data = await fetchWithTimeout(getJobMatchesFromAI(candidateId));
+
+      if (data && data.success && data.matches) {
+        const completeProfile = data.candidate?.complete_profile || {};
+        const stats = completeProfile.statistics || {};
+        const totalExperience = stats.total_years_experience || 0;
+
+        const workSkills: string[] = [];
+        if (completeProfile.work_experience) {
+          completeProfile.work_experience.forEach((exp: any) => {
+            if (exp.skills && Array.isArray(exp.skills)) {
+              exp.skills.forEach((skill: string) => {
+                if (!workSkills.includes(skill)) workSkills.push(skill);
+              });
+            }
+          });
         }
+
+        const profileSkills = data.candidate?.skills || [];
+        const allSkills = [...new Set([...profileSkills, ...workSkills])];
+
+        setCandidateInfo({
+          name: data.candidate?.name || data.candidate?.full_name || 'Candidate',
+          level: data.candidate?.level || completeProfile?.headline || 'Professional',
+          total_experience_years: totalExperience,
+          skills: allSkills.slice(0, 5)
+        });
+
+        const transformedMatches = data.matches.map((match: any) => {
+          const jobData = match.job || {};
+          const companyData = jobData.company || {};
+          const criteriaScores = match.criteria_scores || {};
+          const skillsBD = match.skills_breakdown || {};
+          const expBD = match.experience_breakdown || {};
+          const qualsBD = match.qualifications_breakdown || {};
+          const prefsBD = match.preferences_breakdown || {};
+
+          return {
+            id: jobData.id || match.id,
+            title: jobData.title || match.title,
+            company: companyData.name || jobData.company_name || match.company || 'Unknown Company',
+            location: jobData.locations?.[0]?.city || jobData.location || match.location || 'Location not specified',
+            salary: match.salary,
+            type: jobData.job_type || match.type || 'Full-time',
+            workArrangement: jobData.work_arrangement || match.workArrangement || 'Onsite',
+            description: jobData.description || match.description,
+            requirements: jobData.requirements || match.requirements || [],
+            skills: jobData.skills_required?.map((s: any) => typeof s === 'string' ? s : s.name) || match.skills || [],
+            screeningQuestions: jobData.screening_questions || match.screeningQuestions || [],
+            expiresAt: jobData.expires_at || match.expiresAt,
+            publishedAt: jobData.published_at || match.publishedAt,
+            matchScore: match.match_score || match.matchScore || 0,
+            matchLevel: match.match_level || match.matchLevel || '',
+            criteriaScores: {
+              skills_match: criteriaScores.skills_match || 0,
+              qualifications_match: criteriaScores.qualifications_match || 0,
+              experience_match: criteriaScores.experience_match || 0,
+              preferences_match: criteriaScores.preferences_match || 0
+            },
+            skillsBreakdown: {
+              matched_skills: skillsBD.matched_skills || [],
+              missing_skills: skillsBD.missing_skills || [],
+              total_required: skillsBD.total_required || 0,
+              total_matched: skillsBD.total_matched || 0,
+              individual_scores: skillsBD.individual_scores || []
+            },
+            experienceBreakdown: {
+              match_type: expBD.match_type || 'unknown',
+              total_requirements: expBD.total_requirements || 0,
+              matched_requirements: expBD.matched_requirements || 0,
+              specific_matches: expBD.specific_matches || [],
+              unmatched_requirements: expBD.unmatched_requirements || [],
+              total_years: expBD.total_years || 0,
+              required_years: expBD.required_years || 0,
+              gap_years: expBD.gap_years || 0,
+              candidate_years: expBD.candidate_years || 0
+            },
+            qualificationsBreakdown: {
+              candidate_degrees: qualsBD.candidate_degrees || [],
+              candidate_fields: qualsBD.candidate_fields || [],
+              candidate_combined: qualsBD.candidate_combined || [],
+              candidate_certifications: qualsBD.candidate_certifications || [],
+              job_degree_required: qualsBD.job_degree_required || '',
+              job_allowed_fields: qualsBD.job_allowed_fields || [],
+              job_certifications: qualsBD.job_certifications || [],
+              best_similarity: qualsBD.best_similarity || 0,
+              best_matched_field: qualsBD.best_matched_field || null,
+              best_matched_candidate_value: qualsBD.best_matched_candidate_value || '',
+              best_job_requirement: qualsBD.best_job_requirement || '',
+              match_type: qualsBD.match_type || 'none',
+              match_quality: qualsBD.match_quality || '',
+              explanation: qualsBD.explanation || '',
+              is_degree_required: qualsBD.is_degree_required || false,
+              component_scores: qualsBD.component_scores || {}
+            },
+            preferencesBreakdown: {
+              missing_job_data: prefsBD.missing_job_data || [],
+              type_match: prefsBD.type_match || 0,
+              type_match_details: prefsBD.type_match_details || [],
+              type_match_note: prefsBD.type_match_note || null,
+              remote_match: prefsBD.remote_match || 0,
+              remote_match_note: prefsBD.remote_match_note || null,
+              location_match: prefsBD.location_match || 0,
+              location_match_details: prefsBD.location_match_details || null,
+              location_match_note: prefsBD.location_match_note || null,
+              industry_match: prefsBD.industry_match || 0,
+              industry_match_details: prefsBD.industry_match_details || [],
+              industry_match_note: prefsBD.industry_match_note || null,
+              salary_match: prefsBD.salary_match || 0,
+              salary_match_details: prefsBD.salary_match_details || {},
+              salary_match_note: prefsBD.salary_match_note || null,
+              language_match: prefsBD.language_match || 0,
+              language_match_details: prefsBD.language_match_details || [],
+              language_match_note: prefsBD.language_match_note || null,
+              candidate_job_types: prefsBD.candidate_job_types || [],
+              candidate_locations: prefsBD.candidate_locations || [],
+              candidate_industries: prefsBD.candidate_industries || [],
+              candidate_languages: prefsBD.candidate_languages || [],
+              candidate_salary_min: prefsBD.candidate_salary_min || 0,
+              candidate_salary_max: prefsBD.candidate_salary_max || 0,
+              candidate_remote_preference: prefsBD.candidate_remote_preference || 'flexible'
+            },
+            rawJob: jobData,
+            benefits: jobData.benefits || [],
+            tags: jobData.tags || [],
+            experienceLevel: jobData.experience_level || '',
+            department: jobData.department || '',
+            status: jobData.status || 'active',
+            responsibilities: jobData.responsibilities || [],
+            applications: jobData.application_count || 0,
+            viewCount: jobData.view_count || 0,
+            companyLogo: companyData.logo_url || '',
+            companyVerified: companyData.verified || false,
+            companyIndustry: companyData.industry || '',
+            companySize: companyData.size || '',
+            companyWebsite: companyData.website || '',
+            companyDescription: companyData.description || ''
+          };
+        });
+
+        console.log('✅ Transformed matches:', transformedMatches.length);
+        setAiMatches(transformedMatches);
+        setJobError(null);
+      } else {
+        setAiMatches([]);
+        setJobError(data?.message || 'No job matches found. Complete your profile for better recommendations.');
       }
-    } catch (error) {
-      console.error('Error fetching full profile:', error);
+    } catch (error: any) {
+      console.error('Error fetching AI matches:', error);
+      setJobError(error.message || 'Failed to load job matches. Please try again later.');
+      setAiMatches([]);
     } finally {
-      setProfileLoading(false);
+      setMatchesLoading(false);
     }
   };
 
-  const fetchRealSimulations = async () => {
-    if (isCompanyUser) {
-      setRealSimulations([]);
-      return;
+  // ✅ Returns the resolved percentage so loadData can pass it to fetchAiJobMatches directly
+  const fetchFullCandidateProfile = async (): Promise<number> => {
+    if (isCompanyUser) return 0;
+
+    const token = localStorage.getItem('authToken');
+    if (!token || !user?.id) return 0;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/candidates/full-profile/${user.id}`, {
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.status === 401) {
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
+        return 0;
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setFullCandidateProfile(data.data);
+
+        const stats = data.data.statistics || {};
+        const profileInfo = data.data.profile?.personal_info || {};
+        const skills = data.data.skills || [];
+        const skillNames = skills.map((s: any) => s.skill_name);
+
+        const workSkills: string[] = [];
+        if (data.data.work_experience) {
+          data.data.work_experience.forEach((exp: any) => {
+            if (exp.skills && Array.isArray(exp.skills)) {
+              exp.skills.forEach((skill: string) => {
+                if (!workSkills.includes(skill)) workSkills.push(skill);
+              });
+            }
+          });
+        }
+
+        const allSkills = [...new Set([...skillNames, ...workSkills])];
+        setCandidateInfo({
+          name: profileInfo.full_name || 'Candidate',
+          level: profileInfo.headline || 'Professional',
+          total_experience_years: stats.total_years_experience || 0,
+          skills: allSkills.slice(0, 5)
+        });
+
+        // ✅ Also fetch completion status and return the resolved percentage
+        const statusResponse = await getProfileCompletionStatus();
+        if (statusResponse.success && statusResponse.data) {
+          setCompletionStatus(statusResponse.data);
+          return statusResponse.data.completionPercentage || 0;
+        }
+
+        // Fallback: use profile_completion from profile response
+        return data.data.profile?.profile_completion || 0;
+      }
+    } catch (error) {
+      console.error('Error fetching full profile:', error);
     }
-    
+
+    return 0;
+  };
+
+  const fetchRealSimulations = async () => {
+    if (isCompanyUser) { setRealSimulations([]); return; }
     try {
       const response = await getMySimulations({ page: 1, limit: 10 });
       if (response.success && response.data) {
@@ -522,51 +494,60 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
   };
 
+  // ✅ MAIN DATA LOADER — sequential, passes resolved percentage directly
   useEffect(() => {
     const loadData = async () => {
       if (!user?.id) {
-        setLoading(false);
+        setPageLoading(false);
+        setProfileLoading(false);
         return;
       }
-      
-      setLoading(true);
-      console.log('Loading data for user:', user.id);
-      
-      try {
-        const savedJobIds = await loadSavedJobsFromAPI();
-        setSavedJobs(new Set(savedJobIds));
-      } catch (error) {
-        console.error('Error loading saved jobs:', error);
-      }
-      
-      if (!isCompanyUser) {
-        await Promise.all([
-          fetchFullCandidateProfile(),
-          fetchRealSimulations(),
-          fetchAiJobMatches()
-        ]);
-      } else {
-        // Fetch company dashboard stats for company users
+
+      // Load saved jobs in background (non-blocking)
+      loadSavedJobsFromAPI()
+        .then(ids => setSavedJobs(new Set(ids)))
+        .catch(err => console.error('Error loading saved jobs:', err));
+
+      if (isCompanyUser) {
         await fetchCompanyDashboardStats();
-        setLoading(false);
+        setProfileLoading(false);
+        setPageLoading(false);
+        return;
       }
+
+      // ── CANDIDATE FLOW ──
+      // Step 1: profile + completion (profileLoading stays true)
+      setProfileLoading(true);
+      const [resolvedPercentage] = await Promise.all([
+        fetchFullCandidateProfile(),
+        fetchRealSimulations(),
+      ]);
+      setProfileLoading(false);
+
+      // Step 2: now we know the real percentage — decide what to do
+      // pageLoading ends here so the profile sidebar already renders
+      setPageLoading(false);
+
+      // Step 3: if eligible, start AI matching (matchesLoading goes true)
+      await fetchAiJobMatches(resolvedPercentage);
     };
-    
+
     const loadApplications = async () => {
       await appliedJobsManager.loadFromAPI();
       setAppliedJobs(appliedJobsManager.getAllAppliedJobs());
     };
-    
+
     const handleAppliedJobsChange = (appliedJobIds: string[]) => setAppliedJobs(appliedJobIds);
     appliedJobsManager.addListener(handleAppliedJobsChange);
     loadApplications();
-    
+
     if (user?.id) {
       loadData();
     } else {
-      setLoading(false);
+      setPageLoading(false);
+      setProfileLoading(false);
     }
-    
+
     return () => appliedJobsManager.removeListener(handleAppliedJobsChange);
   }, [user?.id, isCompanyUser]);
 
@@ -603,7 +584,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
   const getFilteredMatches = () => {
     let filtered = [...aiMatches];
-    
     switch (matchFilter) {
       case 'applied':
         filtered = filtered.filter(match => appliedJobs.includes(match.id));
@@ -620,21 +600,18 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       default:
         break;
     }
-    
     return filtered;
   };
 
   const displayJobs = getFilteredMatches();
-  const completionPercentage = completionStatus?.completionPercentage || fullCandidateProfile?.profile?.profile_completion || 0;
 
-  // Helper function to format numbers with K/M suffixes
   const formatStatNumber = (num: number): string => {
     if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
     if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
     return num.toString();
   };
 
-  // COMPANY USER VIEW with real data
+  // ── COMPANY VIEW ──────────────────────────────────────────────────────────
   if (isCompanyUser) {
     return (
       <div className="space-y-6">
@@ -647,161 +624,84 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           </div>
         </div>
 
-        {/* Stats Cards with Real Data */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {/* Active Jobs Card */}
           <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500 transition-all hover:shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm font-medium">Active Jobs</p>
-                {statsLoading ? (
-                  <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div>
-                ) : (
-                  <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.active_jobs)}</p>
-                )}
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.active_jobs)}</p>}
               </div>
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <Briefcase className="w-6 h-6 text-blue-600" />
-              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center"><Briefcase className="w-6 h-6 text-blue-600" /></div>
             </div>
-            <button 
-              onClick={() => onViewChange?.('jobs')}
-              className="mt-4 text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"
-            >
-              View all jobs →
-            </button>
+            <button onClick={() => onViewChange?.('jobs')} className="mt-4 text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">View all jobs →</button>
           </div>
-
-          {/* Total Applications Card */}
           <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500 transition-all hover:shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm font-medium">Total Applications</p>
-                {statsLoading ? (
-                  <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div>
-                ) : (
-                  <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.total_applications)}</p>
-                )}
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.total_applications)}</p>}
               </div>
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <Users className="w-6 h-6 text-green-600" />
-              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center"><Users className="w-6 h-6 text-green-600" /></div>
             </div>
-            <button 
-              onClick={() => onViewChange?.('applications')}
-              className="mt-4 text-xs text-green-600 hover:text-green-800 font-medium flex items-center gap-1"
-            >
-              View applications →
-            </button>
+            <button onClick={() => onViewChange?.('applications')} className="mt-4 text-xs text-green-600 hover:text-green-800 font-medium flex items-center gap-1">View applications →</button>
           </div>
-
-          {/* Qualified Candidates Card */}
           <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500 transition-all hover:shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm font-medium">Qualified Candidates</p>
-                {statsLoading ? (
-                  <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div>
-                ) : (
-                  <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.qualified_candidates)}</p>
-                )}
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.qualified_candidates)}</p>}
               </div>
-              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
-                <User className="w-6 h-6 text-purple-600" />
-              </div>
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center"><User className="w-6 h-6 text-purple-600" /></div>
             </div>
-            <button 
-              onClick={() => onViewChange?.('candidates')}
-              className="mt-4 text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1"
-            >
-              Find candidates →
-            </button>
+            <button onClick={() => onViewChange?.('candidates')} className="mt-4 text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1">Find candidates →</button>
           </div>
-
-          {/* Interviews Scheduled Card */}
           <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-yellow-500 transition-all hover:shadow-lg">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-500 text-sm font-medium">Interviews Scheduled</p>
-                {statsLoading ? (
-                  <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div>
-                ) : (
-                  <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.interviews_scheduled)}</p>
-                )}
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(companyStats.interviews_scheduled)}</p>}
               </div>
-              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-yellow-600" />
-              </div>
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center"><Calendar className="w-6 h-6 text-yellow-600" /></div>
             </div>
-            <button 
-              onClick={() => onViewChange?.('interviews')}
-              className="mt-4 text-xs text-yellow-600 hover:text-yellow-800 font-medium flex items-center gap-1"
-            >
-              Schedule interview →
-            </button>
+            <button onClick={() => onViewChange?.('interviews')} className="mt-4 text-xs text-yellow-600 hover:text-yellow-800 font-medium flex items-center gap-1">Schedule interview →</button>
           </div>
         </div>
 
-        {/* Additional Stats Row */}
         <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500">Draft Jobs</p>
-            <p className="text-xl font-semibold text-gray-700">{companyStats.additional.draft_jobs}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500">Under Review</p>
-            <p className="text-xl font-semibold text-gray-700">{companyStats.additional.under_review}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500">Shortlisted</p>
-            <p className="text-xl font-semibold text-gray-700">{companyStats.additional.shortlisted}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500">Offers</p>
-            <p className="text-xl font-semibold text-gray-700">{companyStats.additional.offers}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500">Hired</p>
-            <p className="text-xl font-semibold text-gray-700">{companyStats.additional.hired}</p>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-500">Rejected</p>
-            <p className="text-xl font-semibold text-gray-700">{companyStats.additional.rejected}</p>
-          </div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Draft Jobs</p><p className="text-xl font-semibold text-gray-700">{companyStats.additional.draft_jobs}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Under Review</p><p className="text-xl font-semibold text-gray-700">{companyStats.additional.under_review}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Shortlisted</p><p className="text-xl font-semibold text-gray-700">{companyStats.additional.shortlisted}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Offers</p><p className="text-xl font-semibold text-gray-700">{companyStats.additional.offers}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Hired</p><p className="text-xl font-semibold text-gray-700">{companyStats.additional.hired}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Rejected</p><p className="text-xl font-semibold text-gray-700">{companyStats.additional.rejected}</p></div>
         </div>
 
-        {/* Action Buttons */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <button onClick={() => onViewChange?.('jobs')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
             <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors"><Briefcase className="w-6 h-6 text-blue-600" /></div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Post New Job</h3>
             <p className="text-gray-500 text-sm">Create and publish job openings to attract top talent</p>
           </button>
-
           <button onClick={() => onViewChange?.('candidates')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors"><Search className="w-6 h-6 text-purple-600" /></div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Find Candidates</h3>
             <p className="text-gray-500 text-sm">Search and discover qualified candidates for your roles</p>
           </button>
-
           <button onClick={() => onViewChange?.('team')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
             <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-200 transition-colors"><Users className="w-6 h-6 text-green-600" /></div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Manage Team</h3>
             <p className="text-gray-500 text-sm">Invite team members and manage permissions</p>
           </button>
-
           <button onClick={() => onViewChange?.('recruiter-analytics')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-yellow-200 transition-colors"><BarChart3 className="w-6 h-6 text-yellow-600" /></div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">View Analytics</h3>
             <p className="text-gray-500 text-sm">Track your recruitment metrics and performance</p>
           </button>
-
           <button onClick={() => onViewChange?.('company-profile')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
             <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors"><Building2 className="w-6 h-6 text-indigo-600" /></div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Company Profile</h3>
             <p className="text-gray-500 text-sm">Update your company information and branding</p>
           </button>
-
           <button onClick={() => onViewChange?.('simulations-list')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
             <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors"><Target className="w-6 h-6 text-orange-600" /></div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Manage Simulations</h3>
@@ -812,41 +712,120 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     );
   }
 
-  // CANDIDATE USER VIEW
+  // ── CANDIDATE VIEW ────────────────────────────────────────────────────────
+
+  // ✅ While we don't know profile yet, show a single full-page skeleton
+  // This prevents ANY flash of wrong content
+  if (pageLoading || profileLoading) {
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="lg:col-span-3 w-full">
+          {/* Banner skeleton */}
+          <div className="bg-gray-100 animate-pulse rounded-xl h-24 mb-6" />
+          {/* Stats skeleton */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            {[1, 2, 3].map(i => (
+              <div key={i} className="bg-gray-100 animate-pulse rounded-xl h-20" />
+            ))}
+          </div>
+          {/* Loading indicator with message */}
+          <div className="flex items-center justify-center py-12 gap-3">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 flex-shrink-0" />
+            <p className="text-gray-500 text-sm">Loading your profile...</p>
+          </div>
+        </div>
+        {/* Sidebar skeleton */}
+        <div className="lg:col-span-1 w-full space-y-4">
+          <div className="bg-gray-100 animate-pulse rounded-xl h-80" />
+          <div className="bg-gray-100 animate-pulse rounded-xl h-48" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         <div className="lg:col-span-3 w-full">
           <div className="mb-8">
-            <AIMatchBanner 
-              matchFilter={matchFilter}
-              onSetMatchFilter={setMatchFilter}
-              aiMatchesCount={aiMatches.filter(m => (m.matchScore || 0) >= 90).length}
-              appliedJobsCount={appliedJobs.length}
-              filteredMatchesLength={displayJobs.length}
-            />
-            
+
+            {/* ── Banner area: profile incomplete OR AI match banner ── */}
+            {!isProfileReady ? (
+              <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg p-6 mb-6 text-white">
+                <div className="flex items-start gap-4">
+                  <div className="bg-white/20 p-3 rounded-full flex-shrink-0">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg">Complete Your Profile to Unlock AI Matches</h3>
+                    <p className="text-sm text-yellow-100 mt-1">
+                      Your profile is {completionPercentage}% complete. Please reach at least 80% to see personalized job matches.
+                    </p>
+                    <div className="mt-3 flex items-center gap-4">
+                      <div className="flex-1 max-w-xs">
+                        <div className="w-full bg-white/30 rounded-full h-2">
+                          <div className="bg-white h-2 rounded-full transition-all duration-500" style={{ width: `${completionPercentage}%` }} />
+                        </div>
+                      </div>
+                      <span className="text-sm font-semibold">{completionPercentage}%</span>
+                    </div>
+                    <button
+                      onClick={() => onViewChange?.('profile')}
+                      className="mt-3 px-4 py-2 bg-white text-orange-600 rounded-lg text-sm font-semibold hover:bg-gray-100 transition-colors"
+                    >
+                      Complete Profile Now →
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <AIMatchBanner
+                matchFilter={matchFilter}
+                onSetMatchFilter={setMatchFilter}
+                aiMatchesCount={aiMatches.filter(m => (m.matchScore || 0) >= 90).length}
+                appliedJobsCount={appliedJobs.length}
+                filteredMatchesLength={displayJobs.length}
+              />
+            )}
+
+            {/* Candidate info strip — only when matches are loaded */}
             {candidateInfo && aiMatches.length > 0 && (
               <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm text-gray-700">
-                <span className="font-medium">👤 {candidateInfo.name}</span> • 
-                <span className="ml-2">📊 {candidateInfo.level}</span> • 
-                <span className="ml-2">💼 {candidateInfo.total_experience_years} years exp</span> • 
+                <span className="font-medium">👤 {candidateInfo.name}</span> •
+                <span className="ml-2">📊 {candidateInfo.level}</span> •
+                <span className="ml-2">💼 {candidateInfo.total_experience_years} years exp</span> •
                 <span className="ml-2">🎯 Skills: {candidateInfo.skills?.slice(0, 5).join(', ')}</span>
               </div>
             )}
 
             <StatsCards aiMatches={aiMatches} />
 
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                <p className="ml-3 text-gray-600">Loading AI job matches...</p>
+            {/* ── Main content area ── */}
+            {matchesLoading ? (
+              // AI matching in progress — show spinner ONLY here, not the "no matches" empty state
+              <div className="flex items-center justify-center py-12 gap-3">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 flex-shrink-0" />
+                <div>
+                  <p className="text-gray-700 font-medium">Finding your best job matches...</p>
+                  <p className="text-gray-400 text-sm mt-1">AI is analysing your profile against all open roles</p>
+                </div>
               </div>
             ) : jobError ? (
-              <div className="text-center py-12 bg-red-50 rounded-lg">
-                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
-                <p className="text-red-600">{jobError}</p>
-                <button onClick={() => fetchAiJobMatches()} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Retry</button>
+              <div className={`text-center py-12 rounded-lg ${!isProfileReady ? 'bg-yellow-50' : 'bg-red-50'}`}>
+                <AlertCircle className={`w-12 h-12 mx-auto mb-3 ${!isProfileReady ? 'text-yellow-500' : 'text-red-500'}`} />
+                <p className={`${!isProfileReady ? 'text-yellow-700' : 'text-red-600'}`}>{jobError}</p>
+                {!isProfileReady ? (
+                  <button onClick={() => onViewChange?.('profile')} className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
+                    Complete Profile Now
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => fetchAiJobMatches(completionPercentage)}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Retry
+                  </button>
+                )}
               </div>
             ) : displayJobs.length === 0 && aiMatches.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -858,7 +837,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             ) : displayJobs.length === 0 && aiMatches.length > 0 ? (
               <div className="text-center py-12 bg-yellow-50 rounded-lg">
                 <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-3" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No matches for filter</h3>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">No matches for this filter</h3>
                 <p className="text-gray-600">Try changing the filter to see more job matches.</p>
               </div>
             ) : (
@@ -885,12 +864,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           </div>
         </div>
 
+        {/* Right Sidebar */}
         <div className="lg:col-span-1 w-full space-y-4 sm:space-y-6">
-          {profileLoading ? (
-            <div className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div></div>
-            </div>
-          ) : fullCandidateProfile === null ? (
+          {fullCandidateProfile === null ? (
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Complete Your Profile</h3>
               <div className="text-center">
@@ -902,64 +878,91 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           ) : (
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Profile Progress</h3>
-              <ProfileProgressRing percentage={completionPercentage} sections={completionStatus?.sections} />
-              <button onClick={() => onViewChange?.('profile')} className="w-full mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">
-                {completionPercentage === 100 ? 'Update Profile' : 'Complete Profile'}
+              {completionPercentage < 80 && (
+                <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-3 mb-4">
+                  <p className="text-xs font-semibold text-yellow-700">
+                    ⚠️ {80 - completionPercentage}% more needed for AI matches
+                  </p>
+                  <div className="w-full bg-yellow-200 rounded-full h-1.5 mt-2">
+                    <div className="bg-yellow-600 h-1.5 rounded-full transition-all duration-500" style={{ width: `${completionPercentage}%` }} />
+                  </div>
+                </div>
+              )}
+              <ProfileProgressRing
+                percentage={completionPercentage}
+                sections={completionStatus?.sections}
+                showWarning={completionPercentage < 80}
+              />
+              <button
+                onClick={() => onViewChange?.('profile')}
+                className={`w-full mt-4 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  completionPercentage < 80
+                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white animate-pulse'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {completionPercentage < 80
+                  ? `⚠️ Complete Profile (${completionPercentage}%)`
+                  : completionPercentage === 100 ? 'Update Profile' : 'Complete Profile'}
               </button>
             </div>
           )}
-          
-          <div className="sticky top-96">
-            <SimulationScheduler simulations={realSimulations} onStartSimulation={(sim) => onViewChange?.('simulation')} />
+
+          <div>
+            <SimulationScheduler
+              simulations={realSimulations}
+              onStartSimulation={(sim) => onViewChange?.('simulation')}
+            />
           </div>
         </div>
       </div>
 
-     {showApplicationModal && selectedMatchForApply && fullCandidateProfile && (
-  <JobApplicationModal
-    isOpen={showApplicationModal}
-    onClose={() => { setShowApplicationModal(false); setSelectedMatchForApply(null); }}
-    onSuccess={() => {
-      if (selectedMatchForApply) {
-        appliedJobsManager.addAppliedJob(selectedMatchForApply.id);
-        setAppliedJobs([...appliedJobs, selectedMatchForApply.id]);
-      }
-      setShowApplicationModal(false);
-      setSelectedMatchForApply(null);
-    }}
-    job={{
-      id: selectedMatchForApply.id,
-      title: selectedMatchForApply.title,
-      company_name: selectedMatchForApply.company,
-      location: selectedMatchForApply.location,
-      salary_range: selectedMatchForApply.salary,
-      job_type: selectedMatchForApply.type,
-      work_arrangement: selectedMatchForApply.workArrangement,
-      description: selectedMatchForApply.description,
-      requirements: selectedMatchForApply.requirements,
-      skills_required: selectedMatchForApply.skills,
-      screeningQuestions: selectedMatchForApply.screeningQuestions,
-      expires_at: selectedMatchForApply.expiresAt
-    }}
-    candidateProfile={{
-      profile: fullCandidateProfile.profile?.personal_info || {},
-      skills: fullCandidateProfile.skills || [],
-      education: fullCandidateProfile.education || [],
-      workExperience: fullCandidateProfile.work_experience || [],
-      portfolioLinks: fullCandidateProfile.portfolio_links || [],
-      resumes: fullCandidateProfile.resumes || [],
-    }}
-    matchScore={selectedMatchForApply.matchScore || 78.7}
-    matchDetails={{  // ✅ ADD THIS - pass the match details
-      criteria_scores: selectedMatchForApply.criteriaScores,
-      skills_breakdown: selectedMatchForApply.skillsBreakdown,
-      qualifications_breakdown: selectedMatchForApply.qualificationsBreakdown,
-      experience_breakdown: selectedMatchForApply.experienceBreakdown,
-      preferences_breakdown: selectedMatchForApply.preferencesBreakdown
-    }}
-    requiredDocuments={['Resume', 'Cover Letter']}
-  />
-)}
+      {/* Modals */}
+      {showApplicationModal && selectedMatchForApply && fullCandidateProfile && (
+        <JobApplicationModal
+          isOpen={showApplicationModal}
+          onClose={() => { setShowApplicationModal(false); setSelectedMatchForApply(null); }}
+          onSuccess={() => {
+            if (selectedMatchForApply) {
+              appliedJobsManager.addAppliedJob(selectedMatchForApply.id);
+              setAppliedJobs([...appliedJobs, selectedMatchForApply.id]);
+            }
+            setShowApplicationModal(false);
+            setSelectedMatchForApply(null);
+          }}
+          job={{
+            id: selectedMatchForApply.id,
+            title: selectedMatchForApply.title,
+            company_name: selectedMatchForApply.company,
+            location: selectedMatchForApply.location,
+            salary_range: selectedMatchForApply.salary,
+            job_type: selectedMatchForApply.type,
+            work_arrangement: selectedMatchForApply.workArrangement,
+            description: selectedMatchForApply.description,
+            requirements: selectedMatchForApply.requirements,
+            skills_required: selectedMatchForApply.skills,
+            screeningQuestions: selectedMatchForApply.screeningQuestions,
+            expires_at: selectedMatchForApply.expiresAt
+          }}
+          candidateProfile={{
+            profile: fullCandidateProfile.profile?.personal_info || {},
+            skills: fullCandidateProfile.skills || [],
+            education: fullCandidateProfile.education || [],
+            workExperience: fullCandidateProfile.work_experience || [],
+            portfolioLinks: fullCandidateProfile.portfolio_links || [],
+            resumes: fullCandidateProfile.resumes || [],
+          }}
+          matchScore={selectedMatchForApply.matchScore || 78.7}
+          matchDetails={{
+            criteria_scores: selectedMatchForApply.criteriaScores,
+            skills_breakdown: selectedMatchForApply.skillsBreakdown,
+            qualifications_breakdown: selectedMatchForApply.qualificationsBreakdown,
+            experience_breakdown: selectedMatchForApply.experienceBreakdown,
+            preferences_breakdown: selectedMatchForApply.preferencesBreakdown
+          }}
+          requiredDocuments={['Resume', 'Cover Letter']}
+        />
+      )}
 
       {showDetails && selectedMatch && (
         <JobViewModal

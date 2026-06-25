@@ -124,8 +124,7 @@ except ImportError:
 
 # API Configuration
 BASE_URL = "http://localhost:3001/api/v1"
-EMAIL = "ccilem4@gmail.com"
-PASSWORD = "123456@Uc"
+BACKEND_REQUEST_TIMEOUT = 120
 
 log_info(f"📡 API Configuration:")
 log_info(f"   BASE_URL: {BASE_URL}")
@@ -2477,36 +2476,17 @@ def extract_complete_candidate_data(profile_data: Dict) -> Dict:
 class BackendClient:
     def __init__(self):
         self.base_url = BASE_URL
-        self.token = None
         self.headers = {"Content-Type": "application/json"}
-    
-    def login(self):
-        log_info("🔐 Attempting login...")
-        try:
-            resp = requests.post(f"{self.base_url}/auth/login", json={"email": EMAIL, "password": PASSWORD}, timeout=30)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("success"):
-                    self.token = data["data"]["token"]
-                    self.headers["Authorization"] = f"Bearer {self.token}"
-                    log_info("✅ Login successful!")
-                    return True
-            log_error("❌ Login failed")
-            return False
-        except Exception as e:
-            log_error(f"❌ Login error: {e}")
-            return False
     
     def get_profile(self, candidate_id):
         try:
             log_info(f"🔍 Calling backend API for candidate: {candidate_id}")
             log_info(f"   URL: {self.base_url}/candidates/full-profile/{candidate_id}")
-            log_info(f"   Headers: {self.headers}")
             
             resp = requests.get(
                 f"{self.base_url}/candidates/full-profile/{candidate_id}", 
                 headers=self.headers, 
-                timeout=30
+                timeout=BACKEND_REQUEST_TIMEOUT
             )
             
             log_info(f"📊 Response status: {resp.status_code}")
@@ -2529,7 +2509,7 @@ class BackendClient:
     
     def get_jobs(self):
         try:
-            resp = requests.get(f"{self.base_url}/jobs/candidate/list", headers=self.headers, timeout=30)
+            resp = requests.get(f"{self.base_url}/jobs/candidate/list", headers=self.headers, timeout=BACKEND_REQUEST_TIMEOUT)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("success") and data.get("data"):
@@ -2546,7 +2526,7 @@ class BackendClient:
     def get_job_by_id(self, job_id: str):
         """Get a single job by ID from the database"""
         try:
-            resp = requests.get(f"{self.base_url}/jobs/candidate/{job_id}", headers=self.headers, timeout=30)
+            resp = requests.get(f"{self.base_url}/jobs/candidate/{job_id}", headers=self.headers, timeout=BACKEND_REQUEST_TIMEOUT)
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("success") and data.get("data"):
@@ -2571,10 +2551,7 @@ app.add_middleware(
 )
 
 backend = BackendClient()
-if backend.login():
-    log_info("✅ Backend connected!")
-else:
-    log_error("❌ Backend connection failed!")
+log_info("✅ Backend client ready - no login required; requests use candidate_id only")
 
 log_info("🧠 Initializing Database-Driven Matching System...")
 ml_start = time.time()
@@ -2598,14 +2575,27 @@ log_info("="*70)
 # API ENDPOINTS
 # =====================================================
 
+async def parse_candidate_id_request(request: Request):
+    body = await request.body()
+    data = json.loads(body.decode('utf-8')) if body else {}
+    forbidden_fields = [field for field in ("username", "email", "password") if data.get(field)]
+
+    if forbidden_fields:
+        return None, {
+            "success": False,
+            "error": "Do not send username, email, or password. Send only candidate_id."
+        }
+
+    return data.get("candidate_id"), None
+
 @app.post("/match")
 async def match_candidate(request: Request):
     request_start = time.time()
     
     try:
-        body = await request.body()
-        data = json.loads(body.decode('utf-8'))
-        candidate_id = data.get("candidate_id")
+        candidate_id, request_error = await parse_candidate_id_request(request)
+        if request_error:
+            return request_error
         
         log_info(f"\n{'='*70}")
         log_info(f"👤 Candidate ID: {candidate_id}")
@@ -2823,9 +2813,9 @@ async def match_candidate_for_job(job_id: str, request: Request):
     request_start = time.time()
     
     try:
-        body = await request.body()
-        data = json.loads(body.decode('utf-8'))
-        candidate_id = data.get("candidate_id")
+        candidate_id, request_error = await parse_candidate_id_request(request)
+        if request_error:
+            return request_error
         
         log_info(f"\n{'='*70}")
         log_info(f"👤 Candidate ID: {candidate_id}")
