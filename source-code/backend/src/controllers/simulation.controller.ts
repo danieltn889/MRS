@@ -954,172 +954,181 @@ class SimulationController extends BaseController {
     }
   }
 
-  async getSimulations(req: AuthenticatedRequest, res: Response): Promise<void> {
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('📞 [getSimulations] CALLED');
-    console.log('═══════════════════════════════════════════════════════════════');
+ async getSimulations(req: AuthenticatedRequest, res: Response): Promise<void> {
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('📞 [getSimulations] CALLED');
+  console.log('═══════════════════════════════════════════════════════════════');
 
-    try {
-      const {
-        page = '1',
-        limit = '20',
-        type,
-        difficulty,
-        status = 'all',
-        sort = '-created_at',
-        search = ''
-      } = req.query;
+  try {
+    const {
+      page = '1',
+      limit = '20',
+      type,
+      difficulty,
+      status = 'all',
+      sort = '-created_at',
+      search = '',
+      jobId  // ✅ ADD THIS - Job ID filter
+    } = req.query;
 
-      console.log('📋 REQUEST PARAMS:', {
-        page,
-        limit,
-        type,
-        difficulty,
-        status,
-        sort,
-        search,
-        userId: req.user.id,
-        userType: req.user.user_type,
-        timestamp: new Date().toISOString()
-      });
+    console.log('📋 REQUEST PARAMS:', {
+      page,
+      limit,
+      type,
+      difficulty,
+      status,
+      sort,
+      search,
+      jobId,  // ✅ ADD THIS
+      userId: req.user.id,
+      userType: req.user.user_type,
+      timestamp: new Date().toISOString()
+    });
 
-      const validPage = Math.max(1, Number(page));
-      const validLimit = Math.min(100, Number(limit));
-      const offset = (validPage - 1) * validLimit;
+    const validPage = Math.max(1, Number(page));
+    const validLimit = Math.min(100, Number(limit));
+    const offset = (validPage - 1) * validLimit;
 
-      let whereConditions: string[] = [];
-      const params: any[] = [];
-      let paramIndex = 1;
+    let whereConditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
 
-      // Get user's company ID
-      console.log('🔍 Getting user company ID for user:', req.user.id);
-      const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
-      console.log('📊 User company ID:', userCompanyId);
-      console.log('📊 User type:', req.user.user_type);
+    // Get user's company ID
+    console.log('🔍 Getting user company ID for user:', req.user.id);
+    const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
+    console.log('📊 User company ID:', userCompanyId);
+    console.log('📊 User type:', req.user.user_type);
 
-      // Base access control
-      if (req.user.user_type === 'candidate') {
-        whereConditions.push(`EXISTS (
+    // Base access control
+    if (req.user.user_type === 'candidate') {
+      whereConditions.push(`EXISTS (
         SELECT 1 FROM simulation_sessions ss 
         LEFT JOIN simulations sim ON ss.simulation_id = sim.id
         WHERE sim.template_id = st.id AND ss.user_id = $${paramIndex++}
       )`);
-        params.push(req.user.id);
-        console.log('🔐 Candidate access: showing only taken simulations');
-      } else if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
-        if (userCompanyId) {
-          whereConditions.push(`(st.is_public = true OR st.company_id = $${paramIndex++})`);
-          params.push(userCompanyId);
-          console.log('🔐 Company user access: showing own + public simulations');
-        } else {
-          whereConditions.push(`st.is_public = true`);
-          console.log('🔐 Company user without company: showing only public simulations');
-        }
-      } else if (req.user.user_type === 'system_admin') {
-        console.log('🔐 System admin access: showing all simulations');
+      params.push(req.user.id);
+      console.log('🔐 Candidate access: showing only taken simulations');
+    } else if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      if (userCompanyId) {
+        whereConditions.push(`(st.is_public = true OR st.company_id = $${paramIndex++})`);
+        params.push(userCompanyId);
+        console.log('🔐 Company user access: showing own + public simulations');
       } else {
         whereConditions.push(`st.is_public = true`);
-        console.log('🔐 Default access: showing only public simulations');
+        console.log('🔐 Company user without company: showing only public simulations');
       }
+    } else if (req.user.user_type === 'system_admin') {
+      console.log('🔐 System admin access: showing all simulations');
+    } else {
+      whereConditions.push(`st.is_public = true`);
+      console.log('🔐 Default access: showing only public simulations');
+    }
 
-      // ✅ Status filter - using latest simulation attempt status
-      if (status !== 'all') {
-        if (status === 'scheduled') {
-          whereConditions.push(`EXISTS (
+    // ✅ ADD THIS - Job ID filter
+    if (jobId) {
+      whereConditions.push(`st.job_id = $${paramIndex++}`);
+      params.push(jobId);
+      console.log('📊 Job ID filter:', jobId);
+    }
+
+    // ✅ Status filter - using latest simulation attempt status
+    if (status !== 'all') {
+      if (status === 'scheduled') {
+        whereConditions.push(`EXISTS (
           SELECT 1 FROM simulations sim 
           WHERE sim.template_id = st.id AND sim.status = 'scheduled'
           ORDER BY sim.created_at DESC LIMIT 1
         )`);
-          console.log('📊 Status filter: scheduled');
-        } else if (status === 'in_progress') {
-          whereConditions.push(`EXISTS (
+        console.log('📊 Status filter: scheduled');
+      } else if (status === 'in_progress') {
+        whereConditions.push(`EXISTS (
           SELECT 1 FROM simulations sim 
           WHERE sim.template_id = st.id AND sim.status = 'in_progress'
           ORDER BY sim.created_at DESC LIMIT 1
         )`);
-          console.log('📊 Status filter: in_progress');
-        } else if (status === 'paused') {
-          whereConditions.push(`EXISTS (
+        console.log('📊 Status filter: in_progress');
+      } else if (status === 'paused') {
+        whereConditions.push(`EXISTS (
           SELECT 1 FROM simulations sim 
           WHERE sim.template_id = st.id AND sim.status = 'paused'
           ORDER BY sim.created_at DESC LIMIT 1
         )`);
-          console.log('📊 Status filter: paused');
-        } else if (status === 'completed') {
-          whereConditions.push(`EXISTS (
+        console.log('📊 Status filter: paused');
+      } else if (status === 'completed') {
+        whereConditions.push(`EXISTS (
           SELECT 1 FROM simulations sim 
           WHERE sim.template_id = st.id AND sim.status = 'completed'
           ORDER BY sim.created_at DESC LIMIT 1
         )`);
-          console.log('📊 Status filter: completed');
-        } else if (status === 'expired') {
-          whereConditions.push(`EXISTS (
+        console.log('📊 Status filter: completed');
+      } else if (status === 'expired') {
+        whereConditions.push(`EXISTS (
           SELECT 1 FROM simulations sim 
           WHERE sim.template_id = st.id AND sim.status = 'expired'
           ORDER BY sim.created_at DESC LIMIT 1
         )`);
-          console.log('📊 Status filter: expired');
-        } else if (status === 'cancelled') {
-          whereConditions.push(`EXISTS (
+        console.log('📊 Status filter: expired');
+      } else if (status === 'cancelled') {
+        whereConditions.push(`EXISTS (
           SELECT 1 FROM simulations sim 
           WHERE sim.template_id = st.id AND sim.status = 'cancelled'
           ORDER BY sim.created_at DESC LIMIT 1
         )`);
-          console.log('📊 Status filter: cancelled');
-        } else if (status === 'failed') {
-          whereConditions.push(`EXISTS (
+        console.log('📊 Status filter: cancelled');
+      } else if (status === 'failed') {
+        whereConditions.push(`EXISTS (
           SELECT 1 FROM simulations sim 
           WHERE sim.template_id = st.id AND sim.status = 'failed'
           ORDER BY sim.created_at DESC LIMIT 1
         )`);
-          console.log('📊 Status filter: failed');
-        }
+        console.log('📊 Status filter: failed');
       }
+    }
 
-      // Type filter
-      if (type) {
-        whereConditions.push(`st.type = $${paramIndex++}`);
-        params.push(type);
-        console.log('📊 Type filter:', type);
-      }
+    // Type filter
+    if (type) {
+      whereConditions.push(`st.type = $${paramIndex++}`);
+      params.push(type);
+      console.log('📊 Type filter:', type);
+    }
 
-      // Difficulty filter
-      if (difficulty) {
-        whereConditions.push(`st.difficulty = $${paramIndex++}`);
-        params.push(difficulty);
-        console.log('📊 Difficulty filter:', difficulty);
-      }
+    // Difficulty filter
+    if (difficulty) {
+      whereConditions.push(`st.difficulty = $${paramIndex++}`);
+      params.push(difficulty);
+      console.log('📊 Difficulty filter:', difficulty);
+    }
 
-      // Search filter
-      if (search && typeof search === 'string' && search.trim()) {
-        whereConditions.push(`(st.name ILIKE $${paramIndex++} OR st.description ILIKE $${paramIndex++})`);
-        params.push(`%${search}%`, `%${search}%`);
-        console.log('📊 Search filter:', search);
-      }
+    // Search filter
+    if (search && typeof search === 'string' && search.trim()) {
+      whereConditions.push(`(st.name ILIKE $${paramIndex++} OR st.description ILIKE $${paramIndex++})`);
+      params.push(`%${search}%`, `%${search}%`);
+      console.log('📊 Search filter:', search);
+    }
 
-      const whereClause = whereConditions.length > 0
-        ? `WHERE ${whereConditions.join(' AND ')}`
-        : '';
+    const whereClause = whereConditions.length > 0
+      ? `WHERE ${whereConditions.join(' AND ')}`
+      : '';
 
-      console.log('📊 Where clause:', whereClause);
-      console.log('📊 Query params:', params);
+    console.log('📊 Where clause:', whereClause);
+    console.log('📊 Query params:', params);
 
-      // Sort order
-      let orderBy = 'st.created_at DESC';
-      if (sort === '-updated_at') orderBy = 'st.updated_at DESC';
-      else if (sort === 'updated_at') orderBy = 'st.updated_at ASC';
-      else if (sort === '-created_at') orderBy = 'st.created_at DESC';
-      else if (sort === 'created_at') orderBy = 'st.created_at ASC';
-      else if (sort === 'name') orderBy = 'st.name ASC';
-      else if (sort === '-name') orderBy = 'st.name DESC';
+    // Sort order
+    let orderBy = 'st.created_at DESC';
+    if (sort === '-updated_at') orderBy = 'st.updated_at DESC';
+    else if (sort === 'updated_at') orderBy = 'st.updated_at ASC';
+    else if (sort === '-created_at') orderBy = 'st.created_at DESC';
+    else if (sort === 'created_at') orderBy = 'st.created_at ASC';
+    else if (sort === 'name') orderBy = 'st.name ASC';
+    else if (sort === '-name') orderBy = 'st.name DESC';
 
-      console.log('📊 Sort order:', orderBy);
+    console.log('📊 Sort order:', orderBy);
 
-      // Main query - Get latest simulation attempt status
-      console.log('🔍 Executing main query...');
-      const queryStartTime = Date.now();
+    // Main query - Get latest simulation attempt status
+    console.log('🔍 Executing main query...');
+    const queryStartTime = Date.now();
 
-      const result = await DatabaseService.query(`
+    const result = await DatabaseService.query(`
       SELECT 
         st.*,
         c.name as company_name,
@@ -1162,173 +1171,173 @@ class SimulationController extends BaseController {
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `, [...params, validLimit, offset]);
 
-      const queryEndTime = Date.now();
-      console.log(`📊 Main query executed in ${queryEndTime - queryStartTime}ms`);
-      console.log('📊 Query result:', {
-        rowCount: result.rows.length,
-        hasRows: result.rows.length > 0
+    const queryEndTime = Date.now();
+    console.log(`📊 Main query executed in ${queryEndTime - queryStartTime}ms`);
+    console.log('📊 Query result:', {
+      rowCount: result.rows.length,
+      hasRows: result.rows.length > 0
+    });
+
+    if (result.rows.length > 0) {
+      const firstRow = result.rows[0];
+      console.log('📊 First result sample:', {
+        id: firstRow.id,
+        name: firstRow.name,
+        is_active: firstRow.is_active,
+        latest_simulation_status: firstRow.latest_simulation_status,
+        computed_status: firstRow.computed_status,
+        company_name: firstRow.company_name,
+        total_instances: firstRow.total_instances,
+        avg_score: firstRow.avg_score
       });
+    }
 
-      if (result.rows.length > 0) {
-        const firstRow = result.rows[0];
-        console.log('📊 First result sample:', {
-          id: firstRow.id,
-          name: firstRow.name,
-          is_active: firstRow.is_active,
-          latest_simulation_status: firstRow.latest_simulation_status,
-          computed_status: firstRow.computed_status,
-          company_name: firstRow.company_name,
-          total_instances: firstRow.total_instances,
-          avg_score: firstRow.avg_score
-        });
-      }
+    // Count query for pagination
+    console.log('🔍 Executing count query...');
+    const countStartTime = Date.now();
 
-      // Count query for pagination
-      console.log('🔍 Executing count query...');
-      const countStartTime = Date.now();
-
-      const countQuery = `
+    const countQuery = `
       SELECT COUNT(*) as total
       FROM simulation_templates st
       ${whereClause}
     `;
 
-      const countResult = await DatabaseService.query(countQuery, params);
+    const countResult = await DatabaseService.query(countQuery, params);
 
-      const countEndTime = Date.now();
-      console.log(`📊 Count query executed in ${countEndTime - countStartTime}ms`);
+    const countEndTime = Date.now();
+    console.log(`📊 Count query executed in ${countEndTime - countStartTime}ms`);
 
-      const total = parseInt(countResult.rows[0]?.total || '0');
-      console.log('📊 Total simulations count:', total);
+    const total = parseInt(countResult.rows[0]?.total || '0');
+    console.log('📊 Total simulations count:', total);
 
-      // Format results for frontend
-      const formattedResults = result.rows.map((row: any) => {
-        // Parse JSON fields if they're strings
-        let tasks = row.tasks;
-        let scoringRubric = row.scoring_rubric;
-        let tasksStructure = row.tasks_structure;
-        let metadata = row.metadata;
+    // Format results for frontend
+    const formattedResults = result.rows.map((row: any) => {
+      // Parse JSON fields if they're strings
+      let tasks = row.tasks;
+      let scoringRubric = row.scoring_rubric;
+      let tasksStructure = row.tasks_structure;
+      let metadata = row.metadata;
 
-        try {
-          if (typeof tasks === 'string') tasks = JSON.parse(tasks);
-          if (typeof scoringRubric === 'string') scoringRubric = JSON.parse(scoringRubric);
-          if (typeof tasksStructure === 'string') tasksStructure = JSON.parse(tasksStructure);
-          if (typeof metadata === 'string') metadata = JSON.parse(metadata);
-        } catch (e) {
-          console.warn('Error parsing JSON for simulation:', row.id);
-        }
+      try {
+        if (typeof tasks === 'string') tasks = JSON.parse(tasks);
+        if (typeof scoringRubric === 'string') scoringRubric = JSON.parse(scoringRubric);
+        if (typeof tasksStructure === 'string') tasksStructure = JSON.parse(tasksStructure);
+        if (typeof metadata === 'string') metadata = JSON.parse(metadata);
+      } catch (e) {
+        console.warn('Error parsing JSON for simulation:', row.id);
+      }
 
-        return {
-          id: row.id,
-          title: row.name,
-          name: row.name,
-          jobRole: tasksStructure?.jobRole || row.job_title || '',
-          jobId: row.job_id,
-          description: row.description || '',
-          duration: row.duration_minutes || 60,
-          difficulty: row.difficulty || 'intermediate',
-          objectives: tasksStructure?.objectives || [],
-          tasks: tasks || [],
-          scoring: scoringRubric || {},
-          settings: tasksStructure?.settings || {
-            allowPause: true, showTimer: true, randomizeTasks: false, allowHints: true,
-            recordScreen: false, recordAudio: false, maxAttempts: 1, timeLimit: 60,
-            environment: 'office', tools: [], constraints: [],
-          },
-          // ✅ Use the simulation attempt status
-          status: row.computed_status,
-          latest_simulation_status: row.latest_simulation_status,
-          is_active: row.is_active,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          compliance: tasksStructure?.compliance || [],
-          passFailCriteria: row.pass_fail_criteria,
-          availability: metadata?.availability || tasksStructure?.availability,
-          practiceEnabled: tasksStructure?.practiceEnabled || false,
-          practiceSimulation: tasksStructure?.practiceSimulation,
-          metadata: metadata || {},
-          company_name: row.company_name,
-          logo_url: row.logo_url,
-          avg_score: row.avg_score,
-          max_score: row.max_score,
-          min_score: row.min_score,
-          usage_count: row.usage_count,
-          total_instances: parseInt(row.total_instances || '0'),
-          completed_instances: parseInt(row.completed_instances || '0'),
-          unique_candidates: parseInt(row.unique_candidates || '0'),
-          created_by: row.created_by,
-          creator_name: row.creator_name,
-          creator_type: row.creator_type,
-          is_public: row.is_public,
-          type: row.type,
-          technologies: row.technologies,
-          skills_assessed: row.skills_assessed
-        };
-      });
-
-      console.log('📊 Formatted results count:', formattedResults.length);
-
-      // Count by status for stats
-      const statusCounts = {
-        not_started: formattedResults.filter((s: any) => s.status === 'not_started').length,
-        scheduled: formattedResults.filter((s: any) => s.status === 'scheduled').length,
-        in_progress: formattedResults.filter((s: any) => s.status === 'in_progress').length,
-        paused: formattedResults.filter((s: any) => s.status === 'paused').length,
-        completed: formattedResults.filter((s: any) => s.status === 'completed').length,
-        expired: formattedResults.filter((s: any) => s.status === 'expired').length,
-        cancelled: formattedResults.filter((s: any) => s.status === 'cancelled').length,
-        failed: formattedResults.filter((s: any) => s.status === 'failed').length,
+      return {
+        id: row.id,
+        title: row.name,
+        name: row.name,
+        jobRole: tasksStructure?.jobRole || row.job_title || '',
+        jobId: row.job_id,
+        description: row.description || '',
+        duration: row.duration_minutes || 60,
+        difficulty: row.difficulty || 'intermediate',
+        objectives: tasksStructure?.objectives || [],
+        tasks: tasks || [],
+        scoring: scoringRubric || {},
+        settings: tasksStructure?.settings || {
+          allowPause: true, showTimer: true, randomizeTasks: false, allowHints: true,
+          recordScreen: false, recordAudio: false, maxAttempts: 1, timeLimit: 60,
+          environment: 'office', tools: [], constraints: [],
+        },
+        // ✅ Use the simulation attempt status
+        status: row.computed_status,
+        latest_simulation_status: row.latest_simulation_status,
+        is_active: row.is_active,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        compliance: tasksStructure?.compliance || [],
+        passFailCriteria: row.pass_fail_criteria,
+        availability: metadata?.availability || tasksStructure?.availability,
+        practiceEnabled: tasksStructure?.practiceEnabled || false,
+        practiceSimulation: tasksStructure?.practiceSimulation,
+        metadata: metadata || {},
+        company_name: row.company_name,
+        logo_url: row.logo_url,
+        avg_score: row.avg_score,
+        max_score: row.max_score,
+        min_score: row.min_score,
+        usage_count: row.usage_count,
+        total_instances: parseInt(row.total_instances || '0'),
+        completed_instances: parseInt(row.completed_instances || '0'),
+        unique_candidates: parseInt(row.unique_candidates || '0'),
+        created_by: row.created_by,
+        creator_name: row.creator_name,
+        creator_type: row.creator_type,
+        is_public: row.is_public,
+        type: row.type,
+        technologies: row.technologies,
+        skills_assessed: row.skills_assessed
       };
+    });
 
-      console.log('📊 Status breakdown:', statusCounts);
+    console.log('📊 Formatted results count:', formattedResults.length);
 
-      const responseData = {
-        page: validPage,
-        limit: validLimit,
-        total: total,
-        pages: Math.ceil(total / validLimit),
-        has_next: validPage * validLimit < total,
-        has_prev: validPage > 1,
-        stats: {
-          total_simulations: total,
-          ...statusCounts,
-          avg_score_all: formattedResults.length > 0
-            ? (formattedResults.reduce((sum: number, s: any) => sum + (Number(s.avg_score) || 0), 0) / formattedResults.length).toFixed(1)
-            : 0,
-          total_instances: formattedResults.reduce((sum: number, s: any) => sum + (s.total_instances || 0), 0),
-          unique_candidates: new Set(formattedResults.flatMap((s: any) => s.unique_candidates || 0)).size
-        }
-      };
+    // Count by status for stats
+    const statusCounts = {
+      not_started: formattedResults.filter((s: any) => s.status === 'not_started').length,
+      scheduled: formattedResults.filter((s: any) => s.status === 'scheduled').length,
+      in_progress: formattedResults.filter((s: any) => s.status === 'in_progress').length,
+      paused: formattedResults.filter((s: any) => s.status === 'paused').length,
+      completed: formattedResults.filter((s: any) => s.status === 'completed').length,
+      expired: formattedResults.filter((s: any) => s.status === 'expired').length,
+      cancelled: formattedResults.filter((s: any) => s.status === 'cancelled').length,
+      failed: formattedResults.filter((s: any) => s.status === 'failed').length,
+    };
 
-      console.log('📄 Pagination response:', {
-        page: responseData.page,
-        limit: responseData.limit,
-        total: responseData.total,
-        pages: responseData.pages,
-        has_next: responseData.has_next,
-        has_prev: responseData.has_prev
-      });
+    console.log('📊 Status breakdown:', statusCounts);
 
-      console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [getSimulations] COMPLETED SUCCESSFULLY');
-      console.log('═══════════════════════════════════════════════════════════════');
+    const responseData = {
+      page: validPage,
+      limit: validLimit,
+      total: total,
+      pages: Math.ceil(total / validLimit),
+      has_next: validPage * validLimit < total,
+      has_prev: validPage > 1,
+      stats: {
+        total_simulations: total,
+        ...statusCounts,
+        avg_score_all: formattedResults.length > 0
+          ? (formattedResults.reduce((sum: number, s: any) => sum + (Number(s.avg_score) || 0), 0) / formattedResults.length).toFixed(1)
+          : 0,
+        total_instances: formattedResults.reduce((sum: number, s: any) => sum + (s.total_instances || 0), 0),
+        unique_candidates: new Set(formattedResults.flatMap((s: any) => s.unique_candidates || 0)).size
+      }
+    };
 
-      ResponseService.paginated(res, formattedResults, responseData);
+    console.log('📄 Pagination response:', {
+      page: responseData.page,
+      limit: responseData.limit,
+      total: responseData.total,
+      pages: responseData.pages,
+      has_next: responseData.has_next,
+      has_prev: responseData.has_prev
+    });
 
-    } catch (error: any) {
-      console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [getSimulations] ERROR');
-      console.error('═══════════════════════════════════════════════════════════════');
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        code: error.code,
-        detail: error.detail
-      });
-      console.error('═══════════════════════════════════════════════════════════════');
-      ResponseService.error(res, 'Failed to fetch simulations', 500, null, this.formatError(error));
-    }
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('✅ [getSimulations] COMPLETED SUCCESSFULLY');
+    console.log('═══════════════════════════════════════════════════════════════');
+
+    ResponseService.paginated(res, formattedResults, responseData);
+
+  } catch (error: any) {
+    console.error('═══════════════════════════════════════════════════════════════');
+    console.error('❌ [getSimulations] ERROR');
+    console.error('═══════════════════════════════════════════════════════════════');
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      detail: error.detail
+    });
+    console.error('═══════════════════════════════════════════════════════════════');
+    ResponseService.error(res, 'Failed to fetch simulations', 500, null, this.formatError(error));
   }
+}
 
   async getSimulationById(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {

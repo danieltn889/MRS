@@ -1,14 +1,14 @@
 // Dialogs/index.tsx - COMPLETE WITH DETAILED GITHUB STATS COMPACT
 import React, { useState, useEffect } from 'react';
-import { 
-  Play, Pause, Send, CheckCircle, AlertCircle, X, Github, Star, GitFork, 
-  Eye, GitCommit, Users, Activity, TrendingUp, Search, Loader2, Edit, 
+import {
+  Play, Pause, Send, CheckCircle, AlertCircle, X, Github, Star, GitFork,
+  Eye, GitCommit, Users, Activity, TrendingUp, Search, Loader2, Edit,
   RefreshCw, Download, Save, Brain, FolderGit2, ExternalLink, Copy, Timer,
-  GitPullRequest, Code, ChevronDown, ChevronUp, MessageCircle, Calendar, 
+  GitPullRequest, Code, ChevronDown, ChevronUp, MessageCircle, Calendar,
   User, GitBranch, Clock, XCircle, FileCode
 } from 'lucide-react';
 import aiEvaluationService from '../../../services/aiEvaluation.service';
-import { calculateGitHubScoreForRepo,verifyGitHubUser } from '../../../services/simulationAPI';
+import { calculateGitHubScoreForRepo, verifyGitHubUser } from '../../../services/simulationAPI';
 import { GitHubStatsCompact } from '../GitHubStatsCompact';
 import { githubAuthService } from '../../../services/githubAuth.service';
 
@@ -131,7 +131,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m`;
     }
@@ -153,15 +153,15 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const progressPercentage = sessionData.progress || 
-    (sessionData.currentTask && sessionData.totalTasks 
-      ? Math.round((sessionData.currentTask / sessionData.totalTasks) * 100) 
+  const progressPercentage = sessionData.progress ||
+    (sessionData.currentTask && sessionData.totalTasks
+      ? Math.round((sessionData.currentTask / sessionData.totalTasks) * 100)
       : 0);
 
   const gitCommand = sessionData.githubRepo?.repoUrl
     ? `git clone ${sessionData.githubRepo.repoUrl}`
     : '';
-    
+
   const handleViewReport = () => {
     if (onViewReport && sessionData.sessionId) {
       onViewReport(sessionData.sessionId);
@@ -177,7 +177,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-lg w-full border border-gray-700 flex flex-col max-h-[90vh]">
-        
+
         <div className="p-6 pb-4 border-b border-gray-700 flex-shrink-0">
           <div className="text-center">
             <div className="bg-orange-500/20 rounded-full p-3 inline-flex mx-auto mb-3">
@@ -191,7 +191,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          
+
           <div className="bg-gray-900 rounded-lg p-4 border border-gray-700">
             <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-700">
               <span className="text-gray-400 text-sm font-medium">📋 Session Details</span>
@@ -228,7 +228,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
                 <span className="text-orange-400">{progressPercentage}%</span>
               </div>
               <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-orange-500 rounded-full transition-all duration-500"
                   style={{ width: `${progressPercentage}%` }}
                 />
@@ -246,7 +246,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
                   <span className="text-green-400 text-xs font-medium">GitHub Repository Ready</span>
                   <span className="text-green-400/70 text-xs">✓ Already Created</span>
                 </div>
-                
+
                 <div className="bg-gray-800 rounded p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <code className="text-xs text-green-400 font-mono truncate flex-1">
@@ -260,7 +260,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
                       {copied === 'repoUrl' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
                     </button>
                   </div>
-                  
+
                   <div className="flex items-center gap-2">
                     <code className="flex-1 text-xs bg-gray-900 px-2 py-1 rounded text-yellow-400 font-mono truncate">
                       {gitCommand}
@@ -273,19 +273,19 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
                       {copied === 'cloneCommand' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
                     </button>
                   </div>
-                  
+
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-gray-500">Branch:</span>
                     <code className="text-purple-400">{sessionData.githubRepo.branchName || 'main'}</code>
                   </div>
-                  
+
                   {sessionData.githubRepo.candidateUsername && (
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-500">Candidate:</span>
                       <code className="text-blue-400">{sessionData.githubRepo.candidateUsername}</code>
                     </div>
                   )}
-                  
+
                   <a
                     href={sessionData.githubRepo.repoUrl}
                     target="_blank"
@@ -559,11 +559,11 @@ interface RepoCreatedDialogProps {
     candidateUsername?: string;
     sessionId?: string;
     simulationId?: string;
-    issues?: Array<{ 
-      taskIndex: number; 
-      taskName: string; 
-      issueNumber: number; 
-      issueUrl: string 
+    issues?: Array<{
+      taskIndex: number;
+      taskName: string;
+      issueNumber: number;
+      issueUrl: string
     }>;
     existing?: boolean;
   };
@@ -615,7 +615,21 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
             Your GitHub repository has been created successfully.
           </p>
         </div>
-        
+
+        <div className="mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
+          <p className="text-blue-300 text-sm font-medium mb-2">📋 Next Steps:</p>
+          <ol className="text-gray-300 text-xs space-y-1.5 list-decimal list-inside">
+            <li>You have been invited to the repository you are going to use. Check your email where your github give us is created on to accept the invitation.</li>
+            <li>Clone the repository using the command above</li>
+            <li>Switch to the <code className="bg-gray-800 px-1 rounded text-purple-400">{repoData.branchName}</code> branch</li>
+            <li>Complete the tasks listed in the issues above</li>
+            <li>Commit and push your changes to the repository</li>
+            <li>Comment <code className="bg-gray-800 px-1 rounded text-green-400">/ready</code> on each issue when done</li>
+            <li>See the issues created on the GitHub repository you were invited to</li>
+            <li>Once you read all instructions, click "Continue to Tasks" below on this popup</li>
+          </ol>
+        </div>
+
         <div className="bg-gray-900 rounded-lg p-4 mb-4 border border-gray-700">
           <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-700">
             <span className="text-gray-400 text-sm font-medium">📦 Repository</span>
@@ -632,7 +646,7 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
               )}
             </div>
           </div>
-          
+
           <div className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-1">
@@ -660,31 +674,28 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
                 <div className="flex gap-1">
                   <button
                     onClick={() => setSelectedProtocol('https')}
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      selectedProtocol === 'https' 
-                        ? 'bg-blue-600 text-white' 
+                    className={`text-xs px-2 py-0.5 rounded ${selectedProtocol === 'https'
+                        ? 'bg-blue-600 text-white'
                         : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                    }`}
+                      }`}
                   >
                     HTTPS
                   </button>
                   <button
                     onClick={() => setSelectedProtocol('ssh')}
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      selectedProtocol === 'ssh' 
-                        ? 'bg-blue-600 text-white' 
+                    className={`text-xs px-2 py-0.5 rounded ${selectedProtocol === 'ssh'
+                        ? 'bg-blue-600 text-white'
                         : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                    }`}
+                      }`}
                   >
                     SSH
                   </button>
                   <button
                     onClick={() => setSelectedProtocol('gh')}
-                    className={`text-xs px-2 py-0.5 rounded ${
-                      selectedProtocol === 'gh' 
-                        ? 'bg-blue-600 text-white' 
+                    className={`text-xs px-2 py-0.5 rounded ${selectedProtocol === 'gh'
+                        ? 'bg-blue-600 text-white'
                         : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                    }`}
+                      }`}
                   >
                     GitHub CLI
                   </button>
@@ -734,7 +745,7 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
             </div>
           </div>
         </div>
-        
+
         {repoData.issues && repoData.issues.length > 0 && (
           <div className="mb-4">
             <p className="text-gray-300 text-sm font-medium mb-2 flex items-center gap-2">
@@ -760,18 +771,7 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
             </div>
           </div>
         )}
-        
-        <div className="mb-4 p-3 bg-blue-900/20 border border-blue-800 rounded-lg">
-          <p className="text-blue-300 text-sm font-medium mb-2">📋 Next Steps:</p>
-          <ol className="text-gray-300 text-xs space-y-1.5 list-decimal list-inside">
-            <li>Clone the repository using the command above</li>
-            <li>Switch to the <code className="bg-gray-800 px-1 rounded text-purple-400">{repoData.branchName}</code> branch</li>
-            <li>Complete the tasks listed in the issues above</li>
-            <li>Commit and push your changes to the repository</li>
-            <li>Comment <code className="bg-gray-800 px-1 rounded text-green-400">/ready</code> on each issue when done</li>
-          </ol>
-        </div>
-        
+
         <div className="flex gap-3">
           <button
             onClick={handleContinue}
@@ -794,9 +794,9 @@ export const StartDialog: React.FC<StartDialogProps> = ({ session, onStart, onEx
   if (session?.status === 'completed' || session?.status === 'submitted') {
     return null;
   }
-  
+
   const isPaused = session?.status === 'paused';
-  
+
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700">
@@ -841,7 +841,7 @@ export const PauseDialog: React.FC<PauseDialogProps> = ({ open, onResume, sessio
   if (session?.status === 'completed' || session?.status === 'submitted') {
     return null;
   }
-  
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
@@ -890,7 +890,7 @@ export const SubmitDialog: React.FC<SubmitDialogProps> = ({
   const remainingSeconds = Math.max(0, minSubmitSeconds - timeSpent);
   const canSubmit = remainingSeconds === 0 && !isSubmitting;
   const displayTime = (seconds: number) => formatTime ? formatTime(seconds) : `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-  
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
@@ -898,11 +898,10 @@ export const SubmitDialog: React.FC<SubmitDialogProps> = ({
         <h2 className="text-2xl font-bold text-white">Submit Simulation?</h2>
         <p className="text-gray-400 mt-2">This cannot be undone.</p>
 
-        <div className={`mt-4 mb-4 rounded-lg border p-3 text-left ${
-          remainingSeconds > 0
+        <div className={`mt-4 mb-4 rounded-lg border p-3 text-left ${remainingSeconds > 0
             ? 'bg-yellow-900/30 border-yellow-700'
             : 'bg-green-900/30 border-green-700'
-        }`}>
+          }`}>
           <div className="flex items-center gap-2">
             <Clock size={16} className={remainingSeconds > 0 ? 'text-yellow-400' : 'text-green-400'} />
             <p className={`text-sm font-semibold ${remainingSeconds > 0 ? 'text-yellow-300' : 'text-green-300'}`}>
@@ -1016,18 +1015,18 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
   const [repoError, setRepoError] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const supportsGithub = task?.type === 'code_editor' || 
-                         task?.type === 'code_execution' || 
-                         task?.type === 'technical' ||
-                         task?.type === 'github_challenge';
-  
+  const supportsGithub = task?.type === 'code_editor' ||
+    task?.type === 'code_execution' ||
+    task?.type === 'technical' ||
+    task?.type === 'github_challenge';
+
   const isEditMode = draft.completed === true;
-  
+
   const taskSpecificRepo = taskRepositories[taskIndex];
   const displayRepo = taskSpecificRepo || currentRepo;
   const autoGithubUrl = displayRepo ? `https://github.com/${displayRepo.owner}/${displayRepo.repo}` : '';
   const displayGithubUrl = draft.githubCommitUrl || autoGithubUrl;
-  
+
   const stats = displayRepo?.fullStats;
   const fileCount = displayRepo?.files ? Object.keys(displayRepo.files).length : 0;
   const folderCount = displayRepo?.fileStructure?.filter((f: any) => f.type === 'folder').length || 0;
@@ -1122,7 +1121,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
           stats: displayRepo.fullStats,
         } : undefined,
       };
-      
+
       const result = aiEvaluationService.evaluateTask(evaluationInput) as EvaluationResult;
       setEvaluation(result);
     } catch (error) {
@@ -1151,7 +1150,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
     if (repo.startsWith('sim-')) return null;
     return { owner, repo };
   };
-  
+
   const handleLoadRepo = async () => {
     if (!repoUrl.trim()) {
       setRepoError('Please enter a GitHub repository URL');
@@ -1167,13 +1166,13 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
       await onLoadFromGitHub(parsed.owner, parsed.repo);
     }
   };
-  
+
   const handleRefreshRepo = async () => {
     if (onRefreshRepo) {
       await onRefreshRepo();
     }
   };
-  
+
   const getScoreColor = (score: number): string => {
     if (score >= 80) return 'text-green-400';
     if (score >= 60) return 'text-yellow-400';
@@ -1407,21 +1406,19 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
         <div className="flex border-b border-gray-700">
           <button
             onClick={() => setActiveTab('submission')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'submission'
+            className={`px-4 py-2 text-sm font-medium transition-colors ${activeTab === 'submission'
                 ? 'text-blue-400 border-b-2 border-blue-400'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             Submission
           </button>
           <button
             onClick={() => setActiveTab('evaluation')}
-            className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${
-              activeTab === 'evaluation'
+            className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === 'evaluation'
                 ? 'text-blue-400 border-b-2 border-blue-400'
                 : 'text-gray-400 hover:text-white'
-            }`}
+              }`}
           >
             <Brain size={14} />
             AI Evaluation
@@ -1444,7 +1441,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                     <span className="text-green-400 text-xs ml-2">✓ Connected</span>
                   )}
                 </div>
-                
+
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1464,18 +1461,18 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                     {isLoadingGitHub ? 'Loading...' : 'Load Repo'}
                   </button>
                 </div>
-                
+
                 {repoError && (
                   <p className="text-red-400 text-xs mt-2 flex items-center gap-1">
                     <AlertCircle size={12} /> {repoError}
                   </p>
                 )}
-                
+
                 <p className="text-gray-500 text-xs mt-2">
                   Enter a GitHub repository URL to load its files and get comprehensive statistics
                 </p>
               </div>
-              
+
               {displayRepo && (
                 <GitHubStatsCompact
                   currentRepo={displayRepo}
@@ -1487,7 +1484,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                   isRefreshing={isRefreshingRepo}
                 />
               )}
-              
+
               {!displayRepo && (
                 <div className="p-4 bg-gray-700/30 rounded-lg border border-dashed border-gray-600 text-center">
                   <Github size={24} className="mx-auto text-gray-500 mb-2" />
@@ -1495,27 +1492,27 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                   <p className="text-gray-500 text-xs mt-1">Enter a GitHub URL above to load comprehensive repository statistics</p>
                 </div>
               )}
-              
+
               <label className="flex items-center gap-3 rounded border border-gray-700 p-3 bg-gray-900 cursor-pointer">
                 <input type="checkbox" checked={draft.completed} onChange={(e) => onDraftChange({ ...draft, completed: e.target.checked })} className="h-5 w-5 text-green-600 rounded" />
                 <span className="text-white font-medium">I have completed this task</span>
               </label>
-              
+
               <div>
                 <label className="block text-gray-400 text-xs font-medium mb-1.5">📝 Comment / Summary</label>
                 <textarea value={draft.comment} onChange={(e) => onDraftChange({ ...draft, comment: e.target.value })} rows={3} className="w-full rounded border border-gray-700 bg-gray-900 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Describe what you accomplished..." />
               </div>
-              
+
               <div>
                 <label className="block text-gray-400 text-xs font-medium mb-1.5">⚠️ Challenges Faced</label>
                 <textarea value={draft.challenges} onChange={(e) => onDraftChange({ ...draft, challenges: e.target.value })} rows={2} className="w-full rounded border border-gray-700 bg-gray-900 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="What challenges did you encounter?" />
               </div>
-              
+
               <div>
                 <label className="block text-gray-400 text-xs font-medium mb-1.5">💡 Suggestions for Improvement</label>
                 <textarea value={draft.suggestions} onChange={(e) => onDraftChange({ ...draft, suggestions: e.target.value })} rows={2} className="w-full rounded border border-gray-700 bg-gray-900 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="How could this task be improved?" />
               </div>
-              
+
               {supportsGithub && (
                 <div>
                   <label className="block text-gray-400 text-xs font-medium mb-1.5">🔗 GitHub Repository URL (Commit Link)</label>
@@ -1553,11 +1550,11 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                       <RefreshCw size={14} className={isEvaluating ? 'animate-spin' : ''} />
                     </button>
                   </div>
-                  
+
                   <div className="p-3 bg-gray-700/50 rounded-lg">
                     <p className="text-white text-sm">{evaluation.feedback}</p>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-gray-300 text-sm font-medium">Detailed Scores</p>
@@ -1572,7 +1569,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                     </div>
                     {renderDetailedScores()}
                   </div>
-                  
+
                   {renderStrengths()}
                   {renderImprovements()}
                   {renderMetrics()}
@@ -1668,12 +1665,12 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
   const summary = result?.summary || {};
   const score = result?.score ?? scoreBreakdown.overall ?? 0;
   const passed = Boolean(result?.passed);
-  
+
   const displayTime = (seconds?: number) => {
     const safeSeconds = Number(seconds || 0);
     return formatTime ? formatTime(safeSeconds) : `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, '0')}`;
   };
-  
+
   const scoreRows = [
     ['Quality', scoreBreakdown.quality],
     ['Technical', scoreBreakdown.technical],
@@ -1714,10 +1711,10 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
   // FIXED: Use session ID for navigation instead of simulation ID
   const handleReviewResults = () => {
     console.log('📊 Review Full Results clicked in PostSubmitDialog');
-    
+
     // Get session ID from various possible locations (NOT simulation ID)
     const sessionId = session?.id || result?.sessionId || result?.session_id || result?.session?.id;
-    
+
     if (sessionId) {
       console.log('🔍 Navigating to session report with sessionId:', sessionId);
       // Use window.location.href for direct navigation to session report
@@ -1868,7 +1865,7 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
                     <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
                       <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${configMark.percentage}%` }} />
                     </div>
-                   {detailedMarks?.configFile?.found && detailedMarks.configFile.found.length > 0 && (
+                    {detailedMarks?.configFile?.found && detailedMarks.configFile.found.length > 0 && (
                       <p className="text-gray-500 text-[10px] mt-1 truncate">
                         {detailedMarks.configFile.found.slice(0, 2).join(', ')}
                         {detailedMarks.configFile.found.length > 2 && '...'}

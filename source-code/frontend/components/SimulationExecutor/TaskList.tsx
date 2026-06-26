@@ -1,7 +1,7 @@
-// TaskList.tsx - Fixed with separate handlers for Start, Complete, and Edit
+// TaskList.tsx - WITH CHAT AND ANALYTICS BUTTONS
 
 import React from 'react';
-import { CheckCircle, Clock, Circle, ChevronRight, Edit, BarChart3, Play } from 'lucide-react';
+import { CheckCircle, Clock, Circle, ChevronRight, Edit, BarChart3, Play, MessageCircle, Github } from 'lucide-react';
 
 interface SimulationTask {
   id: string;
@@ -22,6 +22,10 @@ interface TaskListProps {
   onStartTask?: (index: number) => void;       // For Start button
   onOpenGitHubStats?: (taskIndex: number) => void;
   hasGitHubRepoForTask?: (taskIndex: number) => boolean;
+  // ✅ NEW PROPS
+  onOpenChat?: () => void;
+  onOpenGitHubAnalytics?: (taskIndex: number) => void;
+  unreadCount?: number;
 }
 
 const TaskList: React.FC<TaskListProps> = ({
@@ -33,12 +37,15 @@ const TaskList: React.FC<TaskListProps> = ({
   onStartTask,
   onOpenGitHubStats,
   hasGitHubRepoForTask,
+  // ✅ NEW PROPS
+  onOpenChat,
+  onOpenGitHubAnalytics,
+  unreadCount = 0,
 }) => {
   const getTaskStatus = (index: number): 'not_started' | 'in_progress' | 'completed' => {
     const progress = taskProgress.find(p => p.task_index === index);
     const status = progress?.status || 'not_started';
     
-    // Handle any unexpected status values
     if (status === 'completed') return 'completed';
     if (status === 'in_progress') return 'in_progress';
     return 'not_started';
@@ -55,7 +62,6 @@ const TaskList: React.FC<TaskListProps> = ({
     if (onStartTask) {
       onStartTask(index);
     } else {
-      // Fallback: open completion dialog which should show start screen
       onOpenCompletion(index);
     }
   };
@@ -78,6 +84,22 @@ const TaskList: React.FC<TaskListProps> = ({
     e.preventDefault();
     console.log('📊 Opening GitHub stats for task:', taskIndex);
     onOpenGitHubStats?.(taskIndex);
+  };
+
+  // ✅ Handle Chat button click
+  const handleChatClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    console.log('💬 Opening chat from TaskList');
+    onOpenChat?.();
+  };
+
+  // ✅ Handle GitHub Analytics button click
+  const handleGitHubAnalyticsClick = (e: React.MouseEvent, taskIndex: number) => {
+    e.stopPropagation();
+    e.preventDefault();
+    console.log('📊 Opening GitHub Analytics for task:', taskIndex);
+    onOpenGitHubAnalytics?.(taskIndex);
   };
 
   // Get status icon and color
@@ -112,17 +134,53 @@ const TaskList: React.FC<TaskListProps> = ({
 
   return (
     <div className="bg-gray-800 border-b border-gray-700 px-4 py-2 flex-shrink-0">
-      {/* Progress Bar */}
-      <div className="flex items-center gap-3 mb-2">
-        <span className="text-white text-xs font-medium">
-          Progress: {completedCount}/{tasks.length} Tasks
-        </span>
-        <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-green-500 rounded-full transition-all duration-300"
-            style={{ width: `${(completedCount / tasks.length) * 100}%` }}
-          />
+      {/* Top Row: Progress + Action Buttons */}
+      <div className="flex items-center justify-between mb-2">
+        {/* Progress Bar */}
+        <div className="flex items-center gap-3 flex-1 mr-4">
+          <span className="text-white text-xs font-medium">
+            Progress: {completedCount}/{tasks.length} Tasks
+          </span>
+          <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden max-w-[200px]">
+            <div 
+              className="h-full bg-green-500 rounded-full transition-all duration-300"
+              style={{ width: `${(completedCount / tasks.length) * 100}%` }}
+            />
+          </div>
         </div>
+
+        {/* ✅ CHAT BUTTON */}
+        <button
+          onClick={handleChatClick}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-all duration-200 shadow-md flex-shrink-0"
+          title="Chat with recruiter or admin"
+        >
+          <MessageCircle size={14} />
+          Chat
+          {unreadCount > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full animate-pulse">
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
+        </button>
+
+        {/* ✅ GITHUB ANALYTICS BUTTON */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            // Open GitHub Analytics for the currently selected task
+            if (selectedTaskIndex !== undefined && selectedTaskIndex !== null) {
+              onOpenGitHubAnalytics?.(selectedTaskIndex);
+            } else {
+              onOpenGitHubAnalytics?.(0);
+            }
+          }}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium transition-all duration-200 shadow-md flex-shrink-0 ml-2"
+          title="View GitHub repository analytics"
+        >
+          <BarChart3 size={14} />
+          Analytics
+        </button>
       </div>
       
       {/* Horizontal Task List */}
@@ -151,7 +209,7 @@ const TaskList: React.FC<TaskListProps> = ({
                 {taskLabel}
               </span>
               
-              {/* GitHub Stats Button */}
+              {/* ✅ GitHub Stats Button (per task) - shows if repo exists */}
               {hasRepo && (
                 <button
                   onClick={(e) => handleGitHubStatsClick(e, i)}
@@ -164,9 +222,24 @@ const TaskList: React.FC<TaskListProps> = ({
                   `}
                   title="GitHub Stats"
                 >
-                  <BarChart3 size={10} />
+                  <Github size={10} />
                 </button>
               )}
+              
+              {/* ✅ GitHub Analytics Button (per task) */}
+              <button
+                onClick={(e) => handleGitHubAnalyticsClick(e, i)}
+                className={`
+                  text-xs px-0.5 py-0.5 rounded transition-colors flex-shrink-0
+                  ${isActive 
+                    ? 'bg-purple-500 text-white hover:bg-purple-400' 
+                    : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
+                  }
+                `}
+                title="GitHub Analytics"
+              >
+                <BarChart3 size={10} />
+              </button>
               
               {/* Edit Button for Completed Tasks */}
               {isCompleted && (
@@ -207,6 +280,22 @@ const TaskList: React.FC<TaskListProps> = ({
             </div>
           );
         })}
+      </div>
+
+      {/* ✅ Helpful Info Bar */}
+      <div className="mt-1.5 pt-1.5 border-t border-gray-700 flex items-center gap-4 text-[10px] text-gray-500">
+        <span className="flex items-center gap-1">
+          <MessageCircle size={10} className="text-blue-400" />
+          <span className="text-gray-400">Chat: Ask questions</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <BarChart3 size={10} className="text-purple-400" />
+          <span className="text-gray-400">Analytics: View repo stats</span>
+        </span>
+        <span className="flex items-center gap-1">
+          <Github size={10} className="text-gray-400" />
+          <span className="text-gray-400">GitHub: Per-task stats</span>
+        </span>
       </div>
     </div>
   );

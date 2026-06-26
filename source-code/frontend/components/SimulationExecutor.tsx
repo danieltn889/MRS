@@ -22,14 +22,14 @@ import {
   TaskCompletionDialog,
   PostSubmitDialog,
 } from './SimulationExecutor/Dialogs';
-import { 
-  AlertCircle, 
-  MessageCircle, 
-  Github, 
-  Layout, 
-  X, 
-  UploadCloud, 
-  Download, 
+import {
+  AlertCircle,
+  MessageCircle,
+  Github,
+  Layout,
+  X,
+  UploadCloud,
+  Download,
   GitBranch,
 } from 'lucide-react';
 
@@ -56,7 +56,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     currentUserType === 'company_admin' ||
     currentUserType === 'recruiter' ||
     currentUserType === 'system_admin';
-  
+
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     if (typeof window === 'undefined') return 'workspace';
     const tab = new URLSearchParams(window.location.search).get('tab');
@@ -69,7 +69,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const [githubMessage, setGithubMessage] = useState('');
   const [showGitHubStatsModal, setShowGitHubStatsModal] = useState(false);
   const [statsTaskIndex, setStatsTaskIndex] = useState<number | null>(null);
-  
+
   // Flag to prevent auto-save while starting a task
   const isStartingTaskRef = useRef(false);
   // Debounce timer for manual save
@@ -85,12 +85,12 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       void refreshCurrentRepoFromGitHub();
     }
   };
-  
+
   // Get GitHub repo from context - PER TASK STORAGE!
-  const { 
-    currentRepo, 
+  const {
+    currentRepo,
     loadRepository,
-    loadRepositoryFromUrl, 
+    loadRepositoryFromUrl,
     isLoading: isRepoLoading,
     hasRepo,
     currentTaskIndex: globalTaskIndex,
@@ -100,7 +100,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     getReposForAllTasks,
     refreshStats,
   } = useGitHubRepo();
-  
+
   const {
     session,
     tasks,
@@ -121,10 +121,10 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     refreshTaskProgress,
     startTask,
   } = useSimulationSession(sessionId || null, currentUserType);
-  
+
   // Get the SIMULATION ID from the session
   const simulationIdForChat = session?.simulationId;
-  
+
   const {
     messages,
     unreadCount,
@@ -146,7 +146,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     cancelReply,
     markAsRead,
   } = useChat(simulationIdForChat || null, user?.id, sessionId || null);
-  
+
   const {
     fileStructure,
     currentFilePath,
@@ -170,7 +170,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     loadFromGitHubRepo,
     isLoading: isFileSystemLoading,
   } = useFileSystem(sessionId, currentTask);
-  
+
   // Timer only updates UI, NO AUTO-SAVE
   const {
     timeSpent,
@@ -188,7 +188,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       updateTimeSpent?.(newTime);
     }
   });
-  
+
   // UI State
   const [showStartDialog, setShowStartDialog] = useState(true);
   const [showPauseDialog, setShowPauseDialog] = useState(false);
@@ -203,13 +203,13 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const [showMinimap, setShowMinimap] = useState(true);
   const [showTimer, setShowTimer] = useState(true);
   const [githubRepoUrl, setGithubRepoUrl] = useState('');
-  
+
   // Task type specific state
   const [code, setCode] = useState('');
   const [essay, setEssay] = useState('');
   const [mcqAnswers, setMcqAnswers] = useState<Record<string, number[]>>({});
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  
+
   const [taskCompletionDraft, setTaskCompletionDraft] = useState({
     completed: false,
     comment: '',
@@ -219,7 +219,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   });
 
   const hasValidId = sessionId && sessionId.length > 0;
-  
+
   // Helper functions
   const getGitHubRepoUrl = () => {
     if (currentTask?.data?.githubRepoUrl) {
@@ -230,14 +230,14 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     }
     return '';
   };
-  
+
   const handleLoadFromGitHub = async (owner: string, repo: string) => {
     await loadFromGitHubRepo(owner, repo);
     setTimeout(() => {
       saveCurrentRepoForTask();
     }, 500);
   };
-  
+
   const handleLoadFromUrl = async (url: string) => {
     await loadRepositoryFromUrl(url);
     setTimeout(() => {
@@ -275,7 +275,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
     loadRepoForTask(selectedIndex);
   };
-  
+
   const handleRefreshGitHubStats = async () => {
     if ((currentRepo || githubRepo?.repoUrl) && refreshStats) {
       if (!currentRepo) {
@@ -302,7 +302,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
       setGithubPushStatus('syncing');
       setGithubMessage(`Refreshing stats for ${currentRepo.owner}/${currentRepo.repo}...`);
-      
+
       try {
         await refreshCurrentRepoFromGitHub();
         await refreshStats();
@@ -320,7 +320,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       }
     }
   };
-  
+
   const handlePushToGitHub = async () => {
     if (!currentRepo) {
       setGithubMessage('No repository loaded');
@@ -328,10 +328,10 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       setTimeout(() => setGithubPushStatus('idle'), 3000);
       return;
     }
-    
+
     setGithubPushStatus('syncing');
     setGithubMessage(`Pushing to ${currentRepo.owner}/${currentRepo.repo}...`);
-    
+
     try {
       await new Promise(resolve => setTimeout(resolve, 2000));
       setGithubPushStatus('success');
@@ -349,7 +349,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       }, 3000);
     }
   };
-  
+
   const handlePullFromGitHub = async () => {
     if (!currentRepo && !githubRepo?.repoUrl) {
       setGithubMessage('No repository loaded');
@@ -380,10 +380,10 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       }
       return;
     }
-    
+
     setGithubPullStatus('syncing');
     setGithubMessage(currentRepo ? `Pulling from ${currentRepo.owner}/${currentRepo.repo}...` : 'Pulling from GitHub...');
-    
+
     try {
       await refreshCurrentRepoFromGitHub();
       setGithubPullStatus('success');
@@ -402,6 +402,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     }
   };
 
+  // Make sure this function exists in SimulationExecutor (it should already be there):
   const handleOpenGitHubStats = (taskIndex: number) => {
     console.log('📊 Opening GitHub stats for task:', taskIndex);
     setStatsTaskIndex(taskIndex);
@@ -415,15 +416,15 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
   const handleUpdateTaskProgress = async (taskIndex: number, data: any) => {
     console.log(`📝 [SimulationExecutor] Updating task ${taskIndex}:`, data);
-    
+
     if (isStartingTaskRef.current && data.status === 'in_progress') {
       console.log('⚠️ Skipping update while starting task');
       return;
     }
-    
+
     try {
       await updateTaskProgress(taskIndex, data);
-      
+
       if (data.status === 'completed') {
         if (refreshTaskProgress) {
           await refreshTaskProgress();
@@ -440,11 +441,11 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       console.log('⚠️ Skipping save progress while starting task');
       return;
     }
-    
+
     if (saveDebounceRef.current) {
       clearTimeout(saveDebounceRef.current);
     }
-    
+
     saveDebounceRef.current = setTimeout(async () => {
       console.log('💾 Manual save triggered by user');
       await saveProgress();
@@ -511,7 +512,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
           suggestions: savedAnswer.suggestions || '',
           githubCommitUrl: savedAnswer.githubCommitUrl || savedAnswer.githubRepo?.url || prev.githubCommitUrl,
         }));
-        
+
         if (savedAnswer.code) setCode(savedAnswer.code);
         if (savedAnswer.essay) setEssay(savedAnswer.essay);
         if (savedAnswer.mcqAnswers) setMcqAnswers(savedAnswer.mcqAnswers);
@@ -553,13 +554,13 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         repoUrl: githubRepo.repoUrl,
         branchName: githubRepo.branchName
       });
-      
+
       const match = githubRepo.repoUrl.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
       if (match) {
         const owner = match[1];
         const repo = match[2].replace(/\.git$/, '');
         const branch = githubRepo.branchName || 'main';
-        
+
         loadRepository(owner, repo, githubRepo.repoUrl, branch).catch((err) => {
           console.error('❌ Failed to auto-load GitHub repo from session:', err);
         });
@@ -576,7 +577,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       console.log('🔄 selectedTaskIndex changed to:', selectedTaskIndex);
       const task = tasks[selectedTaskIndex];
       console.log('🔄 Current task:', task?.title);
-      
+
       const taskStatus = taskProgress?.find(tp => tp.task_index === selectedTaskIndex)?.status;
       console.log('📊 Task status from taskProgress:', taskStatus || 'not_started');
     }
@@ -584,10 +585,10 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
   useEffect(() => {
     if (!loading && session && hasValidId) {
-      const hasProgress = session.timeSpent > 0 || 
-                          session.currentTaskIndex > 0 || 
-                          Object.keys(session.progress || {}).length > 0;
-      
+      const hasProgress = session.timeSpent > 0 ||
+        session.currentTaskIndex > 0 ||
+        Object.keys(session.progress || {}).length > 0;
+
       if (hasProgress && session.status === 'in_progress') {
         setShowStartDialog(false);
         startTimer();
@@ -655,49 +656,49 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   }
 
 
-// In SimulationExecutor.tsx - This is the frontend component
+  // In SimulationExecutor.tsx - This is the frontend component
 
-// Find this section (around line 380-400) and replace it:
+  // Find this section (around line 380-400) and replace it:
 
-if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'completed' || session?.status === 'submitted')) {
-  return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
-      <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
-        <div className="text-green-500 mb-4">
-          <svg className="h-16 w-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+  if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'completed' || session?.status === 'submitted')) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
+          <div className="text-green-500 mb-4">
+            <svg className="h-16 w-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Simulation Already Completed</h2>
+          <p className="text-gray-400 mb-6">This simulation has already been submitted.</p>
+          <button
+            onClick={() => {
+              // Use session ID to go to session report
+              const currentSessionId = session?.id || sessionId;
+              if (currentSessionId) {
+                window.location.href = `/session-report/${currentSessionId}`;
+              } else {
+                window.location.href = `/session-report/${sessionId}`;
+              }
+            }}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
+            View Results
+          </button>
         </div>
-        <h2 className="text-xl font-bold text-white mb-2">Simulation Already Completed</h2>
-        <p className="text-gray-400 mb-6">This simulation has already been submitted.</p>
-        <button 
-          onClick={() => {
-            // Use session ID to go to session report
-            const currentSessionId = session?.id || sessionId;
-            if (currentSessionId) {
-              window.location.href = `/session-report/${currentSessionId}`;
-            } else {
-              window.location.href = `/session-report/${sessionId}`;
-            }
-          }} 
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          View Results
-        </button>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   const handleCompleteTask = async () => {
     if (selectedTaskIndex === null) return;
     console.log('✅ Completing task:', selectedTaskIndex);
     await updateTaskProgress(selectedTaskIndex, {
       status: taskCompletionDraft.completed ? 'completed' : 'in_progress',
-      answer: { 
+      answer: {
         completed: taskCompletionDraft.completed,
-        comment: taskCompletionDraft.comment, 
-        challenges: taskCompletionDraft.challenges, 
+        comment: taskCompletionDraft.comment,
+        challenges: taskCompletionDraft.challenges,
         suggestions: taskCompletionDraft.suggestions,
         githubCommitUrl: taskCompletionDraft.githubCommitUrl,
         githubRepo: currentRepo ? {
@@ -713,7 +714,7 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
       githubCommitUrl: taskCompletionDraft.githubCommitUrl,
     });
     setShowTaskCompletionDialog(false);
-    
+
     if (refreshTaskProgress) {
       await refreshTaskProgress();
     }
@@ -723,17 +724,17 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
     setShowPostSubmitDialog(false);
     _onComplete({ sessionId, progress, timeSpent, submissionResult });
   };
-  
+
   // FIXED: Handle review results after submission - navigate to session report with SESSION ID
   const handlePostSubmitReviewResults = () => {
     console.log('📊 Post-submit review results clicked');
     console.log('📊 Session object:', session);
     console.log('📊 Current sessionId:', sessionId);
-    
+
     // Use the session ID (not simulation ID) to go to the session report
     // The route needed in App.jsx: /session-report/:sessionId
     const currentSessionId = session?.id || sessionId;
-    
+
     if (currentSessionId) {
       console.log('🔍 Navigating to session report with sessionId:', currentSessionId);
       // Navigate to the session report page
@@ -752,7 +753,7 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
 
   const isOverallLoading = isFileSystemLoading || isRepoLoading;
   const isLoadingDisplay = isOverallLoading && !hasRepo;
-  
+
   const stats = currentRepo?.fullStats;
   const fileCount = currentRepo?.files ? Object.keys(currentRepo.files).length : 0;
   const folderCount = currentRepo?.fileStructure?.filter(f => f.type === 'folder').length || 0;
@@ -760,7 +761,7 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
 
   const syncStatusTyped = (syncStatus as SyncStatus) || 'idle';
   const isSyncing = syncStatusTyped === 'syncing' || githubPushStatus === 'syncing' || githubPullStatus === 'syncing';
-  
+
   const getSyncButtonClass = () => {
     if (isSyncing) return 'bg-yellow-600/20 text-yellow-400 border-yellow-600';
     if (syncStatusTyped === 'success' || githubPushStatus === 'success' || githubPullStatus === 'success') return 'bg-green-600/20 text-green-400 border-green-600';
@@ -780,7 +781,7 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
   const handleSelectTask = async (idx: number) => {
     console.log('📌 Task clicked - index:', idx);
     console.log('📌 Task title:', tasks[idx]?.title);
-    
+
     setSelectedTaskIndex(idx);
     setCurrentTask(tasks[idx]);
     setGlobalTaskIndex(idx);
@@ -870,11 +871,10 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
             <button
               key={tab.id}
               onClick={() => handleTabChange(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 border-b-2 -mb-px ${
-                activeTab === tab.id 
-                  ? 'border-blue-500 text-blue-400 bg-gray-900/50' 
-                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
-              }`}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-all duration-200 border-b-2 -mb-px ${activeTab === tab.id
+                ? 'border-blue-500 text-blue-400 bg-gray-900/50'
+                : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-gray-700/50'
+                }`}
             >
               {tab.icon}
               {tab.label}
@@ -915,62 +915,59 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
           <button
             onClick={handlePushToGitHub}
             disabled={!currentRepo || isSyncing}
-            className={`px-2.5 py-1.5 rounded flex items-center gap-1 text-xs transition-colors border ${
-              currentRepo && !isSyncing
-                ? githubPushStatus === 'syncing' 
-                  ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600'
-                  : githubPushStatus === 'success'
+            className={`px-2.5 py-1.5 rounded flex items-center gap-1 text-xs transition-colors border ${currentRepo && !isSyncing
+              ? githubPushStatus === 'syncing'
+                ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600'
+                : githubPushStatus === 'success'
                   ? 'bg-green-600/20 text-green-400 border-green-600'
                   : githubPushStatus === 'error'
-                  ? 'bg-red-600/20 text-red-400 border-red-600'
-                  : 'bg-purple-600/20 text-purple-400 border-purple-600 hover:bg-purple-600/30'
-                : 'bg-gray-700/50 text-gray-500 border-gray-600 cursor-not-allowed'
-            }`}
+                    ? 'bg-red-600/20 text-red-400 border-red-600'
+                    : 'bg-purple-600/20 text-purple-400 border-purple-600 hover:bg-purple-600/30'
+              : 'bg-gray-700/50 text-gray-500 border-gray-600 cursor-not-allowed'
+              }`}
             title="Push code to GitHub repository"
           >
             <GitBranch size={13} />
-            {githubPushStatus === 'syncing' 
-              ? 'Pushing...' 
-              : githubPushStatus === 'success' 
-              ? '✓ Pushed!' 
-              : githubPushStatus === 'error'
-              ? '✗ Failed'
-              : 'Push to GitHub'}
+            {githubPushStatus === 'syncing'
+              ? 'Pushing...'
+              : githubPushStatus === 'success'
+                ? '✓ Pushed!'
+                : githubPushStatus === 'error'
+                  ? '✗ Failed'
+                  : 'Push to GitHub'}
           </button>
 
           {/* Pull from GitHub Button */}
           <button
             onClick={handlePullFromGitHub}
             disabled={!currentRepo || isSyncing}
-            className={`px-2.5 py-1.5 rounded flex items-center gap-1 text-xs transition-colors border ${
-              currentRepo && !isSyncing
-                ? githubPullStatus === 'syncing'
-                  ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600'
-                  : githubPullStatus === 'success'
+            className={`px-2.5 py-1.5 rounded flex items-center gap-1 text-xs transition-colors border ${currentRepo && !isSyncing
+              ? githubPullStatus === 'syncing'
+                ? 'bg-yellow-600/20 text-yellow-400 border-yellow-600'
+                : githubPullStatus === 'success'
                   ? 'bg-green-600/20 text-green-400 border-green-600'
                   : githubPullStatus === 'error'
-                  ? 'bg-red-600/20 text-red-400 border-red-600'
-                  : 'bg-purple-600/20 text-purple-400 border-purple-600 hover:bg-purple-600/30'
-                : 'bg-gray-700/50 text-gray-500 border-gray-600 cursor-not-allowed'
-            }`}
+                    ? 'bg-red-600/20 text-red-400 border-red-600'
+                    : 'bg-purple-600/20 text-purple-400 border-purple-600 hover:bg-purple-600/30'
+              : 'bg-gray-700/50 text-gray-500 border-gray-600 cursor-not-allowed'
+              }`}
             title="Pull latest code from GitHub repository"
           >
             <Download size={13} />
-            {githubPullStatus === 'syncing' 
-              ? 'Pulling...' 
-              : githubPullStatus === 'success' 
-              ? '✓ Pulled!' 
-              : githubPullStatus === 'error'
-              ? '✗ Failed'
-              : 'Pull from GitHub'}
+            {githubPullStatus === 'syncing'
+              ? 'Pulling...'
+              : githubPullStatus === 'success'
+                ? '✓ Pulled!'
+                : githubPullStatus === 'error'
+                  ? '✗ Failed'
+                  : 'Pull from GitHub'}
           </button>
 
           {displayMessage && (
-            <span className={`text-xs ${
-              syncStatusTyped === 'success' || githubPushStatus === 'success' || githubPullStatus === 'success' ? 'text-green-400' : 
-              syncStatusTyped === 'error' || githubPushStatus === 'error' || githubPullStatus === 'error' ? 'text-red-400' : 
-              'text-yellow-400'
-            } ml-1`}>
+            <span className={`text-xs ${syncStatusTyped === 'success' || githubPushStatus === 'success' || githubPullStatus === 'success' ? 'text-green-400' :
+              syncStatusTyped === 'error' || githubPushStatus === 'error' || githubPullStatus === 'error' ? 'text-red-400' :
+                'text-yellow-400'
+              } ml-1`}>
               {displayMessage}
             </span>
           )}
@@ -981,6 +978,8 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
         {/* WORKSPACE TAB */}
         {activeTab === 'workspace' && (
           <div className="flex flex-col h-full overflow-hidden">
+            // In SimulationExecutor.tsx - update the TaskList component call:
+
             <TaskList
               tasks={tasks}
               taskProgress={taskProgress}
@@ -990,8 +989,12 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
               onStartTask={startTask}
               onOpenGitHubStats={handleOpenGitHubStats}
               hasGitHubRepoForTask={hasGitHubRepoForTask}
+              // ✅ NEW PROPS
+              onOpenChat={() => handleTabChange('chat')}
+              onOpenGitHubAnalytics={handleOpenGitHubStats}
+              unreadCount={unreadCount}
             />
-            
+
             <div className="flex flex-1 overflow-hidden min-h-0">
               {showSidebar && (
                 <FileExplorer
@@ -1021,6 +1024,8 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
                     </div>
                   </div>
                 ) : (
+                  // ... inside the workspace tab, find the TaskContent call and replace with:
+
                   <TaskContent
                     task={currentSelectedTask}
                     simulationId={sessionId || undefined}
@@ -1052,10 +1057,20 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
                     currentRepo={currentRepo}
                     taskRepositories={getReposForAllTasks()}
                     onRefreshRepo={handleRefreshGitHubStats}
+                    // ✅ NEW PROPS - These make the buttons work!
+                    onOpenChat={() => {
+                      console.log('💬 Opening chat from TaskContent');
+                      handleTabChange('chat');
+                    }}
+                    onOpenGitHubAnalytics={(taskIndex: number) => {
+                      console.log('📊 Opening GitHub analytics for task:', taskIndex);
+                      handleOpenGitHubStats(taskIndex);
+                    }}
+                    unreadCount={unreadCount}
                   />
                 )}
               </div>
-              
+
               {showRightSidebar && (
                 <GitHubDetailsSidebar
                   currentRepo={currentRepo}
@@ -1113,7 +1128,7 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
                 </h2>
                 <p className="text-gray-400 text-sm">Analyze any GitHub repository to see code quality, commit history, pull requests, and more.</p>
               </div>
-              
+
               <GitHubPanel
                 repoUrl={githubRepoUrl || getGitHubRepoUrl()}
                 simulationId={sessionId || undefined}
@@ -1142,7 +1157,7 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
                 <X size={18} />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto p-4">
               <GitHubPanel
                 simulationId={sessionId || undefined}
@@ -1152,7 +1167,7 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
                 className="w-full"
               />
             </div>
-            
+
             <div className="px-4 py-3 border-t border-gray-700 flex justify-end">
               <button onClick={() => setShowGitHubStatsModal(false)} className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors">
                 Close
@@ -1185,14 +1200,14 @@ if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'complet
         result={submissionResult}
         formatTime={formatTime}
       />
-      
-      <TaskCompletionDialog 
-        open={showTaskCompletionDialog} 
-        task={selectedTaskIndex !== null ? tasks[selectedTaskIndex] : null} 
-        draft={taskCompletionDraft} 
-        onDraftChange={setTaskCompletionDraft} 
-        onCancel={() => setShowTaskCompletionDialog(false)} 
-        onSave={handleCompleteTask} 
+
+      <TaskCompletionDialog
+        open={showTaskCompletionDialog}
+        task={selectedTaskIndex !== null ? tasks[selectedTaskIndex] : null}
+        draft={taskCompletionDraft}
+        onDraftChange={setTaskCompletionDraft}
+        onCancel={() => setShowTaskCompletionDialog(false)}
+        onSave={handleCompleteTask}
         session={session}
         currentRepo={repoForDialog}
         onLoadFromGitHub={handleLoadFromGitHub}

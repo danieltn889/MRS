@@ -1,10 +1,11 @@
-// TaskContent.tsx - NO AUTO-REFRESH, Added Manual Refresh Button with Icon
+// TaskContent.tsx - WITH CHAT AND GITHUB ANALYTICS BUTTONS
 
 import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import {
   Code, Upload, FileText, X, Lightbulb, Target,
-  Bold, Italic, Underline, Github, Play, Clock, CheckCircle, AlertCircle, Lock, RefreshCw
+  Bold, Italic, Underline, Github, Play, Clock, CheckCircle, AlertCircle, Lock, RefreshCw,
+  MessageCircle, BarChart3, ExternalLink
 } from 'lucide-react';
 import GitHubTaskPanel from './GitHubTaskPanel';
 import { TaskCompletionDialog } from './Dialogs';
@@ -52,6 +53,10 @@ interface TaskContentProps {
   currentRepo?: any;
   taskRepositories?: Record<number, any>;
   onRefreshRepo?: () => Promise<void>;
+  // ✅ NEW PROPS
+  onOpenChat?: () => void;
+  onOpenGitHubAnalytics?: (taskIndex: number) => void;
+  unreadCount?: number;
 }
 
 const formatDuration = (seconds?: number): string => {
@@ -92,12 +97,18 @@ const TaskContent: React.FC<TaskContentProps> = ({
   currentRepo,
   taskRepositories = {},
   onRefreshRepo,
+  // ✅ NEW PROPS
+  onOpenChat,
+  onOpenGitHubAnalytics,
+  unreadCount = 0,
 }) => {
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [hideStartModal, setHideStartModal] = useState(false);
   const [showCompletionDialog, setShowCompletionDialog] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showChatTooltip, setShowChatTooltip] = useState(false);
+  const [showGithubTooltip, setShowGithubTooltip] = useState(false);
   
   // Completion dialog draft state
   const [completionDraft, setCompletionDraft] = useState({
@@ -135,7 +146,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
     }
   }, [isTaskInProgress, isTaskCompleted]);
   
-  // Timer for elapsed time - FIXED: Use ReturnType<typeof setInterval>
+  // Timer for elapsed time
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
     
@@ -145,7 +156,6 @@ const TaskContent: React.FC<TaskContentProps> = ({
         const elapsed = Math.floor((Date.now() - startTime) / 1000);
         setElapsedTime(elapsed);
         
-        // ✅ Save progress every 3600 seconds (1 hour) instead of every 30 seconds
         if (onUpdateTaskProgress && elapsed % 3600 === 0 && elapsed > 0) {
           onUpdateTaskProgress(taskIndex!, { timeSpent: elapsed });
         }
@@ -158,10 +168,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
     };
   }, [isTaskInProgress, isTaskCompleted, taskStartTime, taskTimeSpent, taskIndex, onUpdateTaskProgress]);
 
-  // ❌ REMOVED AUTO-REFRESH - No more automatic refreshing every 10 seconds
-  // Users will manually refresh when needed
-
-  // ✅ MANUAL REFRESH FUNCTION with loading state
+  // Manual refresh function
   const handleManualRefresh = async () => {
     if (!onRefreshTaskProgress) {
       console.warn('No refresh function available');
@@ -174,7 +181,6 @@ const TaskContent: React.FC<TaskContentProps> = ({
     try {
       await onRefreshTaskProgress();
       console.log('✅ Manual refresh completed successfully');
-      // Optional: Show success feedback
       setTimeout(() => setIsRefreshing(false), 500);
     } catch (error) {
       console.error('❌ Manual refresh failed:', error);
@@ -197,7 +203,6 @@ const TaskContent: React.FC<TaskContentProps> = ({
       setHideStartModal(true);
       console.log(`✅ Task ${taskIndex} started successfully`);
       
-      // Manual refresh after starting task
       if (onRefreshTaskProgress) {
         await onRefreshTaskProgress();
       }
@@ -212,7 +217,6 @@ const TaskContent: React.FC<TaskContentProps> = ({
 
   const handleOpenCompletionDialog = () => {
     console.log(`📝 Opening completion dialog for task ${taskNumber}`);
-    // Pre-fill the draft with current data
     setCompletionDraft({
       completed: true,
       comment: '',
@@ -257,12 +261,27 @@ const TaskContent: React.FC<TaskContentProps> = ({
       
       setShowCompletionDialog(false);
       
-      // Manual refresh after completing task
       if (onRefreshTaskProgress) {
         await onRefreshTaskProgress();
       }
     } catch (error) {
       console.error(`❌ Failed to complete task ${taskNumber}:`, error);
+    }
+  };
+
+  // ✅ Handle Chat button click
+  const handleChatClick = () => {
+    console.log('💬 Opening chat for task:', taskNumber);
+    if (onOpenChat) {
+      onOpenChat();
+    }
+  };
+
+  // ✅ Handle GitHub Analytics button click
+  const handleGitHubAnalyticsClick = () => {
+    console.log('📊 Opening GitHub Analytics for task:', taskNumber);
+    if (onOpenGitHubAnalytics && taskIndex !== undefined) {
+      onOpenGitHubAnalytics(taskIndex);
     }
   };
 
@@ -404,8 +423,53 @@ const TaskContent: React.FC<TaskContentProps> = ({
                 )}
               </div>
               
-              <div className="flex items-center gap-3">
-                {/* ✅ MANUAL REFRESH BUTTON WITH ICON */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* ✅ CHAT BUTTON */}
+                <div className="relative">
+                  <button
+                    onClick={handleChatClick}
+                    onMouseEnter={() => setShowChatTooltip(true)}
+                    onMouseLeave={() => setShowChatTooltip(false)}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
+                    title="Chat with recruiter or admin"
+                  >
+                    <MessageCircle size={14} />
+                    Chat
+                    {unreadCount > 0 && (
+                      <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full animate-pulse">
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                  {showChatTooltip && (
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 whitespace-nowrap z-50">
+                      💬 Ask questions or get clarification
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                    </div>
+                  )}
+                </div>
+
+                {/* ✅ GITHUB ANALYTICS BUTTON */}
+                <div className="relative">
+                  <button
+                    onClick={handleGitHubAnalyticsClick}
+                    onMouseEnter={() => setShowGithubTooltip(true)}
+                    onMouseLeave={() => setShowGithubTooltip(false)}
+                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
+                    title="View GitHub repository analytics"
+                  >
+                    <BarChart3 size={14} />
+                    Analytics
+                  </button>
+                  {showGithubTooltip && (
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg shadow-xl border border-gray-700 whitespace-nowrap z-50">
+                      📊 View repository stats and code analysis
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
+                    </div>
+                  )}
+                </div>
+
+                {/* ✅ REFRESH BUTTON */}
                 <button
                   onClick={handleManualRefresh}
                   disabled={isRefreshing}
@@ -416,6 +480,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                   {isRefreshing ? 'Refreshing...' : 'Refresh'}
                 </button>
 
+                {/* STATUS BADGE */}
                 {isTaskCompleted ? (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-green-900/30 border border-green-700 rounded-lg">
                     <CheckCircle size={14} className="text-green-400" />
@@ -459,7 +524,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                       </span>
                     </div>
                     
-                    {/* COMPLETE BUTTON - Opens the completion dialog */}
+                    {/* COMPLETE BUTTON */}
                     <button
                       onClick={handleOpenCompletionDialog}
                       className="px-4 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
@@ -470,6 +535,22 @@ const TaskContent: React.FC<TaskContentProps> = ({
                   </>
                 )}
               </div>
+            </div>
+            
+            {/* Helpful Info Bar */}
+            <div className="px-4 py-2 bg-gray-900/50 border-b border-gray-700 flex items-center gap-4 flex-wrap text-xs text-gray-400">
+              <span className="flex items-center gap-1">
+                <MessageCircle size={12} className="text-blue-400" />
+                <span>💬 <strong className="text-blue-300">Chat</strong> - Ask questions or get clarification</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <BarChart3 size={12} className="text-purple-400" />
+                <span>📊 <strong className="text-purple-300">Analytics</strong> - View GitHub repo stats</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <RefreshCw size={12} className="text-gray-400" />
+                <span>🔄 <strong className="text-gray-300">Refresh</strong> - Update task progress</span>
+              </span>
             </div>
             
             {startError && (
@@ -494,6 +575,36 @@ const TaskContent: React.FC<TaskContentProps> = ({
                   <p className="text-yellow-300 text-sm font-semibold">Start this task to continue</p>
                   <p className="text-gray-300 text-sm mt-1">
                     Instructions are hidden until you start. Use the Start Task button above when you are ready.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Chat Help Message - shown when task is not started */}
+          {isTaskNotStarted && (
+            <div className="bg-blue-900/20 border border-blue-700/60 rounded-lg p-4">
+              <div className="flex gap-3">
+                <MessageCircle size={18} className="text-blue-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-blue-300 text-sm font-semibold">Need help?</p>
+                  <p className="text-gray-300 text-sm mt-1">
+                    Use the <strong className="text-blue-400">Chat</strong> button above to ask the recruiter or admin for clarification on this task.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* GitHub Analytics Help Message */}
+          {!isTaskNotStarted && (
+            <div className="bg-purple-900/20 border border-purple-700/60 rounded-lg p-4">
+              <div className="flex gap-3">
+                <BarChart3 size={18} className="text-purple-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-purple-300 text-sm font-semibold">Track your progress</p>
+                  <p className="text-gray-300 text-sm mt-1">
+                    Click the <strong className="text-purple-400">Analytics</strong> button above to view detailed GitHub repository statistics and code analysis for this task.
                   </p>
                 </div>
               </div>

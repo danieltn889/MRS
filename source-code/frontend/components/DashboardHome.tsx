@@ -22,6 +22,8 @@ import {
   getExpiryStatusColor, getMatchColor, getScoreColor, transformMatchData
 } from '../utils/jobHelpers';
 
+
+
 const API_BASE_URL = import.meta.env?.VITE_API_URL || 'http://localhost:3001/api/v1';
 
 interface DashboardHomeProps {
@@ -210,6 +212,82 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       console.error('❌ Error fetching company dashboard stats:', error);
     } finally {
       setStatsLoading(false);
+    }
+  };
+
+  // DashboardHome/index.tsx
+
+  // DashboardHome/index.tsx - Replace the handleWithdrawApplication function
+
+  const handleWithdrawApplication = async (job: any) => {
+    console.log('🔄 Withdrawing application for job:', job.id);
+
+    try {
+      // Show confirmation
+      if (!window.confirm(`Are you sure you want to withdraw your application for "${job.title}" at ${job.company}?`)) {
+        return;
+      }
+
+      // 🔑 KEY FIX: Get the application ID from the job object
+      // The job object should have an applicationId field
+      let applicationId = job.applicationId || job.application_id;
+
+      // If no applicationId, try to fetch it from the API
+      if (!applicationId) {
+        console.log('📤 No application ID found, fetching from API...');
+
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+          alert('❌ Please log in again.');
+          return;
+        }
+
+        // Fetch the application for this job
+        const response = await fetch(`${API_BASE_URL}/applications`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data?.applications) {
+            // Find the application for this job
+            const app = data.data.applications.find((a: any) => a.job_id === job.id);
+            if (app) {
+              applicationId = app.id;
+              console.log('✅ Found application ID:', applicationId);
+            }
+          }
+        }
+      }
+
+      if (!applicationId) {
+        alert('❌ Application not found. Please try again.');
+        return;
+      }
+
+      console.log('📤 Withdrawing application ID:', applicationId);
+
+      // Call the withdraw API
+      const response = await withdrawApplication(applicationId);
+
+      if (response.success) {
+        // Remove from applied jobs using the manager
+        appliedJobsManager.removeAppliedJob(job.id);
+
+        // Update local state directly
+        setAppliedJobs(prevApplied => prevApplied.filter(id => id !== job.id));
+
+        // Show success message
+        alert('✅ Application withdrawn successfully!');
+      } else {
+        alert('❌ Failed to withdraw application: ' + (response.message || 'Unknown error'));
+      }
+    } catch (error: any) {
+      console.error('Error withdrawing application:', error);
+      alert('❌ Failed to withdraw application: ' + (error?.message || 'Unknown error'));
     }
   };
 
@@ -854,7 +932,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
                     onViewDetails={handleViewDetails}
                     onSaveJob={handleSaveJob}
                     onViewApplication={handleViewApplication}
-                    onWithdrawApplication={() => {}}
+                    onWithdrawApplication={handleWithdrawApplication}
                     onApplyNow={handleApplyNow}
                     formatFullDate={formatFullDate}
                   />
@@ -895,11 +973,10 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
               />
               <button
                 onClick={() => onViewChange?.('profile')}
-                className={`w-full mt-4 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  completionPercentage < 80
-                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white animate-pulse'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white'
-                }`}
+                className={`w-full mt-4 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${completionPercentage < 80
+                  ? 'bg-yellow-500 hover:bg-yellow-600 text-white animate-pulse'
+                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
               >
                 {completionPercentage < 80
                   ? `⚠️ Complete Profile (${completionPercentage}%)`
@@ -922,13 +999,31 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
         <JobApplicationModal
           isOpen={showApplicationModal}
           onClose={() => { setShowApplicationModal(false); setSelectedMatchForApply(null); }}
-          onSuccess={() => {
+          // In DashboardHome.tsx - update the onSuccess callback for JobApplicationModal
+          onSuccess={(data?: any) => {
+            // Always mark the job as applied
             if (selectedMatchForApply) {
               appliedJobsManager.addAppliedJob(selectedMatchForApply.id);
-              setAppliedJobs([...appliedJobs, selectedMatchForApply.id]);
+              setAppliedJobs(prev => [...prev, selectedMatchForApply.id]);
             }
-            setShowApplicationModal(false);
-            setSelectedMatchForApply(null);
+
+            // ✅ Check if we need to navigate to simulation
+            if (data?.action === 'start-simulation' && data?.view === 'simulation') {
+              // Close the modal
+              setShowApplicationModal(false);
+              setSelectedMatchForApply(null);
+              // ✅ Navigate to simulation view using the onViewChange prop
+              onViewChange?.('simulation');
+              return;
+            }
+
+            // If there's no simulation, close normally
+            if (!data?.hasSimulation) {
+              setShowApplicationModal(false);
+              setSelectedMatchForApply(null);
+            }
+
+            // If hasSimulation is true, leave the modal open so the simulation prompt renders
           }}
           job={{
             id: selectedMatchForApply.id,

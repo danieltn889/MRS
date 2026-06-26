@@ -564,7 +564,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             
             
               {/* 3. GitHub Repository Loader Section */}
-            {onLoadFromGitHub && (
+            {/* {onLoadFromGitHub && (
               <div className="p-3 border-b border-gray-700 bg-gray-850">
                 <div className="flex items-center gap-2 mb-2">
                   <Github size={14} className="text-white" />
@@ -610,7 +610,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                   This repository will be saved for Task {currentTaskIndex + 1}
                 </p>
               </div>
-            )} 
+            )}  */}
 
             {/* 4. Explorer Header & File Tree */}
             <div className="flex flex-col">

@@ -178,6 +178,9 @@ export const submitApplication = async (applicationData: ApplicationData): Promi
   }
 };
 
+
+
+
 // Get user's applications
 export const getApplications = async (params?: {
   page?: number;
@@ -262,15 +265,23 @@ export const deleteApplication = async (applicationId: string): Promise<{ succes
 };
 
 // Withdraw application (candidates only)
+// applicationAPI.ts - Update the withdrawApplication function
+
+// Withdraw application (candidates only) - Use PUT method
 export const withdrawApplication = async (applicationId: string): Promise<ApplicationResponse> => {
   try {
     const token = getAuthToken();
-    const response = await axios.post(`${API_BASE_URL}/applications/${applicationId}/withdraw`, {}, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json'
+    // ✅ Use PUT method with status: 'withdrawn'
+    const response = await axios.put(
+      `${API_BASE_URL}/applications/${applicationId}`,
+      { status: 'withdrawn' },  // ← Send status in body
+      {
+        headers: {
+          'Authorization': token ? `Bearer ${token}` : '',
+          'Content-Type': 'application/json'
+        }
       }
-    });
+    );
     return response.data;
   } catch (error: any) {
     console.error('Withdraw application error:', error);

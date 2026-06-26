@@ -1,4 +1,5 @@
-// JobApplicationModal.tsx - COMPLETE VERSION WITH ALL DETAILS (FULLY FIXED)
+// JobApplicationModal.tsx - FIXED VERSION
+
 import React, { useState, useEffect } from 'react';
 import {
   X, CheckCircle, AlertCircle, Upload, FileText, User, Briefcase,
@@ -6,7 +7,8 @@ import {
   Send, ChevronRight, ChevronLeft, Plus, Trash2, Eye, Download,
   MessageSquare, HelpCircle, Building2, Info, AlertTriangle, Edit3,
   Check, ThumbsUp, ThumbsDown, Code, GraduationCap, Link, Globe,
-  Linkedin, Github, ExternalLink, Heart, Target, Zap, Sparkles
+  Linkedin, Github, ExternalLink, Heart, Target, Zap, Sparkles,
+  Play, Rocket, BarChart3
 } from 'lucide-react';
 import { submitApplication } from '../../services/applicationAPI';
 
@@ -80,12 +82,16 @@ interface MatchDetailsType {
     best_similarity?: number;
     best_matched_field?: string | null;
     match_type?: string;
-    match_quality?: string;      // ✅ Add this
-    explanation?: string;         // ✅ Add this
+    match_quality?: string;
+    explanation?: string;
+    qualification_entries?: Array<{
+      degree: string;
+      fields_of_study: string[];
+    }>;
   };
   experience_breakdown?: {
     total_years?: number;
-    candidate_years?: number;     // ✅ Add this
+    candidate_years?: number;
     required_years?: number;
     gap_years?: number;
     match_type?: string;
@@ -105,8 +111,19 @@ interface MatchDetailsType {
   preferences_breakdown?: any;
 }
 
+interface JobApplicationModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  job: any;
+  candidateProfile?: any;
+  matchScore?: number;
+  matchDetails?: MatchDetailsType | null;
+  requiredDocuments?: string[];
+  onSuccess?: (data?: any) => void;
+}
+
 // ============================================
-// COMPLETE PROFILE NORMALIZER
+// JOB APPLICATION MODAL COMPONENT
 // ============================================
 
 const JobApplicationModal = ({
@@ -118,16 +135,7 @@ const JobApplicationModal = ({
   matchDetails: matchDetailsProp = null,
   requiredDocuments = ['Resume', 'Cover Letter'],
   onSuccess,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  job: any;
-  candidateProfile?: any;
-  matchScore?: number;
-  matchDetails?: MatchDetailsType | null;
-  requiredDocuments?: string[];
-  onSuccess?: (data?: any) => void;
-}) => {
+}: JobApplicationModalProps) => {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [answers, setAnswers] = useState<AnswersType>({});
   const [documents, setDocuments] = useState<(DocumentType | null)[]>([]);
@@ -139,6 +147,8 @@ const JobApplicationModal = ({
   const [showAllExperience, setShowAllExperience] = useState<boolean>(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgressType>({});
+  const [submissionResponse, setSubmissionResponse] = useState<any>(null);
+  const [showSimulationPrompt, setShowSimulationPrompt] = useState<boolean>(false);
 
   // Normalize profile data
   const profile = normaliseProfile(candidateProfileProp);
@@ -147,7 +157,7 @@ const JobApplicationModal = ({
   const screeningQuestions = job?.screening_questions || job?.screeningQuestions || [];
   const totalSteps = 4;
 
-  // ─── COMPLETE PROFILE NORMALISER ─────────────────────────────────────────
+  // ─── HELPER FUNCTIONS ─────────────────────────────────────────
   function normaliseProfile(raw: any): ProfileType | null {
     if (!raw) return null;
 
@@ -253,7 +263,6 @@ const JobApplicationModal = ({
 
   function calculateExperienceYears(workExperiences: any[] | undefined): number {
     if (!workExperiences || workExperiences.length === 0) return 0;
-
     let totalYears = 0;
     workExperiences.forEach(exp => {
       if (exp && exp.start_date) {
@@ -270,73 +279,16 @@ const JobApplicationModal = ({
     return Math.round(totalYears * 10) / 10;
   }
 
-  // Reset on open
-  useEffect(() => {
-    if (isOpen) {
-      setCurrentStep(1);
-      setAnswers({});
-      setDocuments([]);
-      setErrors({});
-      setReviewMode(false);
-      setSuccessMessage(null);
-      setUploadProgress({});
-    }
-  }, [isOpen]);
-
-  // Auto-close success message
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
-
-  if (!isOpen || !job) return null;
-
-  // Check minimum match score (70% requirement)
-  if (matchScore < 60 && matchScore > 0) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl max-w-md w-full m-4">
-          <div className="border-b p-4 flex justify-between items-center">
-            <h2 className="text-xl font-bold">Application Not Available</h2>
-            <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
-          </div>
-          <div className="p-6 text-center">
-            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertCircle className="w-10 h-10 text-red-600" />
-            </div>
-            <p className="text-gray-700 mb-4">
-              Your match score is <strong className="text-red-600">{matchScore}%</strong>, which is below the required <strong className="text-blue-600">70%</strong> minimum.
-            </p>
-            <div className="bg-yellow-50 p-4 rounded-lg text-left mb-4">
-              <h3 className="font-semibold text-yellow-800 mb-2">To improve your match:</h3>
-              <ul className="space-y-1 text-sm text-yellow-700">
-                <li>• Update your profile with more relevant skills</li>
-                <li>• Add work experience in this field</li>
-                <li>• Complete your education details</li>
-                <li>• Add certifications and portfolio links</li>
-              </ul>
-            </div>
-            <button onClick={onClose} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  function getDocumentType(documentName: string): string {
+    const lowerName = documentName.toLowerCase();
+    if (lowerName.includes('resume') || lowerName.includes('cv')) return 'resume';
+    if (lowerName.includes('cover')) return 'cover_letter';
+    if (lowerName.includes('portfolio')) return 'portfolio';
+    if (lowerName.includes('certificate') || lowerName.includes('cert')) return 'certificate';
+    return 'resume';
   }
 
-  const documentTemplates = requiredDocuments.map(doc => ({
-    name: doc,
-    required: true,
-    acceptedTypes: ['.pdf', '.doc', '.docx'],
-    maxSize: 5 * 1024 * 1024,
-    description: doc === 'Resume' ? 'Upload your CV/Resume (PDF, DOC, DOCX)' :
-      doc === 'Cover Letter' ? 'Upload your cover letter' :
-        `Upload your ${doc.toLowerCase()}`
-  }));
-
+  // ─── HANDLERS ────────────────────────────────────────────────
   const handleAnswerChange = (questionId: number, value: string) => {
     setAnswers(prev => ({ ...prev, [questionId]: value }));
     if (errors[questionId]) setErrors(prev => ({ ...prev, [questionId]: null }));
@@ -348,9 +300,7 @@ const JobApplicationModal = ({
       alert(`${file.name} exceeds 5 MB limit`);
       return;
     }
-
     setUploadProgress(prev => ({ ...prev, [docIndex]: 0 }));
-
     const reader = new FileReader();
     reader.onloadend = () => {
       setDocuments(prev => {
@@ -406,61 +356,38 @@ const JobApplicationModal = ({
   const handleReview = () => { if (validateStep()) setReviewMode(true); };
   const handleBackFromReview = () => setReviewMode(false);
 
-  const handleSubmit = async () => {
-    if (!validateStep()) return;
-    setSubmitting(true);
+  // ─── DOCUMENT TEMPLATES ──────────────────────────────────────
+  const documentTemplates = requiredDocuments.map(doc => ({
+    name: doc,
+    required: true,
+    acceptedTypes: ['.pdf', '.doc', '.docx'],
+    maxSize: 5 * 1024 * 1024,
+    description: doc === 'Resume' ? 'Upload your CV/Resume (PDF, DOC, DOCX)' :
+      doc === 'Cover Letter' ? 'Upload your cover letter' :
+        `Upload your ${doc.toLowerCase()}`
+  }));
 
-    try {
-      // Transform documents to match expected format
-      const formattedDocuments = documentTemplates.map((doc, idx) => {
-        const uploadedDoc = documents[idx];
-        return {
-          name: doc.name,
-          url: uploadedDoc?.preview || '',
-          type: getDocumentType(doc.name) as 'resume' | 'cover_letter' | 'portfolio' | 'certificate'
-        };
-      }).filter(doc => doc.url);
-
-      const applicationData = {
-        jobId: job.id,
-        additionalInfo: {
-          screeningAnswers: answers,
-          documents: formattedDocuments,
-          matchScore: Math.round(matchScore),
-          submittedAt: new Date().toISOString(),
-        },
-      };
-
-      console.log('📤 Submitting application:', applicationData);
-      const result = await submitApplication(applicationData);
-
-      if (result?.success) {
-        setSuccessMessage('✅ Application submitted successfully!');
-        if (onSuccess) onSuccess(result.data);
-        setTimeout(() => {
-          onClose();
-          window.location.reload();
-        }, 1500);
-      } else {
-        throw new Error(result?.message || 'Failed to submit application');
-      }
-    } catch (error) {
-      console.error('Submission error:', error);
-      alert('Failed to submit application: ' + ((error as Error)?.message || 'Unknown error'));
-    } finally {
-      setSubmitting(false);
+  // ─── EFFECTS ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentStep(1);
+      setAnswers({});
+      setDocuments([]);
+      setErrors({});
+      setReviewMode(false);
+      setSuccessMessage(null);
+      setUploadProgress({});
+      setSubmissionResponse(null);
+      setShowSimulationPrompt(false);
     }
-  };
+  }, [isOpen]);
 
-  // Helper function to get document type
-  function getDocumentType(documentName: string): string {
-    const lowerName = documentName.toLowerCase();
-    if (lowerName.includes('resume') || lowerName.includes('cv')) return 'resume';
-    if (lowerName.includes('cover')) return 'cover_letter';
-    if (lowerName.includes('portfolio')) return 'portfolio';
-    if (lowerName.includes('certificate') || lowerName.includes('cert')) return 'certificate';
-    return 'resume';
-  }
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   // ============================================
   // STEP 1: COMPLETE CANDIDATE PROFILE
@@ -530,8 +457,8 @@ const JobApplicationModal = ({
                 const skillDetail = profile.skillDetails?.find(s => s.name === skillName);
                 return (
                   <span key={idx} className={`px-3 py-1.5 text-sm rounded-full ${(skillDetail?.proficiency_level ?? 3) >= 4 ? 'bg-green-100 text-green-800 border border-green-300' :
-                      (skillDetail?.proficiency_level ?? 3) >= 3 ? 'bg-blue-100 text-blue-800 border border-blue-300' :
-                        'bg-gray-100 text-gray-700 border border-gray-200'
+                    (skillDetail?.proficiency_level ?? 3) >= 3 ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                      'bg-gray-100 text-gray-700 border border-gray-200'
                     }`}>
                     {skillName}
                     {(skillDetail?.proficiency_level ?? 3) >= 4 && <Star className="w-3 h-3 inline ml-1 text-green-600" />}
@@ -647,424 +574,298 @@ const JobApplicationModal = ({
     );
   };
 
-// ============================================
-// STEP 2: COMPLETE JOB DETAILS WITH MATCH INFO
-// ============================================
-const renderStep2 = () => {
-  const jobTitle = job.title || job.job_title;
-  const companyName = job.company_name || job.companyName || job.company?.name;
-  const location = job.location || (job.locations?.[0]?.city) || 'Remote';
-  const salaryRange = job.salary_range || (job.salary_min && job.salary_max ? `${job.salary_currency || 'USD'} ${job.salary_min?.toLocaleString()} - ${job.salary_max?.toLocaleString()}` : 'Competitive');
-  const jobType = job.job_type || job.jobType;
-  const workArrangement = job.work_arrangement || job.workArrangement;
-  const description = job.description;
-  const requirements = job.requirements || [];
-  const responsibilities = job.responsibilities || [];
-  const benefits = job.benefits || [];
-  const skillsRequired = job.skills_required || job.skillsRequired || [];
-  const tags = job.tags || [];
-  const publishedAt = job.published_at || job.publishedAt;
-  const expiresAt = job.expires_at || job.expiresAt;
-  const postedDate = publishedAt ? formatFullDate(publishedAt) : 'Recently';
-  const companyLogo = job.company_logo || job.companyLogo || job.company?.logo_url;
-  const companyIndustry = job.company_industry || job.companyIndustry || job.company?.industry;
-  const companySize = job.company_size || job.companySize || job.company?.size;
-  const applicationCount = job.application_count || job.applications || 0;
+  // ============================================
+  // STEP 2: JOB DETAILS WITH MATCH INFO
+  // ============================================
+  const renderStep2 = () => {
+    const jobTitle = job.title || job.job_title;
+    const companyName = job.company_name || job.companyName || job.company?.name;
+    const location = job.location || (job.locations?.[0]?.city) || 'Remote';
+    const salaryRange = job.salary_range || (job.salary_min && job.salary_max ? `${job.salary_currency || 'USD'} ${job.salary_min?.toLocaleString()} - ${job.salary_max?.toLocaleString()}` : 'Competitive');
+    const jobType = job.job_type || job.jobType;
+    const workArrangement = job.work_arrangement || job.workArrangement;
+    const description = job.description;
+    const requirements = job.requirements || [];
+    const responsibilities = job.responsibilities || [];
+    const benefits = job.benefits || [];
+    const skillsRequired = job.skills_required || job.skillsRequired || [];
+    const tags = job.tags || [];
+    const publishedAt = job.published_at || job.publishedAt;
+    const expiresAt = job.expires_at || job.expiresAt;
+    const postedDate = publishedAt ? formatFullDate(publishedAt) : 'Recently';
+    const companyLogo = job.company_logo || job.companyLogo || job.company?.logo_url;
+    const companyIndustry = job.company_industry || job.companyIndustry || job.company?.industry;
+    const companySize = job.company_size || job.companySize || job.company?.size;
+    const applicationCount = job.application_count || job.applications || 0;
 
-  // Get match breakdowns
-  const criteria = matchDetails?.criteria_scores || {};
-  const skillsBD = matchDetails?.skills_breakdown || {};
-  const qualsBD = matchDetails?.qualifications_breakdown || {};
-  const expBD = matchDetails?.experience_breakdown || {};
-  
-  // Get individual scores
-  const skillsMatchScore = criteria.skills_match ?? 0;
-  const qualsMatchScore = criteria.qualifications_match ?? 0;
-  const expMatchScore = criteria.experience_match ?? 0;
-  const prefsMatchScore = criteria.preferences_match ?? 0;
+    const criteria = matchDetails?.criteria_scores || {};
+    const skillsBD = matchDetails?.skills_breakdown || {};
+    const qualsBD = matchDetails?.qualifications_breakdown || {};
+    const expBD = matchDetails?.experience_breakdown || {};
 
-  return (
-    <div className="space-y-6">
-      <div className="border-b pb-4">
-        <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-          <Briefcase className="w-5 h-5 text-blue-600" />
-          Job Details & Match Analysis
-        </h2>
-      </div>
+    const skillsMatchScore = criteria.skills_match ?? 0;
+    const qualsMatchScore = criteria.qualifications_match ?? 0;
+    const expMatchScore = criteria.experience_match ?? 0;
+    const prefsMatchScore = criteria.preferences_match ?? 0;
 
-      {/* Job Header */}
-      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5">
-        <div className="flex items-start gap-4">
-          {companyLogo ? (
-            <img src={companyLogo} alt={companyName} className="w-16 h-16 rounded-lg object-cover" />
-          ) : (
-            <Building2 className="w-16 h-16 text-gray-400" />
-          )}
-          <div className="flex-1">
-            <h3 className="text-xl font-bold text-gray-900">{jobTitle}</h3>
-            <div className="flex items-center gap-2 mt-1">
-              <span className="font-medium text-gray-700">{companyName}</span>
-              {companyIndustry && <span className="text-xs text-gray-500">• {companyIndustry}</span>}
-              {companySize && <span className="text-xs text-gray-500">• {companySize}</span>}
-            </div>
-            <div className="flex flex-wrap gap-3 mt-3 text-sm">
-              <span className="flex items-center gap-1 text-gray-600"><MapPin className="w-4 h-4" />{location}</span>
-              <span className="flex items-center gap-1 text-gray-600"><DollarSign className="w-4 h-4" />{salaryRange}</span>
-              <span className="flex items-center gap-1 text-gray-600"><Briefcase className="w-4 h-4" />{jobType} • {workArrangement}</span>
-            </div>
-          </div>
+    const gapYears = expBD.gap_years ?? 0;
+    const candidateYears = expBD.candidate_years ?? expBD.total_years ?? 0;
+    const requiredYears = expBD.required_years ?? 0;
+    const totalYears = expBD.total_years ?? candidateYears;
+
+    const qualificationEntries = qualsBD.qualification_entries ?? [];
+    const hasQualificationEntries = qualificationEntries.length > 0;
+    const bestSimilarity = qualsBD.best_similarity ?? 0;
+
+    return (
+      <div className="space-y-6">
+        <div className="border-b pb-4">
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+            <Briefcase className="w-5 h-5 text-blue-600" />
+            Job Details & Match Analysis
+          </h2>
         </div>
-      </div>
 
-      {/* Match Score Card */}
-      {matchScore > 0 && (
-        <div className={`p-4 rounded-xl ${matchScore >= 80 ? 'bg-green-50 border border-green-200' : matchScore >= 70 ? 'bg-blue-50 border border-blue-200' : 'bg-yellow-50 border border-yellow-200'}`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${matchScore >= 80 ? 'bg-green-200' : matchScore >= 70 ? 'bg-blue-200' : 'bg-yellow-200'}`}>
-              <Target className={`w-7 h-7 ${matchScore >= 80 ? 'text-green-600' : matchScore >= 70 ? 'text-blue-600' : 'text-yellow-600'}`} />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-lg">AI Match Score: {Math.round(matchScore)}%</h3>
-              <p className="text-sm">
-                {matchScore >= 90 ? '🏆 Excellent match! You are highly qualified.' :
-                  matchScore >= 80 ? '✅ Great match! You meet most requirements.' :
-                    matchScore >= 70 ? '📈 Good match. You meet the minimum requirements.' :
-                      '⚠️ Low match. Consider updating your profile.'}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4-Factor Breakdown */}
-      {matchScore > 0 && (
-        <div className="bg-gray-50 rounded-xl p-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-            <Target className="w-4 h-4 text-purple-500" />
-            Match Breakdown
-          </h4>
-          <div className="space-y-3">
-            {/* Skills Factor */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="flex items-center gap-1"><Code className="w-3 h-3 text-green-600" /> Skills</span>
-                <span className="font-semibold">
-                  {skillsBD.total_matched || 0}/{skillsBD.total_required || 0} ({Math.round(skillsMatchScore)}%)
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full transition-all duration-500" 
-                  style={{ width: `${skillsMatchScore}%` }} 
-                />
-              </div>
-              {skillsBD.matched_skills && skillsBD.matched_skills.length > 0 && (
-                <p className="text-xs text-green-600 mt-1">
-                  ✓ Matched: {skillsBD.matched_skills.slice(0, 5).join(', ')}
-                  {skillsBD.matched_skills.length > 5 && ` +${skillsBD.matched_skills.length - 5} more`}
-                </p>
-              )}
-              {skillsBD.missing_skills && skillsBD.missing_skills.length > 0 && (
-                <p className="text-xs text-red-500 mt-0.5">
-                  ✗ Missing: {skillsBD.missing_skills.slice(0, 3).join(', ')}
-                  {skillsBD.missing_skills.length > 3 && ` +${skillsBD.missing_skills.length - 3} more`}
-                </p>
-              )}
-            </div>
-
-            {/* Qualifications Factor */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3 text-purple-600" /> Qualifications</span>
-                <span className="font-semibold">{Math.round(qualsMatchScore)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-purple-500 h-2 rounded-full transition-all duration-500" 
-                  style={{ width: `${qualsMatchScore}%` }} 
-                />
-              </div>
-              {qualsBD.candidate_degrees && qualsBD.candidate_degrees.length > 0 && (
-                <p className="text-xs text-purple-600 mt-1">
-                  🎓 Your degree: {qualsBD.candidate_degrees[0]}
-                </p>
-              )}
-              {qualsBD.job_degree_required && (
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Required: {qualsBD.job_degree_required}
-                </p>
-              )}
-              {qualsBD.best_matched_field && (
-                <p className="text-xs text-green-600 mt-0.5">
-                  ✓ Best match: {qualsBD.best_matched_field}
-                </p>
-              )}
-            </div>
-
-            {/* Experience Factor */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-yellow-600" /> Experience</span>
-                <span className="font-semibold">
-                  {expBD.total_years?.toFixed(1) || expBD.candidate_years?.toFixed(1) || 0} / {expBD.required_years || 0} yrs ({Math.round(expMatchScore)}%)
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-yellow-500 h-2 rounded-full transition-all duration-500" 
-                  style={{ width: `${expMatchScore}%` }} 
-                />
-              </div>
-              {expBD.gap_years > 0 && (
-                <p className="text-xs text-orange-600 mt-1">
-                  ⚠️ Experience gap: {expBD.gap_years.toFixed(1)} years
-                </p>
-              )}
-              {expBD.specific_matches && expBD.specific_matches.length > 0 && (
-                <p className="text-xs text-green-600 mt-0.5">
-                  ✓ Matched: {expBD.specific_matches[0]?.requirement_title} ({expBD.specific_matches[0]?.candidate_years?.toFixed(1)}/{expBD.specific_matches[0]?.requirement_years} yrs)
-                </p>
-              )}
-            </div>
-
-            {/* Preferences Factor */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-blue-600" /> Preferences</span>
-                <span className="font-semibold">{Math.round(prefsMatchScore)}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-blue-500 h-2 rounded-full transition-all duration-500" 
-                  style={{ width: `${prefsMatchScore}%` }} 
-                />
-              </div>
-              <div className="flex flex-wrap gap-2 mt-1 text-xs">
-                {matchDetails?.preferences_breakdown?.type_match > 0.7 && (
-                  <span className="text-green-600">✓ Job type matches</span>
-                )}
-                {matchDetails?.preferences_breakdown?.industry_match > 0.7 && (
-                  <span className="text-green-600">✓ Industry matches</span>
-                )}
-                {matchDetails?.preferences_breakdown?.salary_match > 0.7 && (
-                  <span className="text-green-600">✓ Salary range matches</span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Required Skills with Match Status */}
-      {skillsRequired.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-            <Code className="w-4 h-4 text-blue-600" />
-            Required Skills
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {skillsRequired.map((skill: any, idx: number) => {
-              const skillName = typeof skill === 'string' ? skill : skill.name || skill.skill_name;
-              const matchedSkillsList = skillsBD.matched_skills || [];
-              const isMatched = matchedSkillsList.some((ms: string) => 
-                ms.toLowerCase() === skillName.toLowerCase() || 
-                skillName.toLowerCase().includes(ms.toLowerCase()) ||
-                ms.toLowerCase().includes(skillName.toLowerCase())
-              );
-              return (
-                <span 
-                  key={idx} 
-                  className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1 ${
-                    isMatched 
-                      ? 'bg-green-100 text-green-800 border border-green-300' 
-                      : 'bg-red-50 text-red-700 border border-red-200'
-                  }`}
-                >
-                  {skillName}
-                  {isMatched ? <CheckCircle className="w-3 h-3 text-green-600" /> : <X className="w-3 h-3 text-red-500" />}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Missing Skills Warning */}
-      {skillsBD.missing_skills && skillsBD.missing_skills.length > 0 && (
-        <div className="bg-yellow-50 rounded-lg p-3">
-          <p className="text-sm text-yellow-800 font-medium mb-1 flex items-center gap-1">
-            <AlertTriangle className="w-4 h-4" />
-            Skills you're missing ({skillsBD.missing_skills.length}):
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {skillsBD.missing_skills.slice(0, 5).map((skill: string, idx: number) => (
-              <span key={idx} className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">{skill}</span>
-            ))}
-            {skillsBD.missing_skills.length > 5 && (
-              <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">
-                +{skillsBD.missing_skills.length - 5} more
-              </span>
+        {/* Job Header */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5">
+          <div className="flex items-start gap-4">
+            {companyLogo ? (
+              <img src={companyLogo} alt={companyName} className="w-16 h-16 rounded-lg object-cover" />
+            ) : (
+              <Building2 className="w-16 h-16 text-gray-400" />
             )}
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-gray-900">{jobTitle}</h3>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="font-medium text-gray-700">{companyName}</span>
+                {companyIndustry && <span className="text-xs text-gray-500">• {companyIndustry}</span>}
+                {companySize && <span className="text-xs text-gray-500">• {companySize}</span>}
+              </div>
+              <div className="flex flex-wrap gap-3 mt-3 text-sm">
+                <span className="flex items-center gap-1 text-gray-600"><MapPin className="w-4 h-4" />{location}</span>
+                <span className="flex items-center gap-1 text-gray-600"><DollarSign className="w-4 h-4" />{salaryRange}</span>
+                <span className="flex items-center gap-1 text-gray-600"><Briefcase className="w-4 h-4" />{jobType} • {workArrangement}</span>
+              </div>
+            </div>
           </div>
         </div>
-      )}
 
-      {/* Education Qualification Match with Fields of Study */}
-      {(qualsBD.job_degree_required || qualsBD.qualification_entries?.length > 0) && (
-        <div className="bg-blue-50 rounded-lg p-3">
-          <p className="text-sm text-blue-800 font-medium mb-1 flex items-center gap-1">
-            <GraduationCap className="w-4 h-4" />
-            Education & Qualifications Match
-          </p>
-          
-          {/* Required Degree */}
-          {qualsBD.job_degree_required && (
-            <p className="text-sm">📋 Job requires: <strong>{qualsBD.job_degree_required}</strong></p>
-          )}
-          
-          {/* Candidate's Degree */}
-          {qualsBD.candidate_degrees && qualsBD.candidate_degrees.length > 0 && (
-            <p className="text-sm mt-1">🎓 Your degree: <strong>{qualsBD.candidate_degrees.join(', ')}</strong></p>
-          )}
-          
-          {/* Candidate's Field */}
-          {qualsBD.candidate_fields && qualsBD.candidate_fields.length > 0 && (
-            <p className="text-sm mt-1">📚 Your field: <strong>{qualsBD.candidate_fields.join(', ')}</strong></p>
-          )}
-          
-          {/* ✅ FIELDS OF STUDY FROM QUALIFICATION ENTRIES */}
-          {qualsBD.qualification_entries && qualsBD.qualification_entries.length > 0 && (
-            <div className="mt-2 pt-2 border-t border-blue-200">
-              <p className="text-xs font-semibold text-blue-700 mb-2">📖 Accepted qualifications:</p>
-              {qualsBD.qualification_entries.map((entry: any, idx: number) => (
-                <div key={idx} className="mb-2">
-                  <p className="text-xs font-medium text-gray-800">{entry.degree}:</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {entry.fields_of_study && entry.fields_of_study.map((field: string, fIdx: number) => (
-                      <span key={fIdx} className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-                        {field}
-                      </span>
-                    ))}
-                  </div>
+        {/* Match Score Card */}
+        {matchScore > 0 && (
+          <div className={`p-4 rounded-xl ${matchScore >= 80 ? 'bg-green-50 border border-green-200' : matchScore >= 70 ? 'bg-blue-50 border border-blue-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center ${matchScore >= 80 ? 'bg-green-200' : matchScore >= 70 ? 'bg-blue-200' : 'bg-yellow-200'}`}>
+                <Target className={`w-7 h-7 ${matchScore >= 80 ? 'text-green-600' : matchScore >= 70 ? 'text-blue-600' : 'text-yellow-600'}`} />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-bold text-lg">AI Match Score: {Math.round(matchScore)}%</h3>
+                <p className="text-sm">
+                  {matchScore >= 90 ? '🏆 Excellent match! You are highly qualified.' :
+                    matchScore >= 80 ? '✅ Great match! You meet most requirements.' :
+                      matchScore >= 70 ? '📈 Good match. You meet the minimum requirements.' :
+                        '⚠️ Low match. Consider updating your profile.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 4-Factor Breakdown */}
+        {matchScore > 0 && (
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <Target className="w-4 h-4 text-purple-500" />
+              Match Breakdown
+            </h4>
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1"><Code className="w-3 h-3 text-green-600" /> Skills</span>
+                  <span className="font-semibold">{skillsBD.total_matched || 0}/{skillsBD.total_required || 0} ({Math.round(skillsMatchScore)}%)</span>
                 </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{ width: `${skillsMatchScore}%` }} />
+                </div>
+                {skillsBD.matched_skills && skillsBD.matched_skills.length > 0 && (
+                  <p className="text-xs text-green-600 mt-1">✓ Matched: {skillsBD.matched_skills.slice(0, 5).join(', ')}{skillsBD.matched_skills.length > 5 && ` +${skillsBD.matched_skills.length - 5} more`}</p>
+                )}
+                {skillsBD.missing_skills && skillsBD.missing_skills.length > 0 && (
+                  <p className="text-xs text-red-500 mt-0.5">✗ Missing: {skillsBD.missing_skills.slice(0, 3).join(', ')}{skillsBD.missing_skills.length > 3 && ` +${skillsBD.missing_skills.length - 3} more`}</p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3 text-purple-600" /> Qualifications</span>
+                  <span className="font-semibold">{Math.round(qualsMatchScore)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-purple-500 h-2 rounded-full transition-all duration-500" style={{ width: `${qualsMatchScore}%` }} />
+                </div>
+                {qualsBD.candidate_degrees && qualsBD.candidate_degrees.length > 0 && (
+                  <p className="text-xs text-purple-600 mt-1">🎓 Your degree: {qualsBD.candidate_degrees[0]}</p>
+                )}
+                {qualsBD.job_degree_required && (
+                  <p className="text-xs text-gray-500 mt-0.5">Required: {qualsBD.job_degree_required}</p>
+                )}
+                {qualsBD.best_matched_field && (
+                  <p className="text-xs text-green-600 mt-0.5">✓ Best match: {qualsBD.best_matched_field}</p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-yellow-600" /> Experience</span>
+                  <span className="font-semibold">{totalYears.toFixed(1)} / {requiredYears} yrs ({Math.round(expMatchScore)}%)</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-yellow-500 h-2 rounded-full transition-all duration-500" style={{ width: `${expMatchScore}%` }} />
+                </div>
+                {gapYears > 0 && (
+                  <p className="text-xs text-orange-600 mt-1">⚠️ Experience gap: {gapYears.toFixed(1)} years</p>
+                )}
+                {expBD.specific_matches && expBD.specific_matches.length > 0 && (
+                  <p className="text-xs text-green-600 mt-0.5">✓ Matched: {expBD.specific_matches[0]?.requirement_title} ({expBD.specific_matches[0]?.candidate_years?.toFixed(1)}/{expBD.specific_matches[0]?.requirement_years} yrs)</p>
+                )}
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-blue-600" /> Preferences</span>
+                  <span className="font-semibold">{Math.round(prefsMatchScore)}%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${prefsMatchScore}%` }} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Required Skills */}
+        {skillsRequired.length > 0 && (
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <Code className="w-4 h-4 text-blue-600" />
+              Required Skills
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {skillsRequired.map((skill: any, idx: number) => {
+                const skillName = typeof skill === 'string' ? skill : skill.name || skill.skill_name;
+                const matchedSkillsList = skillsBD.matched_skills || [];
+                const isMatched = matchedSkillsList.some((ms: string) =>
+                  ms.toLowerCase() === skillName.toLowerCase() ||
+                  skillName.toLowerCase().includes(ms.toLowerCase()) ||
+                  ms.toLowerCase().includes(skillName.toLowerCase())
+                );
+                return (
+                  <span key={idx} className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1 ${isMatched ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                    {skillName}
+                    {isMatched ? <CheckCircle className="w-3 h-3 text-green-600" /> : <X className="w-3 h-3 text-red-500" />}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Missing Skills Warning */}
+        {skillsBD.missing_skills && skillsBD.missing_skills.length > 0 && (
+          <div className="bg-yellow-50 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 font-medium mb-1 flex items-center gap-1">
+              <AlertTriangle className="w-4 h-4" />
+              Skills you're missing ({skillsBD.missing_skills.length}):
+            </p>
+            <div className="flex flex-wrap gap-1">
+              {skillsBD.missing_skills.slice(0, 5).map((skill: string, idx: number) => (
+                <span key={idx} className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full">{skill}</span>
+              ))}
+              {skillsBD.missing_skills.length > 5 && (
+                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">+{skillsBD.missing_skills.length - 5} more</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Job Description */}
+        {description && (
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2">Job Description</h3>
+            <div className="text-gray-700 text-sm whitespace-pre-wrap line-clamp-4">{description}</div>
+          </div>
+        )}
+
+        {/* Key Responsibilities */}
+        {responsibilities.length > 0 && (
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              Key Responsibilities ({responsibilities.length})
+            </h3>
+            <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
+              {responsibilities.slice(0, 5).map((resp: string, idx: number) => (
+                <li key={idx} className="text-sm">{resp}</li>
+              ))}
+              {responsibilities.length > 5 && <li className="text-gray-400 text-sm">+{responsibilities.length - 5} more</li>}
+            </ul>
+          </div>
+        )}
+
+        {/* Benefits */}
+        {benefits.length > 0 && (
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <Award className="w-4 h-4 text-purple-600" />
+              Benefits & Perks
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {benefits.slice(0, 6).map((benefit: string, idx: number) => (
+                <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">{benefit}</span>
+              ))}
+              {benefits.length > 6 && <span className="text-xs text-gray-400">+{benefits.length - 6} more</span>}
+            </div>
+          </div>
+        )}
+
+        {/* Meta Info */}
+        <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
+          <div>
+            <p className="text-xs text-gray-500">Posted on</p>
+            <p className="text-sm font-medium">{postedDate}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Applications close</p>
+            <p className="text-sm font-medium">{expiresAt ? formatFullDate(expiresAt) : 'Not specified'}</p>
+          </div>
+          {applicationCount > 0 && (
+            <div>
+              <p className="text-xs text-gray-500">Applicants</p>
+              <p className="text-sm font-medium">{applicationCount}</p>
+            </div>
+          )}
+          {job.department && (
+            <div>
+              <p className="text-xs text-gray-500">Department</p>
+              <p className="text-sm font-medium">{job.department}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Tags */}
+        {tags.length > 0 && (
+          <div>
+            <h3 className="font-semibold text-gray-900 mb-2">Tags</h3>
+            <div className="flex flex-wrap gap-2">
+              {tags.map((tag: string, idx: number) => (
+                <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">#{tag}</span>
               ))}
             </div>
-          )}
-          
-          {/* Best Match Info */}
-          {qualsBD.best_matched_field && (
-            <div className="mt-2 pt-2 border-t border-blue-200">
-              <p className="text-xs text-green-700 font-medium">✓ Best match: {qualsBD.best_matched_field}</p>
-              <p className="text-xs text-blue-600 mt-0.5">Match type: {qualsBD.match_type}</p>
-              <p className="text-xs text-gray-500">Similarity: {(qualsBD.best_similarity * 100).toFixed(0)}%</p>
-            </div>
-          )}
-          
-          {/* Match Quality & Explanation */}
-          {qualsBD.match_quality && (
-            <p className="text-xs text-green-600 mt-1">Quality: {qualsBD.match_quality}</p>
-          )}
-          {qualsBD.explanation && (
-            <p className="text-xs text-gray-600 mt-1">ℹ️ {qualsBD.explanation}</p>
-          )}
-        </div>
-      )}
-
-      {/* Experience Gap Warning */}
-      {expBD.gap_years && expBD.gap_years > 0 && (
-        <div className="bg-orange-50 rounded-lg p-3">
-          <p className="text-sm text-orange-800 font-medium flex items-center gap-1">
-            <AlertCircle className="w-4 h-4" />
-            Experience Gap: {expBD.gap_years.toFixed(1)} years
-          </p>
-          <p className="text-xs text-orange-700 mt-1">
-            You have {(expBD.total_years || expBD.candidate_years || 0).toFixed(1)} years, job requires {expBD.required_years || 0}+ years
-          </p>
-        </div>
-      )}
-
-      {/* Job Description */}
-      {description && (
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2">Job Description</h3>
-          <div className="text-gray-700 text-sm whitespace-pre-wrap line-clamp-4">{description}</div>
-        </div>
-      )}
-
-      {/* Key Responsibilities */}
-      {responsibilities.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-green-600" />
-            Key Responsibilities ({responsibilities.length})
-          </h3>
-          <ul className="list-disc list-inside space-y-1 text-sm text-gray-700">
-            {responsibilities.slice(0, 5).map((resp: string, idx: number) => (
-              <li key={idx} className="text-sm">{resp}</li>
-            ))}
-            {responsibilities.length > 5 && (
-              <li className="text-gray-400 text-sm">+{responsibilities.length - 5} more</li>
-            )}
-          </ul>
-        </div>
-      )}
-
-      {/* Benefits */}
-      {benefits.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-            <Award className="w-4 h-4 text-purple-600" />
-            Benefits & Perks
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {benefits.slice(0, 6).map((benefit: string, idx: number) => (
-              <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">{benefit}</span>
-            ))}
-            {benefits.length > 6 && (
-              <span className="text-xs text-gray-400">+{benefits.length - 6} more</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Meta Info */}
-      <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl">
-        <div>
-          <p className="text-xs text-gray-500">Posted on</p>
-          <p className="text-sm font-medium">{postedDate}</p>
-        </div>
-        <div>
-          <p className="text-xs text-gray-500">Applications close</p>
-          <p className="text-sm font-medium">{expiresAt ? formatFullDate(expiresAt) : 'Not specified'}</p>
-        </div>
-        {applicationCount > 0 && (
-          <div>
-            <p className="text-xs text-gray-500">Applicants</p>
-            <p className="text-sm font-medium">{applicationCount}</p>
-          </div>
-        )}
-        {job.department && (
-          <div>
-            <p className="text-xs text-gray-500">Department</p>
-            <p className="text-sm font-medium">{job.department}</p>
           </div>
         )}
       </div>
+    );
+  };
 
-      {/* Tags */}
-      {tags.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-gray-900 mb-2">Tags</h3>
-          <div className="flex flex-wrap gap-2">
-            {tags.map((tag: string, idx: number) => (
-              <span key={idx} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">#{tag}</span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
   // ============================================
   // STEP 3: SCREENING QUESTIONS
   // ============================================
@@ -1091,8 +892,7 @@ const renderStep2 = () => {
                 value={answers[idx] || ''}
                 onChange={(e) => handleAnswerChange(idx, e.target.value)}
                 rows={3}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors[idx] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors[idx] ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="Type your answer here..."
               />
             )}
@@ -1102,8 +902,7 @@ const renderStep2 = () => {
                 type="number"
                 value={answers[idx] || ''}
                 onChange={(e) => handleAnswerChange(idx, e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg ${errors[idx] ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                className={`w-full px-3 py-2 border rounded-lg ${errors[idx] ? 'border-red-500' : 'border-gray-300'}`}
                 placeholder="Enter number..."
               />
             )}
@@ -1163,7 +962,6 @@ const renderStep2 = () => {
               <p className="text-sm text-gray-500">{doc.description}</p>
               {doc.required && <span className="text-xs text-red-500">Required</span>}
             </div>
-
             {documents[idx] ? (
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-green-600" />
@@ -1207,7 +1005,6 @@ const renderStep2 = () => {
         <p className="text-sm text-gray-500">Please review all information before submitting</p>
       </div>
 
-      {/* Candidate Summary */}
       <div className="bg-gray-50 rounded-lg p-4">
         <h3 className="font-semibold mb-2 flex items-center gap-2"><User className="w-4 h-4" /> Your Information</h3>
         {profile ? (
@@ -1220,7 +1017,6 @@ const renderStep2 = () => {
         ) : <p className="text-sm text-gray-500">Profile data not available</p>}
       </div>
 
-      {/* Skills Summary */}
       {profile?.skills && profile.skills.length > 0 && (
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-semibold mb-2">Your Skills</h3>
@@ -1232,7 +1028,6 @@ const renderStep2 = () => {
         </div>
       )}
 
-      {/* Job Summary */}
       <div className="bg-gray-50 rounded-lg p-4">
         <h3 className="font-semibold mb-2 flex items-center gap-2"><Briefcase className="w-4 h-4" /> Job Details</h3>
         <p><span className="text-gray-500">Position:</span> {job.title}</p>
@@ -1240,7 +1035,6 @@ const renderStep2 = () => {
         <p><span className="text-gray-500">Match Score:</span> <strong className="text-blue-600">{Math.round(matchScore)}%</strong></p>
       </div>
 
-      {/* Screening Answers */}
       {screeningQuestions.length > 0 && (
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-semibold mb-2">Your Answers</h3>
@@ -1253,7 +1047,6 @@ const renderStep2 = () => {
         </div>
       )}
 
-      {/* Documents */}
       <div className="bg-gray-50 rounded-lg p-4">
         <h3 className="font-semibold mb-2">Uploaded Documents</h3>
         {documentTemplates.map((doc, idx) => (
@@ -1266,7 +1059,6 @@ const renderStep2 = () => {
         ))}
       </div>
 
-      {/* Confirmation */}
       <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
         <p className="text-sm text-yellow-800 flex items-center gap-2">
           <AlertCircle className="w-4 h-4" />
@@ -1277,36 +1069,571 @@ const renderStep2 = () => {
   );
 
   // ============================================
-  // MAIN RENDER
+  // HANDLE SUBMIT
+  // ============================================
+  const handleSubmit = async () => {
+    if (!validateStep()) return;
+    setSubmitting(true);
+
+    try {
+      const formattedDocuments = documentTemplates.map((doc, idx) => {
+        const uploadedDoc = documents[idx];
+        return {
+          name: doc.name,
+          url: uploadedDoc?.preview || '',
+          type: getDocumentType(doc.name) as 'resume' | 'cover_letter' | 'portfolio' | 'certificate'
+        };
+      }).filter(doc => doc.url);
+
+      const applicationData = {
+        jobId: job.id,
+        additionalInfo: {
+          screeningAnswers: answers,
+          documents: formattedDocuments,
+          matchScore: Math.round(matchScore),
+          submittedAt: new Date().toISOString(),
+        },
+      };
+
+      console.log('📤 Submitting application:', applicationData);
+      const result = await submitApplication(applicationData);
+      console.log('📥 Submit response:', result);
+
+      if (result?.success) {
+        const responseData = result.data as any;
+        console.log('📊 Response data:', responseData);
+
+        // ✅ Always show success message first
+        setSuccessMessage('✅ Application submitted successfully!');
+
+        // ✅ Store the full response
+        setSubmissionResponse(responseData);
+
+        // ✅ Check using simulationTemplates fields only
+        const hasAnySimulation =
+          responseData?.hasSimulationTemplates === true ||
+          (Array.isArray(responseData?.simulationTemplates) && responseData.simulationTemplates.length > 0) ||
+          (responseData?.totalTemplates && responseData.totalTemplates > 0);
+
+        console.log('🎯 Has any simulation:', hasAnySimulation);
+
+        if (hasAnySimulation) {
+          console.log('🎯 Showing simulation prompt');
+          setShowSimulationPrompt(true);
+        }
+        // No else-alert — success message is always shown
+
+        if (onSuccess) {
+          onSuccess({
+            applicationId: responseData?.applicationId,
+            hasSimulation: hasAnySimulation,
+            simulationInfo: hasAnySimulation ? {
+              simulationTemplates: responseData.simulationTemplates || [],
+              totalTemplates: responseData.totalTemplates || 0,
+              hasSimulationTemplates: responseData.hasSimulationTemplates,
+              nextStep: responseData.nextStep || 'view_simulations',
+              message: responseData.message,
+              action: responseData.action || null,
+            } : null
+          });
+        }
+      } else {
+        throw new Error(result?.message || 'Failed to submit application');
+      }
+    } catch (error: any) {
+      console.error('Submission error:', error);
+      setSuccessMessage(null);
+      alert('Failed to submit application: ' + (error?.message || 'Unknown error'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ============================================
+  // SIMULATION INFO RENDERER - Navigate to /simulations/my
+  // ============================================
+  const renderSimulationInfo = () => {
+    console.log('🔍 Rendering simulation info:', submissionResponse);
+
+    if (!submissionResponse) return null;
+
+    const simulationTemplates: any[] = submissionResponse?.simulationTemplates || [];
+    const totalTemplates: number = submissionResponse?.totalTemplates || 0;
+    const hasSimulationTemplates: boolean = submissionResponse?.hasSimulationTemplates || false;
+    const action = submissionResponse?.action || null;
+    const message: string = submissionResponse?.message || '';
+    const applicationId: string = submissionResponse?.applicationId || '';
+
+    const hasAnySimulation =
+      hasSimulationTemplates ||
+      simulationTemplates.length > 0 ||
+      totalTemplates > 0;
+
+    if (!hasAnySimulation) return null;
+
+    // Helper to format date
+    const formatAvailabilityDate = (dateStr: string | null | undefined): string => {
+      if (!dateStr) return 'Not specified';
+      try {
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return 'Invalid date';
+        return date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+      } catch {
+        return 'Invalid date';
+      }
+    };
+
+    // Helper to format time
+    const formatTime = (timeStr: string): string => {
+      if (!timeStr) return 'Not specified';
+      try {
+        const [hours, minutes] = timeStr.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        return `${hour12}:${minutes} ${ampm}`;
+      } catch {
+        return timeStr;
+      }
+    };
+
+    // Check if simulation is currently available
+    const isSimulationAvailable = (availability: any): { available: boolean; message: string } => {
+      if (!availability) return { available: true, message: 'Always available' };
+
+      const now = new Date();
+      const currentDay = now.getDay();
+      const currentTime = now.getHours() * 60 + now.getMinutes();
+
+      // Check start date
+      if (availability.startDate) {
+        const startDate = new Date(availability.startDate);
+        if (now < startDate) {
+          return {
+            available: false,
+            message: `📅 Available from ${formatAvailabilityDate(availability.startDate)}`
+          };
+        }
+      }
+
+      // Check end date
+      if (availability.endDate) {
+        const endDate = new Date(availability.endDate);
+        if (now > endDate) {
+          return {
+            available: false,
+            message: `❌ This simulation expired on ${formatAvailabilityDate(availability.endDate)}`
+          };
+        }
+      }
+
+      // Check daily windows
+      if (availability.dailyWindows && availability.dailyWindows.length > 0) {
+        const todayWindows = availability.dailyWindows.filter((w: any) => w.dayOfWeek === currentDay && w.enabled !== false);
+
+        if (todayWindows.length === 0) {
+          // Find next available day
+          let daysToAdd = 1;
+          let found = false;
+          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+          let nextDayName = '';
+
+          for (let i = 1; i <= 7; i++) {
+            const checkDay = (currentDay + i) % 7;
+            const hasWindow = availability.dailyWindows.some((w: any) => w.dayOfWeek === checkDay && w.enabled !== false);
+            if (hasWindow) {
+              nextDayName = days[checkDay];
+              daysToAdd = i;
+              found = true;
+              break;
+            }
+          }
+
+          if (found) {
+            return {
+              available: false,
+              message: `📅 Next available: ${nextDayName} (in ${daysToAdd} day${daysToAdd > 1 ? 's' : ''})`
+            };
+          }
+          return { available: false, message: '❌ No available time slots configured' };
+        }
+
+        // Check if current time is within any window
+        let inWindow = false;
+        let nextWindowTime: string | null = null;
+
+        for (const window of todayWindows) {
+          if (!window.enabled) continue;
+
+          const startMinutes = window.startTime ?
+            (parseInt(window.startTime.split(':')[0]) * 60 + parseInt(window.startTime.split(':')[1])) :
+            9 * 60;
+          const endMinutes = window.endTime ?
+            (parseInt(window.endTime.split(':')[0]) * 60 + parseInt(window.endTime.split(':')[1])) :
+            17 * 60;
+
+          if (currentTime >= startMinutes && currentTime <= endMinutes) {
+            inWindow = true;
+            break;
+          }
+
+          if (currentTime < startMinutes) {
+            if (!nextWindowTime || startMinutes < parseInt(nextWindowTime.split(':')[0]) * 60 + parseInt(nextWindowTime.split(':')[1])) {
+              nextWindowTime = window.startTime;
+            }
+          }
+        }
+
+        if (!inWindow) {
+          if (nextWindowTime) {
+            return {
+              available: false,
+              message: `⏰ Available from ${formatTime(nextWindowTime)} today`
+            };
+          }
+          return { available: false, message: '⏰ Outside of available hours' };
+        }
+      }
+
+      return { available: true, message: '✅ Available now!' };
+    };
+
+    // Get availability info from metadata
+    const getAvailabilityInfo = (metadata: any) => {
+      if (!metadata?.availability) return null;
+      const avail = metadata.availability;
+      return {
+        startDate: avail.startDate,
+        endDate: avail.endDate,
+        timezone: avail.timezone || 'UTC',
+        dailyWindows: avail.dailyWindows || [],
+        noticePeriod: avail.noticePeriod || 24,
+        allowRescheduling: avail.allowRescheduling !== false,
+        maxReschedules: avail.maxReschedules || 2,
+        maxConcurrentCandidates: avail.maxConcurrentCandidates || 10
+      };
+    };
+
+    // ✅ Get sorted daily windows
+    const getSortedWindows = (windows: any[]) => {
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      return windows
+        .filter((w: any) => w.enabled !== false)
+        .sort((a: any, b: any) => a.dayOfWeek - b.dayOfWeek)
+        .map((w: any) => ({
+          ...w,
+          dayName: days[w.dayOfWeek] || `Day ${w.dayOfWeek}`
+        }));
+    };
+
+    // ✅ Handle Start Simulation - Navigate to simulation view using onViewChange
+    const handleStartSimulation = () => {
+      console.log('🚀 Navigating to Job Simulation page');
+      console.log('📋 Application ID:', applicationId);
+
+      // ✅ Close the modal first
+      setShowSimulationPrompt(false);
+      onClose();
+
+      // ✅ Then navigate using the onSuccess callback or directly
+      // The modal is closed and the parent component (DashboardHome) 
+      // will handle the view change via onSuccess
+      if (onSuccess) {
+        onSuccess({
+          action: 'start-simulation',
+          view: 'simulation',
+          applicationId: applicationId
+        });
+      }
+    };
+
+    // ✅ Handle Close
+    const handleClose = () => {
+      console.log('🔒 Closing simulation prompt');
+      setShowSimulationPrompt(false);
+      onClose();
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Success message */}
+        {successMessage && (
+          <div className="p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center gap-3">
+            <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
+            <span className="font-semibold text-base">{successMessage}</span>
+          </div>
+        )}
+
+        {/* Header Banner */}
+        <div className="p-4 rounded-xl border-2 bg-blue-50 border-blue-300">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-full bg-blue-100">
+              <Rocket className="w-5 h-5 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <h4 className="font-semibold text-blue-800 text-base">🎯 Next Step: Complete the Simulation</h4>
+              <p className="text-sm mt-1 text-blue-700">
+                {message || `This job requires ${totalTemplates} simulation${totalTemplates > 1 ? 's' : ''} to evaluate your skills.`}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Simulation Cards */}
+        {simulationTemplates.length > 0 && (
+          <div className="space-y-4">
+            {simulationTemplates.map((sim: any) => {
+              const availability = getAvailabilityInfo(sim.metadata);
+              const availabilityStatus = availability ? isSimulationAvailable(availability) : { available: true, message: 'Always available' };
+              const isAvailable = availabilityStatus.available;
+              const sortedWindows = availability ? getSortedWindows(availability.dailyWindows) : [];
+
+              return (
+                <div key={sim.id} className={`bg-white rounded-xl border p-5 transition-shadow ${isAvailable ? 'border-green-300 hover:shadow-md' : 'border-gray-200'}`}>
+
+                  {/* Simulation Name */}
+                  <h4 className="font-bold text-gray-900 text-lg">{sim.name}</h4>
+
+                  {/* Duration & Difficulty */}
+                  <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" /> {sim.durationMinutes} minutes
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <BarChart3 className="w-4 h-4" /> {sim.difficulty || 'intermediate'}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Code className="w-4 h-4" /> {sim.type || 'technical'}
+                    </span>
+                    {sim.tasks?.length > 0 && (
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-4 h-4" /> {sim.tasks.length} tasks
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Availability Status */}
+                  <div className={`mt-4 p-4 rounded-lg border-2 ${isAvailable ? 'bg-green-50 border-green-400' : 'bg-yellow-50 border-yellow-400'
+                    }`}>
+                    <div className="flex items-start gap-3">
+                      <div className={`p-2 rounded-full flex-shrink-0 ${isAvailable ? 'bg-green-200' : 'bg-yellow-200'
+                        }`}>
+                        {isAvailable ? (
+                          <CheckCircle className="w-6 h-6 text-green-700" />
+                        ) : (
+                          <Clock className="w-6 h-6 text-yellow-700" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className={`text-base font-bold ${isAvailable ? 'text-green-800' : 'text-yellow-800'}`}>
+                          {isAvailable ? '✅ Available Now!' : '⏳ Not Currently Available'}
+                        </p>
+                        <p className={`text-sm mt-1 ${isAvailable ? 'text-green-700' : 'text-yellow-700'}`}>
+                          {availabilityStatus.message}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ✅ FULL AVAILABILITY DETAILS */}
+                  {availability && (
+                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-blue-600" />
+                        Availability Schedule
+                      </h5>
+
+                      <div className="space-y-2 text-sm">
+                        {/* Date Range */}
+                        <div className="flex flex-wrap gap-4">
+                          {availability.startDate && (
+                            <span className="text-gray-600">
+                              📅 From: <strong>{formatAvailabilityDate(availability.startDate)}</strong>
+                            </span>
+                          )}
+                          {availability.endDate && (
+                            <span className="text-gray-600">
+                              📅 Until: <strong>{formatAvailabilityDate(availability.endDate)}</strong>
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Timezone */}
+                        {availability.timezone && (
+                          <div className="text-gray-600">
+                            🌐 Timezone: <strong>{availability.timezone}</strong>
+                          </div>
+                        )}
+
+                        {/* ✅ ALL Daily Windows - Show ALL days */}
+                        {sortedWindows.length > 0 && (
+                          <div className="mt-2">
+                            <p className="text-xs font-semibold text-gray-500 mb-2">Daily Windows:</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {sortedWindows.map((window: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between bg-white px-3 py-1.5 rounded border border-gray-200 text-sm">
+                                  <span className="font-medium text-gray-700">{window.dayName}</span>
+                                  <span className="text-gray-600">
+                                    {window.startTime || '09:00'} - {window.endTime || '17:00'}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Additional Info */}
+                        <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-3 text-xs text-gray-500">
+                          {availability.noticePeriod && (
+                            <span>⏰ Notice: {availability.noticePeriod}h required</span>
+                          )}
+                          {availability.allowRescheduling && (
+                            <span>🔄 Rescheduling allowed ({availability.maxReschedules} max)</span>
+                          )}
+                          {availability.maxConcurrentCandidates && (
+                            <span>👥 Max candidates: {availability.maxConcurrentCandidates}</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ✅ Action Button - Navigate to /simulations/my */}
+                  <div className="mt-5 flex justify-center">
+                    {isAvailable ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartSimulation();
+                        }}
+                        className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-base font-semibold rounded-lg hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95"
+                      >
+                        <Play className="w-5 h-5" />
+                        Start Simulation
+                      </button>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClose();
+                        }}
+                        className="w-full py-3 bg-gray-200 text-gray-700 text-base font-semibold rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <X className="w-5 h-5" />
+                        Close - Not Available Yet
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Tasks count note */}
+                  {sim.tasks && sim.tasks.length > 0 && (
+                    <div className="mt-3 text-center">
+                      <span className="text-xs text-gray-400">
+                        📋 {sim.tasks.length} task{sim.tasks.length > 1 ? 's' : ''} • {sim.scoringRubric?.passingScore || 70}% passing score
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Skip/Close button at bottom */}
+        <button
+          onClick={handleClose}
+          className="w-full px-4 py-2.5 text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors"
+        >
+          {simulationTemplates.some((sim: any) => {
+            const availability = getAvailabilityInfo(sim.metadata);
+            const status = availability ? isSimulationAvailable(availability) : { available: true };
+            return status.available;
+          }) ? 'Skip for now — I\'ll start later' : 'Close'}
+        </button>
+      </div>
+    );
+  };
+
+  // ============================================
+  // EARLY RETURNS — must come before main return
+  // ============================================
+  if (!isOpen || !job) return null;
+
+  if (matchScore < 60 && matchScore > 0) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-xl max-w-md w-full m-4">
+          <div className="border-b p-4 flex justify-between items-center">
+            <h2 className="text-xl font-bold">Application Not Available</h2>
+            <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
+          </div>
+          <div className="p-6 text-center">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-10 h-10 text-red-600" />
+            </div>
+            <p className="text-gray-700 mb-4">
+              Your match score is <strong className="text-red-600">{matchScore}%</strong>, which is below the required <strong className="text-blue-600">70%</strong> minimum.
+            </p>
+            <div className="bg-yellow-50 p-4 rounded-lg text-left mb-4">
+              <h3 className="font-semibold text-yellow-800 mb-2">To improve your match:</h3>
+              <ul className="space-y-1 text-sm text-yellow-700">
+                <li>• Update your profile with more relevant skills</li>
+                <li>• Add work experience in this field</li>
+                <li>• Complete your education details</li>
+                <li>• Add certifications and portfolio links</li>
+              </ul>
+            </div>
+            <button onClick={onClose} className="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================
+  // MAIN RENDER — single return
   // ============================================
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl max-w-3xl w-full max-h-[90vh] flex flex-col m-4">
+
         {/* Header */}
         <div className="border-b p-4 flex justify-between items-center flex-shrink-0">
           <div>
             <h2 className="text-lg font-bold">Apply for {safeStr(job.title)}</h2>
-            <p className="text-xs text-gray-500">{reviewMode ? 'Review & Submit' : `Step ${currentStep} of ${totalSteps}`}</p>
+            <p className="text-xs text-gray-500">
+              {showSimulationPrompt ? '📋 Application Submitted — Next Steps' :
+                reviewMode ? 'Review & Submit' :
+                  `Step ${currentStep} of ${totalSteps}`}
+            </p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        {/* Success Message */}
-        {successMessage && (
-          <div className="mx-4 mt-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center gap-2 animate-pulse">
-            <CheckCircle className="w-5 h-5 text-green-600" />
-            <span className="font-medium">{successMessage}</span>
+        {/* Success message — shown when NOT in simulation prompt (e.g. no simulation case) */}
+        {successMessage && !showSimulationPrompt && (
+          <div className="mx-4 mt-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center gap-3">
+            <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
+            <span className="font-semibold text-base">{successMessage}</span>
           </div>
         )}
 
         {/* Step Indicator */}
-        {!reviewMode && (
+        {!reviewMode && !showSimulationPrompt && (
           <div className="px-6 pt-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               {[1, 2, 3, 4].map((step) => (
                 <div key={step} className="flex items-center flex-1">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step === currentStep ? 'bg-blue-600 text-white' :
-                      step < currentStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+                    step < currentStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
                     }`}>
                     {step < currentStep ? <CheckCircle className="w-5 h-5" /> : step}
                   </div>
@@ -1322,7 +1649,11 @@ const renderStep2 = () => {
 
         {/* Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-6">
-          {reviewMode ? renderReview() : (
+          {showSimulationPrompt ? (
+            renderSimulationInfo()
+          ) : reviewMode ? (
+            renderReview()
+          ) : (
             <>
               {currentStep === 1 && renderStep1()}
               {currentStep === 2 && renderStep2()}
@@ -1332,40 +1663,48 @@ const renderStep2 = () => {
           )}
         </div>
 
-        {/* Footer */}
-        <div className="border-t p-4 flex justify-between flex-shrink-0">
-          <div>
-            {!reviewMode && currentStep > 1 && (
-              <button onClick={handlePrevious} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
-                <ChevronLeft className="w-4 h-4 inline mr-1" /> Back
-              </button>
-            )}
-            {reviewMode && (
-              <button onClick={handleBackFromReview} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
-                <ChevronLeft className="w-4 h-4 inline mr-1" /> Edit Application
-              </button>
-            )}
-          </div>
+        {/* Footer — hidden when simulation prompt is shown */}
+        {!showSimulationPrompt && (
+          <div className="border-t p-4 flex justify-between flex-shrink-0">
+            <div>
+              {!reviewMode && currentStep > 1 && (
+                <button onClick={handlePrevious} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+                  <ChevronLeft className="w-4 h-4 inline mr-1" /> Back
+                </button>
+              )}
+              {reviewMode && (
+                <button onClick={handleBackFromReview} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50">
+                  <ChevronLeft className="w-4 h-4 inline mr-1" /> Edit Application
+                </button>
+              )}
+            </div>
 
-          <div className="flex gap-2">
-            <button onClick={onClose} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50" disabled={submitting}>Cancel</button>
-            {!reviewMode ? (
-              currentStep < totalSteps ? (
-                <button onClick={handleNext} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
-                  Continue <ChevronRight className="w-4 h-4" />
-                </button>
-              ) : (
-                <button onClick={handleReview} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
-                  Review Application <Eye className="w-4 h-4" />
-                </button>
-              )
-            ) : (
-              <button onClick={handleSubmit} disabled={submitting} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50">
-                {submitting ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Submitting...</> : <><Send className="w-4 h-4" /> Submit Application</>}
+            <div className="flex gap-2">
+              <button onClick={onClose} className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-50" disabled={submitting}>
+                Cancel
               </button>
-            )}
+              {!reviewMode ? (
+                currentStep < totalSteps ? (
+                  <button onClick={handleNext} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                    Continue <ChevronRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button onClick={handleReview} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                    Review Application <Eye className="w-4 h-4" />
+                  </button>
+                )
+              ) : (
+                <button onClick={handleSubmit} disabled={submitting} className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 disabled:opacity-50">
+                  {submitting
+                    ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> Submitting...</>
+                    : <><Send className="w-4 h-4" /> Submit Application</>
+                  }
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
       </div>
     </div>
   );

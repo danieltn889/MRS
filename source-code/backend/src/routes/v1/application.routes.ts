@@ -5,6 +5,9 @@ import { validateRequest } from '../../middleware/validation.middleware.js';
 import { query as dbQuery, getClient } from '../../config/database.js';
 import { logger } from '../../utils/logger.js';
 import { AuthenticatedRequest } from '../../types/auth.types.js';
+import SimulationController from '../../controllers/simulation.controller.js';
+import DatabaseService from '../../services/database.service.js';
+import ResponseService from '../../services/response.service.js';
 
 const router: Router = express.Router();
 
@@ -251,7 +254,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     }
 
     const application = applicationResult.rows[0];
-    
+
     console.log('📋 Application found:', {
       id: application.id,
       candidate_id: application.candidate_id,
@@ -277,7 +280,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
       const isCompanyOwner = application.company_created_by === authReq.user!.id;
       const isJobCreator = application.job_created_by === authReq.user!.id;
       const isCandidate = application.candidate_id === authReq.user!.id;
-      
+
       hasPermission = isCompanyOwner || isJobCreator || isCandidate;
       permissionReason = `Company owner: ${isCompanyOwner}, Job creator: ${isJobCreator}, Is candidate: ${isCandidate}`;
       console.log(`🔐 Company Admin permission check: ${permissionReason}`);
@@ -292,15 +295,15 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
         WHERE j.id = $3 AND j.created_by = $2
       `;
       const accessResult = await dbQuery(recruiterAccessQuery, [
-        application.company_id, 
+        application.company_id,
         authReq.user!.id,
         application.job_id
       ]);
-      
+
       const isOnTeam = accessResult.rows.length > 0;
       const isJobCreator = application.job_created_by === authReq.user!.id;
       const isCandidate = application.candidate_id === authReq.user!.id;
-      
+
       hasPermission = isOnTeam || isJobCreator || isCandidate;
       permissionReason = `On team: ${isOnTeam}, Job creator: ${isJobCreator}, Is candidate: ${isCandidate}`;
       console.log(`🔐 Recruiter permission check: ${permissionReason}`);
@@ -320,7 +323,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
         applicationId: id,
         reason: permissionReason
       });
-      
+
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to view this application',
@@ -399,7 +402,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     // Parse job requirements and benefits
     const jobRequirements = safeParseJSON(application.job_requirements, []);
     const jobBenefits = safeParseJSON(application.job_benefits, []);
-    
+
     application.job_requirements = extractTextFromArray(jobRequirements);
     application.job_benefits = extractTextFromArray(jobBenefits);
 
@@ -408,7 +411,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     const candidateExperience = safeParseJSON(application.candidate_experience, []);
     const candidateEducation = safeParseJSON(application.candidate_education, []);
     const candidateLanguages = safeParseJSON(application.languages, []);
-    
+
     application.candidate_skills = extractTextFromArray(candidateSkills);
     application.candidate_experience = candidateExperience;
     application.candidate_education = candidateEducation;
@@ -429,7 +432,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
         updated_at: application.updated_at,
         match_score: application.match_score,
         rating: application.rating,
-        
+
         submitted_data: application.submitted_data,
         screening_answers: application.screening_answers,
         documents: application.documents,
@@ -438,7 +441,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
         tags: application.tags,
         match_details: application.match_details,
         metadata: application.metadata,
-        
+
         job: {
           id: application.job_id,
           title: application.job_title,
@@ -456,7 +459,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
             currency: application.salary_currency
           }
         },
-        
+
         company: {
           id: application.company_id,
           name: application.company_name,
@@ -466,7 +469,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
           industry: application.company_industry,
           size: application.company_size
         },
-        
+
         candidate: {
           id: application.candidate_id,
           email: application.candidate_email,
@@ -505,7 +508,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     };
 
     console.log('✅ Successfully fetched application details');
-    
+
     return res.json({
       success: true,
       data: responseData
@@ -514,7 +517,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     console.error('❌ Get application error:', errorMessage);
-    
+
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch application',
@@ -655,118 +658,6 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch applications'
-    });
-  }
-});
-
-// @route   POST /api/v1/applications
-// @desc    Submit a new job application
-// @access  Private (Candidates only)
-router.post('/', [protect, authorize('candidate'), body('jobId').isUUID(), body('additionalInfo').optional(), validateRequest], async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  const client = await getClient();
-
-  try {
-    await client.query('BEGIN');
-
-    const { jobId, additionalInfo } = req.body;
-
-    // Check if job exists and is active
-    const jobResult = await client.query(
-      'SELECT id, title FROM jobs WHERE id = $1 AND status = $2',
-      [jobId, 'active']
-    );
-
-    if (jobResult.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({
-        success: false,
-        message: 'Job not found or not accepting applications'
-      });
-    }
-
-    // Check if user already applied
-    const existingApplication = await client.query(
-      'SELECT id, status FROM applications WHERE job_id = $1 AND user_id = $2',
-      [jobId, authReq.user!.id]
-    );
-
-    if (existingApplication.rows.length > 0) {
-      const existingApp = existingApplication.rows[0];
-      if (existingApp.status !== 'withdrawn') {
-        await client.query('ROLLBACK');
-        return res.status(400).json({
-          success: false,
-          message: 'You have already applied for this job'
-        });
-      } else {
-        // Update the withdrawn application
-        const updateResult = await client.query(
-          `UPDATE applications SET
-            status = 'submitted',
-            screening_answers = $1,
-            documents = $2,
-            match_score = $3,
-            submitted_data = $4,
-            updated_at = NOW()
-           WHERE id = $5
-           RETURNING id`,
-          [
-            JSON.stringify(additionalInfo?.screeningAnswers || {}),
-            JSON.stringify(additionalInfo?.documents || []),
-            additionalInfo?.matchScore || null,
-            JSON.stringify(additionalInfo || {}),
-            existingApp.id
-          ]
-        );
-
-        await client.query('COMMIT');
-
-        return res.status(200).json({
-          success: true,
-          message: 'Application submitted successfully',
-          data: {
-            applicationId: updateResult.rows[0].id,
-            status: 'submitted'
-          }
-        });
-      }
-    }
-
-    // Create new application
-    const applicationResult = await client.query(
-      `INSERT INTO applications (
-        job_id, user_id, status, screening_answers, documents, match_score, submitted_data,
-        applied_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-      RETURNING id`,
-      [
-        jobId,
-        authReq.user!.id,
-        'submitted',
-        JSON.stringify(additionalInfo?.screeningAnswers || {}),
-        JSON.stringify(additionalInfo?.documents || []),
-        additionalInfo?.matchScore || null,
-        JSON.stringify(additionalInfo || {})
-      ]
-    );
-
-    await client.query('COMMIT');
-
-    return res.status(201).json({
-      success: true,
-      data: {
-        applicationId: applicationResult.rows[0].id
-      },
-      message: 'Application submitted successfully'
-    });
-
-  } catch (error) {
-    await client.query('ROLLBACK');
-    logger.error('Submit application error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to submit application'
     });
   }
 });
@@ -1055,53 +946,401 @@ router.get('/requirements/:jobId', [protect, authorize('candidate'), param('jobI
   }
 });
 
-// @route   POST /api/v1/applications/:id/withdraw
-// @desc    Withdraw my application
-// @access  Private (Candidates)
-router.post('/:id/withdraw', [protect, authorize('candidate'), param('id').isUUID(), validateRequest], async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  try {
-    const { id } = req.params;
+interface SimulationTemplate {
+  id: string;
+  name: string;
+  description: string;
+  durationMinutes: number;
+  difficulty: string;
+  type: string;
+  category: string;
+  tasks: any[];
+  tasksStructure?: any;
+  scoringRubric: any;
+  passFailCriteria: any;
+  evaluationCriteria?: any;
+  isActive: boolean;
+  isPublic: boolean;
+  technologies: string[];
+  skillsAssessed: string[];
+  instructions: string;
+  preparationMaterials?: any;
+  languagesSupported?: string[];
+  totalTasks?: number;
+  usageCount?: number;
+  avgCompletionTime?: number;
+  avgScore?: number;
+  slug?: string;
+  sampleSimulationId?: string | null;
+  companyName: string | null;
+  companyLogo: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  metadata?: any;
+}
 
-    const applicationResult = await dbQuery(
-      'SELECT id, status FROM applications WHERE id = $1 AND user_id = $2',
-      [id, authReq.user.id]
-    );
+// @route   POST /api/v1/applications
+// @desc    Submit a new job application
+// @access  Private (Candidates only)
+router.post(
+  '/',
+  [
+    protect,
+    authorize('candidate'),
+    body('jobId').isUUID(),
+    body('additionalInfo').optional(),
+    validateRequest
+  ],
+  async (req: Request, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const client = await getClient();
 
-    if (applicationResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Application not found'
+    try {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📝 [APPLICATION SUBMISSION] Starting...');
+      console.log(`👤 User ID: ${authReq.user!.id}`);
+      console.log(`📧 User Email: ${authReq.user!.email}`);
+      console.log(`📋 Job ID: ${req.body.jobId}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      await client.query('BEGIN');
+
+      const { jobId, additionalInfo } = req.body;
+
+      console.log('🔍 [STEP 1] Checking if job exists and is active...');
+
+      // Check if job exists and is active
+      const jobResult = await client.query(
+        `SELECT 
+          j.id, 
+          j.title,
+          j.company_id,
+          (
+            SELECT COUNT(*) FROM simulation_templates st 
+            WHERE st.job_id = j.id AND st.is_active = true
+          ) as template_count
+        FROM jobs j
+        WHERE j.id = $1 AND j.status = $2 AND j.deleted_at IS NULL`,
+        [jobId, 'active']
+      );
+
+      if (jobResult.rows.length === 0) {
+        console.log('❌ Job not found or not active');
+        await client.query('ROLLBACK');
+        return res.status(404).json({
+          success: false,
+          message: 'Job not found or not accepting applications'
+        });
+      }
+
+      const job = jobResult.rows[0];
+      const hasTemplates = parseInt(job.template_count) > 0;
+
+      console.log(`✅ Job found: "${job.title}" (ID: ${job.id})`);
+      console.log(`📊 Template count: ${job.template_count}`);
+      console.log(`🎯 Has templates: ${hasTemplates}`);
+
+      // Get ALL simulation templates for this job - SELECTING ALL FIELDS
+      let simulations: SimulationTemplate[] = [];
+
+      console.log('🔍 [STEP 2] Fetching simulation templates for this job...');
+
+      if (hasTemplates) {
+        const simulationResult = await client.query(`
+          SELECT 
+            st.id,
+            st.company_id,
+            st.name,
+            st.slug,
+            st.description,
+            st.type,
+            st.category,
+            st.difficulty,
+            st.duration_minutes,
+            st.total_tasks,
+            st.tasks,
+            st.tasks_structure,
+            st.scoring_rubric,
+            st.pass_fail_criteria,
+            st.evaluation_criteria,
+            st.technologies,
+            st.skills_assessed,
+            st.languages_supported,
+            st.instructions,
+            st.preparation_materials,
+            st.sample_simulation_id,
+            st.is_public,
+            st.is_active,
+            st.usage_count,
+            st.avg_completion_time,
+            st.avg_score,
+            st.job_id,
+            st.created_at,
+            st.updated_at,
+            st.created_by,
+            st.metadata,
+            c.name as company_name,
+            c.logo_url as company_logo
+          FROM simulation_templates st
+          LEFT JOIN companies c ON st.company_id = c.id
+          WHERE st.job_id = $1 
+            AND st.is_active = true
+          ORDER BY st.created_at ASC
+        `, [jobId]);
+
+        console.log(`📊 Found ${simulationResult.rows.length} simulation templates`);
+
+        // Format simulations with proper type safety - including ALL fields
+        simulations = simulationResult.rows.map((row: any) => {
+          let tasks = row.tasks;
+          let tasksStructure = row.tasks_structure;
+          let scoringRubric = row.scoring_rubric;
+          let passFailCriteria = row.pass_fail_criteria;
+          let evaluationCriteria = row.evaluation_criteria;
+          let skillsAssessed = row.skills_assessed;
+          let technologies = row.technologies;
+          let languagesSupported = row.languages_supported;
+          let preparationMaterials = row.preparation_materials;
+          let metadata = row.metadata;
+
+          try {
+            if (typeof tasks === 'string') tasks = JSON.parse(tasks);
+            if (typeof tasksStructure === 'string') tasksStructure = JSON.parse(tasksStructure);
+            if (typeof scoringRubric === 'string') scoringRubric = JSON.parse(scoringRubric);
+            if (typeof passFailCriteria === 'string') passFailCriteria = JSON.parse(passFailCriteria);
+            if (typeof evaluationCriteria === 'string') evaluationCriteria = JSON.parse(evaluationCriteria);
+            if (typeof skillsAssessed === 'string') skillsAssessed = JSON.parse(skillsAssessed);
+            if (typeof technologies === 'string') technologies = JSON.parse(technologies);
+            if (typeof languagesSupported === 'string') languagesSupported = JSON.parse(languagesSupported);
+            if (typeof preparationMaterials === 'string') preparationMaterials = JSON.parse(preparationMaterials);
+            if (typeof metadata === 'string') metadata = JSON.parse(metadata);
+          } catch (e) {
+            logger.warn('Error parsing JSON for simulation template:', row.id);
+          }
+
+          return {
+            id: row.id,
+            name: row.name,
+            description: row.description || '',
+            durationMinutes: row.duration_minutes || 60,
+            difficulty: row.difficulty || 'intermediate',
+            type: row.type || 'technical',
+            category: row.category || 'general',
+            tasks: tasks || [],
+            tasksStructure: tasksStructure || {},
+            scoringRubric: scoringRubric || {},
+            passFailCriteria: passFailCriteria || {},
+            evaluationCriteria: evaluationCriteria || {},
+            isActive: row.is_active,
+            isPublic: row.is_public,
+            technologies: technologies || [],
+            skillsAssessed: skillsAssessed || [],
+            instructions: row.instructions || '',
+            preparationMaterials: preparationMaterials || {},
+            languagesSupported: languagesSupported || [],
+            totalTasks: row.total_tasks || 0,
+            usageCount: row.usage_count || 0,
+            avgCompletionTime: row.avg_completion_time || null,
+            avgScore: row.avg_score || null,
+            slug: row.slug || '',
+            sampleSimulationId: row.sample_simulation_id || null,
+            companyName: row.company_name,
+            companyLogo: row.company_logo,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            metadata: metadata || {}
+          };
+        });
+
+        // Log simulation details with more info
+        simulations.forEach((sim, index) => {
+          console.log(`  📌 Simulation ${index + 1}: "${sim.name}"`);
+          console.log(`     - Type: ${sim.type}, Difficulty: ${sim.difficulty}, Duration: ${sim.durationMinutes}min`);
+          console.log(`     - Tasks: ${sim.tasks?.length || 0}, Skills: ${sim.skillsAssessed?.length || 0}`);
+          console.log(`     - Public: ${sim.isPublic}, Active: ${sim.isActive}`);
+        });
+      } else {
+        console.log('ℹ️ No simulation templates found for this job');
+      }
+
+      console.log('🔍 [STEP 3] Checking if user already applied...');
+
+      // Check if user already applied
+      const existingApplication = await client.query(
+        'SELECT id, status FROM applications WHERE job_id = $1 AND user_id = $2 AND deleted_at IS NULL',
+        [jobId, authReq.user!.id]
+      );
+
+      let applicationId: string;
+      let isNewApplication = false;
+
+      if (existingApplication.rows.length > 0) {
+        const existingApp = existingApplication.rows[0];
+        console.log(`📋 Existing application found: ${existingApp.id} (status: ${existingApp.status})`);
+
+        if (existingApp.status !== 'withdrawn' && existingApp.status !== 'rejected') {
+          console.log('❌ User already applied with active status');
+          await client.query('ROLLBACK');
+          return res.status(400).json({
+            success: false,
+            message: 'You have already applied for this job'
+          });
+        } else {
+          console.log(`🔄 Updating existing ${existingApp.status} application...`);
+
+          // Update the withdrawn/rejected application
+          const updateResult = await client.query(
+            `UPDATE applications SET
+              status = 'submitted',
+              screening_answers = $1,
+              documents = $2,
+              match_score = $3,
+              submitted_data = $4,
+              updated_at = NOW(),
+              withdrawn_at = NULL,
+              withdrawn_reason = NULL,
+              rejection_reason = NULL
+             WHERE id = $5
+             RETURNING id`,
+            [
+              JSON.stringify(additionalInfo?.screeningAnswers || {}),
+              JSON.stringify(additionalInfo?.documents || []),
+              additionalInfo?.matchScore || null,
+              JSON.stringify(additionalInfo || {}),
+              existingApp.id
+            ]
+          );
+          applicationId = updateResult.rows[0].id;
+          isNewApplication = false;
+          console.log(`✅ Application updated successfully: ${applicationId}`);
+        }
+      } else {
+        console.log('📝 Creating new application...');
+
+        // Create new application
+        const applicationResult = await client.query(
+          `INSERT INTO applications (
+            job_id, user_id, status, screening_answers, documents, match_score, submitted_data,
+            applied_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+          RETURNING id`,
+          [
+            jobId,
+            authReq.user!.id,
+            'submitted',
+            JSON.stringify(additionalInfo?.screeningAnswers || {}),
+            JSON.stringify(additionalInfo?.documents || []),
+            additionalInfo?.matchScore || null,
+            JSON.stringify(additionalInfo || {})
+          ]
+        );
+        applicationId = applicationResult.rows[0].id;
+        isNewApplication = true;
+        console.log(`✅ New application created successfully: ${applicationId}`);
+      }
+
+      await client.query('COMMIT');
+      console.log('💾 Database transaction committed successfully');
+
+      // Build response with simulation data
+      const responseData: any = {
+        applicationId,
+        isNewApplication,
+        jobId,
+        jobTitle: job.title,
+        hasSimulationTemplates: hasTemplates,
+        simulationTemplates: simulations,
+        totalTemplates: simulations.length,
+        nextStep: hasTemplates ? 'view_simulations' : 'awaiting_review',
+        message: ''
+      };
+
+      console.log('🔍 [STEP 4] Building response...');
+
+      // Add contextual messages based on templates availability
+      if (hasTemplates && simulations.length > 0) {
+        console.log(`🎯 ${simulations.length} simulation(s) available for this job`);
+
+        if (simulations.length === 1) {
+          const sim = simulations[0]!;
+          console.log(`📌 Single simulation: "${sim.name}"`);
+
+          responseData.action = {
+            type: 'start',
+            simulationId: sim.id,
+            url: `/api/v1/simulations/start-session?simulationId=${sim.id}&applicationId=${applicationId}`,
+            message: 'Start Simulation',
+            simulationName: sim.name,
+            durationMinutes: sim.durationMinutes,
+            difficulty: sim.difficulty,
+            simulationType: sim.type,
+            category: sim.category,
+            totalTasks: sim.totalTasks || sim.tasks?.length || 0
+          };
+          responseData.message = `✅ Application submitted! This job requires a simulation. Please start "${sim.name}" to complete your application.`;
+          console.log(`✅ Response: Single simulation - "${sim.name}"`);
+        } else {
+          console.log(`📌 Multiple simulations (${simulations.length}):`);
+          simulations.forEach((sim, index) => {
+            console.log(`  ${index + 1}. "${sim.name}" (${sim.difficulty}, ${sim.durationMinutes}min, ${sim.tasks?.length || 0} tasks)`);
+          });
+
+          responseData.action = {
+            type: 'choose',
+            message: 'Choose a simulation to start',
+            options: simulations.map((sim: SimulationTemplate) => ({
+              id: sim.id,
+              name: sim.name,
+              description: sim.description,
+              durationMinutes: sim.durationMinutes,
+              difficulty: sim.difficulty,
+              simulationType: sim.type,
+              category: sim.category,
+              totalTasks: sim.totalTasks || sim.tasks?.length || 0,
+              skillsAssessed: sim.skillsAssessed || [],
+              technologies: sim.technologies || [],
+              url: `/api/v1/simulations/start-session?simulationId=${sim.id}&applicationId=${applicationId}`
+            }))
+          };
+          responseData.message = `✅ Application submitted! This job requires a simulation. Please choose one of ${simulations.length} available simulations to complete your application.`;
+          console.log(`✅ Response: Multiple simulations available`);
+        }
+      } else {
+        console.log('ℹ️ No simulation required for this position');
+        responseData.message = '✅ Application submitted successfully! No simulation required for this position.';
+        responseData.nextStep = 'awaiting_review';
+      }
+
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(`✅ Application submission completed successfully`);
+      console.log(`📋 Application ID: ${applicationId}`);
+      console.log(`🆕 New application: ${isNewApplication}`);
+      console.log(`🎯 Next step: ${responseData.nextStep}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+      return res.status(isNewApplication ? 201 : 200).json({
+        success: true,
+        data: responseData
       });
-    }
 
-    const application = applicationResult.rows[0];
+    } catch (error) {
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('❌ [ERROR] Application submission failed');
+      console.error('❌ Error details:', error);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    if (!['submitted', 'under_review'].includes(application.status)) {
-      return res.status(400).json({
+      await client.query('ROLLBACK');
+      logger.error('Submit application error:', error);
+      return res.status(500).json({
         success: false,
-        message: 'Cannot withdraw application in current status'
+        message: 'Failed to submit application'
       });
+    } finally {
+      client.release();
     }
-
-    await dbQuery(
-      'UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2',
-      ['withdrawn', id]
-    );
-
-    return res.json({
-      success: true,
-      message: 'Application withdrawn successfully'
-    });
-
-  } catch (error) {
-    logger.error('Withdraw application error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to withdraw application'
-    });
   }
-});
+);
+
 
 // @route   GET /api/v1/applications/:id/rejection-reason
 // @desc    See why I was rejected
@@ -1282,7 +1521,7 @@ router.post('/:id/documents', [protect, authorize('candidate'), param('id').isUU
     if (typeof existingDocs === 'string') {
       existingDocs = JSON.parse(existingDocs);
     }
-    
+
     // Add new document
     const newDoc = {
       name,
