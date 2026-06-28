@@ -326,7 +326,7 @@ class Factor1_SkillsMatcher:
         }
 
 # =====================================================
-# FACTOR 2: QUALIFICATIONS MATCHER (25%) - COMPLETE FIXED
+# FACTOR 2: QUALIFICATIONS MATCHER (25%) - COMPLETE FIXED .
 # =====================================================
 
 # =====================================================
