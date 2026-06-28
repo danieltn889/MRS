@@ -17,6 +17,12 @@ cd "$ROOT/source-code/backend"
 npm ci || npm install
 npm run type-check || echo "⚠ type-check reported issues (continuing)"
 
+# Apply the database schema on every deploy. migrate.ts is idempotent: it creates
+# the database if missing and skips objects that already exist, so this is safe to
+# re-run. Requires PostgreSQL running + the .env DB_* values (see bootstrap-server.sh).
+echo "── Database migrate ──"
+npm run migrate
+
 # ── Frontend (Vite → static build, served on port 3000) ──────────────────────
 echo "── Frontend ──"
 cd "$ROOT/source-code/frontend"

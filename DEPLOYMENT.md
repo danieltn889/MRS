@@ -22,54 +22,55 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 
 ---
 
-## 2. One-time server setup (SSH in once)
+## 2. One-time server setup (fresh server → deploy-ready)
+
+First create the env files the apps need (these hold secrets, so they are **not** in
+git — template: `source-code/backend/.env.example`):
 
 ```bash
-ssh -i ssh_key.pem ubuntu@16.192.28.113
-
-# Node 20 + pm2
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt-get install -y nodejs python3 python3-venv python3-pip git
-sudo npm i -g pm2
-
-# Let pm2 restart your apps after a server reboot
-pm2 startup            # run the command it prints
+# on the server, in the repo root (~/SVWR-CFE):
+nano source-code/backend/.env    # DB_*, JWT_SECRET, SMTP_*, GROQ_API_KEY, GITHUB_*, NODE_ENV=production
+nano source-code/frontend/.env   # VITE_API_URL=/api/v1  VITE_ML_GATEWAY_URL=/matcher  VITE_SEARCH_URL=/search/search
 ```
 
-Create the env files the apps need (these are **not** in git):
+Then run the **bootstrap script once** — it installs Node 20, pm2, Python, PostgreSQL
+(+ creates the DB matching your `.env`), Nginx (reverse proxy), and enables pm2 on boot:
 
 ```bash
-mkdir -p ~/SVWR-CFE/source-code/backend ~/SVWR-CFE/source-code/ml
-nano ~/SVWR-CFE/source-code/backend/.env   # DB, SMTP, GROQ_API_KEY, FRONTEND_URL, etc.
-nano ~/SVWR-CFE/source-code/ml/.env        # ML service config
+bash deploy/bootstrap-server.sh
 ```
+
+That's the whole server. The database **tables** are created automatically — `deploy.sh`
+runs the idempotent migration on every deploy.
 
 ---
 
 ## 3. AWS Security Group — open the ports
 
-In the EC2 instance's security group, allow inbound TCP for the ports you expose:
+Nginx fronts everything on port 80/443, so you only need to expose:
 
 | Port | Service |
 |---|---|
+| 80 | HTTP (Nginx → all services) |
+| 443 | HTTPS (after SSL) |
 | 22 | SSH (your IP only, ideally) |
-| 3000 | Frontend |
-| 3001 | Backend API |
-| 8080 | ML gateway |
-| 8000 | AI matcher |
+
+The internal ports (3000/3001/8080/8000) stay private — Nginx proxies to them on localhost.
 
 ---
 
 ## 4. Deploy
 
 Just **push to `main`** (or run the workflow manually from the **Actions** tab). The
-workflow will: clone the repo on first run, then on each push `git reset --hard` to
-the new commit and run `deploy.sh`, which:
+workflow rsyncs the code to the server (preserving the server's `.env`) and runs
+`deploy.sh`, which:
 
 1. installs backend deps,
-2. builds the frontend (`vite build` → `dist/`),
-3. prepares the ML Python venv,
-4. restarts everything with **pm2** (`backend`, `ml-gateway`, `frontend`).
+2. **runs database migrations** (idempotent — creates the DB/tables if missing),
+3. builds the frontend (`vite build` → `dist/`),
+4. prepares the ML Python venv,
+5. restarts everything with **pm2** (`backend`, `ml-gateway`, `frontend`),
+6. health-checks all services (the run fails if any is unhealthy).
 
 Check status on the server: `pm2 status` · logs: `pm2 logs backend`.
 
