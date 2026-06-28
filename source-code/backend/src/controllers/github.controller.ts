@@ -373,7 +373,7 @@ async createSimulationRepoInternal(
           name: uniqueRepoName,
           description: `Recruitment simulation - ${simulationId} (Attempt ${attemptNumber})`,
           private: true,
-          auto_init: true
+          auto_init: false
         });
         finalOwner = orgName;
       } else {
@@ -381,7 +381,7 @@ async createSimulationRepoInternal(
           name: uniqueRepoName,
           description: `Recruitment simulation - ${simulationId} (Attempt ${attemptNumber})`,
           private: true,
-          auto_init: true
+          auto_init: false
         });
         finalOwner = personalOwner;
       }
@@ -391,7 +391,7 @@ async createSimulationRepoInternal(
         name: uniqueRepoName,
         description: `Recruitment simulation - ${simulationId} (Attempt ${attemptNumber})`,
         private: true,
-        auto_init: true
+        auto_init: false
       });
       finalOwner = personalOwner;
     }
@@ -401,7 +401,10 @@ async createSimulationRepoInternal(
     const cloneUrl = `${repoUrl}.git`;
 
     // ── detect default branch ─────────────────────────────────────────────
-    let defaultBranch = 'main';
+    // The repository is created EMPTY (auto_init=false): no initial commit, no
+    // README, no branches. The default branch (main) is created when the candidate
+    // makes their first push, so a missing branch here is EXPECTED — do not throw.
+    let defaultBranch = repo.data.default_branch || 'main';
 
     try {
       await this.octokit.git.getRef({ owner: finalOwner, repo: finalRepoName, ref: 'heads/main' });
@@ -411,7 +414,9 @@ async createSimulationRepoInternal(
         await this.octokit.git.getRef({ owner: finalOwner, repo: finalRepoName, ref: 'heads/master' });
         defaultBranch = 'master';
       } catch {
-        throw new Error('Repository creation failed - no default branch found');
+        // Empty repo — no commit/branch yet. The candidate creates the first commit.
+        defaultBranch = repo.data.default_branch || 'main';
+        console.log('ℹ️ Empty repository created — first commit/branch will be the candidate\'s');
       }
     }
 
@@ -646,7 +651,7 @@ async createSimulationRepoInternal(
         repo = await this.octokit.repos.createForAuthenticatedUser({
           name: repoName,
           description: `Recruitment simulation for candidate ${candidateId}`,
-          private: true, auto_init: true
+          private: true, auto_init: false
         });
       }
 
@@ -654,9 +659,16 @@ async createSimulationRepoInternal(
 
       const repoData = await this.octokit.repos.get({ owner: this.organizationName, repo: repoName });
       const defaultBranch = repoData.data.default_branch || 'main';
-      const mainBranch = await this.octokit.git.getRef({ owner: this.organizationName, repo: repoName, ref: `heads/${defaultBranch}` });
       const branchName = `candidate-${candidateId.substring(0, 8)}`;
-      await this.octokit.git.createRef({ owner: this.organizationName, repo: repoName, ref: `refs/heads/${branchName}`, sha: mainBranch.data.object.sha });
+      // Only create the candidate branch if the repo already has a commit. For an
+      // EMPTY repository (no initial commit), the candidate creates the first commit
+      // and branch themselves — so a missing default branch here is expected.
+      try {
+        const mainBranch = await this.octokit.git.getRef({ owner: this.organizationName, repo: repoName, ref: `heads/${defaultBranch}` });
+        await this.octokit.git.createRef({ owner: this.organizationName, repo: repoName, ref: `refs/heads/${branchName}`, sha: mainBranch.data.object.sha });
+      } catch (branchErr: any) {
+        console.log('ℹ️ Empty repository — candidate will create the first commit/branch:', branchErr?.message);
+      }
 
       let issues: any[] = [];
       if (tasks?.length) {

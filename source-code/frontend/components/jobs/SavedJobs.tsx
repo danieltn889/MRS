@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { submitApplication } from '../../services/applicationAPI';
 import JobApplicationModal from './JobApplicationModal';
 import appliedJobsManager from '../../src/utils/AppliedJobsManager';
-import { loadSavedJobsFromAPI } from '../../services/jobStorageService';
 import {
   Bookmark,
   X,
@@ -84,9 +82,15 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
       if (response.ok) {
         const data = await response.json();
         if (data.success && data.data) {
-          console.log('SavedJobs: Fetched saved jobs from API:', data.data.map((job: SavedJob) => ({ id: job.id, title: job.title })));
-          setSavedJobs(data.data);
-          setFilteredJobs(data.data);
+          // The backend wraps the payload as { success, data: { data: [...], pagination } },
+          // so the array is at data.data.data. Be tolerant of either shape.
+          const payload = data.data;
+          const list: SavedJob[] = Array.isArray(payload)
+            ? payload
+            : (payload.data || payload.savedJobs || payload.jobs || []);
+          console.log('SavedJobs: Fetched saved jobs from API:', list.map((job: SavedJob) => ({ id: job.id, title: job.title })));
+          setSavedJobs(list);
+          setFilteredJobs(list);
           return;
         }
       }
@@ -242,8 +246,16 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
   };
 
   const removeJobTag = (jobId: string, tagToRemove: string): void => {
-    const updatedJobs = savedJobs.map(job => 
-      job.id === jobId ? { ...job, tags: job.tags.filter(tag => tag !== tagToRemove) } : job
+    const updatedJobs = savedJobs.map(job =>
+      job.id === jobId ? { ...job, tags: (job.tags || []).filter(tag => tag !== tagToRemove) } : job
+    );
+    setSavedJobs(updatedJobs);
+    setFilteredJobs(updatedJobs);
+  };
+
+  const updateJobPriority = (jobId: string, priority: 'low' | 'medium' | 'high'): void => {
+    const updatedJobs = savedJobs.map(job =>
+      job.id === jobId ? { ...job, priority } : job
     );
     setSavedJobs(updatedJobs);
     setFilteredJobs(updatedJobs);
@@ -254,10 +266,11 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
     let filtered = savedJobs;
 
     if (searchQuery) {
+      const q = searchQuery.toLowerCase();
       filtered = filtered.filter(job =>
-        job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        job.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        job.description.toLowerCase().includes(searchQuery.toLowerCase())
+        (job.title || '').toLowerCase().includes(q) ||
+        (job.company_name || '').toLowerCase().includes(q) ||
+        (job.description || '').toLowerCase().includes(q)
       );
     }
 
@@ -267,7 +280,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
 
     if (filterTags.length > 0) {
       filtered = filtered.filter(job =>
-        filterTags.some(tag => job.tags.includes(tag))
+        filterTags.some(tag => (job.tags || []).includes(tag))
       );
     }
 
@@ -279,27 +292,16 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
     setShowApplicationModal(true);
   };
 
-  const handleApplicationSubmit = async (formData: any): Promise<void> => {
-    try {
-      console.log('Submitting application for job:', selectedJobForApply?.id);
-      const response = await submitApplication(formData);
-      
-      if (response.success) {
-        console.log('✅ Application submitted successfully');
-        if (selectedJobForApply) {
-          appliedJobsManager.addAppliedJob(selectedJobForApply.id);
-        }
-        setShowApplicationModal(false);
-        setSelectedJobForApply(null);
-        alert('Application submitted successfully!');
-      } else {
-        console.log('❌ Application submission failed:', response);
-        alert('Failed to submit application: ' + (response.message || 'Unknown error'));
-      }
-    } catch (error: any) {
-      console.error('❌ Error submitting application:', error);
-      alert('Error submitting application: ' + (error.response?.data?.message || error.message));
+  // The JobApplicationModal performs the submission itself and calls this on
+  // success — so here we ONLY sync local state (mark applied, close the modal).
+  // Re-submitting here would cause a duplicate application.
+  const handleApplicationSubmit = (_data?: any): void => {
+    if (selectedJobForApply) {
+      appliedJobsManager.addAppliedJob(selectedJobForApply.id);
+      setAppliedJobs(appliedJobsManager.getAllAppliedJobs());
     }
+    setShowApplicationModal(false);
+    setSelectedJobForApply(null);
   };
 
   if (loading || profileLoading) {
@@ -481,7 +483,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
                           <p className="text-gray-700 mt-3 line-clamp-2">
                             {job.description}
                           </p>
-                          {job.tags.length > 0 && (
+                          {job.tags && job.tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-3">
                               {job.tags.map((tag, index) => (
                                 <span
@@ -608,7 +610,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
           }}
           matchScore={selectedJobForApply.match_score || 78.7}
           requiredDocuments={['Resume', 'Cover Letter']}
-          onApply={handleApplicationSubmit}
+          onSuccess={handleApplicationSubmit}
         />
       )}
 

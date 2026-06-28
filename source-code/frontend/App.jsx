@@ -19,6 +19,7 @@ import { GitHubCallback } from './pages/Auth/GitHubCallback';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import JobDetails from './components/jobs/JobDetails';
+import BlockchainExplorer from './components/BlockchainExplorer';
 
 // Wrapper component for SimulationSessionViewer to handle URL params
 const SimulationResultsWrapper = () => {
@@ -205,6 +206,9 @@ function AppRoutes() {
 
       {/* Company Profile Route */}
       <Route path="/company-profile" element={<ProtectedRoute><CompanyProfile /></ProtectedRoute>} />
+
+      {/* Blockchain Explorer / Verification Dashboard */}
+      <Route path="/blockchain" element={<ProtectedRoute><BlockchainExplorer /></ProtectedRoute>} />
 
       {/* Default route for any unmatched paths */}
       <Route path="*" element={<Navigate to={isAuthenticated ? "/" : "/"} replace />} />

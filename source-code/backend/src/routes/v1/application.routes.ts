@@ -8,8 +8,126 @@ import { AuthenticatedRequest } from '../../types/auth.types.js';
 import SimulationController from '../../controllers/simulation.controller.js';
 import DatabaseService from '../../services/database.service.js';
 import ResponseService from '../../services/response.service.js';
+import emailService from '../../services/email.service.js';
+import NotificationService from '../../services/notification.service.js';
 
 const router: Router = express.Router();
+
+// Human-readable labels for application statuses (used in notifications/emails).
+const STATUS_LABELS: Record<string, string> = {
+  submitted: 'Applied',
+  under_review: 'Under Review',
+  shortlisted: 'Shortlisted',
+  interview: 'Interview Scheduled',
+  assessment: 'Assessment Pending',
+  reference_check: 'Reference Check',
+  offer: 'Offer Extended',
+  hired: 'Hired',
+  rejected: 'Rejected',
+  withdrawn: 'Withdrawn',
+  on_hold: 'On Hold',
+};
+
+// Statuses a candidate can no longer withdraw from (offer already accepted / final).
+const NON_WITHDRAWABLE_STATUSES = ['hired', 'withdrawn', 'rejected'];
+
+/**
+ * Best-effort side effects for an application status change: an in-app notification
+ * and an email to the candidate. Never throws — a notification/email failure must
+ * not break the underlying status update. Call AFTER the DB transaction commits.
+ */
+async function notifyCandidateOfApplication(
+  applicationId: string,
+  opts: { title: string; status?: string; statusLabel?: string; jobId?: string; emailKind?: 'received' | 'status' | 'withdrawn'; includeSimulation?: boolean }
+): Promise<void> {
+  try {
+    const info = await dbQuery(
+      `SELECT a.user_id, a.job_id, u.email,
+              COALESCE(cp.first_name, '') AS first_name,
+              j.title AS job_title, c.name AS company_name
+       FROM applications a
+       JOIN jobs j ON j.id = a.job_id
+       LEFT JOIN companies c ON c.id = j.company_id
+       JOIN users u ON u.id = a.user_id
+       LEFT JOIN candidate_profiles cp ON cp.user_id = a.user_id
+       WHERE a.id = $1`,
+      [applicationId]
+    );
+    const row = info.rows[0];
+    if (!row) return;
+    const jobTitle = row.job_title || 'the role';
+    const companyName = row.company_name || 'the company';
+
+    // When relevant (e.g. on shortlisting), include this job's simulation details if
+    // one exists — reuses simulations (per-application instance) and simulation_templates
+    // (per-job). No new schema.
+    let simulation: any = undefined;
+    if (opts.includeSimulation) {
+      try {
+        const simRes = await dbQuery(
+          `SELECT s.scheduled_at, s.status AS sim_status,
+                  COALESCE(st.name, 'Assessment') AS name,
+                  st.duration_minutes, st.instructions
+             FROM simulations s
+             LEFT JOIN simulation_templates st ON st.id = s.template_id
+            WHERE s.application_id = $1
+            ORDER BY s.created_at DESC
+            LIMIT 1`,
+          [applicationId]
+        );
+        if (simRes.rows[0]) {
+          simulation = { ...simRes.rows[0], scheduled: true };
+        } else {
+          // No instance yet — fall back to the job's active simulation template so we
+          // can tell the candidate a simulation is part of the role.
+          const tplRes = await dbQuery(
+            `SELECT st.name, st.duration_minutes, st.instructions
+               FROM simulation_templates st
+              WHERE st.job_id = $1 AND st.is_active = TRUE
+              ORDER BY st.created_at DESC
+              LIMIT 1`,
+            [row.job_id]
+          );
+          if (tplRes.rows[0]) simulation = { ...tplRes.rows[0], scheduled: false };
+        }
+      } catch (simErr) {
+        logger.warn(`Simulation lookup for application ${applicationId} failed: ${(simErr as Error).message}`);
+      }
+    }
+
+    await NotificationService.create({
+      userId: row.user_id,
+      type: 'application_update',
+      category: 'application',
+      title: opts.title,
+      content: `${jobTitle} at ${companyName}`,
+      data: {
+        applicationId,
+        jobId: opts.jobId || row.job_id,
+        status: opts.status,
+        url: `/applications/${applicationId}`,
+      },
+    });
+
+    if (row.email && opts.emailKind) {
+      try {
+        await emailService.sendApplicationStatusEmail(row.email, {
+          candidateName: row.first_name || 'there',
+          jobTitle,
+          companyName,
+          statusLabel: opts.statusLabel || STATUS_LABELS[opts.status || ''] || opts.status || 'Updated',
+          applicationId,
+          kind: opts.emailKind,
+          simulation,
+        });
+      } catch (emailErr) {
+        logger.warn(`Application email failed for ${applicationId}: ${(emailErr as Error).message}`);
+      }
+    }
+  } catch (err) {
+    logger.warn(`notifyCandidateOfApplication failed for ${applicationId}: ${(err as Error).message}`);
+  }
+}
 
 // Utility function to wrap AuthenticatedRequest handlers
 const withAuth = (handler: (req: AuthenticatedRequest, res: express.Response) => Promise<any>) => {
@@ -698,20 +816,34 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
       hasPermission = application.user_id === authReq.user!.id;
       allowedStatuses = ['withdrawn'];
     } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
-      // Recruiters can update status for applications to their jobs
-      if (authReq.user!.user_type === 'company_admin') {
-        const companyCheck = await client.query(
-          'SELECT id FROM companies WHERE id = $1 AND created_by = $2',
+      // A recruiter/company_admin may manage applications for jobs at THEIR company.
+      // Accept any of the existing relationships: the user belongs to the job's
+      // company (req.user.company_id, set by auth middleware), created the job,
+      // is a company_team member, or created the company. Reuses existing data —
+      // no new fields.
+      const userCompanyId = authReq.user!.company_id ? String(authReq.user!.company_id) : null;
+      const jobCompanyId = application.company_id ? String(application.company_id) : null;
+      const sameCompany = !!userCompanyId && !!jobCompanyId && userCompanyId === jobCompanyId;
+
+      const isJobCreator = application.created_by === authReq.user!.id;
+
+      let inTeamOrOwner = false;
+      if (!sameCompany && !isJobCreator) {
+        const rel = await client.query(
+          `SELECT 1
+             FROM company_team
+            WHERE company_id = $1 AND user_id = $2
+           UNION
+           SELECT 1
+             FROM companies
+            WHERE id = $1 AND created_by = $2
+           LIMIT 1`,
           [application.company_id, authReq.user!.id]
         );
-        hasPermission = companyCheck.rows.length > 0;
-      } else {
-        hasPermission = application.created_by === authReq.user!.id ||
-          (await client.query(
-            'SELECT id FROM company_team WHERE company_id = $1 AND user_id = $2',
-            [application.company_id, authReq.user!.id]
-          )).rows.length > 0;
+        inTeamOrOwner = rel.rows.length > 0;
       }
+
+      hasPermission = sameCompany || isJobCreator || inTeamOrOwner;
 
       if (hasPermission) {
         allowedStatuses = ['under_review', 'shortlisted', 'interview', 'offer', 'hired', 'rejected'];
@@ -734,6 +866,17 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
       });
     }
 
+    // A candidate cannot withdraw once the application is final (offer accepted /
+    // hired) or already withdrawn/rejected — explain why clearly.
+    if (status === 'withdrawn' && authReq.user!.user_type === 'candidate'
+        && NON_WITHDRAWABLE_STATUSES.includes(application.status)) {
+      await client.query('ROLLBACK');
+      const reason = application.status === 'hired'
+        ? 'This application can no longer be withdrawn because an offer has already been accepted.'
+        : `This application is already ${STATUS_LABELS[application.status] || application.status} and cannot be withdrawn.`;
+      return res.status(409).json({ success: false, message: reason });
+    }
+
     // Update application
     const updateFields = ['updated_at = NOW()'];
     const updateValues = [];
@@ -742,6 +885,17 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
     if (status) {
       updateFields.push(`status = $${paramIndex}`);
       updateValues.push(status);
+      paramIndex++;
+    }
+
+    // Record withdrawal metadata when a candidate withdraws.
+    if (status === 'withdrawn') {
+      updateFields.push('withdrawn_at = NOW()');
+      updateFields.push(`withdrawn_by = $${paramIndex}`);
+      updateValues.push(authReq.user!.id);
+      paramIndex++;
+      updateFields.push(`withdrawn_reason = $${paramIndex}`);
+      updateValues.push((req.body && req.body.reason) || 'Withdrawn by candidate');
       paramIndex++;
     }
 
@@ -791,6 +945,32 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
     await client.query('COMMIT');
 
     logger.info(`Application updated: ${id} by user ${authReq.user!.id}`);
+
+    // Notify the candidate (in-app + email) when their application status changes.
+    if (status && status !== application.status) {
+      const label = STATUS_LABELS[status] || status;
+      await notifyCandidateOfApplication(id!, {
+        title: `Application ${label}`,
+        status,
+        statusLabel: label,
+        jobId: application.job_id,
+        emailKind: status === 'withdrawn' ? 'withdrawn' : 'status',
+        // Include the simulation details in the shortlisted email (spec §9–11).
+        includeSimulation: status === 'shortlisted',
+      });
+
+      // On withdrawal, also notify the recruiter who owns the job.
+      if (status === 'withdrawn' && application.created_by && application.created_by !== authReq.user!.id) {
+        await NotificationService.create({
+          userId: application.created_by,
+          type: 'application_withdrawn',
+          category: 'application',
+          title: 'Candidate withdrew an application',
+          content: 'A candidate has withdrawn their application.',
+          data: { applicationId: id, jobId: application.job_id, status: 'withdrawn' },
+        });
+      }
+    }
 
     return res.json({
       success: true,
@@ -860,10 +1040,23 @@ router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (r
       });
     }
 
-    // Soft delete
+    // A candidate cannot withdraw once the application is final (e.g. an offer has
+    // been accepted / hired) or already withdrawn/rejected. Explain why clearly.
+    if (authReq.user!.user_type === 'candidate' && NON_WITHDRAWABLE_STATUSES.includes(application.status)) {
+      await client.query('ROLLBACK');
+      const reason = application.status === 'hired'
+        ? 'This application can no longer be withdrawn because an offer has already been accepted.'
+        : `This application is already ${STATUS_LABELS[application.status] || application.status} and cannot be withdrawn.`;
+      return res.status(409).json({ success: false, message: reason });
+    }
+
+    // Soft delete — record who withdrew, when, and why.
     await client.query(
-      'UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2',
-      ['withdrawn', id]
+      `UPDATE applications
+         SET status = 'withdrawn', withdrawn_at = NOW(), withdrawn_by = $2,
+             withdrawn_reason = $3, updated_at = NOW()
+       WHERE id = $1`,
+      [id, authReq.user!.id, (req.body && req.body.reason) || 'Withdrawn by candidate']
     );
 
     // Update job application count
@@ -894,6 +1087,27 @@ router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (r
 
     logger.info(`Application deleted: ${id} by user ${authReq.user!.id}`);
 
+    // Notify the recruiter assigned to the application (if any) that it was withdrawn.
+    if (application.assigned_to && application.assigned_to !== authReq.user!.id) {
+      await NotificationService.create({
+        userId: application.assigned_to,
+        type: 'application_withdrawn',
+        category: 'application',
+        title: 'Candidate withdrew an application',
+        content: 'A candidate has withdrawn their application.',
+        data: { applicationId: id, jobId: application.job_id, status: 'withdrawn' },
+      });
+    }
+
+    // Confirm the withdrawal to the candidate (in-app + email).
+    await notifyCandidateOfApplication(id!, {
+      title: 'Application withdrawn',
+      status: 'withdrawn',
+      statusLabel: 'Withdrawn',
+      jobId: application.job_id,
+      emailKind: 'withdrawn',
+    });
+
     return res.json({
       success: true,
       message: 'Application withdrawn successfully'
@@ -909,6 +1123,76 @@ router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (r
 
   } finally {
     client.release();
+  }
+});
+
+// @route   POST /api/v1/applications/:id/send-results
+// @desc    Email a candidate their full simulation results breakdown (recruiter action)
+// @access  Private (recruiter, company_admin)
+router.post('/:id/send-results', [protect, authorize('recruiter', 'company_admin'), param('id').isUUID(), validateRequest], async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    const { id } = req.params;
+    const { finalScore, aiScore, recruiterAvg, passed, competencies, tasks } = req.body || {};
+
+    const info = await dbQuery(
+      `SELECT u.email, COALESCE(cp.first_name, '') AS first_name,
+              j.title AS job_title, c.name AS company_name
+       FROM applications a
+       JOIN jobs j ON j.id = a.job_id
+       LEFT JOIN companies c ON c.id = j.company_id
+       JOIN users u ON u.id = a.user_id
+       LEFT JOIN candidate_profiles cp ON cp.user_id = a.user_id
+       WHERE a.id = $1`,
+      [id]
+    );
+    const row = info.rows[0];
+    if (!row || !row.email) {
+      return res.status(404).json({ success: false, message: 'Candidate email not found' });
+    }
+
+    const isPass = passed === true || passed === 'true';
+
+    await emailService.sendSimulationResultsEmail(row.email, {
+      candidateName: row.first_name || 'there',
+      jobTitle: row.job_title || 'the role',
+      companyName: row.company_name || 'the company',
+      finalScore: Number(finalScore) || 0,
+      aiScore: Number(aiScore) || 0,
+      recruiterAvg: Number(recruiterAvg) || 0,
+      passed: isPass,
+      competencies: Array.isArray(competencies) ? competencies : [],
+      tasks: Array.isArray(tasks) ? tasks : [],
+    });
+
+    // Persist the recruiter's decision so it survives a reload and is visible in the
+    // Status column: pass → hired (selected), fail → rejected. Reuses the existing
+    // applications.status field — no new schema. Records a timeline entry too.
+    await dbQuery(
+      `UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2`,
+      [isPass ? 'hired' : 'rejected', id]
+    );
+    await dbQuery(
+      `INSERT INTO application_timeline (application_id, event_type, event_data, created_by)
+       VALUES ($1, 'status_changed', $2, $3)`,
+      [id, JSON.stringify({ description: `Results sent — marked ${isPass ? 'passed (hired)' : 'failed (rejected)'}`, new_status: isPass ? 'hired' : 'rejected' }), authReq.user!.id]
+    ).catch(() => {});
+
+    // Best-effort in-app notification too.
+    await NotificationService.create({
+      userId: (await dbQuery('SELECT user_id FROM applications WHERE id = $1', [id])).rows[0]?.user_id,
+      type: 'simulation_results',
+      category: 'application',
+      title: passed ? 'You passed the assessment' : 'Your assessment results are available',
+      content: `${row.job_title || 'Your role'} — overall ${Math.round(Number(finalScore) || 0)}%`,
+      data: { applicationId: id, url: `/applications/${id}` },
+    });
+
+    logger.info(`Results email sent for application ${id} by ${authReq.user!.id}`);
+    return res.json({ success: true, message: 'Results sent to candidate' });
+  } catch (error) {
+    logger.error('Send results error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to send results' });
   }
 });
 
@@ -1241,6 +1525,33 @@ router.post(
 
       await client.query('COMMIT');
       console.log('💾 Database transaction committed successfully');
+
+      // Best-effort side effects for a NEW application: a submission timeline entry,
+      // an in-app notification, and a confirmation email. None of these may break the
+      // application response if they fail.
+      if (isNewApplication) {
+        try {
+          await dbQuery(
+            `INSERT INTO application_timeline (application_id, event_type, event_data, created_by)
+             VALUES ($1, 'application_submitted', $2, $3)`,
+            [
+              applicationId,
+              JSON.stringify({ description: 'Application submitted', new_status: 'submitted' }),
+              authReq.user!.id,
+            ]
+          );
+        } catch (timelineErr) {
+          logger.warn(`application_submitted timeline failed: ${(timelineErr as Error).message}`);
+        }
+
+        await notifyCandidateOfApplication(applicationId, {
+          title: 'Application received',
+          status: 'submitted',
+          statusLabel: 'Applied',
+          jobId,
+          emailKind: 'received',
+        });
+      }
 
       // Build response with simulation data
       const responseData: any = {

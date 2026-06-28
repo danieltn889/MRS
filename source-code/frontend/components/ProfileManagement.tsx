@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Mail,
   User,
@@ -15,9 +15,12 @@ import {
   Phone,
   MessageSquare,
   Edit,
+  Camera,
+  Trash2,
+  Loader,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getCandidateProfile, completeProfile, getProfileCompletionStatus, updateCandidateProfile } from '../services/candidateAPI';
+import { getCandidateProfile, completeProfile, getProfileCompletionStatus, updateCandidateProfile, uploadProfilePhoto, deleteProfilePhoto } from '../services/candidateAPI';
 import { updateProfile } from '../services/authAPI';
 import { useAuth } from '../context/AuthContext';
 import EducationSection from './profile/EducationSection';
@@ -575,6 +578,72 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
   const [saveMessage, setSaveMessage] = useState('');
   const [showModal,   setShowModal]   = useState(false);
 
+  // Profile picture
+  const [photoUrl,     setPhotoUrl]     = useState<string | null>(null);
+  const [photoBusy,    setPhotoBusy]    = useState(false);
+  const [photoError,   setPhotoError]   = useState('');
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5MB
+
+  // Notify the rest of the app (header avatar, etc.) and persist for quick reads.
+  const broadcastPhoto = (url: string | null) => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('user') || '{}');
+      stored.profile_photo_url = url;
+      localStorage.setItem('user', JSON.stringify(stored));
+    } catch { /* ignore */ }
+    window.dispatchEvent(new CustomEvent('profile-photo-updated', { detail: { url } }));
+  };
+
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPhotoError('');
+    const file = e.target.files?.[0];
+    if (photoInputRef.current) photoInputRef.current.value = '';
+    if (!file) return;
+
+    if (!ALLOWED_PHOTO_TYPES.includes(file.type)) {
+      setPhotoError('Please use a JPG, PNG or WebP image.');
+      return;
+    }
+    if (file.size > MAX_PHOTO_BYTES) {
+      setPhotoError('Image must be 5MB or smaller.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setPhotoUrl(previewUrl);          // optimistic preview
+    setPhotoBusy(true);
+    try {
+      const res = await uploadProfilePhoto(file);
+      const url = res?.data?.photoUrl || res?.photoUrl || previewUrl;
+      setPhotoUrl(url);
+      broadcastPhoto(url);
+      await onUpdate();
+    } catch (err: any) {
+      setPhotoError(`Upload failed: ${err?.message || 'Unknown error'}`);
+      setPhotoUrl((profile?.profile as any)?.profile_photo_url || null); // revert
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handleRemovePhoto = async () => {
+    setPhotoError('');
+    setPhotoBusy(true);
+    try {
+      await deleteProfilePhoto();
+      setPhotoUrl(null);
+      broadcastPhoto(null);
+      await onUpdate();
+    } catch (err: any) {
+      setPhotoError(`Remove failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (profile?.profile) {
       setFormData({
@@ -589,6 +658,7 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
                          || '',
         bio:             profile.profile.bio || profile.profile.summary || '',
       });
+      setPhotoUrl((profile.profile as any).profile_photo_url || null);
     }
   }, [profile]);
 
@@ -695,6 +765,56 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
       )}
       <div className="bg-white rounded-lg shadow-sm p-6">
       <h2 className="text-xl font-semibold text-gray-900 mb-6">Basic Information</h2>
+
+      {/* Profile picture */}
+      <div className="flex items-center gap-5 mb-8">
+        <div className="relative">
+          {photoUrl ? (
+            <img src={photoUrl} alt="Profile" className="w-20 h-20 rounded-full object-cover border border-gray-200" />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
+              {`${formData.firstName.charAt(0) || ''}${formData.lastName.charAt(0) || ''}`.toUpperCase() || <User size={28} />}
+            </div>
+          )}
+          {photoBusy && (
+            <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+              <Loader size={20} className="text-white animate-spin" />
+            </div>
+          )}
+        </div>
+        <div>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            onChange={handlePhotoSelect}
+            className="hidden"
+            id="profile-photo-input"
+          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={photoBusy}
+              className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Camera size={15} /> {photoUrl ? 'Change Photo' : 'Upload Photo'}
+            </button>
+            {photoUrl && (
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                disabled={photoBusy}
+                className="inline-flex items-center gap-2 px-3.5 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                <Trash2 size={15} /> Remove
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-1.5">JPG, PNG or WebP · up to 5MB</p>
+          {photoError && <p className="text-xs text-red-600 mt-1">{photoError}</p>}
+        </div>
+      </div>
 
       <form onSubmit={handleSubmit} noValidate className="space-y-6">
         {/* Name row */}

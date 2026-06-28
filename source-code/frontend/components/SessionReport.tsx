@@ -8,9 +8,11 @@ import {
   ChevronDown, ChevronUp, Copy, ExternalLink,
   Save, Edit, Check, X, Trophy,
   FolderOpen, FileCode, Loader, Edit2, PlusCircle, Award as AwardIcon,
-  BarChart2, Percent, Database, MessageSquare, TrendingUp, Settings, BarChart
+  BarChart2, Percent, Database, MessageSquare, TrendingUp, Settings, BarChart,
+  Printer, Shield, ShieldCheck, ShieldAlert
 } from 'lucide-react';
 import simulationAPI from '../services/simulationAPI';
+import { verifyChain as verifyAuditChain } from '../services/blockchainAPI';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -212,12 +214,29 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
   const [error, setError] = useState<string | null>(null);
   const [taskProgress, setTaskProgress] = useState<TaskProgressItem[]>([]);
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
+  const [showCalc, setShowCalc] = useState(false);
   const [editingFeedback, setEditingFeedback] = useState<number | null>(null);
   const [tempFeedback, setTempFeedback] = useState('');
   const [showScoreModal, setShowScoreModal] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'report' | 'submission'>('report');
+  const [chainReport, setChainReport] = useState<{ valid: boolean; totalBlocks: number; verifiedCount: number; failedCount: number } | null>(null);
+  const [chainVerifying, setChainVerifying] = useState(false);
+  const [chainError, setChainError] = useState<string | null>(null);
+
+  const verifyResultsOnChain = async () => {
+    setChainVerifying(true);
+    setChainError(null);
+    try {
+      const report = await verifyAuditChain();
+      setChainReport(report);
+    } catch (e: any) {
+      setChainError(e?.message || 'Verification failed');
+    } finally {
+      setChainVerifying(false);
+    }
+  };
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok });
@@ -408,6 +427,10 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
         .task-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.07); }
         .btn-score { transition: all 0.15s; }
         .btn-score:hover { filter: brightness(1.08); transform: translateY(-1px); }
+        @media print {
+          .no-print { display: none !important; }
+          body { background: #fff !important; }
+        }
       `}</style>
 
       {toast && (
@@ -415,7 +438,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
       )}
 
       {/* Header */}
-      <div style={{ background: '#fff', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, zIndex: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div className="no-print" style={{ background: '#fff', borderBottom: '1px solid #f1f5f9', position: 'sticky', top: 0, zIndex: 20, boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '14px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={handleBack} style={{ background: '#f3f4f6', border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, color: '#374151', fontWeight: 600, fontSize: 13 }}>
@@ -431,6 +454,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               <button onClick={() => setActiveTab('report')} style={{ padding: '6px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: activeTab === 'report' ? '#fff' : 'transparent', color: activeTab === 'report' ? '#7c3aed' : '#6b7280', border: 'none', cursor: 'pointer', boxShadow: activeTab === 'report' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>Report</button>
               <button onClick={() => setActiveTab('submission')} style={{ padding: '6px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600, background: activeTab === 'submission' ? '#fff' : 'transparent', color: activeTab === 'submission' ? '#7c3aed' : '#6b7280', border: 'none', cursor: 'pointer', boxShadow: activeTab === 'submission' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>Submission Results</button>
             </div>
+            <button onClick={() => window.print()} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: '#fff', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}><Printer size={14} /> Print / PDF</button>
             <button onClick={downloadReport} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}><Download size={14} /> Download JSON</button>
           </div>
         </div>
@@ -466,6 +490,31 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 </div>
               </div>
             </div>
+
+            {/* Hiring Recommendation Card */}
+            {(() => {
+              const rec = submissionResults.hiringRecommendation || submissionResults.feedback?.hiring_recommendation;
+              if (!rec) return null;
+              const palette: Record<string, { fg: string; bg: string; border: string }> = {
+                strong_hire: { fg: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+                hire: { fg: '#2563eb', bg: '#eff6ff', border: '#bfdbfe' },
+                borderline: { fg: '#d97706', bg: '#fffbeb', border: '#fde68a' },
+                needs_improvement: { fg: '#ea580c', bg: '#fff7ed', border: '#fed7aa' },
+                not_recommended: { fg: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+              };
+              const c = palette[rec.level] || palette.borderline;
+              return (
+                <div style={{ background: c.bg, borderRadius: 16, padding: 24, border: `2px solid ${c.border}` }}>
+                  <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Trophy size={18} style={{ color: c.fg }} /> Hiring Recommendation
+                  </h3>
+                  <div style={{ display: 'inline-block', padding: '6px 16px', borderRadius: 999, background: c.fg, color: '#fff', fontWeight: 700, fontSize: 15, marginBottom: 12 }}>
+                    {rec.label}
+                  </div>
+                  <p style={{ margin: 0, color: '#374151', fontSize: 14, lineHeight: 1.6 }}>{rec.reasoning}</p>
+                </div>
+              );
+            })()}
 
             {/* Summary Stats */}
             {submissionResults.summary && (
@@ -507,6 +556,35 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                   <div style={{ background: '#eff6ff', borderRadius: 12, padding: 16, textAlign: 'center' }}><div style={{ fontSize: 28, fontWeight: 800, color: '#2563eb' }}>{submissionResults.scoreBreakdown.speed || 0}%</div><div style={{ fontSize: 12, color: '#6b7280' }}>Speed</div></div>
                   <div style={{ background: '#f0fdf4', borderRadius: 12, padding: 16, textAlign: 'center' }}><div style={{ fontSize: 28, fontWeight: 800, color: '#16a34a' }}>{submissionResults.scoreBreakdown.technical || 0}%</div><div style={{ fontSize: 12, color: '#6b7280' }}>Technical</div></div>
                   <div style={{ background: '#fffbeb', borderRadius: 12, padding: 16, textAlign: 'center' }}><div style={{ fontSize: 28, fontWeight: 800, color: '#d97706' }}>{submissionResults.scoreBreakdown.github || 0}%</div><div style={{ fontSize: 12, color: '#6b7280' }}>GitHub</div></div>
+                </div>
+
+                {/* All category scores as progress bars */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {([
+                    ['Quality', submissionResults.scoreBreakdown.quality, '#7c3aed'],
+                    ['Technical', submissionResults.scoreBreakdown.technical, '#16a34a'],
+                    ['Communication', submissionResults.scoreBreakdown.communication, '#0ea5e9'],
+                    ['Collaboration', submissionResults.scoreBreakdown.collaboration, '#8b5cf6'],
+                    ['Adaptability', submissionResults.scoreBreakdown.adaptability, '#f59e0b'],
+                    ['Punctuality', submissionResults.scoreBreakdown.punctuality, '#ef4444'],
+                    ['Speed', submissionResults.scoreBreakdown.speed, '#2563eb'],
+                    ['GitHub', submissionResults.scoreBreakdown.github, '#d97706'],
+                  ] as Array<[string, number, string]>)
+                    .filter(([, v]) => v !== undefined && v !== null)
+                    .map(([label, value, color]) => {
+                      const pct = Math.max(0, Math.min(100, Math.round(value || 0)));
+                      return (
+                        <div key={label}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                            <span style={{ color: '#374151', fontWeight: 600 }}>{label}</span>
+                            <span style={{ color }}>{pct}%</span>
+                          </div>
+                          <div style={{ height: 8, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width .4s' }} />
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}
@@ -583,13 +661,124 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               </div>
             )}
 
+            {/* Timeline */}
+            {(() => {
+              const events: Array<{ label: string; time: string }> = [];
+              const push = (label: string, time?: string | null) => { if (time) events.push({ label, time }); };
+              push('Simulation assigned', session.created_at || sessionData.application?.created_at);
+              push('Simulation started', session.started_at);
+              push('Final submission', session.completed_at || submissionResults.submittedAt);
+              push('AI evaluation completed', submissionResults.timeTracking?.sessionCompletedAt || submissionResults.generatedAt);
+              push('Results published', submissionResults.submittedAt || session.completed_at);
+              const sorted = events
+                .filter(e => !isNaN(new Date(e.time).getTime()))
+                .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+              if (sorted.length === 0) return null;
+              return (
+                <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><Clock size={18} style={{ color: '#7c3aed' }} /> Timeline</h3>
+                  <div style={{ position: 'relative', paddingLeft: 20 }}>
+                    {sorted.map((e, i) => (
+                      <div key={i} style={{ position: 'relative', paddingBottom: i === sorted.length - 1 ? 0 : 18 }}>
+                        <div style={{ position: 'absolute', left: -16, top: 2, width: 10, height: 10, borderRadius: '50%', background: '#7c3aed' }} />
+                        {i !== sorted.length - 1 && <div style={{ position: 'absolute', left: -12, top: 12, width: 2, bottom: -6, background: '#e9d5ff' }} />}
+                        <div style={{ fontWeight: 600, color: '#111827', fontSize: 14 }}>{e.label}</div>
+                        <div style={{ fontSize: 12, color: '#6b7280' }}>{new Date(e.time).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Evidence & Attachments */}
+            {(() => {
+              const repoUrl = submissionResults.githubAnalysis?.repo_info?.repoUrl;
+              const codeTasks = (taskProgress || []).filter((t: any) => t?.answer && (typeof t.answer === 'string' ? t.answer : t.answer.code));
+              if (!repoUrl && codeTasks.length === 0) return null;
+              const downloadText = (filename: string, content: string) => {
+                const blob = new Blob([content], { type: 'text/plain' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+                document.body.removeChild(a); URL.revokeObjectURL(url);
+              };
+              return (
+                <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
+                  <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><FolderOpen size={18} style={{ color: '#7c3aed' }} /> Evidence & Attachments</h3>
+                  {repoUrl && (
+                    <a href={repoUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, background: '#f8fafc', borderRadius: 10, marginBottom: 10, color: '#2563eb', textDecoration: 'none', fontSize: 14 }}>
+                      <GitBranch size={16} /> Repository — {repoUrl}
+                    </a>
+                  )}
+                  {codeTasks.map((t: any, i: number) => {
+                    const code = typeof t.answer === 'string' ? t.answer : (t.answer.code || '');
+                    return (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 12, background: '#f8fafc', borderRadius: 10, marginBottom: 8 }}>
+                        <FileCode size={16} style={{ color: '#6b7280' }} />
+                        <span style={{ flex: 1, fontSize: 14, color: '#374151' }}>Task {t.task_index} submission</span>
+                        <button onClick={() => downloadText(`task-${t.task_index}-submission.txt`, code)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer' }}><Download size={13} /> Download</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* Evaluation Metadata */}
+            {(evaluation?.id || submissionResults.simulationRecordId) && (
+              <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
+                <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><Settings size={18} style={{ color: '#7c3aed' }} /> Evaluation Metadata</h3>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, fontSize: 13 }}>
+                  {(evaluation?.id || submissionResults.simulationRecordId) && <div><div style={{ fontSize: 11, color: '#9ca3af' }}>Evaluation ID</div><code style={{ fontSize: 12 }}>{evaluation?.id || submissionResults.simulationRecordId}</code></div>}
+                  <div><div style={{ fontSize: 11, color: '#9ca3af' }}>Evaluation Date</div><div>{submissionResults.submittedAt ? new Date(submissionResults.submittedAt).toLocaleString() : '—'}</div></div>
+                  <div><div style={{ fontSize: 11, color: '#9ca3af' }}>Passing Score</div><div>{submissionResults.passingScore || 70}%</div></div>
+                  <div><div style={{ fontSize: 11, color: '#9ca3af' }}>Confirmation Email</div><div>{submissionResults.emailSent ? '✓ Sent' : '—'}</div></div>
+                </div>
+              </div>
+            )}
+
+            {/* Verify Results on the audit chain */}
+            <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><Shield size={18} style={{ color: '#7c3aed' }} /> Integrity Verification</h3>
+                <button onClick={verifyResultsOnChain} disabled={chainVerifying} className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', background: '#7c3aed', color: '#fff', border: 'none', borderRadius: 10, cursor: 'pointer', fontWeight: 700, fontSize: 13, opacity: chainVerifying ? 0.6 : 1 }}>
+                  <ShieldCheck size={14} /> {chainVerifying ? 'Verifying…' : 'Verify Results'}
+                </button>
+              </div>
+              {chainError && <div style={{ marginTop: 12, color: '#dc2626', fontSize: 13 }}>{chainError}</div>}
+              {chainReport && (
+                <div style={{ marginTop: 16 }}>
+                  {chainReport.valid ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#16a34a', fontWeight: 700 }}><ShieldCheck size={18} /> 🟢 Verified — The assessment has not been modified since it was recorded.</div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#dc2626', fontWeight: 700 }}><ShieldAlert size={18} /> 🔴 Verification Failed — The assessment data does not match the blockchain record.</div>
+                  )}
+                  <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>{chainReport.verifiedCount}/{chainReport.totalBlocks} blocks verified · {chainReport.failedCount} failed</div>
+                </div>
+              )}
+            </div>
+
             {/* Blockchain Card */}
             {submissionResults.blockchain && (
               <div style={{ background: 'linear-gradient(135deg, #faf5ff, #eff6ff)', borderRadius: 16, padding: 24, border: '1px solid #e9d5ff' }}>
                 <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}><Database size={18} style={{ color: '#7c3aed' }} /> Blockchain Verification</h3>
                 <div><div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>Transaction Hash</div><code style={{ fontSize: 12, wordBreak: 'break-all' }}>{submissionResults.blockchain.txHash}</code></div>
                 <div style={{ marginTop: 12 }}><div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>Block Number</div><div style={{ fontWeight: 600 }}>{submissionResults.blockchain.blockNumber}</div></div>
+                {submissionResults.blockchain.credentialHash && (
+                  <div style={{ marginTop: 12 }}><div style={{ fontSize: 11, color: '#6b7280', marginBottom: 4 }}>Credential Hash</div><code style={{ fontSize: 12, wordBreak: 'break-all' }}>{submissionResults.blockchain.credentialHash}</code></div>
+                )}
                 <div style={{ marginTop: 12, color: '#16a34a', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><CheckCircle size={14} /> {submissionResults.blockchain.message}</div>
+                {submissionResults.blockchain.credentialHash && (
+                  <a
+                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'}/simulations/verify/${submissionResults.blockchain.credentialHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 16, padding: '8px 16px', borderRadius: 10, background: '#7c3aed', color: '#fff', fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
+                  >
+                    <CheckCircle size={14} /> Verify on blockchain
+                  </a>
+                )}
               </div>
             )}
 
@@ -654,14 +843,21 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
             {/* Candidate Hero */}
             <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, flexWrap: 'wrap' }}>
-                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 22 }}>{initials || '?'}</div>
+                {candidate.profile_photo_url ? (
+                  <img src={candidate.profile_photo_url} alt="" style={{ width: 64, height: 64, borderRadius: '50%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 22 }}>{initials || '?'}</div>
+                )}
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 800, fontSize: 22, color: '#111827' }}>{candidate.full_name || candidate.name || 'Candidate'}</div>
                   <div style={{ color: '#6b7280', fontSize: 14 }}>{candidate.email}</div>
+                  {(candidate.id || candidate.user_id) && <div style={{ color: '#9ca3af', fontSize: 11, fontFamily: 'monospace', marginTop: 2 }}>ID: {candidate.id || candidate.user_id}</div>}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 8 }}>
-                    {candidate.headline && <span style={{ fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}><Briefcase size={13} />{candidate.headline}</span>}
+                    {(job.title || candidate.headline) && <span style={{ fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}><Briefcase size={13} />{job.title || candidate.headline}</span>}
                     {candidate.city && <span style={{ fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}><Building size={13} />{candidate.city}, {candidate.country}</span>}
                     {company.name && <span style={{ fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}><Target size={13} />{company.name}</span>}
+                    {(job.recruiter_name || sessionData.recruiter?.name) && <span style={{ fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}><User size={13} />Recruiter: {job.recruiter_name || sessionData.recruiter?.name}</span>}
+                    {(sessionData.mentor?.name || sessionData.application?.mentor_name) && <span style={{ fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}><User size={13} />Mentor: {sessionData.mentor?.name || sessionData.application?.mentor_name}</span>}
                   </div>
                 </div>
                 <div style={{ textAlign: 'center' }}>
@@ -737,11 +933,32 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               </div>
             )}
 
+            {/* How this score is calculated (collapsible) */}
+            <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
+              <button
+                onClick={() => setShowCalc(s => !s)}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontWeight: 700, fontSize: 15, color: '#7c3aed' }}
+              >
+                <Brain size={17} /> {showCalc ? '▲ Hide how this score is calculated' : '▼ How this score is calculated'}
+              </button>
+              {showCalc && (
+                <div style={{ marginTop: 14, fontSize: 13, color: '#475569', lineHeight: 1.8 }}>
+                  <div><strong>1. Each task (0–100):</strong> (Completion + Time + Quality + Answer-quality) ÷ 4.</div>
+                  <div><strong>2. Competencies (0–100):</strong> Punctuality, Speed, Technical, Adaptability, Communication, Collaboration, Initiative, Attention to Detail, GitHub — each scored by the AI from the candidate's work, chat, time and GitHub repo.</div>
+                  <div><strong>3. Composites:</strong> Quality = (Technical + Punctuality + Adaptability) ÷ 3 · Behavioral = (Adaptability + Communication) ÷ 2.</div>
+                  <div style={{ marginTop: 4, color: '#0f172a' }}><strong>4. Overall Score = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</strong> (weights from the simulation rubric; defaults shown). Pass mark default 70%.</div>
+                  <div style={{ marginTop: 8, padding: '10px 12px', background: '#faf5ff', borderRadius: 8 }}>
+                    <strong>Recruiter task marks:</strong> admin/recruiter can set a 0–100% score and comment on each completed task above. Where used, the final blends 70% AI + 30% recruiter task average.
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Task Breakdown */}
             <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
               <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}><CheckSquare size={17} style={{ color: '#7c3aed' }} /> Tasks Breakdown <span style={{ fontSize: 13, color: '#9ca3af', fontWeight: 400 }}>({completedTasks}/{totalTasks} completed)</span></div>
               <div style={{ marginBottom: 20 }}><div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden', marginTop: 10 }}><div style={{ height: '100%', width: `${totalTasks ? (completedTasks / totalTasks) * 100 : 0}%`, background: '#16a34a', borderRadius: 3 }} /></div></div>
-              <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: canGrade ? '#eff6ff' : '#faf5ff', border: `1px solid ${canGrade ? '#bfdbfe' : '#e9d5ff'}`, fontSize: 12, color: canGrade ? '#1d4ed8' : '#7c3aed', fontWeight: 600 }}>{canGrade ? '🎯 Recruiter view — you can set scores on completed tasks' : '👤 Candidate view — scores set by your recruiter appear below'}</div>
+              <div style={{ marginBottom: 16, padding: '8px 12px', borderRadius: 8, background: canGrade ? '#eff6ff' : '#faf5ff', border: `1px solid ${canGrade ? '#bfdbfe' : '#e9d5ff'}`, fontSize: 12, color: canGrade ? '#1d4ed8' : '#7c3aed', fontWeight: 600 }}>{canGrade ? '🎯 Recruiter view — you can set scores on any task' : '👤 Candidate view — scores set by your recruiter appear below'}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {taskProgress.map(task => {
                   const isExpanded = expandedTask === task.task_index;
@@ -768,7 +985,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                             <span style={{ fontSize: 12, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={12} /> {task.task_duration}m</span>
-                            {canGrade && task.status === 'completed' && <button className="btn-score" onClick={() => setShowScoreModal(task.task_index)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: hasScore ? scoreBg(roundedScore!) : '#7c3aed', color: hasScore ? scoreColor(roundedScore!) : '#fff', border: hasScore ? `1.5px solid ${scoreBorder(roundedScore!)}` : 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}><AwardIcon size={13} />{hasScore ? `Update (${roundedScore}%)` : 'Set Score'}</button>}
+                            {canGrade && <button className="btn-score" onClick={() => setShowScoreModal(task.task_index)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', background: hasScore ? scoreBg(roundedScore!) : '#7c3aed', color: hasScore ? scoreColor(roundedScore!) : '#fff', border: hasScore ? `1.5px solid ${scoreBorder(roundedScore!)}` : 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13 }}><AwardIcon size={13} />{hasScore ? `Update (${roundedScore}%)` : 'Set Score'}</button>}
                             <button onClick={() => setExpandedTask(isExpanded ? null : task.task_index)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '5px 8px', cursor: 'pointer', color: '#9ca3af' }}>{isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
                           </div>
                         </div>

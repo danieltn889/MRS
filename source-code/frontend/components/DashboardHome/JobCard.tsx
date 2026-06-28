@@ -312,9 +312,16 @@ const JobCard: React.FC<JobCardProps> = ({
                     {expBD && (
                       <div className="pt-2 mt-1.5 border-t border-blue-200 text-[11px] text-gray-600 space-y-1">
                         <div className="flex justify-between">
-                          <span>Your experience: <strong>{expBD.candidate_years?.toFixed(1) || expBD.total_years?.toFixed(1) || 0} yrs</strong></span>
-                          <span>Required: <strong>{expBD.required_years || expBD.job_min_years || 0}+ yrs</strong></span>
+                          <span>Total experience: <strong>{Number(expBD.total_years ?? 0).toFixed(1)} yrs</strong></span>
+                          {expBD.relevant_years != null && (
+                            <span>Relevant: <strong className="text-purple-700">{Number(expBD.relevant_years).toFixed(1)} yrs</strong></span>
+                          )}
                         </div>
+                        {(expBD.required_years || expBD.job_min_years) > 0 && (
+                          <div className="flex justify-between">
+                            <span>Required: <strong>{expBD.required_years || expBD.job_min_years || 0}+ yrs</strong></span>
+                          </div>
+                        )}
                         {expBD.gap_years > 0 && (
                           <span className="text-orange-600 font-semibold block">⚠️ Experience gap: {expBD.gap_years.toFixed(1)} years</span>
                         )}

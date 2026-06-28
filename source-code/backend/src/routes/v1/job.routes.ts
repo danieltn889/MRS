@@ -623,6 +623,32 @@ router.put('/:id/archive', [
   jobController.archiveJob(req as any, res);
 });
 
+// @route   PATCH /api/v1/jobs/:id/status
+// @desc    Change a job's status (records status-change history)
+// @access  Private (recruiter, company_admin)
+router.patch('/:id/status', [
+  protect,
+  authorize('recruiter', 'company_admin'),
+  param('id').isUUID().withMessage('Invalid job ID format'),
+  body('status').isString().withMessage('status is required'),
+  body('reason').optional().trim(),
+  validateRequest
+], (req: Request, res: Response) => {
+  jobController.updateJobStatus(req as any, res);
+});
+
+// @route   GET /api/v1/jobs/:id/status-history
+// @desc    Get a job's status-change history (audit trail)
+// @access  Private (recruiter, company_admin)
+router.get('/:id/status-history', [
+  protect,
+  authorize('recruiter', 'company_admin'),
+  param('id').isUUID().withMessage('Invalid job ID format'),
+  validateRequest
+], (req: Request, res: Response) => {
+  jobController.getJobStatusHistory(req as any, res);
+});
+
 // @route   PUT /api/v1/jobs/:id/access
 // @desc    Update job visibility/access level
 // @access  Private (recruiter, company_admin)

@@ -157,6 +157,18 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
   const [viewMode, setViewMode]             = useState<'list' | 'edit'>(simulationId ? 'edit' : 'list');
   const [editingId, setEditingId]           = useState<string | undefined>(simulationId);
   const [objectiveSuggestions, setObjectiveSuggestions] = useState<string[]>([]);
+
+  // Auto-calculate the simulation duration from the SUM of all task durations
+  // (each task contributes its own minutes). Keeps duration in sync whenever any
+  // task's duration changes; only overrides once at least one task has a duration.
+  const taskDurationSignature = (simulation?.tasks || []).map((t: any) => t?.duration).join(',');
+  useEffect(() => {
+    if (!simulation) return;
+    const total = (simulation.tasks || []).reduce((sum: number, t: any) => sum + (Number(t?.duration) || 0), 0);
+    if (total > 0 && total !== simulation.duration) {
+      setSimulation(prev => (prev ? { ...prev, duration: total } : prev));
+    }
+  }, [taskDurationSignature]);
   const [taskSuggestions,      setTaskSuggestions]      = useState<string[]>([]);
   const [saveResult,           setSaveResult]           = useState<SaveResult | null>(null);
   const [visitedSteps,         setVisitedSteps]         = useState<Set<number>>(new Set([1]));

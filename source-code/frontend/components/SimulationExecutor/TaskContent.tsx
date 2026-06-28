@@ -537,20 +537,36 @@ const TaskContent: React.FC<TaskContentProps> = ({
               </div>
             </div>
             
-            {/* Helpful Info Bar */}
+            {/* Helpful Info Bar — each item is a shortcut to its action */}
             <div className="px-4 py-2 bg-gray-900/50 border-b border-gray-700 flex items-center gap-4 flex-wrap text-xs text-gray-400">
-              <span className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={handleChatClick}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-blue-900/30 hover:text-blue-200 transition-colors cursor-pointer"
+                title="Open chat with recruiter or admin"
+              >
                 <MessageCircle size={12} className="text-blue-400" />
                 <span>💬 <strong className="text-blue-300">Chat</strong> - Ask questions or get clarification</span>
-              </span>
-              <span className="flex items-center gap-1">
+              </button>
+              <button
+                type="button"
+                onClick={handleGitHubAnalyticsClick}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-purple-900/30 hover:text-purple-200 transition-colors cursor-pointer"
+                title="View GitHub repository analytics"
+              >
                 <BarChart3 size={12} className="text-purple-400" />
                 <span>📊 <strong className="text-purple-300">Analytics</strong> - View GitHub repo stats</span>
-              </span>
-              <span className="flex items-center gap-1">
-                <RefreshCw size={12} className="text-gray-400" />
-                <span>🔄 <strong className="text-gray-300">Refresh</strong> - Update task progress</span>
-              </span>
+              </button>
+              <button
+                type="button"
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-gray-700/50 hover:text-gray-200 transition-colors cursor-pointer disabled:opacity-50"
+                title="Refresh task progress"
+              >
+                <RefreshCw size={12} className={`text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>🔄 <strong className="text-gray-300">Refresh</strong> - {isRefreshing ? 'Refreshing…' : 'Update task progress'}</span>
+              </button>
             </div>
             
             {startError && (

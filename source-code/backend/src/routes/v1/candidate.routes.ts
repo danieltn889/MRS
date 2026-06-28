@@ -152,6 +152,35 @@ router.post('/profile/photo', protect, authorize('candidate'), photoUpload.singl
   }
 });
 
+router.delete('/profile/photo', protect, authorize('candidate'), async (req: Request, res: Response) => {
+  const authReq = req as AuthenticatedRequest;
+  try {
+    // Look up the current photo key so we can remove the file from disk.
+    const existing = await dbQuery(
+      `SELECT profile_photo_key FROM candidate_profiles WHERE user_id = $1`,
+      [authReq.user!.id]
+    );
+    const photoKey: string | null = existing.rows[0]?.profile_photo_key || null;
+
+    await dbQuery(
+      `UPDATE candidate_profiles SET profile_photo_url = NULL, profile_photo_key = NULL, updated_at = NOW() WHERE user_id = $1`,
+      [authReq.user!.id]
+    );
+
+    if (photoKey) {
+      const filePath = path.join(uploadDir, photoKey);
+      try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {
+        logger.warn(`Could not remove photo file ${filePath}: ${(e as Error).message}`);
+      }
+    }
+
+    res.json({ success: true, message: 'Profile photo removed' });
+  } catch (error) {
+    logger.error('Delete profile photo error:', error);
+    res.status(500).json({ success: false, message: 'Failed to remove profile photo' });
+  }
+});
+
 router.post('/documents', protect, authorize('candidate'), documentUpload.single('document'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {

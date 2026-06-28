@@ -121,9 +121,12 @@ interface SkillsBreakdown {
 interface ExperienceBreakdown {
   match_type?: string;
   total_years?: number;
+  relevant_years?: number;
+  experience_analysis?: any[];
   required_years?: number;
   required_min_years?: number;
   required_max_years?: number;
+  job_min_years?: number;
   gap_years?: number;
   total_requirements?: number;
   matched_requirements?: number;

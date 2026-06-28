@@ -704,7 +704,7 @@ const forgotPassword = async (req: ForgotPasswordRequest, res: Response): Promis
               <strong>⏰ This link expires in 1 hour</strong>
             </p>
             <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
-              If you didn't request a password reset, please ignore this email or contact support at support@recruitment-platform.com
+              If you didn't request a password reset, please ignore this email or contact support at ${process.env.SUPPORT_EMAIL || process.env.EMAIL_REPLY_TO || process.env.SMTP_USER || 'notify@lmbtech.rw'}
             </p>
           </div>
         `,

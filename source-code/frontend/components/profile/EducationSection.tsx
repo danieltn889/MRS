@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Plus, Edit, Trash2, Save, X, GraduationCap, Calendar, ChevronDown, 
-  Upload, FileText, CheckCircle, AlertCircle, Loader, Eye, 
+  Plus, Edit, Trash2, Save, X, GraduationCap, Calendar, ChevronDown,
+  FileText, CheckCircle, AlertCircle, Loader, Eye, Download,
   BookOpen, Brain, Sparkles, FileSearch, Image, File
 } from 'lucide-react';
-import { addEducation, updateEducation, deleteEducation } from '../../services/candidateAPI';
+import { addEducation, updateEducation, deleteEducation, uploadCandidateDocument } from '../../services/candidateAPI';
 import { extractTextFromFile } from '../../utils/documentTextExtractor';
+import ConfirmDialog from './ConfirmDialog';
 
 interface EducationItem {
   id: string | number;
@@ -32,6 +33,8 @@ interface EducationItem {
   attachments?: Array<{
     file_name: string;
     file_url: string;
+    file_key?: string;
+    file_type?: string;
     file_size: number;
     uploaded_at: string;
     extracted_text?: string;
@@ -345,6 +348,8 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
   const [showExtractedText, setShowExtractedText] = useState(false);
   const [expandedTranscriptTextId, setExpandedTranscriptTextId] = useState<string | number | null>(null);
   const [processingMessage, setProcessingMessage] = useState<string>('');
+  const [deleteId, setDeleteId] = useState<string | number | null>(null);
+  const [deleting, setDeleting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const education = profile?.education || [];
@@ -540,16 +545,25 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
     setLoading(true);
 
     try {
-      const attachments = formData.transcriptFile ? [{
-          file_name: formData.transcriptFile.name,
-          file_url: URL.createObjectURL(formData.transcriptFile),
-          file_size: formData.transcriptFile.size,
-          uploaded_at: new Date().toISOString(),
+      // Upload the transcript file for real so it persists and stays downloadable,
+      // instead of an ephemeral blob: URL that dies on reload.
+      let attachments: any[] | undefined = undefined;
+      if (formData.transcriptFile) {
+        const res = await uploadCandidateDocument(formData.transcriptFile, 'transcript');
+        const data = res?.data || {};
+        attachments = [{
+          file_name: data.file_name || formData.transcriptFile.name,
+          file_url: data.file_url,
+          file_key: data.file_key,
+          file_type: data.mime_type || formData.transcriptFile.type,
+          file_size: data.file_size ?? formData.transcriptFile.size,
+          uploaded_at: data.uploaded_at || new Date().toISOString(),
           extracted_text: formData.extractedText,
           modules: formData.extractedModules,
           skills: formData.extractedSkills,
           extraction_method: formData.extractionMethod,
-        }] : undefined;
+        }];
+      }
 
       const submissionData = {
         institution: formData.institution,
@@ -612,15 +626,18 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
     setShowExtractedText(false);
   };
 
-  const handleDelete = async (id: string | number) => {
-    if (!confirm('Are you sure you want to delete this education entry?')) return;
-
+  const confirmDelete = async () => {
+    if (deleteId === null) return;
+    setDeleting(true);
     try {
-      await deleteEducation(String(id));
+      await deleteEducation(String(deleteId));
+      setDeleteId(null);
       onUpdate();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       alert('Error deleting education: ' + errorMessage);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -681,6 +698,17 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
 
   return (
     <div className="space-y-6">
+      <ConfirmDialog
+        open={deleteId !== null}
+        title="Delete education entry?"
+        message="This will permanently remove this education entry and its uploaded transcript from your profile."
+        confirmLabel="Delete"
+        variant="danger"
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+      />
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-gray-900">Education</h2>
@@ -1088,6 +1116,14 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                           >
                             View Transcript
                           </a>
+                          <a
+                            href={transcript.file_url}
+                            download={transcript.file_name}
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                          >
+                            <Download size={14} />
+                            Download
+                          </a>
                           {transcript.extracted_text && (
                             <button
                               type="button"
@@ -1160,7 +1196,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                     <Edit size={18} />
                   </button>
                   <button
-                    onClick={() => handleDelete(edu.id)}
+                    onClick={() => setDeleteId(edu.id)}
                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                     title="Delete"
                   >

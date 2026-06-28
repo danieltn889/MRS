@@ -46,6 +46,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'analytics', label: 'System Analytics', icon: BarChart3 },
           { id: 'simulations-list', label: 'All Simulations', icon: List },
           { id: 'simulation-designer', label: 'Simulation Designer', icon: FileText },
+          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'security', label: 'Security Settings', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User }
         ];
@@ -61,6 +62,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'analytics', label: 'Company Analytics', icon: BarChart3 },
           { id: 'simulations-list', label: 'My Simulations', icon: List },
           { id: 'simulation-designer', label: 'Simulation Designer', icon: FileText },
+          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
         ];
@@ -73,6 +75,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'interviews', label: 'Interview Scheduling', icon: UserCheck },
           { id: 'analytics', label: 'Recruitment Analytics', icon: TrendingUp },
           { id: 'simulations-list', label: 'My Simulations', icon: List },
+          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
         ];
@@ -84,6 +87,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'my-simulations', label: 'My Simulations', icon: Play },
           { id: 'applications', label: 'My Applications', icon: CheckSquare },
           { id: 'results', label: 'My Results', icon: TrendingUp },
+          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
         ];

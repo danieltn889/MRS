@@ -1332,6 +1332,34 @@ CREATE INDEX idx_blockchain_records_tx_id      ON blockchain_records(tx_id);
 CREATE INDEX idx_blockchain_records_candidate  ON blockchain_records(candidate_id);
 CREATE INDEX idx_blockchain_records_session    ON blockchain_records(session_id);
 
+-- Hash-linked, tamper-evident audit chain (app-level; can anchor to an Ethereum tx
+-- via eth_tx_id). Each block stores the previous block's hash; altering any block
+-- breaks every subsequent hash, which verifyChain() detects.
+CREATE TABLE IF NOT EXISTS audit_chain (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    block_number    BIGINT NOT NULL,
+    prev_hash       VARCHAR(64) NOT NULL,
+    current_hash    VARCHAR(64) NOT NULL UNIQUE,
+    timestamp       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    event_type      VARCHAR(100) NOT NULL,
+    candidate_id    UUID REFERENCES users(id) ON DELETE SET NULL,
+    simulation_id   UUID,
+    evaluation_id   UUID,
+    git_commit_hash VARCHAR(255),
+    repo_hash       VARCHAR(255),
+    action          TEXT,
+    metadata        JSONB DEFAULT '{}'::JSONB,
+    nonce           INTEGER DEFAULT 0,
+    eth_tx_id       VARCHAR(255),
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_audit_chain_block_number ON audit_chain(block_number);
+CREATE INDEX IF NOT EXISTS idx_audit_chain_event_type ON audit_chain(event_type);
+CREATE INDEX IF NOT EXISTS idx_audit_chain_candidate  ON audit_chain(candidate_id);
+CREATE INDEX IF NOT EXISTS idx_audit_chain_simulation ON audit_chain(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_audit_chain_current_hash ON audit_chain(current_hash);
+
 CREATE TABLE verifiable_credentials (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     simulation_id   UUID NOT NULL REFERENCES simulations(id)         ON DELETE CASCADE,

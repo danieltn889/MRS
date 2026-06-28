@@ -4,7 +4,8 @@ import {
   Upload, FileText, CheckCircle, Loader, AlertCircle, Eye, Download, 
   File, Image, FileArchive
 } from 'lucide-react';
-import { addWorkExperience, updateWorkExperience, deleteWorkExperience } from '../../services/candidateAPI';
+import { addWorkExperience, updateWorkExperience, deleteWorkExperience, uploadCandidateDocument } from '../../services/candidateAPI';
+import ConfirmDialog from './ConfirmDialog';
 
 // =====================================================
 // TYPE DEFINITIONS
@@ -28,6 +29,7 @@ interface WorkExperienceItem {
   reports_to?: string;
   reason_for_leaving?: string;
   verification_method?: string;
+  attachments?: ProofFile[];
   display_order?: number;
 }
 
@@ -52,7 +54,7 @@ interface FormData {
   industry: string;
   reasonForLeaving: string;
   proofFiles: File[];
-  existingProof: string;
+  existingProofFiles: ProofFile[];
   displayOrder: number;
 }
 
@@ -62,6 +64,7 @@ interface ProofFile {
   file_type?: string;
   uploaded_at?: string;
   file_url?: string;
+  file_key?: string;
 }
 
 // =====================================================
@@ -125,7 +128,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     industry: '',
     reasonForLeaving: '',
     proofFiles: [],
-    existingProof: '',
+    existingProofFiles: [],
     displayOrder: 0
   });
   const [loading, setLoading] = useState<boolean>(false);
@@ -135,6 +138,8 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
   const [proofUploadMessage, setProofUploadMessage] = useState<string>('');
   const [viewingProofFile, setViewingProofFile] = useState<ProofFile | null>(null);
   const [isProofModalOpen, setIsProofModalOpen] = useState<boolean>(false);
+  const [deleteId, setDeleteId] = useState<string | number | null>(null);
+  const [deleting, setDeleting] = useState<boolean>(false);
   const proofInputRef = useRef<HTMLInputElement>(null);
 
   const experience = profile?.workExperience || profile?.experience || [];
@@ -153,7 +158,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       industry: '',
       reasonForLeaving: '',
       proofFiles: [],
-      existingProof: '',
+      existingProofFiles: [],
       displayOrder: 0
     });
     setDateError('');
@@ -265,6 +270,13 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     }
   };
 
+  const removeExistingProofFile = (index: number): void => {
+    setFormData(prev => ({
+      ...prev,
+      existingProofFiles: prev.existingProofFiles.filter((_, fileIndex) => fileIndex !== index)
+    }));
+  };
+
   const truncateTitle = (title: string): string => {
     if (title && title.length > 100) {
       return title.substring(0, 100);
@@ -312,20 +324,26 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       if (formData.reasonForLeaving) submitData.reasonForLeaving = formData.reasonForLeaving;
       if (formData.displayOrder) submitData.displayOrder = formData.displayOrder;
 
-      // ✅ Handle verification method
-      if (formData.proofFiles.length > 0) {
-        submitData.verificationMethod = JSON.stringify({
-          type: 'work_proof',
-          files: formData.proofFiles.map(file => ({
-            file_name: file.name,
-            file_size: file.size,
-            file_type: file.type,
-            uploaded_at: new Date().toISOString()
-          }))
+      // ✅ Upload proof files for real so they persist and can be viewed/downloaded,
+      // then store their references in the `attachments` JSONB column.
+      const uploadedProofFiles: ProofFile[] = [];
+      for (const file of formData.proofFiles) {
+        const res = await uploadCandidateDocument(file, 'work_proof');
+        const data = res?.data || {};
+        uploadedProofFiles.push({
+          file_name: data.file_name || file.name,
+          file_size: data.file_size ?? file.size,
+          file_type: data.mime_type || file.type,
+          uploaded_at: data.uploaded_at || new Date().toISOString(),
+          file_url: data.file_url,
+          file_key: data.file_key,
         });
-      } else if (formData.existingProof) {
-        submitData.verificationMethod = formData.existingProof;
       }
+
+      // Keep previously-saved proof files and append the newly uploaded ones.
+      submitData.attachments = [...formData.existingProofFiles, ...uploadedProofFiles];
+      // Short label kept in the (VARCHAR) verification_method column for context.
+      submitData.verificationMethod = submitData.attachments.length > 0 ? 'work_proof' : '';
 
       if (editingId) {
         await updateWorkExperience(editingId, submitData);
@@ -363,23 +381,26 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       industry: exp.industry || '',
       reasonForLeaving: exp.reason_for_leaving || '',
       proofFiles: [],
-      existingProof: exp.verification_method || '',
+      existingProofFiles: getProofFiles(exp),
       displayOrder: exp.display_order || 0
     });
     setEditingId(String(exp.id));
     setIsAdding(true);
   };
 
-  const handleDelete = async (id: string | number): Promise<void> => {
-    if (!confirm('Are you sure you want to delete this work experience?')) return;
-
+  const confirmDelete = async (): Promise<void> => {
+    if (deleteId === null) return;
+    setDeleting(true);
     try {
-      await deleteWorkExperience(String(id));
+      await deleteWorkExperience(String(deleteId));
+      setDeleteId(null);
       onUpdate();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error deleting work experience:', error);
       alert('Error deleting work experience: ' + errorMessage);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -395,14 +416,27 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     return isNaN(date.getTime()) ? 'N/A' : date.getFullYear().toString();
   };
 
-  const getProofFiles = (value?: string): ProofFile[] => {
-    if (!value) return [];
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed?.files) ? parsed.files : [];
-    } catch {
-      return [];
+  // Proof files now live in the `attachments` JSONB column. Older entries may
+  // still keep them inside the legacy `verification_method` JSON string, so we
+  // read both for backward compatibility.
+  const getProofFiles = (exp?: { attachments?: ProofFile[]; verification_method?: string } | null): ProofFile[] => {
+    if (!exp) return [];
+
+    if (Array.isArray(exp.attachments) && exp.attachments.length > 0) {
+      return exp.attachments;
     }
+
+    if (exp.verification_method) {
+      try {
+        const parsed = JSON.parse(exp.verification_method);
+        if (Array.isArray(parsed?.files)) return parsed.files;
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return [];
+      }
+    }
+
+    return [];
   };
 
   const openProofViewer = (file: ProofFile): void => {
@@ -422,50 +456,44 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     }
 
     try {
+      // File just selected in this session but not saved yet: serve from memory.
       const uploadedFile = formData.proofFiles.find(f => f.name === file.file_name);
-      
       if (uploadedFile) {
         const url = URL.createObjectURL(uploadedFile);
-        if (uploadedFile.type === 'application/pdf') {
-          window.open(url, '_blank');
-        } else {
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = uploadedFile.name;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          URL.revokeObjectURL(url);
-        }
-        return;
-      }
-
-      const token = localStorage.getItem('token');
-      if (!token) {
-        alert('Please log in to download files');
-        return;
-      }
-
-      const isPDF = file.file_name.toLowerCase().endsWith('.pdf');
-      const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(file.file_name);
-
-      if (isPDF || isImage) {
-        const viewUrl = `/api/v1/candidates/proof/view/${encodeURIComponent(file.file_name)}`;
-        window.open(viewUrl, '_blank');
-      } else {
-        const downloadUrl = `/api/v1/candidates/proof/download/${encodeURIComponent(file.file_name)}`;
         const link = document.createElement('a');
-        link.href = downloadUrl;
-        link.download = file.file_name;
+        link.href = url;
+        link.download = uploadedFile.name;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        return;
       }
 
+      // Persisted file: download directly from its stored URL.
+      if (file.file_url) {
+        const link = document.createElement('a');
+        link.href = file.file_url;
+        link.download = file.file_name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
+      alert('This file is no longer available for download.');
     } catch (error) {
       console.error('Error downloading file:', error);
       alert('Failed to download file. Please try again.');
     }
+  };
+
+  // Build a previewable URL for the file (persisted URL, or an in-memory object URL).
+  const getProofPreviewUrl = (file: ProofFile): string | null => {
+    if (file.file_url) return file.file_url;
+    const uploadedFile = formData.proofFiles.find(f => f.name === file.file_name);
+    return uploadedFile ? URL.createObjectURL(uploadedFile) : null;
   };
 
   const renderProofModal = (): React.ReactNode => {
@@ -474,6 +502,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     const isImage = viewingProofFile.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
     const isPDF = viewingProofFile.file_name?.match(/\.pdf$/i);
     const fileExtension = viewingProofFile.file_name?.split('.').pop()?.toUpperCase() || 'FILE';
+    const previewUrl = getProofPreviewUrl(viewingProofFile);
 
     return (
       <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeProofViewer}>
@@ -498,34 +527,12 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
           </div>
           
           <div className="p-6 overflow-auto max-h-[calc(90vh-80px)] bg-gray-50">
-            {isImage ? (
-              <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
-                <div className="text-center p-8">
-                  <Image size={80} className="text-gray-300 mx-auto mb-6" />
-                  <p className="text-gray-600 font-medium">Image Preview</p>
-                  <p className="text-sm text-gray-400 mt-1">{viewingProofFile.file_name}</p>
-                  <div className="mt-6 flex gap-3 justify-center">
-                    <button onClick={() => downloadProofFile(viewingProofFile)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-                      <Download size={16} /> Download Image
-                    </button>
-                    <button onClick={closeProofViewer} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
-                  </div>
-                </div>
+            {isImage && previewUrl ? (
+              <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner overflow-auto">
+                <img src={previewUrl} alt={viewingProofFile.file_name} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
               </div>
-            ) : isPDF ? (
-              <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
-                <div className="text-center p-8">
-                  <FileText size={80} className="text-red-400 mx-auto mb-6" />
-                  <p className="text-gray-600 font-medium">PDF Document</p>
-                  <p className="text-sm text-gray-400 mt-1">{viewingProofFile.file_name}</p>
-                  <div className="mt-6 flex gap-3 justify-center">
-                    <button onClick={() => downloadProofFile(viewingProofFile)} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2">
-                      <Download size={16} /> Download PDF
-                    </button>
-                    <button onClick={closeProofViewer} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
-                  </div>
-                </div>
-              </div>
+            ) : isPDF && previewUrl ? (
+              <iframe src={previewUrl} title={viewingProofFile.file_name} className="w-full h-[70vh] rounded-lg bg-white shadow-inner" />
             ) : (
               <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
                 <div className="text-center p-8">
@@ -550,6 +557,17 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
   return (
     <div className="space-y-6">
       {renderProofModal()}
+
+      <ConfirmDialog
+        open={deleteId !== null}
+        title="Delete work experience?"
+        message="This will permanently remove this work experience entry and its proof files from your profile."
+        confirmLabel="Delete"
+        variant="danger"
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+      />
 
       <div className="flex items-center justify-between">
         <div>
@@ -744,15 +762,19 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 </div>
               )}
 
-              {formData.existingProof && formData.proofFiles.length === 0 && getProofFiles(formData.existingProof).length > 0 && (
+              {formData.existingProofFiles.length > 0 && (
                 <div className="mt-3 space-y-2">
-                  {getProofFiles(formData.existingProof).map((file, index) => (
+                  <p className="text-xs font-medium text-gray-500">Saved proof files</p>
+                  {formData.existingProofFiles.map((file, index) => (
                     <div key={`${file.file_name}-${index}`} className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                       {getFileIcon(file.file_name)}
                       <span className="flex-1 truncate">{file.file_name}</span>
                       {file.file_size && <span className="text-xs text-green-600">{formatFileSize(file.file_size)}</span>}
-                      <button onClick={() => openProofViewer(file)} className="text-blue-600 hover:text-blue-800 transition-colors" title="View file">
+                      <button type="button" onClick={() => openProofViewer(file)} className="text-blue-600 hover:text-blue-800 transition-colors" title="View file">
                         <Eye size={16} />
+                      </button>
+                      <button type="button" onClick={() => removeExistingProofFile(index)} className="text-gray-400 hover:text-red-600 transition-colors" title="Remove file">
+                        <X size={16} />
                       </button>
                     </div>
                   ))}
@@ -800,7 +822,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
           </div>
         ) : (
           experience.map((exp) => {
-            const proofFiles = getProofFiles(exp.verification_method);
+            const proofFiles = getProofFiles(exp);
             return (
               <div key={exp.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between">
@@ -867,7 +889,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                     <button onClick={() => handleEdit(exp)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit" type="button">
                       <Edit size={18} />
                     </button>
-                    <button onClick={() => handleDelete(exp.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete" type="button">
+                    <button onClick={() => setDeleteId(exp.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete" type="button">
                       <Trash2 size={18} />
                     </button>
                   </div>

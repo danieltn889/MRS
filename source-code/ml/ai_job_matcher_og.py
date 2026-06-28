@@ -149,7 +149,41 @@ class LocalTextProcessor:
         self.embeddings_cache = {}
         self.cache_hits = 0
         self.cache_misses = 0
-    
+        # Correction vocabulary built dynamically from the candidate's and job's
+        # OWN skills at match time — no hardcoded/static skill list.
+        self.dynamic_vocab = set()
+
+    def add_to_vocab(self, terms):
+        """Populate the fuzzy-correction vocabulary from real data (skill names)."""
+        if not terms:
+            return
+        for term in terms:
+            if not term or not isinstance(term, str):
+                continue
+            cleaned = re.sub(r'[^\w\s+#.]', ' ', term.lower())
+            for tok in cleaned.split():
+                if len(tok) > 3:
+                    self.dynamic_vocab.add(tok)
+
+    def normalize_terms(self, text: str) -> str:
+        """Correct typos against the vocabulary built from the candidate's and job's
+        own skills (e.g. a misspelled job skill 'javascrit' aligns to the candidate's
+        'javascript'). Purely data-driven — a no-op when no vocabulary is set."""
+        if not text or not self.dynamic_vocab:
+            return text
+        try:
+            import difflib
+            out = []
+            for tok in text.split():
+                if len(tok) <= 3 or tok in self.dynamic_vocab:
+                    out.append(tok)
+                    continue
+                match = difflib.get_close_matches(tok, self.dynamic_vocab, n=1, cutoff=0.86)
+                out.append(match[0] if match else tok)
+            return ' '.join(out)
+        except Exception:
+            return text
+
     def lemmatize(self, text: str) -> str:
         if not text:
             return text
@@ -159,7 +193,7 @@ class LocalTextProcessor:
             return ' '.join(lemmatized)
         except:
             return text
-    
+
     def clean(self, text: str) -> str:
         if not text:
             return ""
@@ -168,6 +202,7 @@ class LocalTextProcessor:
         text = text.lower()
         text = re.sub(r'[^\w\s]', ' ', text)
         text = re.sub(r'\s+', ' ', text)
+        text = self.normalize_terms(text)   # typo / abbreviation correction
         text = self.lemmatize(text)
         return text.strip()
     
@@ -881,22 +916,50 @@ class Factor3_ExperienceMatcher:
                 if isinstance(start_str, str):
                     start_str = start_str.replace('Z', '+00:00')
                 start = datetime.fromisoformat(start_str)
-                
+                # Normalize to naive so we never mix tz-aware and naive datetimes
+                # (current jobs use datetime.now(), which is naive) — this was silently
+                # dropping current experiences via a TypeError.
+                if start.tzinfo is not None:
+                    start = start.replace(tzinfo=None)
+
                 if is_current or not end_str:
-                    end = current_date
+                    end = datetime.now()
                 else:
                     if isinstance(end_str, str):
                         end_str = end_str.replace('Z', '+00:00')
                     end = datetime.fromisoformat(end_str)
-                
+                    if end.tzinfo is not None:
+                        end = end.replace(tzinfo=None)
+
                 years = (end - start).days / 365.25
-                
+
                 if years > 0:
+                    # Build the text used for semantic matching from the TITLE plus the
+                    # responsibilities, technologies, and industry — not the title alone —
+                    # so relevant experience is recognised even when the title differs.
+                    parts = [title]
+                    if work.get('description'):
+                        parts.append(str(work.get('description')))
+                    exp_skills = work.get('skills') or []
+                    if isinstance(exp_skills, list) and exp_skills:
+                        parts.append(' '.join(str(s) for s in exp_skills))
+                    elif isinstance(exp_skills, str):
+                        parts.append(exp_skills)
+                    if work.get('industry'):
+                        parts.append(str(work.get('industry')))
+
                     experiences.append({
                         "title": title,
+                        "company": work.get('company') or work.get('company_name') or work.get('organization') or '',
+                        "skills": exp_skills if isinstance(exp_skills, list) else ([exp_skills] if exp_skills else []),
                         "years": round(years, 2),
                         "is_current": is_current,
-                        "cleaned": self.tp.clean(title)
+                        # Title alone (high-signal for role-to-role matching) AND the full
+                        # text (title + responsibilities + skills + industry). Matching
+                        # takes the MAX of the two so a clear title match isn't diluted by
+                        # the longer text, while skill-based matches still count.
+                        "cleaned": self.tp.clean(title),
+                        "cleaned_full": self.tp.clean(' '.join(parts)),
                     })
                     log_candidate(f"   Work from DB: {title} - {years:.2f} years")
                     
@@ -969,11 +1032,17 @@ class Factor3_ExperienceMatcher:
             for exp in candidate_experiences:
                 exp_title = exp["title"]
                 exp_years = exp["years"]
-                exp_cleaned = exp["cleaned"]
-                
-                similarity = self.tp.semantic_similarity(exp_cleaned, req_cleaned)
-                
-                if similarity >= 0.3:
+                # Compare BOTH the role title and the full experience text, and take the
+                # stronger of the two (avoids a long description diluting a clear
+                # title-to-role match, e.g. "Software Engineer" ↔ "Software Development").
+                similarity = max(
+                    self.tp.semantic_similarity(exp["cleaned"], req_cleaned),
+                    self.tp.semantic_similarity(exp.get("cleaned_full", exp["cleaned"]), req_cleaned),
+                )
+
+                # Only count an experience toward the score if it is at least 50%
+                # semantically relevant to the requirement (spec: experience matching).
+                if similarity >= 0.5:
                     if exp_years >= req_years:
                         years_score = 1.0
                     else:
@@ -981,8 +1050,9 @@ class Factor3_ExperienceMatcher:
                         years_score = 0.5 + (ratio * 0.5)
                         years_score = min(0.85, years_score)
                     
-                    combined = (similarity * 0.6) + (years_score * 0.4)
-                    
+                    # Skills/content relevance drives the score; years is a minor factor.
+                    combined = (similarity * 0.85) + (years_score * 0.15)
+
                     if combined > best_score:
                         best_score = combined
                         best_match = {
@@ -1045,10 +1115,81 @@ class Factor3_ExperienceMatcher:
             "gap": round(max(0, general_years - total_years), 2)
         }
     
+    def build_experience_analysis(self, candidate_experiences, job_requirements, job):
+        """For EVERY candidate experience, compute its best semantic similarity to the
+        job's requirements (or to the job role itself when there are no explicit
+        requirements), whether it CONTRIBUTES (>= 50% similarity), the technologies it
+        used, and a human-readable reason. Also returns total vs RELEVANT years so the
+        UI can show 'Total Experience' and 'Relevant Experience' separately."""
+        specific = job_requirements.get("specific_requirements", []) or []
+        ref_texts = [r.get("cleaned", "") for r in specific if r.get("cleaned")]
+        ref_titles = [r.get("title", "") for r in specific if r.get("title")]
+        if not ref_texts:
+            job_text = ' '.join(str(x) for x in [job.get('title', ''), job.get('description', '')] if x)
+            ref_texts = [self.tp.clean(job_text)] if job_text.strip() else []
+            ref_titles = [job.get('title', '') or 'this role']
+
+        analysis = []
+        relevant_years = 0.0
+        for exp in candidate_experiences:
+            best_sim = 0.0
+            best_ref = ref_titles[0] if ref_titles else (job.get('title', '') or 'this role')
+            for idx, ref in enumerate(ref_texts):
+                if not ref:
+                    continue
+                sim = max(
+                    self.tp.semantic_similarity(exp.get("cleaned", ""), ref),
+                    self.tp.semantic_similarity(exp.get("cleaned_full", exp.get("cleaned", "")), ref),
+                )
+                if sim > best_sim:
+                    best_sim = sim
+                    best_ref = ref_titles[idx] if idx < len(ref_titles) else best_ref
+
+            contributes = best_sim >= 0.5
+            if contributes:
+                relevant_years += exp.get("years", 0)
+
+            techs = exp.get("skills") or []
+            if not isinstance(techs, list):
+                techs = [str(techs)]
+
+            if contributes:
+                reason = f"Relevant to \"{best_ref}\" — the role and its skills/responsibilities align with what this position requires."
+            else:
+                reason = "Not relevant to this role (semantic similarity below 50%); excluded from the Experience score."
+
+            analysis.append({
+                "title": exp.get("title", ""),
+                "company": exp.get("company", ""),
+                "years": exp.get("years", 0),
+                "is_current": exp.get("is_current", False),
+                "similarity": round(best_sim, 4),
+                "matched_with": best_ref,
+                "contributes": contributes,
+                "technologies": [str(t) for t in techs][:12],
+                "reason": reason,
+            })
+
+        analysis.sort(key=lambda a: a["similarity"], reverse=True)
+        return {
+            "experience_analysis": analysis,
+            "relevant_years": round(relevant_years, 2),
+        }
+
     def match(self, profile_data, job):
         candidate_experiences = self.extract_candidate_work_experience(profile_data)
         job_requirements = self.extract_job_experience_requirements(job)
-        
+
+        # Candidate's total experience (years) — included in every response so the UI
+        # "Your Total Experience" is correct regardless of which matching path is used.
+        total_years_all = round(sum(e.get("years", 0) for e in candidate_experiences), 2)
+
+        # Per-experience semantic analysis: which experiences are relevant, why, and
+        # how many years are RELEVANT (vs total). Drives the transparent UI.
+        exp_breakdown = self.build_experience_analysis(candidate_experiences, job_requirements, job)
+        relevant_years_all = exp_breakdown["relevant_years"]
+        experience_analysis = exp_breakdown["experience_analysis"]
+
         log_candidate(f"   Candidate work experiences: {len(candidate_experiences)} positions")
         log_job(f"   Job specific requirements: {len(job_requirements['specific_requirements'])}")
         log_job(f"   Job general requirement: {job_requirements['general_min_years']}+ years")
@@ -1061,6 +1202,9 @@ class Factor3_ExperienceMatcher:
                 "score": specific_result["score"],
                 "match_percentage": specific_result["match_percentage"],
                 "match_type": "specific_requirements",
+                "total_years": total_years_all,
+                "relevant_years": relevant_years_all,
+                "experience_analysis": experience_analysis,
                 "specific_matches": specific_result.get("matches", []),
                 "total_requirements": specific_result.get("total_requirements", 0),
                 "matched_requirements": specific_result.get("matched_count", 0),
@@ -1078,6 +1222,8 @@ class Factor3_ExperienceMatcher:
                 "match_percentage": general_result["match_percentage"],
                 "match_type": "general_requirement",
                 "total_years": general_result.get("total_years", 0),
+                "relevant_years": relevant_years_all,
+                "experience_analysis": experience_analysis,
                 "required_years": general_result.get("required_years", 0),
                 "gap": general_result.get("gap", 0),
                 "weight": 0.20,
@@ -1089,6 +1235,9 @@ class Factor3_ExperienceMatcher:
             "score": 1.0,
             "match_percentage": 100.0,
             "match_type": "no_requirement",
+            "total_years": total_years_all,
+            "relevant_years": relevant_years_all,
+            "experience_analysis": experience_analysis,
             "weight": 0.20,
             "weighted_score": 0.20
         }
@@ -2575,6 +2724,60 @@ log_info("="*70)
 # API ENDPOINTS
 # =====================================================
 
+def _collect_skill_terms(profile_data, jobs):
+    """Gather raw skill names from the candidate and the job(s) to seed the dynamic
+    typo-correction vocabulary (no hardcoded skill list)."""
+    terms = []
+    for s in profile_data.get('skills', []) or []:
+        terms.append(s.get('skill_name') or s.get('name') or '')
+    for w in profile_data.get('work_experience', []) or []:
+        sk = w.get('skills') or []
+        if isinstance(sk, list):
+            terms.extend([str(x) for x in sk])
+    job_list = jobs if isinstance(jobs, list) else [jobs]
+    for j in job_list:
+        if not isinstance(j, dict):
+            continue
+        for key in ('skills_required', 'skills_preferred'):
+            for sk in j.get(key, []) or []:
+                terms.append(sk.get('name') if isinstance(sk, dict) else str(sk))
+    return terms
+
+
+def build_match_narrative(skills, quals, exp, total_score, job):
+    """Compose a transparent 'why this score' explanation and concrete improvement
+    suggestions from the four factor results — so the UI shows reasoning, not just
+    numbers. Returns (explanation_text, improvement_suggestions)."""
+    job_title = job.get('title') or 'this role'
+    matched = skills.get('matched_skills', []) or []
+    missing = skills.get('missing_skills', []) or []
+    parts = []
+
+    sp = skills.get('match_percentage', 0) or 0
+    if sp >= 80 and matched:
+        parts.append(f"The candidate has strong technical alignment, matching {len(matched)} of the required skills ({', '.join(matched[:4])}).")
+    elif matched:
+        parts.append(f"The candidate matches {len(matched)} required skill(s) ({', '.join(matched[:4])}), with room to grow.")
+    else:
+        parts.append("Few of the required technical skills were found in the candidate profile.")
+
+    rel = exp.get('relevant_years', 0) or 0
+    tot = exp.get('total_years', 0) or 0
+    if rel > 0:
+        parts.append(f"Of {tot} year(s) of total experience, about {rel} year(s) are directly relevant to {job_title}, based on semantic matching of past roles.")
+    elif tot > 0:
+        parts.append(f"The candidate has {tot} year(s) of experience, though little of it is directly relevant to {job_title}.")
+
+    if quals.get('explanation'):
+        parts.append(str(quals.get('explanation')))
+    elif quals.get('match_quality'):
+        parts.append(f"Education match is rated {quals.get('match_quality')}.")
+
+    if missing:
+        parts.append(f"The candidate is missing {', '.join(missing[:3])}, which reduced the final score.")
+
+    return ' '.join(parts), list(missing[:6])
+
 async def parse_candidate_id_request(request: Request):
     body = await request.body()
     data = json.loads(body.decode('utf-8')) if body else {}
@@ -2609,11 +2812,18 @@ async def match_candidate(request: Request):
             return {"success": False, "error": "Candidate not found"}
         
         profile_data = profile_resp.get('data', {})
-        
+
+        # Build a DYNAMIC correction vocabulary from the candidate's + all jobs' OWN
+        # skills (replaces the previous hardcoded skill list) so typo correction is
+        # data-driven, e.g. a misspelled job skill aligns to the candidate's real skill.
+        jobs = backend.get_jobs()
+        tp.dynamic_vocab = set()
+        tp.add_to_vocab(_collect_skill_terms(profile_data, jobs))
+
         log_candidate("="*60)
         log_candidate("CANDIDATE DATA FROM DATABASE")
         log_candidate("="*60)
-        
+
         candidate_skills = factor1.extract_candidate_skills(profile_data)
         candidate_quals = factor2.extract_candidate_qualifications(profile_data)
         candidate_prefs = factor4.extract_candidate_preferences(profile_data)
@@ -2632,9 +2842,8 @@ async def match_candidate(request: Request):
         log_candidate(f"Industries from DB: {candidate_prefs.get('industries', [])}")
         log_candidate(f"Languages from DB: {candidate_prefs.get('languages', [])}")
         
-        jobs = backend.get_jobs()
         log_info(f"📊 Jobs from database: {len(jobs)}")
-        
+
         results = []
         
         for idx, job in enumerate(jobs):
@@ -2692,7 +2901,9 @@ async def match_candidate(request: Request):
             candidate_languages = candidate_prefs.get("languages", [])
             candidate_salary_min = candidate_prefs.get("salary_min", 0)
             candidate_salary_max = candidate_prefs.get("salary_max", 0)
-            
+
+            _match_explanation, _match_suggestions = build_match_narrative(s, q, e, total_score, job)
+
             results.append({
                 "match_score": total_score,
                 "match_level": match_level,
@@ -2729,6 +2940,8 @@ async def match_candidate(request: Request):
                     "specific_matches": e.get("specific_matches", []),
                     "unmatched_requirements": e.get("unmatched_requirements", []),
                     "total_years": e.get("total_years", 0),
+                    "relevant_years": e.get("relevant_years", 0),
+                    "experience_analysis": e.get("experience_analysis", []),
                     "required_years": e.get("required_years", 0),
                     "gap_years": e.get("gap", 0)
                 },
@@ -2759,9 +2972,11 @@ async def match_candidate(request: Request):
                     "candidate_salary_max": candidate_salary_max,
                     "candidate_remote_preference": candidate_prefs.get("remote_preference", "flexible")
                 },
+                "explanation": _match_explanation,
+                "improvement_suggestions": _match_suggestions,
                 "job": job_details
             })
-            
+
             log_info(f"   ✓ Score: {total_score}% - {match_level}")
         
         results.sort(key=lambda x: x['match_score'], reverse=True)
@@ -2838,6 +3053,11 @@ async def match_candidate_for_job(job_id: str, request: Request):
         if not job:
             return {"success": False, "error": f"Job not found: {job_id}"}
         job_age_requirement = job.get('education_required', {}).get('age_requirement', '')
+
+        # Dynamic correction vocabulary from the candidate's + this job's own skills.
+        tp.dynamic_vocab = set()
+        tp.add_to_vocab(_collect_skill_terms(profile_data, job))
+
         candidate_skills = factor1.extract_candidate_skills(profile_data)
         candidate_quals = factor2.extract_candidate_qualifications(profile_data)
         candidate_prefs = factor4.extract_candidate_preferences(profile_data)
@@ -2933,6 +3153,8 @@ async def match_candidate_for_job(job_id: str, request: Request):
                 "specific_matches": e.get("specific_matches", []),
                 "unmatched_requirements": e.get("unmatched_requirements", []),
                 "total_years": e.get("total_years", 0),
+                "relevant_years": e.get("relevant_years", 0),
+                "experience_analysis": e.get("experience_analysis", []),
                 "required_years": e.get("required_years", 0),
                 "gap_years": e.get("gap", 0)
             },
@@ -2963,9 +3185,11 @@ async def match_candidate_for_job(job_id: str, request: Request):
                 "candidate_salary_max": candidate_salary_max,
                 "candidate_remote_preference": candidate_prefs.get("remote_preference", "flexible")
             },
+            "explanation": build_match_narrative(s, q, e, total_score, job)[0],
+            "improvement_suggestions": build_match_narrative(s, q, e, total_score, job)[1],
             "job": job_details
         }
-        
+
         total_duration = (time.time() - request_start) * 1000
         log_info(f"⏱️ Total time: {total_duration:.2f}ms")
         

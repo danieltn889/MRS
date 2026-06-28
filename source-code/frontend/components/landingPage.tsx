@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Zap, Menu, X, Brain, Shield, Target,
   Badge, Clock, Award, ChevronRight, Star, Users,
   ArrowRight, Check, Search, Loader2, Briefcase, MapPin,
   Sparkles, GraduationCap, BookOpen, ExternalLink,
-  Bookmark, DollarSign
+  Bookmark, DollarSign, Lock, LogIn
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 // =====================================================
 // TYPES
@@ -297,6 +299,12 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
   const [showAllResults, setShowAllResults] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
+  // Auth gate for viewing the detailed analysis
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [pendingJob, setPendingJob] = useState<{ id: string; title: string } | null>(null);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -380,7 +388,29 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
   };
 
   const handleJobClick = (jobId: string) => {
-    window.location.href = `/jobs/${jobId}`;
+    const targetPath = `/jobs/${jobId}`;
+
+    // Already logged in: go straight to the detailed analysis (SPA navigation
+    // keeps the search results in place).
+    if (isAuthenticated) {
+      navigate(targetPath);
+      return;
+    }
+
+    // Not logged in: remember exactly where the user wanted to go so we can
+    // bring them back after login, then show a friendly prompt instead of
+    // silently bouncing them to the login screen.
+    sessionStorage.setItem('redirectAfterLogin', targetPath);
+    const job = [...searchResults, ...recentJobs].find(j => j.id === jobId);
+    setPendingJob({ id: jobId, title: job?.title || 'this job' });
+    setShowLoginPrompt(true);
+  };
+
+  const handleGoToLogin = () => {
+    setShowLoginPrompt(false);
+    // redirectAfterLogin is already set; Login reads it and returns the user
+    // straight to the detailed analysis page — no need to search again.
+    onLogin();
   };
 
   const handlePopularSearch = (term: string) => {
@@ -1013,6 +1043,56 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
           </div>
         </div>
       </footer>
+
+      {/* Login Required Prompt — shown when an unauthenticated user tries to
+          view the detailed analysis ("View full job"). */}
+      {showLoginPrompt && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowLoginPrompt(false)}
+        >
+          <div
+            className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowLoginPrompt(false)}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-blue-50">
+              <Lock className="h-7 w-7 text-blue-600" />
+            </div>
+
+            <h3 className="mb-2 text-center text-lg font-bold text-gray-900">
+              Login required
+            </h3>
+            <p className="mb-6 text-center text-sm leading-relaxed text-gray-500">
+              You are not logged in. Please log in first to view the detailed
+              analysis{pendingJob ? <> of <span className="font-semibold text-gray-700">{pendingJob.title}</span></> : null} and save your search history.
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleGoToLogin}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:shadow-lg"
+              >
+                <LogIn className="h-4 w-4" />
+                Login
+              </button>
+              <button
+                onClick={() => setShowLoginPrompt(false)}
+                className="w-full rounded-xl px-5 py-2.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100"
+              >
+                Keep browsing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

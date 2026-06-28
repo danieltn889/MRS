@@ -65,6 +65,8 @@ interface SingleJobMatchResponse {
       best_similarity: number;
       best_matched_field: string | null;
       match_type: string;
+      match_quality?: string;
+      explanation?: string;
     };
     experience_breakdown: {
       match_type: string;
@@ -73,6 +75,18 @@ interface SingleJobMatchResponse {
       specific_matches: any[];
       unmatched_requirements: string[];
       total_years: number;
+      relevant_years?: number;
+      experience_analysis?: Array<{
+        title: string;
+        company?: string;
+        years: number;
+        is_current?: boolean;
+        similarity: number;
+        matched_with?: string;
+        contributes: boolean;
+        technologies?: string[];
+        reason?: string;
+      }>;
       required_years: number;
       gap_years: number;
     };
@@ -103,6 +117,8 @@ interface SingleJobMatchResponse {
       candidate_salary_max: number;
       candidate_remote_preference: string;
     };
+    explanation?: string;
+    improvement_suggestions?: string[];
     job: any;
   };
   timestamp?: string;

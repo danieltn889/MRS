@@ -96,6 +96,18 @@ interface MatchDetails {
     specific_matches: any[];
     unmatched_requirements: string[];
     total_years: number;
+    relevant_years?: number;
+    experience_analysis?: Array<{
+      title: string;
+      company?: string;
+      years: number;
+      is_current?: boolean;
+      similarity: number;
+      matched_with?: string;
+      contributes: boolean;
+      technologies?: string[];
+      reason?: string;
+    }>;
     required_years: number;
     gap_years: number;
   };
@@ -117,6 +129,8 @@ interface MatchDetails {
     type_match_details?: any[];
     location_match_details?: any;
   };
+  explanation?: string;
+  improvement_suggestions?: string[];
 }
 
 const JobDetails: React.FC = () => {
@@ -132,6 +146,9 @@ const JobDetails: React.FC = () => {
   const [fullCandidateProfile, setFullCandidateProfile] = useState<any>(null);
   const [matchScore, setMatchScore] = useState<number | null>(null);
   const [matchDetails, setMatchDetails] = useState<MatchDetails | null>(null);
+  // Employer's minimum AI match score to be allowed to apply (reuses the existing
+  // jobs.ai_match_required_score field — no new schema).
+  const [requiredScore, setRequiredScore] = useState<number | null>(null);
   const [isLoadingMatch, setIsLoadingMatch] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     skills: true,
@@ -214,6 +231,11 @@ const JobDetails: React.FC = () => {
 
       if (result.success && result.match) {
         setMatchScore(result.match.match_score);
+        setRequiredScore(
+          (result.match as any).job?.ai_match_required_score ??
+          (job as any)?.ai_match_required_score ??
+          null
+        );
         setMatchDetails({
           match_score: result.match.match_score,
           match_level: result.match.match_level,
@@ -244,6 +266,8 @@ const JobDetails: React.FC = () => {
             specific_matches: result.match.experience_breakdown?.specific_matches || [],
             unmatched_requirements: result.match.experience_breakdown?.unmatched_requirements || [],
             total_years: result.match.experience_breakdown?.total_years || 0,
+            relevant_years: result.match.experience_breakdown?.relevant_years ?? 0,
+            experience_analysis: result.match.experience_breakdown?.experience_analysis || [],
             required_years: result.match.experience_breakdown?.required_years || 0,
             gap_years: result.match.experience_breakdown?.gap_years || 0
           },
@@ -264,7 +288,9 @@ const JobDetails: React.FC = () => {
             missing_job_data: result.match.preferences_breakdown?.missing_job_data || [],
             type_match_details: result.match.preferences_breakdown?.type_match_details,
             location_match_details: result.match.preferences_breakdown?.location_match_details
-          }
+          },
+          explanation: (result.match as any).explanation || '',
+          improvement_suggestions: (result.match as any).improvement_suggestions || []
         });
 
         console.log('✅ AI Match score loaded:', result.match.match_score);
@@ -759,11 +785,22 @@ const JobDetails: React.FC = () => {
                       </div>
                     </div>
 
-                    <p className="text-white/90 mb-4">
+                    <span className={`inline-block px-3 py-1 mb-3 rounded-full text-sm font-bold ${
+                      matchScore >= 90 ? 'bg-green-400 text-green-900'
+                        : matchScore >= 75 ? 'bg-blue-300 text-blue-900'
+                          : matchScore >= 60 ? 'bg-orange-300 text-orange-900'
+                            : 'bg-red-300 text-red-900'
+                    }`}>
+                      {matchScore >= 90 ? 'Excellent Match'
+                        : matchScore >= 75 ? 'Strong Match'
+                          : matchScore >= 60 ? 'Good Match'
+                            : 'Needs Improvement'}
+                    </span>
+                    <p className="text-white/90 mb-4 text-sm">
                       {matchScore >= 80
-                        ? 'Excellent match! You are highly qualified for this role.'
+                        ? 'You are highly qualified for this role.'
                         : matchScore >= 60
-                          ? 'Good match! Your profile aligns well with this position.'
+                          ? 'Your profile aligns well with this position.'
                           : 'Consider updating your profile to better match this role.'}
                     </p>
 
@@ -822,48 +859,107 @@ const JobDetails: React.FC = () => {
                 </div>
               )}
 
+              {/* AI Insight: Why this score + how to improve */}
+              {matchDetails && (matchDetails.explanation || (matchDetails.improvement_suggestions?.length ?? 0) > 0) && (
+                <div className="bg-white rounded-2xl shadow-sm p-6">
+                  {matchDetails.explanation && (
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
+                        <Brain className="w-4 h-4 text-indigo-500" /> Why this score?
+                      </h3>
+                      <p className="text-sm text-gray-600 leading-relaxed">{matchDetails.explanation}</p>
+                    </div>
+                  )}
+                  {(matchDetails.improvement_suggestions?.length ?? 0) > 0 && (
+                    <div className="pt-3 border-t border-gray-100">
+                      <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2 mb-2">
+                        <TrendingUp className="w-4 h-4 text-green-500" /> Improve your match
+                      </h3>
+                      <p className="text-xs text-gray-500 mb-2">Learning these skills would raise your match for similar roles:</p>
+                      <div className="flex flex-wrap gap-2">
+                        {matchDetails.improvement_suggestions!.map((s, i) => (
+                          <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 text-xs font-medium rounded-full border border-green-100">
+                            <span className="text-green-500 font-bold">+</span> {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Experience Match Details Card */}
-              {matchDetails && matchDetails.experience_breakdown.gap_years > 0 && (
+              {matchDetails && (
                 <div className="bg-white rounded-2xl shadow-sm p-6">
                   <button
                     onClick={() => toggleSection('experience')}
                     className="w-full flex items-center justify-between text-sm font-semibold text-gray-700 mb-3"
                   >
-                    <span className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-yellow-500" />Experience Gap Analysis</span>
+                    <span className="flex items-center gap-2"><Briefcase className="w-4 h-4 text-purple-500" />Experience Match</span>
                     {expandedSections.experience ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
 
                   {expandedSections.experience && (
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Your Experience:</span>
-                        <span className="font-medium text-gray-900">{matchDetails.experience_breakdown.total_years} years</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Required Experience:</span>
-                        <span className="font-medium text-gray-900">{matchDetails.experience_breakdown.required_years}+ years</span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Experience Gap:</span>
-                        <span className="font-medium text-red-600">{matchDetails.experience_breakdown.gap_years} years</span>
+                    <div className="space-y-3">
+                      {/* Total vs Relevant — relevant is computed by semantic matching, not raw years */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-gray-900">{(matchDetails.experience_breakdown.total_years || 0).toFixed(1)}</p>
+                          <p className="text-xs text-gray-500">Total Experience (yrs)</p>
+                        </div>
+                        <div className="bg-purple-50 rounded-lg p-3 text-center">
+                          <p className="text-2xl font-bold text-purple-700">{(matchDetails.experience_breakdown.relevant_years || 0).toFixed(1)}</p>
+                          <p className="text-xs text-purple-600">Relevant Experience (yrs)</p>
+                        </div>
                       </div>
 
-                      {matchDetails.experience_breakdown.specific_matches.length > 0 && (
-                        <div className="mt-3">
-                          <p className="text-xs font-semibold text-gray-600 mb-2">Matched Requirements:</p>
-                          {matchDetails.experience_breakdown.specific_matches.slice(0, 3).map((match, idx) => (
-                            <div key={idx} className="text-xs text-gray-500 mb-1">
-                              • {match.requirement_title}: {match.candidate_years}/{match.requirement_years} years ({Math.round(match.combined_score * 100)}%)
+                      {matchDetails.experience_breakdown.required_years > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-500">Required:</span>
+                          <span className="font-medium text-gray-900">{matchDetails.experience_breakdown.required_years}+ years</span>
+                        </div>
+                      )}
+
+                      {/* Per-experience analysis: which roles were used vs excluded, and why */}
+                      {(matchDetails.experience_breakdown.experience_analysis?.length ?? 0) > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <p className="text-xs font-semibold text-gray-600">How each role was used:</p>
+                          {matchDetails.experience_breakdown.experience_analysis!.map((exp, idx) => (
+                            <div key={idx} className={`rounded-lg p-3 border ${exp.contributes ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100'}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
+                                    {exp.contributes
+                                      ? <CheckCircle className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+                                      : <XCircle className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />}
+                                    <span className="truncate">{exp.title}</span>
+                                  </p>
+                                  {exp.company && <p className="text-xs text-gray-500 ml-5">{exp.company}</p>}
+                                </div>
+                                <span className={`text-xs font-bold whitespace-nowrap ${exp.contributes ? 'text-green-700' : 'text-gray-400'}`}>
+                                  {Math.round((exp.similarity || 0) * 100)}%
+                                </span>
+                              </div>
+                              {exp.technologies && exp.technologies.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2 ml-5">
+                                  {exp.technologies.slice(0, 6).map((t, i) => (
+                                    <span key={i} className="px-1.5 py-0.5 bg-white text-gray-600 text-[10px] rounded border border-gray-200">{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {exp.reason && <p className="text-[11px] text-gray-500 mt-1.5 ml-5">{exp.reason}</p>}
                             </div>
                           ))}
                         </div>
                       )}
 
-                      <div className="mt-3 p-2 bg-yellow-50 rounded-lg">
-                        <p className="text-xs text-yellow-800">
-                          Consider highlighting transferable skills or relevant projects to bridge this gap.
-                        </p>
-                      </div>
+                      {matchDetails.experience_breakdown.gap_years > 0 && (
+                        <div className="mt-1 p-2 bg-yellow-50 rounded-lg">
+                          <p className="text-xs text-yellow-800">
+                            Experience gap of {matchDetails.experience_breakdown.gap_years} years. Consider highlighting transferable skills or relevant projects.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -969,7 +1065,42 @@ const JobDetails: React.FC = () => {
                 </div>
 
                 <div className="mt-6 space-y-3">
-                  {!hasApplied && isActive ? (
+                  {!hasApplied && isActive && requiredScore != null && matchScore != null && matchScore < requiredScore ? (
+                    // Not eligible: AI match score below the employer's minimum.
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full py-3 bg-gray-200 text-gray-500 font-semibold rounded-xl cursor-not-allowed mb-3"
+                      >
+                        Apply Now
+                      </button>
+                      <p className="text-sm text-amber-800 font-medium mb-2">
+                        You are currently not eligible to apply because your AI Job Match Score is below the employer's minimum requirement.
+                      </p>
+                      <div className="flex items-center justify-center gap-6 my-3">
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-amber-700">{Math.round(matchScore)}%</p>
+                          <p className="text-xs text-gray-500">Your Match Score</p>
+                        </div>
+                        <div className="text-gray-300 text-2xl">/</div>
+                        <div className="text-center">
+                          <p className="text-2xl font-bold text-gray-800">{requiredScore}%</p>
+                          <p className="text-xs text-gray-500">Required</p>
+                        </div>
+                      </div>
+                      {(matchDetails?.improvement_suggestions?.length ?? 0) > 0 && (
+                        <div className="pt-2 border-t border-amber-200">
+                          <p className="text-xs font-semibold text-amber-800 mb-1">Improve your score by adding:</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {matchDetails!.improvement_suggestions!.map((s, i) => (
+                              <span key={i} className="px-2 py-0.5 bg-white text-amber-700 text-xs rounded-full border border-amber-200">{s}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : !hasApplied && isActive ? (
                     <button
                       onClick={handleApplyNow}
                       disabled={isApplying}
@@ -1089,7 +1220,13 @@ const JobDetails: React.FC = () => {
       experience_breakdown: matchDetails?.experience_breakdown,
       preferences_breakdown: matchDetails?.preferences_breakdown
     }}
-    requiredDocuments={['Resume', 'Cover Letter']}
+    requiredDocuments={
+      Array.isArray((job as any)?.requiredDocuments) && (job as any).requiredDocuments.length > 0
+        ? (job as any).requiredDocuments
+        : Array.isArray((job as any)?.required_documents) && (job as any).required_documents.length > 0
+          ? (job as any).required_documents
+          : ['Resume', 'Cover Letter']
+    }
   />
 )}
     </>

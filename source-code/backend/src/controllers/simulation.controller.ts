@@ -7,6 +7,9 @@ import PaginationService from '../services/pagination.service.js';
 import ValidationService from '../services/validation.service.js';
 import ResponseService from '../services/response.service.js';
 import { AuthenticatedRequest } from '../types/auth.types.js';
+import NotificationService from '../services/notification.service.js';
+import emailService from '../services/email.service.js';
+import AuditChainService from '../services/audit-chain.service.js';
 import { BlockchainService } from '../services/blockchain.service.js';
 import contractArtifact from '../../../blockchain/artifacts/contracts/LocalSimulation.sol/LocalSimulation.json' with { type: 'json' };
 
@@ -2713,6 +2716,59 @@ Return ONLY valid JSON:
   }
 
   /**
+   * Analyzes commit MESSAGE quality: rewards meaningful, descriptive messages and
+   * flags poor practices (empty/spam commits and generic messages like
+   * "update", "test", "fix", "final", "done"). Returns a 0-100 quality score and
+   * the flagged commits so the report can explain the reasoning transparently.
+   */
+  private analyzeCommitMessageQuality(commits: any[]): {
+    score: number;
+    meaningful: number;
+    generic: number;
+    empty: number;
+    total: number;
+    flagged: Array<{ sha: string; message: string; reason: string }>;
+    details: string;
+  } {
+    const GENERIC = new Set([
+      'update', 'updates', 'updated', 'test', 'tests', 'testing', 'fix', 'fixes', 'fixed',
+      'final', 'finally', 'done', 'wip', 'stuff', 'changes', 'change', 'changed', 'commit',
+      'commits', 'misc', 'temp', 'tmp', 'asdf', 'aaa', 'x', '.', '..', '...', 'edit', 'edits',
+    ]);
+    const firstLine = (c: any): string => (String(c?.message || c?.commit?.message || '').split('\n')[0] || '').trim();
+    const shaOf = (c: any): string => String(c?.sha || c?.commit?.sha || c?.id || '').substring(0, 7);
+
+    let meaningful = 0;
+    let generic = 0;
+    let empty = 0;
+    const flagged: Array<{ sha: string; message: string; reason: string }> = [];
+
+    for (const c of commits || []) {
+      const msg = firstLine(c);
+      const normalized = msg.toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+      const words = normalized.split(/\s+/).filter(Boolean);
+
+      if (!msg || msg.length < 3) {
+        empty++;
+        flagged.push({ sha: shaOf(c), message: msg || '(empty)', reason: 'Empty or too short' });
+      } else if (normalized.length === 0 || GENERIC.has(normalized) || (words.length === 1 && GENERIC.has(words[0] || ''))) {
+        generic++;
+        flagged.push({ sha: shaOf(c), message: msg, reason: 'Generic/non-descriptive message' });
+      } else if (words.length < 3) {
+        generic++;
+        flagged.push({ sha: shaOf(c), message: msg, reason: 'Vague message (too few words)' });
+      } else {
+        meaningful++;
+      }
+    }
+
+    const total = (commits || []).length;
+    const score = total > 0 ? Math.round((meaningful / total) * 100) : 0;
+    const details = `${meaningful}/${total} meaningful, ${generic} generic, ${empty} empty`;
+    return { score, meaningful, generic, empty, total, flagged: flagged.slice(0, 20), details };
+  }
+
+  /**
    * Scores commit matching based on match percentage
    */
   private scoreCommitMatching(matchPercentage: number, matchedCount: number, totalAnalyzed: number): { earned: number; max: number; details: string } {
@@ -2996,6 +3052,16 @@ Return ONLY valid JSON:
       detailedMarks.commits.earned = commitCountResult.earned;
       detailedMarks.commits.count = commitsWithChanges.length;
       detailedMarks.commits.details = commitCountResult.details;
+
+      // Commit MESSAGE quality: reward meaningful messages, penalize generic/spam ones.
+      const commitQuality = this.analyzeCommitMessageQuality(commitsWithChanges);
+      // Bounded factor 0.7..1.0 so commit points are reduced by up to 30% when the
+      // history is dominated by generic/empty messages.
+      const qualityFactor = 0.7 + 0.3 * (commitQuality.total > 0 ? commitQuality.meaningful / commitQuality.total : 1);
+      detailedMarks.commits.earned = Math.round(detailedMarks.commits.earned * qualityFactor);
+      detailedMarks.commits.details += ` | message quality: ${commitQuality.details}`;
+      (detailedMarks.commits as any).messageQuality = commitQuality;
+      console.log(`📝 Commit message quality: ${commitQuality.details} (factor ${qualityFactor.toFixed(2)})`);
 
       // ============================================
       // AI + ML COMMIT MATCHING
@@ -3767,7 +3833,11 @@ Return ONLY valid JSON:
    * @param userId - The user ID (for authorization)
    * @returns Complete score analysis including per-task breakdown, overall scores, GitHub analysis, and feedback
    */
-  async calculateFullSessionScores(sessionId: string, userId: string): Promise<any> {
+  async calculateFullSessionScores(
+    sessionId: string,
+    userId: string,
+    onProgress?: (stage: string, label: string, percent: number) => void
+  ): Promise<any> {
     console.log('═══════════════════════════════════════════════════════════════');
     console.log('📊 [calculateFullSessionScores] STARTED');
     console.log('═══════════════════════════════════════════════════════════════');
@@ -3884,6 +3954,7 @@ Return ONLY valid JSON:
       // ============================================
       // 3. GITHUB SCORE - FULL DETAILED BREAKDOWN
       // ============================================
+      onProgress?.('repository', 'Analyzing repository & commit history', 20);
       let githubScore = 0;
       let githubAnalysis = null;
       let githubDetailedMarks = {
@@ -3926,6 +3997,7 @@ Return ONLY valid JSON:
       // ============================================
       // 3.5 COMMUNICATION SCORE - WITH FULL DETAILS
       // ============================================
+      onProgress?.('communication', 'Calculating communication score', 45);
       let communicationScoreResult = null;
       let calculatedCommunicationScore = 0;
 
@@ -3947,6 +4019,7 @@ Return ONLY valid JSON:
       // ============================================
       // 4. Task Completion Analysis (per task with detailed marks)
       // ============================================
+      onProgress?.('code_quality', 'Evaluating code quality & task completion', 55);
       const taskCompletionAnalysis = await Promise.all(templateTasks.map(async (task: any, idx: number) => {
         const progress = taskProgress.find((tp: any) => tp.task_index === idx);
         const isCompleted = progress?.status === 'completed';
@@ -4346,6 +4419,7 @@ Return ONLY valid JSON:
       // ============================================
       // 8. Technical Score
       // ============================================
+      onProgress?.('technical', 'Measuring technical implementation', 75);
       let technicalScoreSum = 0;
       let technicalTasksCount = 0;
       const technicalBreakdown: any[] = [];
@@ -4625,6 +4699,7 @@ Return ONLY valid JSON:
       // ============================================
       // 14. Pass/Fail
       // ============================================
+      onProgress?.('feedback', 'Generating AI feedback', 90);
       const passingScore = scoringRubric.passingScore || 70;
       const passed = overallScore >= passingScore;
 
@@ -4661,6 +4736,20 @@ Return ONLY valid JSON:
 
       if (strengths.length === 0) strengths.push('✅ Completed the simulation');
       if (improvements.length === 0 && overallScore < 80) improvements.push('⚠️ Review all tasks and ensure completeness for a higher score');
+
+      // ============================================
+      // 15.5 Hiring Recommendation (derived transparently from the weighted scores)
+      // ============================================
+      const hiringRecommendation = ((): { level: string; label: string; reasoning: string } => {
+        const topStrengths = strengths.slice(0, 2).map((s: string) => s.replace(/^✅\s*/, ''));
+        const topGaps = improvements.slice(0, 2).map((s: string) => s.replace(/^⚠️\s*/, ''));
+        const basis = `Overall ${overallScore}% (technical ${technicalScore}%, quality ${qualityScore}%, communication ${calculatedCommunicationScore}%, GitHub ${githubScore}%).`;
+        if (overallScore >= 85) return { level: 'strong_hire', label: 'Strong Hire', reasoning: `${basis} Consistently strong across the board${topStrengths.length ? `: ${topStrengths.join('; ')}` : ''}.` };
+        if (overallScore >= 70) return { level: 'hire', label: 'Hire', reasoning: `${basis} Meets the bar with solid performance${topStrengths.length ? `: ${topStrengths.join('; ')}` : ''}.` };
+        if (overallScore >= 60) return { level: 'borderline', label: 'Borderline', reasoning: `${basis} Mixed results — promising but with gaps${topGaps.length ? `: ${topGaps.join('; ')}` : ''}.` };
+        if (overallScore >= 45) return { level: 'needs_improvement', label: 'Needs Improvement', reasoning: `${basis} Below the bar; notable gaps${topGaps.length ? `: ${topGaps.join('; ')}` : ''}.` };
+        return { level: 'not_recommended', label: 'Not Recommended', reasoning: `${basis} Did not demonstrate the required competencies${topGaps.length ? `: ${topGaps.join('; ')}` : ''}.` };
+      })();
 
       // ============================================
       // 16. RETURN COMPLETE ANALYSIS WITH ALL DETAILS
@@ -4758,8 +4847,12 @@ Return ONLY valid JSON:
             : `📚 You scored ${overallScore}% on the ${session.simulation_name} simulation. The passing threshold is ${passingScore}%.`,
           detailed_feedback: passed
             ? `Excellent work! You demonstrated strong ${strengths.slice(0, 2).join(', ')}. Keep up the great performance!`
-            : `Focus on improving: ${improvements.slice(0, 3).join(', ')}. Review the tasks and try again.`
+            : `Focus on improving: ${improvements.slice(0, 3).join(', ')}. Review the tasks and try again.`,
+          hiring_recommendation: hiringRecommendation
         },
+
+        // Top-level hiring recommendation for easy access by results UI.
+        hiring_recommendation: hiringRecommendation,
 
         // ============================================
         // ✅ GITHUB ANALYSIS - FULL DETAILS
@@ -6189,6 +6282,147 @@ Return ONLY valid JSON:
   // MAIN SUBMIT SIMULATION FUNCTION
   // ============================================
 
+  /**
+   * Push an evaluation-progress update to the candidate (and the session room)
+   * over Socket.IO so the submit flow is transparent instead of a black box.
+   */
+  private emitEvalProgress(
+    userId: string,
+    sessionId: string,
+    stage: string,
+    label: string,
+    percent: number,
+    extra: Record<string, any> = {}
+  ): void {
+    try {
+      const io = (global as any).io;
+      if (io && typeof io.to === 'function') {
+        const payload = { sessionId, stage, label, percent, timestamp: new Date().toISOString(), ...extra };
+        io.to(`user:${userId}`).emit('evaluation_progress', payload);
+        io.to(`session:${sessionId}`).emit('evaluation_progress', payload);
+      }
+    } catch {
+      // Progress reporting is best-effort and must never break submission.
+    }
+  }
+
+  /**
+   * Send the submission-confirmation email to the candidate AND the company
+   * (recruiters/admins/job creator), after the submission has been saved.
+   * Idempotent: uses email_tracking to avoid resending for the same submission.
+   * Never throws — email problems must not fail the submission.
+   */
+  private async sendSubmissionEmails(params: {
+    sessionId: string;
+    candidateUserId: string;
+    candidateEmail: string;
+    simulationName: string;
+    taskNames: string[];
+    githubUrl?: string | null;
+  }): Promise<{ emailSent: boolean; recipients: string[]; deduped: boolean }> {
+    const { sessionId, candidateUserId, candidateEmail, simulationName, taskNames, githubUrl } = params;
+    try {
+      // Idempotency guard — if we've already logged a confirmation for this
+      // submission, don't send again (handles accidental double-submits/retries).
+      const existing = await DatabaseService.query(
+        `SELECT 1 FROM email_tracking WHERE metadata->>'submission_session_id' = $1 AND metadata->>'type' = 'submission_confirmation' LIMIT 1`,
+        [sessionId]
+      );
+      if (existing.rows.length > 0) {
+        return { emailSent: true, recipients: [], deduped: true };
+      }
+
+      // Candidate display name.
+      const nameResult = await DatabaseService.query(
+        `SELECT cp.first_name, cp.last_name, u.email
+         FROM users u LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
+         WHERE u.id = $1`,
+        [candidateUserId]
+      );
+      const row = nameResult.rows[0] || {};
+      const candidateName = (row.first_name || row.last_name)
+        ? `${row.first_name || ''} ${row.last_name || ''}`.trim()
+        : (candidateEmail.split('@')[0] || 'Candidate');
+
+      // Company / recruiter recipients: the job creator, company creator, the
+      // assigned reviewer, AND every member of the company's team — so the company
+      // side reliably receives the submission even when the recruiter didn't create
+      // the job/company and isn't the assigned reviewer.
+      const companyResult = await DatabaseService.query(
+        `SELECT DISTINCT u.email
+         FROM simulation_sessions ss
+         JOIN simulations s ON s.id = ss.simulation_id
+         LEFT JOIN applications a ON a.id = s.application_id
+         LEFT JOIN jobs j ON j.id = COALESCE(s.job_id, a.job_id)
+         LEFT JOIN companies c ON c.id = j.company_id
+         JOIN users u ON (
+           u.id IN (j.created_by, c.created_by, a.assigned_to)
+           OR u.id IN (SELECT ct.user_id FROM company_team ct WHERE ct.company_id = c.id)
+         )
+         WHERE ss.id = $1 AND u.email IS NOT NULL AND u.email <> $2`,
+        [sessionId, candidateEmail]
+      );
+      const companyEmails: string[] = companyResult.rows.map((r: any) => r.email).filter(Boolean);
+
+      // Make the "company got nothing" case visible — it's the usual reason the
+      // submission email appears to reach only one end.
+      if (companyEmails.length === 0) {
+        console.warn(`[sendSubmissionEmails] No company recipients resolved for session ${sessionId}. The company will NOT receive the submission email — check the job's created_by, the company's created_by, the assigned reviewer, or the company_team for this job's company.`);
+      } else {
+        console.log(`[sendSubmissionEmails] Company recipients (${companyEmails.length}): ${companyEmails.join(', ')}`);
+      }
+
+      const submittedAt = new Date().toLocaleString();
+      const attempts: Array<{ to: string; role: 'candidate' | 'company'; ok: boolean; error?: string }> = [];
+
+      // Candidate email.
+      try {
+        await emailService.sendSubmissionConfirmation(candidateEmail, {
+          candidateName, simulationName, submissionId: sessionId, submittedAt, taskNames, githubUrl: githubUrl ?? null, recipientRole: 'candidate',
+        });
+        attempts.push({ to: candidateEmail, role: 'candidate', ok: true });
+      } catch (e: any) {
+        attempts.push({ to: candidateEmail, role: 'candidate', ok: false, error: e?.message });
+      }
+
+      // Company emails.
+      for (const email of companyEmails) {
+        try {
+          await emailService.sendSubmissionConfirmation(email, {
+            candidateName, simulationName, submissionId: sessionId, submittedAt, taskNames, githubUrl: githubUrl ?? null, recipientRole: 'company',
+          });
+          attempts.push({ to: email, role: 'company', ok: true });
+        } catch (e: any) {
+          attempts.push({ to: email, role: 'company', ok: false, error: e?.message });
+        }
+      }
+
+      // Log every attempt to email_tracking (success and failure).
+      for (const a of attempts) {
+        try {
+          await DatabaseService.query(
+            `INSERT INTO email_tracking (recipient, subject, sent_at, delivered, metadata)
+             VALUES ($1, $2, NOW(), $3, $4)`,
+            [
+              a.to,
+              `Submission confirmation — ${simulationName}`,
+              a.ok,
+              JSON.stringify({ type: 'submission_confirmation', submission_session_id: sessionId, role: a.role, error: a.error || null }),
+            ]
+          );
+        } catch (logErr: any) {
+          console.warn('Failed to log email_tracking row:', logErr?.message);
+        }
+      }
+
+      const recipients = attempts.filter((a) => a.ok).map((a) => a.to);
+      return { emailSent: recipients.includes(candidateEmail), recipients, deduped: false };
+    } catch (err: any) {
+      console.warn('sendSubmissionEmails failed:', err?.message);
+      return { emailSent: false, recipients: [], deduped: false };
+    }
+  }
+
   async submitSimulation(req: AuthenticatedRequest, res: Response): Promise<void> {
     const startTime = Date.now();
 
@@ -6302,14 +6536,22 @@ Return ONLY valid JSON:
       // ============================================
       console.log('🔢 [STEP 5] Calculating full session scores...');
 
+      this.emitEvalProgress(req.user.id, validSessionId, 'saving', 'Saving submission', 5);
+
       let fullScoreAnalysis;
       let communicationAnalysis = null;
 
       try {
-        fullScoreAnalysis = await this.calculateFullSessionScores(validSessionId, req.user.id);
+        fullScoreAnalysis = await this.calculateFullSessionScores(
+          validSessionId,
+          req.user.id,
+          (stage, label, percent) => this.emitEvalProgress(req.user.id, validSessionId, stage, label, percent)
+        );
         console.log('✅ Full score analysis completed');
+        this.emitEvalProgress(req.user.id, validSessionId, 'finalizing', 'Finalizing report', 95);
       } catch (calcError: any) {
         console.error('❌ Score calculation failed:', calcError);
+        this.emitEvalProgress(req.user.id, validSessionId, 'error', 'Evaluation failed', 100, { error: true });
         ResponseService.error(res, 'Failed to calculate scores', 500);
         return;
       }
@@ -6962,6 +7204,9 @@ Return ONLY valid JSON:
           // Feedback
           feedback: fullScoreAnalysis.feedback,
 
+          // Hiring recommendation (Strong Hire / Hire / Borderline / Needs Improvement / Not Recommended)
+          hiringRecommendation: fullScoreAnalysis.hiring_recommendation || null,
+
           // GitHub analysis
           githubAnalysis: fullScoreAnalysis.github_analysis || {
             has_repo: false,
@@ -7054,6 +7299,52 @@ Return ONLY valid JSON:
           error: 'Failed to save full results to database'
         };
       }
+
+      // Send the confirmation email (candidate + company) now that the
+      // submission is fully saved. Best-effort and idempotent.
+      try {
+        const taskNames: string[] = Array.isArray(fullScoreAnalysis.task_analysis)
+          ? fullScoreAnalysis.task_analysis
+              .map((t: any) => t?.task_name || t?.title || t?.name)
+              .filter(Boolean)
+          : [];
+        const repoUrl = fullScoreAnalysis.github_analysis?.repo_info?.repoUrl || null;
+        const emailResult = await this.sendSubmissionEmails({
+          sessionId: validSessionId,
+          candidateUserId: req.user.id,
+          candidateEmail: req.user.email,
+          simulationName: fullScoreAnalysis.simulation_name || 'Simulation',
+          taskNames,
+          githubUrl: repoUrl,
+        });
+        if (submissionResults) {
+          (submissionResults as any).emailSent = emailResult.emailSent;
+          (submissionResults as any).emailRecipients = emailResult.recipients;
+        }
+      } catch (emailErr: any) {
+        console.warn('⚠️ Submission email step failed:', emailErr?.message);
+      }
+
+      // Append a tamper-evident audit block for this submission, anchoring to the
+      // Ethereum tx hash when on-chain storage is enabled. Best-effort.
+      try {
+        await AuditChainService.appendBlock({
+          eventType: 'simulation_submitted',
+          candidateId: req.user.id,
+          simulationId: session.simulation_id,
+          repoHash: fullScoreAnalysis.github_analysis?.repo_info?.repoUrl || null,
+          action: `Simulation submitted (score ${finalOverallScore}%, ${finalPassed ? 'passed' : 'completed'})`,
+          metadata: { score: finalOverallScore, passed: finalPassed, completionRate },
+          ethTxId: (submissionResults as any)?.blockchain?.txHash || null,
+        });
+      } catch (chainErr: any) {
+        console.warn('⚠️ Audit chain append failed:', chainErr?.message);
+      }
+
+      this.emitEvalProgress(req.user.id, validSessionId, 'complete', 'Evaluation complete', 100, {
+        score: finalOverallScore,
+        passed: finalPassed,
+      });
 
       ResponseService.success(res, submissionResults, `Simulation ${finalPassed ? 'passed' : 'completed'} successfully`);
     } catch (error: any) {
@@ -10725,6 +11016,35 @@ Return ONLY valid JSON:
         console.log('✅ Unread count updates sent');
       } else {
         console.log('⚠️ WebSocket not available, skipping broadcast');
+      }
+
+      // Persist notifications for the OTHER party (recruiters/admins/mentor — or
+      // the candidate when a recruiter writes) so they show up in the bell even
+      // when offline, and are pushed live when online.
+      try {
+        const notifyUserIds = Array.from(new Set(recipientUserIds.filter((id: string) => id && id !== req.user.id)));
+        if (notifyUserIds.length > 0) {
+          const authorName = responseMessage.author?.name || 'Someone';
+          const snippet = (typeof extractedText === 'string' ? extractedText : cleanMessage || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .substring(0, 140);
+          await NotificationService.createForUsers(notifyUserIds, {
+            type: 'chat_message',
+            category: 'message',
+            title: `New message from ${authorName}`,
+            content: snippet || 'Sent you a message',
+            data: {
+              sessionId: actualSessionId,
+              simulationId: actualSimulationId,
+              messageId: savedMessage.id,
+              url: `/simulation/chat/${actualSimulationId}`,
+            },
+            priority: 'normal',
+          });
+        }
+      } catch (notifyErr: any) {
+        console.warn('⚠️ Failed to create chat notifications:', notifyErr?.message);
       }
 
       const totalDuration = Date.now() - startTime;

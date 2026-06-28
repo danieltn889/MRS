@@ -75,6 +75,21 @@ weekly-reports/
 |------|------------|
 | 1 | Repository setup and project documentation |
 
+## Technical Documentation
+
+The full technical documentation for installing, configuring, running, testing, and extending
+the application lives under `source-code/`:
+
+- [`source-code/README.md`](source-code/README.md) — main technical README (overview, install, env, run, tests)
+- [`source-code/frontend/README.md`](source-code/frontend/README.md) — frontend guide
+- [`source-code/backend/README.md`](source-code/backend/README.md) — backend guide
+- [`source-code/docs/API_DOCUMENTATION.md`](source-code/docs/API_DOCUMENTATION.md) — API reference
+- [`source-code/docs/DATABASE.md`](source-code/docs/DATABASE.md) — database schema & migrations
+- [`source-code/docs/AI_EVALUATION.md`](source-code/docs/AI_EVALUATION.md) — AI evaluation flow
+- [`source-code/docs/BLOCKCHAIN.md`](source-code/docs/BLOCKCHAIN.md) — blockchain & audit chain
+- [`source-code/docs/DEPLOYMENT.md`](source-code/docs/DEPLOYMENT.md) — deployment guide
+- [`source-code/docs/DEVELOPER_GUIDE.md`](source-code/docs/DEVELOPER_GUIDE.md) — developer/contribution guide
+
 ## Documentation Notes
 
 - Keep company and supervisor information consistent in the report and all project documentation.

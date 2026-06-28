@@ -668,9 +668,21 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
               <div className="py-1">
                 {renderTree(files)}
                 {files.length === 0 && currentRepo && (
-                  <div className="text-center text-gray-500 text-xs p-4">
-                    <Code size={24} className="mx-auto mb-2 opacity-40" />
-                    <p>No files in this repository</p>
+                  <div className="p-3 text-xs">
+                    <div className="bg-green-900/20 border border-green-700/40 rounded-lg p-3 text-left">
+                      <p className="text-green-400 font-semibold flex items-center gap-1.5 mb-1.5">
+                        <Github size={13} /> Repository created successfully
+                      </p>
+                      <p className="text-gray-300 leading-relaxed">
+                        Your simulation repository has been created successfully. The repository is{' '}
+                        <span className="text-green-300 font-medium">empty</span> and ready for you to begin
+                        your work. You will create the first files and commits during the simulation.
+                      </p>
+                      <p className="text-gray-500 mt-2 flex items-center gap-1">
+                        Use the <FilePlus size={12} className="inline text-gray-400" /> /{' '}
+                        <FolderPlus size={12} className="inline text-gray-400" /> buttons above to create your first file.
+                      </p>
+                    </div>
                   </div>
                 )}
                 {files.length === 0 && !currentRepo && (

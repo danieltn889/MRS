@@ -1579,7 +1579,10 @@ router.get('/jobs', protect, authorize('recruiter', 'company_admin'), [
         j.locations, j.description, j.requirements, j.salary_min,
         j.salary_max, j.salary_currency, j.salary_visible, j.status,
         j.visibility, j.created_at, j.updated_at,
-        COUNT(a.id) as applications_count
+        j.published_at, j.expires_at,
+        COUNT(a.id) as applications_count,
+        (SELECT COUNT(DISTINCT s2.user_id) FROM simulations s2
+           WHERE s2.job_id = j.id AND s2.status = 'completed') as results_count
       FROM jobs j
       LEFT JOIN applications a ON j.id = a.job_id
       WHERE ${whereClause}

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import BlockchainExplorer from './components/BlockchainExplorer';
 import SecuritySettings from './components/SecuritySettings';
 import TeamManagement from './components/TeamManagement';
 import ProfileManagement from './components/ProfileManagement';
@@ -310,6 +311,9 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
 
       case 'results':
         return <Results onBack={() => setCurrentView('dashboard')} />;
+
+      case 'blockchain':
+        return <BlockchainExplorer />;
 
       case 'applications':
         return <ApplicationRequirements onBack={() => setCurrentView('dashboard')} />;

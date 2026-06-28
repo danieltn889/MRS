@@ -11,10 +11,13 @@ interface SimulationHeaderProps {
   totalTasks: number;
   timeSpent: number;           // Elapsed time
   timeLimit?: number | null;   // Time limit (optional)
+  timeRemaining?: number | null;   // Countdown remaining (optional)
+  isExpired?: boolean;             // Whether the countdown reached zero
   showTimer: boolean;
   setShowTimer: (show: boolean) => void;
   formatTime: (seconds: number) => string;
   getTimeColor: (seconds: number) => string;
+  getCountdownColor?: (seconds: number | null) => string;
   editorTheme: string;
   setEditorTheme: (theme: string) => void;
   fontSize: number;
@@ -44,10 +47,13 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
   totalTasks,
   timeSpent,
   timeLimit,
+  timeRemaining = null,
+  isExpired = false,
   showTimer,
   setShowTimer,
   formatTime,
   getTimeColor,
+  getCountdownColor,
   editorTheme,
   setEditorTheme,
   fontSize,
@@ -110,16 +116,26 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
           </button>
         )}
 
-        {/* Timer - Shows elapsed time */}
+        {/* Timer - Countdown remaining when a limit exists, else elapsed */}
         {showTimer && (
-          <div className={`flex items-center space-x-2 ${getTimeColor(timeSpent)}`}>
-            <Clock size={16} />
-            <span className="font-mono font-semibold">{formatTime(timeSpent)}</span>
-            <span className="text-xs text-gray-500">elapsed</span>
-            {/* Show time limit if exists */}
-            {timeLimit && (
-              <span className="text-xs text-gray-500">
-                / {formatTime(timeLimit)} limit
+          <div className="flex items-center space-x-2">
+            {timeLimit ? (
+              isExpired ? (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-red-600/20 text-red-400 font-semibold text-sm">
+                  <Clock size={16} /> Time Expired
+                </span>
+              ) : (
+                <span className={`flex items-center gap-2 ${getCountdownColor ? getCountdownColor(timeRemaining) : getTimeColor(timeSpent)}`}>
+                  <Clock size={16} />
+                  <span className="font-mono font-semibold">{formatTime(timeRemaining ?? 0)}</span>
+                  <span className="text-xs text-gray-500">left</span>
+                </span>
+              )
+            ) : (
+              <span className={`flex items-center gap-2 ${getTimeColor(timeSpent)}`}>
+                <Clock size={16} />
+                <span className="font-mono font-semibold">{formatTime(timeSpent)}</span>
+                <span className="text-xs text-gray-500">elapsed</span>
               </span>
             )}
             <button

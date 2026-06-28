@@ -287,7 +287,14 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       }
     } catch (error: any) {
       console.error('Error withdrawing application:', error);
-      alert('❌ Failed to withdraw application: ' + (error?.message || 'Unknown error'));
+      const msg = error?.message || error?.response?.data?.message || 'Unknown error';
+      // If the backend says it's already withdrawn/final, the local "applied" state is
+      // stale — sync it so the card stops offering Withdraw (and allows re-apply).
+      if (/withdrawn|cannot be withdrawn|already/i.test(String(msg))) {
+        appliedJobsManager.removeAppliedJob(job.id);
+        setAppliedJobs(prevApplied => prevApplied.filter(id => id !== job.id));
+      }
+      alert('❌ Failed to withdraw application: ' + msg);
     }
   };
 

@@ -525,6 +525,22 @@ export const addWorkExperience = async (req: AuthenticatedRequest, res: Response
       logger.warn(`⚠️ Title truncated from ${originalTitle.length} to 100 characters: ${title}`);
     }
 
+    // 🔥 Normalize attachments to a JSONB array (proof files: {file_name, file_url, file_key, ...})
+    if (attachments) {
+      if (typeof attachments === 'string') {
+        try {
+          attachments = JSON.parse(attachments);
+        } catch {
+          attachments = [];
+        }
+      }
+      if (!Array.isArray(attachments)) {
+        attachments = [];
+      }
+    } else {
+      attachments = [];
+    }
+
     // Handle endDate for current positions
     let processedEndDate = endDate;
     if (isCurrent && (!endDate || endDate === '')) {
@@ -564,7 +580,7 @@ export const addWorkExperience = async (req: AuthenticatedRequest, res: Response
     `, [
       req.user!.id, company, company_id, title, employmentType, location, locationType,
       startDate, processedEndDate, isCurrent || false, description, achievements || [], skills || [],
-      industry, teamSize, reportsTo, reasonForLeaving, attachments || [], verificationMethod, displayOrder || 0
+      industry, teamSize, reportsTo, reasonForLeaving, JSON.stringify(attachments), verificationMethod, displayOrder || 0
     ]);
 
     await client.query('COMMIT');
@@ -638,6 +654,16 @@ export const updateWorkExperience = async (req: AuthenticatedRequest, res: Respo
       logger.warn(`⚠️ Verification method truncated to: ${updates.verificationMethod}`);
     }
 
+    // 🔥 Normalize attachments to a JSONB string so node-postgres stores it correctly
+    if (updates.attachments !== undefined) {
+      let att = updates.attachments;
+      if (typeof att === 'string') {
+        try { att = JSON.parse(att); } catch { att = []; }
+      }
+      if (!Array.isArray(att)) att = [];
+      updates.attachments = JSON.stringify(att);
+    }
+
     // Handle endDate for current positions
     if (updates.isCurrent && (!updates.endDate || updates.endDate === '')) {
       updates.endDate = null;
@@ -707,8 +733,9 @@ export const uploadProofFile = async (req: AuthenticatedRequest, res: Response):
     }
 
     const file = req.file;
-    const userId = req.user!.id;
-    const fileKey = `proofs/${userId}/${Date.now()}-${file.originalname}`;
+    // Use the file's ACTUAL saved location (multer documentStorage → candidate-documents)
+    // so the returned URL is reachable via static serving, instead of a fabricated path.
+    const fileKey = `candidate-documents/${file.filename}`;
 
     const fileData = {
       file_name: file.originalname,
@@ -1891,7 +1918,40 @@ export const getProfile = async (req: AuthenticatedRequest, res: Response): Prom
 
 export const updatePreferences = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const preferencesData = req.body;
+    const preferencesData = { ...(req.body || {}) };
+
+    // Server-side validation (defense in depth — the UI already validates these).
+    const errors: string[] = [];
+
+    const REMOTE_PREFS = ['remote_only', 'office_only', 'hybrid', 'flexible', 'remote', 'onsite', 'any'];
+    if (preferencesData.remote_work_preference != null &&
+        !REMOTE_PREFS.includes(String(preferencesData.remote_work_preference))) {
+      errors.push('Invalid remote work preference');
+    }
+
+    const CURRENCIES = ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'RWF'];
+    if (preferencesData.salary_currency != null &&
+        !CURRENCIES.includes(String(preferencesData.salary_currency))) {
+      errors.push('Invalid salary currency');
+    }
+
+    // Coerce salary values to numbers (forms may send strings) and validate.
+    const toNum = (v: any): number | null =>
+      (v === '' || v === null || v === undefined) ? null : Number(v);
+    const minN = toNum(preferencesData.salary_min);
+    const maxN = toNum(preferencesData.salary_max);
+    if (minN !== null && (isNaN(minN) || minN < 0)) errors.push('Minimum salary must be a non-negative number');
+    if (maxN !== null && (isNaN(maxN) || maxN < 0)) errors.push('Maximum salary must be a non-negative number');
+    if (minN !== null && maxN !== null && !isNaN(minN) && !isNaN(maxN) && minN > maxN) {
+      errors.push('Minimum salary cannot be greater than maximum salary');
+    }
+    if (minN !== null && !isNaN(minN)) preferencesData.salary_min = minN;
+    if (maxN !== null && !isNaN(maxN)) preferencesData.salary_max = maxN;
+
+    if (errors.length > 0) {
+      res.status(400).json({ success: false, message: errors.join('; '), errors });
+      return;
+    }
 
     const result = await query(`
       UPDATE candidate_profiles
@@ -1927,6 +1987,16 @@ export const updatePreferences = async (req: AuthenticatedRequest, res: Response
 export const updateAvailability = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const { status, availableFrom, noticePeriod, openToOpportunities, preferredStartDate } = req.body;
+
+    const VALID_STATUSES = ['not_looking', 'actively_looking', 'open_to_offers', 'passive', 'interviewing', 'available_soon'];
+    if (status != null && !VALID_STATUSES.includes(String(status))) {
+      res.status(400).json({ success: false, message: 'Invalid availability status' });
+      return;
+    }
+    if (noticePeriod != null && (isNaN(Number(noticePeriod)) || Number(noticePeriod) < 0)) {
+      res.status(400).json({ success: false, message: 'Notice period must be a non-negative number of days' });
+      return;
+    }
 
     const availabilityObj = {
       status: status || 'not_looking',
@@ -1969,7 +2039,21 @@ export const updateAvailability = async (req: AuthenticatedRequest, res: Respons
 
 export const updatePrivacySettings = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
-    const privacySettings = req.body;
+    const privacySettings = req.body || {};
+
+    const VALID_VISIBILITY = ['public', 'private', 'connections_only', 'recruiters_only'];
+    if (privacySettings.profile_visibility != null &&
+        !VALID_VISIBILITY.includes(String(privacySettings.profile_visibility))) {
+      res.status(400).json({ success: false, message: 'Invalid profile visibility setting' });
+      return;
+    }
+
+    const VALID_RETENTION = ['indefinite', '7_years', '5_years', '3_years', '1_year'];
+    if (privacySettings.data_retention_period != null &&
+        !VALID_RETENTION.includes(String(privacySettings.data_retention_period))) {
+      res.status(400).json({ success: false, message: 'Invalid data retention period' });
+      return;
+    }
 
     const result = await query(`
       UPDATE candidate_profiles

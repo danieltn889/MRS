@@ -102,6 +102,23 @@ export const uploadProfilePhoto = async (photoFile: File) => {
   }
 };
 
+/**
+ * Delete the current profile photo
+ * @returns {Promise<Object>} Result
+ */
+export const deleteProfilePhoto = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/candidates/profile/photo`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return await handleResponse(response);
+  } catch (error: any) {
+    console.error('Error deleting profile photo:', error);
+    throw error;
+  }
+};
+
 export const uploadCandidateDocument = async (documentFile: File, documentType: string = 'candidate_document') => {
   try {
     const formData = new FormData();

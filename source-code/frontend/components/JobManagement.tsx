@@ -39,10 +39,13 @@ const normaliseJob = (job: any): Job => ({
   status: (['active', 'draft', 'closed'].includes(job.status) ? job.status : 'draft') as JobStatus,
   location: formatLocation(job),
   applications_count: Number(job.applications_count ?? job.application_count ?? 0),
+  results_count: Number(job.results_count ?? 0),
   created_at: job.created_at
     ? new Date(job.created_at).toISOString().split('T')[0]
     : new Date().toISOString().split('T')[0],
   salary_range: formatSalary(job),
+  opens_at: job.published_at || job.opens_at || null,
+  closes_at: job.expires_at || job.closes_at || null,
 });
 
 const extractJobsArray = (response: any): any[] => {
@@ -339,6 +342,14 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
       background: `${color}10`, color, cursor: 'pointer', transition: 'all .15s',
     } as React.CSSProperties),
 
+    // Labeled action button (icon + text) so each action is clear to the user.
+    actionBtn: (color: string) => ({
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '6px 10px', borderRadius: 8, border: 'none',
+      background: `${color}15`, color, cursor: 'pointer',
+      fontSize: 12, fontWeight: 600, transition: 'all .15s',
+    } as React.CSSProperties),
+
     resultsBtn: {
       display: 'inline-flex', alignItems: 'center', gap: 6,
       padding: '6px 12px', borderRadius: 8, fontWeight: 500,
@@ -431,7 +442,7 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
             <table style={{ ...s.table, minWidth: 1020 }}>
               <thead>
                 <tr>
-                  {['Job Title', 'Department', 'Status', 'Location', 'Applications', 'Salary', 'Created', 'Actions'].map(h => (
+                  {['Job Title', 'Department', 'Status', 'Location', 'Applications', 'Opens', 'Closes', 'Created', 'Actions'].map(h => (
                     <th key={h} style={s.th}>{h}</th>
                   ))}
                 </tr>
@@ -467,7 +478,19 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
                         <Users size={12} />{job.applications_count ?? 0}
                       </span>
                     </td>
-                    <td style={{ ...s.td, fontSize: 13, color: '#64748b' }}>{job.salary_range}</td>
+                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {job.opens_at
+                        ? new Date(job.opens_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : job.status === 'draft'
+                          ? 'Not published'
+                          /* Active/open job with no published_at → it's been open since creation */
+                          : new Date(job.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>
+                      {job.closes_at
+                        ? new Date(job.closes_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : 'No deadline'}
+                    </td>
                     <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Clock size={13} color="#94a3b8" />
@@ -475,37 +498,37 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
                       </span>
                     </td>
                     <td style={s.td}>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        <button onClick={() => handleView(job.id)} style={s.iconBtn('#2563eb')} title="View">
-                          <Eye size={14} />
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button onClick={() => handleView(job.id)} style={s.actionBtn('#2563eb')} title="View job details">
+                          <Eye size={14} /> View
                         </button>
-                        <button onClick={() => onEditJob?.(job.id)} style={s.iconBtn('#8b5cf6')} title="Edit">
-                          <Edit size={14} />
+                        <button onClick={() => onEditJob?.(job.id)} style={s.actionBtn('#8b5cf6')} title="Edit job">
+                          <Edit size={14} /> Edit
                         </button>
-                        <button onClick={() => handleDuplicate(job.id)} style={s.iconBtn('#22c55e')} title="Duplicate">
-                          <Copy size={14} />
+                        <button onClick={() => handleDuplicate(job.id)} style={s.actionBtn('#22c55e')} title="Duplicate job">
+                          <Copy size={14} /> Duplicate
                         </button>
                         <button
                           onClick={() => handleViewCandidates(job.id, job.title)}
-                          style={s.iconBtn('#7c3aed')}
-                          title="View Candidates"
+                          style={s.actionBtn('#7c3aed')}
+                          title="View applicants for this job"
                         >
-                          <UserCheck size={14} />
+                          <UserCheck size={14} /> Candidates ({job.applications_count ?? 0})
                         </button>
                         <button
                           onClick={() => handleViewResults(job.id, job.title)}
-                          style={s.resultsBtn}
-                          title="View Candidate Results & Scores"
+                          style={s.actionBtn('#16a34a')}
+                          title="View candidate results & scores"
                         >
-                          <BarChart3 size={14} /> Results
+                          <BarChart3 size={14} /> Results ({job.results_count ?? 0})
                         </button>
                         <button
                           onClick={() => handleDelete(job.id, job.title)}
-                          style={s.iconBtn('#ef4444')}
-                          title="Delete"
+                          style={s.actionBtn('#ef4444')}
+                          title="Delete job"
                           disabled={actionLoading === job.id}
                         >
-                          <Trash2 size={14} />
+                          <Trash2 size={14} /> Delete
                         </button>
                       </div>
                     </td>

@@ -4,6 +4,11 @@ import {
   AlertCircle, Activity, Target, CheckCircle, Download, Filter, Eye
 } from 'lucide-react';
 import { getJobCandidatesWithMatches } from '../../services/jobAPI';
+import { updateApplication } from '../../services/applicationAPI';
+
+// Recruiter-recommended baseline AI match score. The AI recommends; the recruiter
+// always decides — shortlisting below this only warns, never blocks (spec §8).
+const RECOMMENDED_MATCH = 70;
 
 interface JobCandidatesViewProps {
   jobId: string;
@@ -251,6 +256,51 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('match_score');
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  // The minimum AI match score the recruiter set on THIS job (jobs.ai_match_required_score),
+  // returned by the candidates API. Falls back to the recommended baseline.
+  const [requiredScore, setRequiredScore] = useState<number>(RECOMMENDED_MATCH);
+
+  // Change an applicant's status (Shortlist / Reject / Under Review). Reuses the
+  // existing PUT /applications/:id endpoint, which already records the timeline and
+  // sends the candidate an email + in-app notification — no new API or schema.
+  const changeStatus = async (c: Candidate, newStatus: 'shortlisted' | 'rejected' | 'under_review') => {
+    // AI recommends, recruiter decides: warn (don't block) when shortlisting below
+    // the score the recruiter set for this job; confirm before rejecting.
+    if (newStatus === 'shortlisted' && (c.ai_match_score || 0) < requiredScore) {
+      const ok = window.confirm(
+        `This candidate is below this job's required AI Match Score (${Math.round(c.ai_match_score || 0)}% < ${requiredScore}%), but you may still shortlist them based on your professional judgment.\n\nShortlist anyway?`
+      );
+      if (!ok) return;
+    }
+    if (newStatus === 'rejected' && !window.confirm(`Reject ${c.full_name}? They will be notified by email.`)) {
+      return;
+    }
+    const prevStatus = c.application_status;
+    try {
+      setStatusUpdatingId(c.application_id);
+      const res: any = await updateApplication(c.application_id, { status: newStatus });
+      if (res?.success === false) {
+        alert(res?.message || 'Failed to update status');
+        return;
+      }
+      // Update the row...
+      setCandidates(prev => prev.map(x =>
+        x.application_id === c.application_id ? { ...x, application_status: newStatus } : x
+      ));
+      // ...and the summary stat cards (move the count from old status to new).
+      setStats(prev => {
+        const by = { ...(prev.by_status || {}) } as Record<string, number>;
+        if (prevStatus && by[prevStatus] != null) by[prevStatus] = Math.max(0, by[prevStatus] - 1);
+        by[newStatus] = (by[newStatus] || 0) + 1;
+        return { ...prev, by_status: by as typeof prev.by_status };
+      });
+    } catch (e: any) {
+      alert(e?.response?.data?.message || e?.message || 'Failed to update status');
+    } finally {
+      setStatusUpdatingId(null);
+    }
+  };
 
   useEffect(() => {
     if (jobId) loadCandidates();
@@ -263,6 +313,7 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
       if (result.success) {
         setCandidates(result.data.candidates || []);
         setStats(result.data.stats || {});
+        setRequiredScore(result.data.job?.ai_match_required_score ?? RECOMMENDED_MATCH);
       }
     } catch (error) {
       console.error('Error loading candidates:', error);
@@ -553,16 +604,48 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
 
                       {/* Actions */}
                       <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', gap: 8 }}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                           <button
                             onClick={() => onViewCandidate(c)}
-                            style={{ padding: '6px 14px', borderRadius: 8, border: '1px solid #8b5cf6', background: '#f5f3ff', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: '#7c3aed', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #8b5cf6', background: '#f5f3ff', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: '#7c3aed', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           >
                             <Eye size={14} /> View
                           </button>
+
+                          {c.application_status !== 'shortlisted' && (
+                            <button
+                              onClick={() => changeStatus(c, 'shortlisted')}
+                              disabled={statusUpdatingId === c.application_id}
+                              title={(c.ai_match_score || 0) < requiredScore ? `Below this job's required AI score (${requiredScore}%) — you can still shortlist` : 'Shortlist this candidate'}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#f0fdf4', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait' : 'pointer', fontWeight: 600, color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
+                            >
+                              <CheckCircle size={14} /> Shortlist
+                            </button>
+                          )}
+
+                          {c.application_status !== 'under_review' && (
+                            <button
+                              onClick={() => changeStatus(c, 'under_review')}
+                              disabled={statusUpdatingId === c.application_id}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #2563eb', background: '#eff6ff', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait' : 'pointer', fontWeight: 500, color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
+                            >
+                              <Activity size={14} /> Review
+                            </button>
+                          )}
+
+                          {c.application_status !== 'rejected' && (
+                            <button
+                              onClick={() => changeStatus(c, 'rejected')}
+                              disabled={statusUpdatingId === c.application_id}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #dc2626', background: '#fef2f2', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait' : 'pointer', fontWeight: 500, color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
+                            >
+                              <AlertCircle size={14} /> Reject
+                            </button>
+                          )}
+
                           <button
                             onClick={() => downloadCandidateReport(c)}
-                            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: '#374151', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                            style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: '#374151', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           >
                             <Download size={14} /> Report
                           </button>

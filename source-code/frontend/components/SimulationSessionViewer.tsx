@@ -754,8 +754,19 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
               <p className="text-gray-700">{feedback.summary || feedback.detailed_feedback || submissionResults.message || `You scored ${Math.round(score)}% on the ${selectedSession.simulationName} simulation. The passing threshold is ${summary.passing_score || 70}%.`}</p>
             </div>
             
-            {/* Close Button */}
-            <div className="flex justify-end pt-4 border-t border-gray-200">
+            {/* Footer actions */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200">
+              {(selectedSession?.sessionId || selectedSessionId) && (
+                <button
+                  onClick={() => {
+                    setShowResultsModal(false);
+                    navigate(`/session-report/${selectedSession?.sessionId || selectedSessionId}`);
+                  }}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold"
+                >
+                  View Full Report &amp; Verify
+                </button>
+              )}
               <button
                 onClick={() => setShowResultsModal(false)}
                 className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
+import jwt from 'jsonwebtoken';
 import app from './app.js';
 import { logger } from './utils/logger.js';
 import DatabaseService from './services/database.service.js';
@@ -42,11 +43,39 @@ try {
     return false;
   };
 
+  // Socket authentication: if a JWT is supplied (via auth.token, query.token, or
+  // the Authorization header), verify it and treat its `id` as the authoritative
+  // user id. An invalid token is rejected. Connections without a token are still
+  // accepted (legacy clients) but cannot be trusted to set another user's id.
+  io.use((socket, next) => {
+    try {
+      const authToken =
+        (socket.handshake.auth && (socket.handshake.auth as any).token) ||
+        (socket.handshake.query && (socket.handshake.query as any).token) ||
+        (socket.handshake.headers.authorization || '').replace(/^Bearer\s+/i, '');
+
+      if (authToken && process.env.JWT_SECRET) {
+        try {
+          const decoded = jwt.verify(authToken, process.env.JWT_SECRET) as { id: string };
+          if (decoded?.id) {
+            socket.data.authUserId = decoded.id;
+          }
+        } catch {
+          return next(new Error('Unauthorized: invalid token'));
+        }
+      }
+      next();
+    } catch {
+      next();
+    }
+  });
+
   io.on('connection', (socket) => {
     logger.info(`User connected: ${socket.id}`);
-    
-    // Get userId from handshake auth or query
-    const userId = socket.handshake.auth.userId || socket.handshake.query.userId;
+
+    // Prefer the verified user id from the JWT; fall back to the client-provided
+    // id only for legacy connections that did not present a token.
+    const userId = socket.data.authUserId || socket.handshake.auth.userId || socket.handshake.query.userId;
     
     if (userId && typeof userId === 'string') {
       // Store user connection
@@ -86,10 +115,12 @@ try {
       if (sessionId) socket.leave(`session:${sessionId}`);
     });
 
-    socket.on('join_user', (userId: string) => {
-      if (userId) {
-        socket.join(`user:${userId}`);
-        logger.info(`Socket ${socket.id} joined user:${userId}`);
+    socket.on('join_user', (requestedUserId: string) => {
+      // If this socket is authenticated, only let it join its OWN user room.
+      const allowedUserId = socket.data.authUserId || requestedUserId;
+      if (allowedUserId) {
+        socket.join(`user:${allowedUserId}`);
+        logger.info(`Socket ${socket.id} joined user:${allowedUserId}`);
       }
     });
 

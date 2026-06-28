@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Save, X, ExternalLink, Globe, Github, Linkedin, Briefcase } from 'lucide-react';
-import { addPortfolioLink, updatePortfolioLink, deletePortfolioLink } from '../../services/candidateAPI';
+import React, { useState, useRef } from 'react';
+import { Plus, Edit, Trash2, Save, X, ExternalLink, Globe, Github, Linkedin, Briefcase, Upload, FileText, Download, Eye, File as FileIcon, Image as ImageIcon } from 'lucide-react';
+import { addPortfolioLink, updatePortfolioLink, deletePortfolioLink, uploadCandidateDocument } from '../../services/candidateAPI';
+import ConfirmDialog from './ConfirmDialog';
 
 // =====================================================
 // TYPESCRIPT INTERFACES
 // =====================================================
+interface PortfolioFile {
+  file_name: string;
+  file_url?: string;
+  file_key?: string;
+  file_size?: number;
+  file_type?: string;
+  uploaded_at?: string;
+}
+
 interface PortfolioLink {
   id: string;
   title: string;
@@ -16,6 +26,7 @@ interface PortfolioLink {
   is_verified?: boolean;
   created_at?: string;
   updated_at?: string;
+  metadata?: { files?: PortfolioFile[] } & Record<string, any>;
 }
 
 interface PortfolioSectionProps {
@@ -33,7 +44,31 @@ interface PortfolioFormData {
   platform: string;
   displayOrder: number;
   isPrimary: boolean;
+  attachedFiles: File[];
+  existingFiles: PortfolioFile[];
 }
+
+const ALLOWED_PORTFOLIO_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+const MAX_PORTFOLIO_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+const formatFileSize = (bytes?: number): string => {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / Math.pow(1024, index)).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+};
+
+const isImageFile = (name?: string): boolean => /\.(jpg|jpeg|png|gif|webp)$/i.test(name || '');
+const isPdfFile = (name?: string): boolean => /\.pdf$/i.test(name || '');
 
 // =====================================================
 // COMPONENT
@@ -47,10 +82,17 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
     description: '',
     platform: 'personal',
     displayOrder: 0,
-    isPrimary: false
+    isPrimary: false,
+    attachedFiles: [],
+    existingFiles: []
   });
   const [loading, setLoading] = useState<boolean>(false);
   const [urlError, setUrlError] = useState<string>('');
+  const [fileError, setFileError] = useState<string>('');
+  const [previewFile, setPreviewFile] = useState<PortfolioFile | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // FIX: Use portfolioLinks from the correct field
   const portfolioLinks = profile?.portfolioLinks || profile?.portfolio || [];
@@ -62,9 +104,54 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
       description: '',
       platform: 'personal',
       displayOrder: 0,
-      isPrimary: false
+      isPrimary: false,
+      attachedFiles: [],
+      existingFiles: []
     });
     setUrlError('');
+    setFileError('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>): void => {
+    setFileError('');
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const validFiles: File[] = [];
+    for (const file of files) {
+      if (!ALLOWED_PORTFOLIO_TYPES.includes(file.type)) {
+        setFileError(`"${file.name}" is not a supported type. Use PDF, Word, or images (JPG, PNG, GIF, WEBP).`);
+        continue;
+      }
+      if (file.size > MAX_PORTFOLIO_FILE_SIZE) {
+        setFileError(`"${file.name}" is larger than 10MB.`);
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    if (validFiles.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        attachedFiles: [...prev.attachedFiles, ...validFiles].slice(0, 5)
+      }));
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeAttachedFile = (index: number): void => {
+    setFormData(prev => ({
+      ...prev,
+      attachedFiles: prev.attachedFiles.filter((_, i) => i !== index)
+    }));
+  };
+
+  const removeExistingFile = (index: number): void => {
+    setFormData(prev => ({
+      ...prev,
+      existingFiles: prev.existingFiles.filter((_, i) => i !== index)
+    }));
   };
 
   const validateUrl = (url: string): boolean => {
@@ -98,13 +185,32 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
     setLoading(true);
 
     try {
+      // Upload any newly attached project files so they persist and stay
+      // viewable/downloadable, then keep their references in metadata.files.
+      const uploadedFiles: PortfolioFile[] = [];
+      for (const file of formData.attachedFiles) {
+        const res = await uploadCandidateDocument(file, 'portfolio');
+        const data = res?.data || {};
+        uploadedFiles.push({
+          file_name: data.file_name || file.name,
+          file_url: data.file_url,
+          file_key: data.file_key,
+          file_size: data.file_size ?? file.size,
+          file_type: data.mime_type || file.type,
+          uploaded_at: data.uploaded_at || new Date().toISOString(),
+        });
+      }
+
+      const allFiles = [...formData.existingFiles, ...uploadedFiles];
+
       const submitData = {
         title: formData.title,
         url: formData.url,
         description: formData.description,
         platform: formData.platform || 'personal',
         displayOrder: formData.displayOrder,
-        isPrimary: formData.isPrimary
+        isPrimary: formData.isPrimary,
+        metadata: { files: allFiles }
       };
 
       if (editingId) {
@@ -131,21 +237,27 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
       description: link.description || '',
       platform: link.platform || 'personal',
       displayOrder: link.display_order || 0,
-      isPrimary: link.is_primary || false
+      isPrimary: link.is_primary || false,
+      attachedFiles: [],
+      existingFiles: Array.isArray(link.metadata?.files) ? link.metadata!.files! : []
     });
     setEditingId(link.id);
     setIsAdding(true);
     setUrlError('');
+    setFileError('');
   };
 
-  const handleDelete = async (linkId: string): Promise<void> => {
-    if (!confirm('Are you sure you want to remove this portfolio link?')) return;
-
+  const confirmDelete = async (): Promise<void> => {
+    if (!deleteId) return;
+    setDeleting(true);
     try {
-      await deletePortfolioLink(linkId);
+      await deletePortfolioLink(deleteId);
+      setDeleteId(null);
       onUpdate();
     } catch (error: any) {
       alert('Error removing portfolio link: ' + (error.message || 'Unknown error'));
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -299,6 +411,66 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
               />
             </div>
 
+            {/* Project Files (images / documents) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Project Files <span className="text-gray-400 font-normal">(optional — images or documents)</span>
+              </label>
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  id="portfolioFiles"
+                  multiple
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <label htmlFor="portfolioFiles" className="cursor-pointer flex flex-col items-center gap-1">
+                  <Upload size={22} className="text-gray-400" />
+                  <span className="text-sm text-gray-600">Click to upload images or documents</span>
+                  <span className="text-xs text-gray-400">PDF, Word, JPG, PNG, GIF, WEBP · up to 10MB · max 5 files</span>
+                </label>
+              </div>
+              {fileError && <p className="mt-1 text-sm text-red-600">{fileError}</p>}
+
+              {/* Already-saved files */}
+              {formData.existingFiles.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs font-medium text-gray-500">Saved files</p>
+                  {formData.existingFiles.map((file, index) => (
+                    <div key={`${file.file_name}-${index}`} className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      {isImageFile(file.file_name) ? <ImageIcon size={16} /> : isPdfFile(file.file_name) ? <FileText size={16} /> : <FileIcon size={16} />}
+                      <span className="flex-1 truncate">{file.file_name}</span>
+                      {file.file_size && <span className="text-xs text-green-600">{formatFileSize(file.file_size)}</span>}
+                      <button type="button" onClick={() => setPreviewFile(file)} className="text-blue-600 hover:text-blue-800" title="Preview">
+                        <Eye size={16} />
+                      </button>
+                      <button type="button" onClick={() => removeExistingFile(index)} className="text-gray-400 hover:text-red-600" title="Remove">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Newly-selected files (not yet uploaded) */}
+              {formData.attachedFiles.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {formData.attachedFiles.map((file, index) => (
+                    <div key={`${file.name}-${index}`} className="flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-2">
+                      {file.type.startsWith('image/') ? <ImageIcon size={16} /> : file.type === 'application/pdf' ? <FileText size={16} /> : <FileIcon size={16} />}
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-gray-500">{formatFileSize(file.size)}</span>
+                      <button type="button" onClick={() => removeAttachedFile(index)} className="text-gray-400 hover:text-red-600" title="Remove">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Primary Link */}
             <div className="flex items-center gap-2">
               <input
@@ -383,7 +555,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                         <Edit size={16} />
                       </button>
                       <button
-                        onClick={() => handleDelete(link.id)}
+                        onClick={() => setDeleteId(link.id)}
                         className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                         title="Remove"
                       >
@@ -406,6 +578,26 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                     {link.description && (
                       <p className="text-sm text-gray-700 mt-2">{link.description}</p>
                     )}
+
+                    {Array.isArray(link.metadata?.files) && link.metadata!.files!.length > 0 && (
+                      <div className="mt-3 space-y-1.5 pt-2 border-t border-gray-100">
+                        <p className="text-xs font-medium text-gray-500">Project files</p>
+                        {link.metadata!.files!.map((file, index) => (
+                          <div key={`${file.file_name}-${index}`} className="flex items-center gap-2 text-sm bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5">
+                            {isImageFile(file.file_name) ? <ImageIcon size={14} className="text-gray-500" /> : isPdfFile(file.file_name) ? <FileText size={14} className="text-red-400" /> : <FileIcon size={14} className="text-gray-500" />}
+                            <span className="flex-1 truncate text-gray-700">{file.file_name}</span>
+                            <button onClick={() => setPreviewFile(file)} className="text-blue-600 hover:text-blue-800" title="Preview">
+                              <Eye size={15} />
+                            </button>
+                            {file.file_url && (
+                              <a href={file.file_url} download={file.file_name} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title="Download">
+                                <Download size={15} />
+                              </a>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -413,6 +605,57 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteId}
+        title="Remove portfolio link?"
+        message="This will permanently remove this portfolio link and its attached files from your profile."
+        confirmLabel="Remove"
+        variant="danger"
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteId(null)}
+      />
+
+      {/* File Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setPreviewFile(null)}>
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+              <span className="font-medium text-gray-900 truncate">{previewFile.file_name}</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {previewFile.file_url && (
+                  <a href={previewFile.file_url} download={previewFile.file_name} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                    <Download size={16} /> Download
+                  </a>
+                )}
+                <button onClick={() => setPreviewFile(null)} className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="p-6 overflow-auto max-h-[calc(90vh-72px)] bg-gray-50">
+              {!previewFile.file_url ? (
+                <p className="text-center text-gray-500 py-12">Preview unavailable.</p>
+              ) : isImageFile(previewFile.file_name) ? (
+                <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner overflow-auto">
+                  <img src={previewFile.file_url} alt={previewFile.file_name} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+                </div>
+              ) : isPdfFile(previewFile.file_name) ? (
+                <iframe src={previewFile.file_url} title={previewFile.file_name} className="w-full h-[70vh] rounded-lg bg-white shadow-inner" />
+              ) : (
+                <div className="flex flex-col items-center justify-center min-h-[300px] text-center">
+                  <FileIcon size={64} className="text-gray-300 mb-4" />
+                  <p className="text-gray-600">This file type can't be previewed inline.</p>
+                  <a href={previewFile.file_url} download={previewFile.file_name} target="_blank" rel="noopener noreferrer" className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                    <Download size={16} /> Download File
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

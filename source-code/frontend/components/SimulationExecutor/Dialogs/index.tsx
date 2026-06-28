@@ -1732,6 +1732,13 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
         <h2 className="text-2xl font-bold text-white">Simulation Submitted</h2>
         <p className="text-gray-400 mt-2">{result?.message || 'Your simulation was submitted successfully.'}</p>
 
+        {result?.emailSent && (
+          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-900/30 border border-green-700 text-green-300 text-sm">
+            <CheckCircle size={16} />
+            A confirmation email has been sent to your registered email address.
+          </div>
+        )}
+
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
           <div className="bg-gray-900 rounded-lg p-4 border border-gray-700 text-center">
             <p className="text-gray-400 text-xs uppercase">Overall Score</p>

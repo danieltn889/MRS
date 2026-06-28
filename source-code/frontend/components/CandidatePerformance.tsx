@@ -403,7 +403,8 @@ const CandidateCard: React.FC<{
   const company = candidate.company || bestSession.company;
   const allSessions = candidate.allSessions;
   const score = Math.round(candidate.bestScore);
-  
+  const [showCalc, setShowCalc] = useState(false);
+
   const metrics = [
     { label: 'Punctuality', value: evaluation?.punctuality_score || 0 },
     { label: 'Communication', value: evaluation?.communication_score || 0 },
@@ -573,6 +574,24 @@ const CandidateCard: React.FC<{
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
             {metrics.map(m => m.value > 0 && <MetricBar key={m.label} label={m.label} value={m.value} />)}
           </div>
+        </div>
+
+        {/* How this score is calculated (collapsible) */}
+        <div style={{ marginBottom: 28, padding: 16, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12, fontSize: 13, color: '#475569', lineHeight: 1.7 }}>
+          <button
+            onClick={() => setShowCalc(s => !s)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 14, fontWeight: 700, color: '#5b21b6' }}
+          >
+            {showCalc ? '▲ Hide how this score is calculated' : '▼ How this score is calculated'}
+          </button>
+          {showCalc && (
+            <div style={{ marginTop: 10 }}>
+              <div><strong>1. Each task (0–100):</strong> (Completion + Time + Quality + Answer-quality) ÷ 4.</div>
+              <div><strong>2. Competencies (0–100):</strong> Punctuality, Speed, Technical, Adaptability, Communication, Collaboration, Initiative, Attention to Detail — each scored by the AI from the candidate's work, chat, time and GitHub.</div>
+              <div><strong>3. Composites:</strong> Quality = (Technical + Punctuality + Adaptability) ÷ 3 · Behavioral = (Adaptability + Communication) ÷ 2.</div>
+              <div style={{ marginTop: 4, color: '#0f172a' }}><strong>4. Overall Score = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</strong> (weights from the simulation rubric; defaults shown). Pass mark default 70%.</div>
+            </div>
+          )}
         </div>
 
         {/* Footer Summary with CHAT BUTTON */}

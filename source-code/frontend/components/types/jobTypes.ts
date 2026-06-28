@@ -72,8 +72,11 @@ export interface Job {
   status: JobStatus;
   location: string;
   applications_count?: number;
+  results_count?: number;
   created_at: string;
   salary_range?: string;
+  opens_at?: string | null;
+  closes_at?: string | null;
   job_type?: JobType;
   work_arrangement?: WorkArrangement;
   ai_match_required_score?: number;
@@ -204,12 +207,12 @@ export const DEFAULT_FORM_DATA: JobFormData = {
 };
 
 export const STEPS = [
-  { id: 1, title: 'Job Information',    shortTitle: 'Info'      },
-  { id: 2, title: 'Salary & Benefits',  shortTitle: 'Salary'    },
-  { id: 3, title: 'Skills & Experience',shortTitle: 'Skills'    },
-  { id: 4, title: 'Languages & Docs',   shortTitle: 'Docs'      },
-  { id: 5, title: 'Screening',          shortTitle: 'Questions' },
-  { id: 6, title: 'Settings',           shortTitle: 'Settings'  },
+  { id: 1, title: 'Job Information',         shortTitle: 'Job Information' },
+  { id: 2, title: 'Salary & Benefits',       shortTitle: 'Salary & Benefits' },
+  { id: 3, title: 'Skills & Experience',     shortTitle: 'Skills & Experience' },
+  { id: 4, title: 'Languages & Documents',   shortTitle: 'Languages & Documents' },
+  { id: 5, title: 'Screening & Application', shortTitle: 'Screening & Application' },
+  { id: 6, title: 'Posting Settings',        shortTitle: 'Posting Settings' },
 ];
 
 export const JOB_TYPE_LABELS: Record<JobType, string> = {

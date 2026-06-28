@@ -1,103 +1,151 @@
 # V-WES Backend
 
-This folder contains the Node.js and TypeScript backend for the V-WES recruitment and culture-fit evaluation platform.
+Node.js + Express + TypeScript API for the V-WES recruitment and culture-fit evaluation
+platform. Handles authentication, profiles, jobs/applications, simulations, AI evaluation,
+GitHub analysis, notifications, email, and blockchain verification. Part of the
+[V-WES platform](../README.md).
 
 ## Company Information
 
 | Item | Details |
 |------|---------|
 | Company name | Mpuza Inc. |
-| Physical address | Kk737St, Kigali, Rwanda |
 | Official email | info@mpuza.com |
-| Phone | +250786397515 |
-| Industry supervisor | Derek J. Blair |
-| Supervisor job title | CTO |
-| Supervisor email | jbderek@mpuza.com |
-| Supervisor phone | +16505077742 |
+| Industry supervisor | Derek J. Blair (CTO) |
 
-## Backend Purpose
+---
 
-The backend manages the platform API for authentication, user profiles, job postings, applications, virtual work simulations, AI scoring, analytics, notifications, and blockchain verification.
+## Architecture
 
-## Tech Stack
+Layered request flow:
 
-- Node.js with Express.js
-- TypeScript
-- PostgreSQL
-- JWT authentication
-- Socket.IO for real-time communication
-- Nodemailer for email notifications
-- Multer for uploads
-- Winston and Morgan for logging
-- Web3/Ethers integration for blockchain services
+```
+routes/v1 (validation, auth) → controllers → services → PostgreSQL (pg)
+                                     │
+                                     └── Socket.IO, email, notifications, audit chain
+```
 
-## Project Structure
+- **ESM TypeScript** run with `tsx` in development; type-checked with `tsc --noEmit`.
+- **Raw SQL** via `pg` (parameterized; no ORM).
+- **Socket.IO** initialized in `src/server.ts` with JWT-verified handshakes and per-user rooms.
+
+### Project structure
 
 ```text
 backend/
   src/
-    config/       Application, database, and service configuration
-    controllers/  Request handlers
-    middleware/   Authentication, validation, and security middleware
-    routes/       Versioned API routes
-    services/     Business logic and integrations
-    utils/        Shared helper functions
-    db/           Database migration and seed logic
-    socket/       Real-time communication handlers
-  emails/         Email templates
+    config/       App, database (pg pool), logger configuration
+    controllers/  Request handlers (auth, candidate, simulation, github, blockchain, …)
+    middleware/   auth (protect/authorize), validation, upload
+    routes/v1/    Versioned API routes
+    services/     Business logic & integrations
+                  (email, notification, audit-chain, blockchain, database, …)
+    utils/        Helpers (fileUrl, logger, …)
+    db/           schema.sql, migrate.ts, seed.ts, reset.ts
+  emails/         (legacy) email artifacts
   logs/           Runtime logs
-  uploads/        Uploaded files
+  uploads/        Uploaded files (served at /uploads)
 ```
 
-## Setup
+---
 
-1. Install dependencies:
+## Installation
 
 ```bash
 npm install
+cp .env.example .env      # configure (see below)
+npm run db:setup          # migrate + seed
+npm run dev               # tsx server on :3001
 ```
 
-2. Create and configure `.env` in this folder:
+### Environment
 
-```env
-DB_HOST=localhost
-DB_PORT=8090
-DB_NAME=SVWR-CFE_DB
-DB_USER=postgres
-DB_PASSWORD=TN12
-JWT_SECRET=your_jwt_secret_here
-JWT_EXPIRE=30d
-PORT=3001
-NODE_ENV=development
-CORS_ORIGIN=http://localhost:3000
-FRONTEND_URL=http://localhost:3000
-AI_SERVICE_URL=http://localhost:5000
-BLOCKCHAIN_RPC_URL=http://127.0.0.1:8545
-```
+See the full table in the [main README](../README.md#environment-variables). Minimum:
+`DB_HOST/PORT/NAME/USER/PASSWORD`, `JWT_SECRET`, `PORT=3001`, `FRONTEND_URL`, `CORS_ORIGIN`,
+`SMTP_*`, `GROQ_API_KEY`. Optional: `USE_BLOCKCHAIN`, `BLOCKCHAIN_RPC_URL`, `CONTRACT_ADDRESS`,
+`COMMUNICATION_API_URL`.
 
-3. Run database setup:
+---
+
+## Running
 
 ```bash
-npm run db:setup
+npm run dev          # development (db:setup + tsx src/server.ts)
+npm run build        # type-check (tsc --noEmit)
+npm run type-check   # type-check
+node dist/server.js  # production (after a build step that emits dist/)
 ```
 
-4. Start the development server:
+---
+
+## Useful scripts
 
 ```bash
-npm run dev
+npm run migrate            # apply schema.sql
+npm run seed               # seed data
+npm run db:setup           # migrate + seed
+npm run db:reset           # drop & recreate (destructive)
+npm run test:audit-chain   # audit-chain unit tests (Node test runner via tsx)
 ```
 
-## Useful Scripts
+---
 
-```bash
-npm run dev        # Run the backend in development mode
-npm run build      # Type-check the TypeScript project
-npm test           # Run tests
-npm run migrate    # Run database migrations
-npm run seed       # Seed the database
-npm run db:reset   # Reset the database
-```
+## Database
 
-## Security Notes
+PostgreSQL, schema in `src/db/queries/schema.sql`, applied idempotently by
+`src/db/migrate.ts`. Full schema, relationships, and backup instructions:
+[docs/DATABASE.md](../docs/DATABASE.md).
 
-Do not commit `.env`, passwords, JWT secrets, API keys, private keys, uploaded private files, or production logs.
+---
+
+## API
+
+Versioned under `/api/v1`. Groups: auth, candidates, jobs/applications, simulations, github,
+blockchain, notifications, files. Full reference with examples:
+[docs/API_DOCUMENTATION.md](../docs/API_DOCUMENTATION.md).
+
+---
+
+## Security
+
+- **JWT** auth (`protect`) + role checks (`authorize`); tokens signed with `JWT_SECRET`.
+- **Password hashing** (bcrypt) for stored credentials.
+- **Validation** via `express-validator` (UUIDs, enums, lengths, dates); server-side enum
+  validation for preferences/privacy/availability.
+- **Socket auth**: handshake JWT is verified; `join_user` is restricted to the user's own room.
+- **Uploads**: type/size limits via Multer; files served from `/uploads`.
+- Do not commit `.env`, secrets, JWT keys, SMTP passwords, private keys, or logs.
+
+---
+
+## Email system
+
+Nodemailer over SMTP (`src/services/email.service.ts`). Workflows: account verification,
+password reset, welcome, team invitations, and **simulation submission confirmation** (sent to
+the candidate **and** the company after the submission is saved; idempotent via
+`email_tracking`; every attempt logged). Configure `SMTP_HOST/PORT/USER/PASS`.
+
+---
+
+## GitHub integration
+
+`src/controllers/github.controller.ts` analyzes a candidate's repository: commits, branches,
+README/config detection, commit-message quality (spam/generic detection), and commit→task
+matching (Groq LLM + ML service). Requires a GitHub token / connection.
+
+---
+
+## AI evaluation
+
+`submitSimulation` → `calculateFullSessionScores` produces multi-dimensional scores, a hiring
+recommendation, and feedback, streaming progress to the client over Socket.IO. Full details:
+[docs/AI_EVALUATION.md](../docs/AI_EVALUATION.md).
+
+---
+
+## Blockchain
+
+The backend maintains a **hash-linked audit chain** (`audit_chain` table +
+`audit-chain.service.ts`) and optionally anchors to a local Ethereum chain via
+`ethers`/Hardhat. Architecture, block format, hashing, verification, APIs, and testing are
+documented in [docs/BLOCKCHAIN.md](../docs/BLOCKCHAIN.md).

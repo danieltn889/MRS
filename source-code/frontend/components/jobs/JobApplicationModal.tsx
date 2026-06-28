@@ -118,7 +118,8 @@ interface JobApplicationModalProps {
   candidateProfile?: any;
   matchScore?: number;
   matchDetails?: MatchDetailsType | null;
-  requiredDocuments?: string[];
+  // Accepts plain names or the job-posting shape { name, is_required }.
+  requiredDocuments?: Array<string | { name: string; is_required?: boolean }>;
   onSuccess?: (data?: any) => void;
 }
 
@@ -357,22 +358,45 @@ const JobApplicationModal = ({
   const handleBackFromReview = () => setReviewMode(false);
 
   // ─── DOCUMENT TEMPLATES ──────────────────────────────────────
-  const documentTemplates = requiredDocuments.map(doc => ({
-    name: doc,
-    required: true,
-    acceptedTypes: ['.pdf', '.doc', '.docx'],
-    maxSize: 5 * 1024 * 1024,
-    description: doc === 'Resume' ? 'Upload your CV/Resume (PDF, DOC, DOCX)' :
-      doc === 'Cover Letter' ? 'Upload your cover letter' :
-        `Upload your ${doc.toLowerCase()}`
-  }));
+  // Normalize the job's configured documents (strings OR { name, is_required }).
+  const documentTemplates = (requiredDocuments || []).map((doc: any) => {
+    const name: string = typeof doc === 'string' ? doc : (doc?.name || 'Document');
+    const required: boolean = typeof doc === 'string' ? true : (doc?.is_required !== false);
+    return {
+      name,
+      required,
+      acceptedTypes: ['.pdf', '.doc', '.docx'],
+      maxSize: 5 * 1024 * 1024,
+      description: name === 'Resume' ? 'Upload your CV/Resume (PDF, DOC, DOCX)' :
+        name === 'Cover Letter' ? 'Upload your cover letter' :
+          `Upload your ${name.toLowerCase()}`,
+    };
+  });
 
   // ─── EFFECTS ──────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen) {
       setCurrentStep(1);
       setAnswers({});
-      setDocuments([]);
+      // Pre-attach the candidate's existing primary resume so they don't re-upload it.
+      const resumes: any[] = candidateProfileProp?.resumes || candidateProfileProp?.profile?.resumes || [];
+      const primaryResume = resumes.find((r: any) => r.is_primary) || resumes[0];
+      const initialDocs = documentTemplates.map((tpl: any) => {
+        if (primaryResume && getDocumentType(tpl.name) === 'resume') {
+          return {
+            id: 'profile-resume',
+            name: primaryResume.file_name || 'Resume',
+            size: primaryResume.file_size || 0,
+            type: primaryResume.mime_type || 'application/pdf',
+            preview: primaryResume.file_url || '',
+            documentType: tpl.name,
+            uploaded: true,
+            fromProfile: true,
+          } as any;
+        }
+        return null;
+      });
+      setDocuments(initialDocs);
       setErrors({});
       setReviewMode(false);
       setSuccessMessage(null);
@@ -960,12 +984,21 @@ const JobApplicationModal = ({
             <div className="flex-1">
               <h3 className="font-semibold text-gray-900">{doc.name}</h3>
               <p className="text-sm text-gray-500">{doc.description}</p>
-              {doc.required && <span className="text-xs text-red-500">Required</span>}
+              {doc.required
+                ? <span className="text-xs text-red-500">Required</span>
+                : <span className="text-xs text-gray-400">Optional</span>}
             </div>
             {documents[idx] ? (
               <div className="flex items-center gap-2">
                 <FileText className="w-5 h-5 text-green-600" />
                 <span className="text-sm text-gray-600 truncate max-w-[150px]">{documents[idx]?.name}</span>
+                {(documents[idx] as any)?.fromProfile && (
+                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">From your profile</span>
+                )}
+                <label className="cursor-pointer text-xs text-blue-600 hover:underline">
+                  Replace
+                  <input type="file" accept={doc.acceptedTypes.join(',')} onChange={(e) => e.target.files?.[0] && handleFileUpload(idx, e.target.files[0])} className="hidden" />
+                </label>
                 <button onClick={() => removeDocument(idx)} className="p-1 text-gray-400 hover:text-red-500">
                   <Trash2 className="w-4 h-4" />
                 </button>

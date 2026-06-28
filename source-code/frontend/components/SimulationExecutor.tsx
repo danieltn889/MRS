@@ -15,6 +15,7 @@ import TaskContent from './SimulationExecutor/TaskContent';
 import ChatPanel from './SimulationExecutor/ChatPanel';
 import GitHubPanel from './SimulationExecutor/GitHubPanel';
 import { GitHubDetailsSidebar } from './SimulationExecutor/GitHubDetailsSidebar';
+import EvaluationProgress from './SimulationExecutor/EvaluationProgress';
 import {
   StartDialog,
   PauseDialog,
@@ -175,6 +176,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const {
     timeSpent,
     timeLimit,
+    timeRemaining,
+    isExpired,
     isRunning: _isRunning,
     isPaused: _isPaused,
     startTimer,
@@ -182,17 +185,28 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     resumeTimer,
     formatTime,
     getTimeColor,
+    getCountdownColor,
     getCurrentTime,
-  } = useTimer(session, (newTime) => {
-    if (!isStartingTaskRef.current) {
-      updateTimeSpent?.(newTime);
+  } = useTimer(
+    session,
+    (newTime) => {
+      if (!isStartingTaskRef.current) {
+        updateTimeSpent?.(newTime);
+      }
+    },
+    () => {
+      // Time's up: persist whatever the candidate has so nothing is lost.
+      if (!isStartingTaskRef.current) {
+        try { saveProgress(); } catch { /* ignore */ }
+      }
     }
-  });
+  );
 
   // UI State
   const [showStartDialog, setShowStartDialog] = useState(true);
   const [showPauseDialog, setShowPauseDialog] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
   const [showTaskCompletionDialog, setShowTaskCompletionDialog] = useState(false);
   const [showPostSubmitDialog, setShowPostSubmitDialog] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -453,6 +467,21 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     }, 500);
   };
 
+  // Periodic auto-save: persist progress every 20s while the simulation is
+  // running so nothing is lost on refresh/crash (the backend restores it on
+  // reload). A ref keeps the interval pointed at the latest save closure.
+  const autoSaveFnRef = useRef<() => void>(() => {});
+  autoSaveFnRef.current = () => {
+    if (isStartingTaskRef.current) return;
+    if (session?.status !== 'in_progress') return;
+    if (isExpired) return;
+    try { saveProgress(); } catch { /* ignore */ }
+  };
+  useEffect(() => {
+    const interval = setInterval(() => { autoSaveFnRef.current(); }, 20000);
+    return () => clearInterval(interval);
+  }, []);
+
   const getMinSubmitMessage = () => {
     const latestTimeSpent = Math.max(timeSpent, getCurrentTime());
     const remainingSeconds = Math.max(0, MIN_SUBMIT_SECONDS - latestTimeSpent);
@@ -482,10 +511,13 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
     try {
       setSubmitError(null);
-      await submitSimulation(progress, latestTimeSpent);
       setShowSubmitDialog(false);
+      setIsEvaluating(true);
+      await submitSimulation(progress, latestTimeSpent);
+      setIsEvaluating(false);
       setShowPostSubmitDialog(true);
     } catch (error: any) {
+      setIsEvaluating(false);
       setSubmitError(error?.message || 'Failed to submit simulation. Please try again.');
     }
   };
@@ -838,10 +870,13 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         totalTasks={tasks.length}
         timeSpent={timeSpent}
         timeLimit={timeLimit}
+        timeRemaining={timeRemaining}
+        isExpired={isExpired}
         showTimer={showTimer}
         setShowTimer={setShowTimer}
         formatTime={formatTime}
         getTimeColor={getTimeColor}
+        getCountdownColor={getCountdownColor}
         editorTheme={editorTheme}
         setEditorTheme={setEditorTheme}
         fontSize={fontSize}
@@ -1192,6 +1227,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         submitError={submitError}
         formatTime={formatTime}
       />
+      {isEvaluating && <EvaluationProgress sessionId={sessionId} userId={user?.id} />}
       <PostSubmitDialog
         open={showPostSubmitDialog}
         onReviewResults={handlePostSubmitReviewResults}

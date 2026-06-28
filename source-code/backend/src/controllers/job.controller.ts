@@ -1495,6 +1495,123 @@ class JobController extends BaseController {
     }
   }
 
+  /**
+   * Change a job's status to any supported value and record the change in
+   * job_status_history (previous status, new status, who, when, optional reason).
+   * Only Active/Open jobs are visible to candidates — the public listing already
+   * filters on status, so moving a job out of Active/Open hides it.
+   */
+  async updateJobStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      const { status, reason } = req.body as { status?: string; reason?: string };
+
+      const ALLOWED = [
+        'draft', 'pending', 'active', 'open', 'inactive',
+        'paused', 'closed', 'filled', 'archived', 'expired',
+      ];
+
+      if (!id) {
+        this.sendError(res, 'Job ID is required', 400);
+        return;
+      }
+      if (!status || !ALLOWED.includes(status)) {
+        this.sendError(res, `Invalid status. Allowed: ${ALLOWED.join(', ')}`, 400);
+        return;
+      }
+
+      const existingJob = await this.findById('jobs', id);
+      if (!existingJob) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
+      if (!this.canEditJob(req.user, existingJob)) {
+        this.sendError(res, "Unauthorized to change this job's status", 403);
+        return;
+      }
+
+      const previousStatus = existingJob.status;
+      if (previousStatus === status) {
+        this.sendError(res, `Job is already '${status}'`, 400);
+        return;
+      }
+
+      // Keep the relevant lifecycle timestamps in sync with the new status.
+      let tsSet = '';
+      if (status === 'active' || status === 'open') {
+        tsSet = ', published_at = COALESCE(published_at, NOW())';
+      } else if (status === 'paused') {
+        tsSet = ', paused_at = NOW()';
+      } else if (['closed', 'filled', 'archived', 'expired'].includes(status)) {
+        tsSet = ', closed_at = NOW()';
+      }
+
+      await DatabaseService.execute(
+        `UPDATE jobs SET status = $1, updated_at = NOW()${tsSet} WHERE id = $2`,
+        [status, id]
+      );
+
+      // Record the change. Best-effort: if the history table isn't present yet
+      // (migration not run), the status change still succeeds.
+      try {
+        await DatabaseService.execute(
+          `INSERT INTO job_status_history (job_id, previous_status, new_status, changed_by, reason)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [id, previousStatus, status, req.user.id, reason || null]
+        );
+      } catch (histErr) {
+        logger.warn(`job_status_history insert failed (run 2026_job_status_history.sql?): ${(histErr as Error).message}`);
+      }
+
+      this.sendSuccess(res, { id, previous_status: previousStatus, status }, 'Job status updated successfully');
+    } catch (error) {
+      logger.error('Error updating job status:', error);
+      this.sendError(res, 'Failed to update job status', 500, error as Error);
+    }
+  }
+
+  /** Return the status-change audit trail for a job (most recent first). */
+  async getJobStatusHistory(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        this.sendError(res, 'Job ID is required', 400);
+        return;
+      }
+
+      const existingJob = await this.findById('jobs', id);
+      if (!existingJob) {
+        this.sendError(res, 'Job not found', 404);
+        return;
+      }
+      if (!this.canEditJob(req.user, existingJob)) {
+        this.sendError(res, 'Unauthorized to view this job', 403);
+        return;
+      }
+
+      let rows: any[] = [];
+      try {
+        const result = await DatabaseService.execute(
+          `SELECT h.id, h.previous_status, h.new_status, h.reason, h.created_at,
+                  h.changed_by, u.email AS changed_by_email
+             FROM job_status_history h
+             LEFT JOIN users u ON u.id = h.changed_by
+            WHERE h.job_id = $1
+            ORDER BY h.created_at DESC`,
+          [id]
+        );
+        rows = result.rows;
+      } catch (histErr) {
+        logger.warn(`job_status_history read failed (run 2026_job_status_history.sql?): ${(histErr as Error).message}`);
+      }
+
+      this.sendSuccess(res, rows, 'Job status history retrieved');
+    } catch (error) {
+      logger.error('Error fetching job status history:', error);
+      this.sendError(res, 'Failed to fetch job status history', 500, error as Error);
+    }
+  }
+
   async setJobAccessLevel(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -3374,6 +3491,7 @@ class JobController extends BaseController {
         j.experience_min, j.experience_max, j.experience_level,
         j.skills_required, j.skills_preferred, j.education_required,
         j.status, j.visibility, j.published_at, j.expires_at,
+        j.ai_match_required_score,
         c.name as company_name, c.logo_url, c.industry
       FROM jobs j
       LEFT JOIN companies c ON j.company_id = c.id
@@ -3990,7 +4108,8 @@ class JobController extends BaseController {
           education_required: job.education_required,
           status: job.status,
           published_at: job.published_at,
-          expires_at: job.expires_at
+          expires_at: job.expires_at,
+          ai_match_required_score: job.ai_match_required_score
         },
         candidates,
         stats: {

@@ -1,8 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Bell, Settings, LogOut, User, Menu, X, UserPlus, Building, ChevronDown, Briefcase, MessageCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Bell, Settings, LogOut, User, Menu, X, UserPlus, Building, ChevronDown, Briefcase, MessageCircle, Loader2, ExternalLink } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ThemeSwitcher from './ThemeSwitcher';
 import { SOCKET_BASE_URL } from '../services/simulationAPI';
+import {
+  getNotifications,
+  getUnreadCount,
+  markNotificationRead,
+  markAllNotificationsRead,
+  type AppNotification,
+} from '../services/notificationAPI';
+import { getCandidateProfile } from '../services/candidateAPI';
+
+// Same search endpoint the landing page uses, so the navbar search behaves
+// exactly like the public search (just without the auth gate, since the
+// navbar is only shown to logged-in users).
+const SEARCH_API_URL = 'http://localhost:8001/search';
 
 // Add proper type definitions
 interface ChatNotification {
@@ -53,14 +67,22 @@ const Header: React.FC<HeaderProps> = ({
   currentView, 
   onViewChange 
 }) => {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState<boolean>(false);
+  const [showSearchResults, setShowSearchResults] = useState<boolean>(false);
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
   const [chatNotifications, setChatNotifications] = useState<ChatNotification[]>([]);
+  const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
+  const [notifUnread, setNotifUnread] = useState<number>(0);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [chatToast, setChatToast] = useState<ChatNotification | null>(null);
   const [showSignupDropdown, setShowSignupDropdown] = useState<boolean>(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
   const lastSoundAtRef = useRef<number>(0);
   const chatNotificationIdsRef = useRef<Set<string>>(new Set());
 
@@ -187,7 +209,6 @@ const Header: React.FC<HeaderProps> = ({
   const companyName = getCompanyName();
   const companyInitial = getCompanyInitial();
   const showCompanyInfo = isLoggedIn && isCompanyUser() && !!companyName;
-  const unreadChatCount = chatNotifications.filter((n: ChatNotification) => !n.read).length;
   const chatNotificationStorageKey = normalizedUser?.id
     ? `simulationChatNotifications:${normalizedUser.id}`
     : null;
@@ -308,10 +329,24 @@ const Header: React.FC<HeaderProps> = ({
       reconnectionAttempts: 3,
       reconnectionDelay: 1000,
       timeout: 10000,
+      auth: {
+        token: localStorage.getItem('authToken') || undefined,
+        userId: normalizedUser.id,
+      },
     });
 
     socket.on('connect', () => {
       socket.emit('join_user', normalizedUser.id);
+    });
+
+    // Persistent notifications pushed from the backend (chat, simulation events, etc.)
+    socket.on('notification', (n: AppNotification) => {
+      if (!n?.id) return;
+      setAppNotifications((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev].slice(0, 50)));
+      setNotifUnread((c) => c + 1);
+    });
+    socket.on('notification_unread_count', (data: { count: number }) => {
+      setNotifUnread(typeof data?.count === 'number' ? data.count : 0);
     });
 
     socket.on('simulation_chat_message', (message: ChatMessage) => {
@@ -369,6 +404,104 @@ const Header: React.FC<HeaderProps> = ({
     return () => window.removeEventListener('simulation-chat-message', handleChatNotification as EventListener);
   }, [normalizedUser?.id]);
 
+  // Load persisted notifications + unread count when the user logs in.
+  useEffect(() => {
+    if (!isLoggedIn || !normalizedUser?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [list, count] = await Promise.all([getNotifications({ limit: 20 }), getUnreadCount()]);
+        if (!cancelled) {
+          setAppNotifications(list.notifications || []);
+          setNotifUnread(count);
+        }
+      } catch {
+        // Non-fatal — bell just stays empty if the request fails.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isLoggedIn, normalizedUser?.id]);
+
+  // Profile avatar: seed from localStorage, fetch from backend for candidates, and
+  // update live when the profile photo changes elsewhere in the app.
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('user') || '{}');
+      if (stored.profile_photo_url) setAvatarUrl(stored.profile_photo_url);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const type = String(normalizedUser?.userType || normalizedUser?.user_type || '').toLowerCase();
+    const isCandidate = type.includes('candidate') || type.includes('applicant');
+    if (!isCandidate) return;
+    let cancelled = false;
+    getCandidateProfile()
+      .then((res: any) => {
+        const url = res?.data?.profile?.profile_photo_url;
+        if (!cancelled && url) {
+          setAvatarUrl(url);
+          try {
+            const stored = JSON.parse(localStorage.getItem('user') || '{}');
+            stored.profile_photo_url = url;
+            localStorage.setItem('user', JSON.stringify(stored));
+          } catch { /* ignore */ }
+        }
+      })
+      .catch(() => { /* non-fatal */ });
+    return () => { cancelled = true; };
+  }, [isLoggedIn, normalizedUser?.id]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const url = (e as CustomEvent<{ url: string | null }>).detail?.url ?? null;
+      setAvatarUrl(url);
+    };
+    window.addEventListener('profile-photo-updated', handler as EventListener);
+    return () => window.removeEventListener('profile-photo-updated', handler as EventListener);
+  }, []);
+
+  const openAppNotification = async (n: AppNotification): Promise<void> => {
+    setShowNotifications(false);
+    if (n.status !== 'read') {
+      setAppNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, status: 'read' } : x)));
+      setNotifUnread((c) => Math.max(0, c - 1));
+      try { await markNotificationRead(n.id); } catch { /* ignore */ }
+    }
+    const url = n.data?.url;
+    if (url) {
+      window.location.href = url;
+    } else if (onViewChange) {
+      onViewChange('my-simulations');
+    }
+  };
+
+  const handleMarkAllNotificationsRead = async (): Promise<void> => {
+    setAppNotifications((prev) => prev.map((x) => ({ ...x, status: 'read' })));
+    setNotifUnread(0);
+    try { await markAllNotificationsRead(); } catch { /* ignore */ }
+  };
+
+  // Group notifications into Today / Yesterday / Earlier for the panel.
+  const groupNotificationsByDate = (items: AppNotification[]): Array<{ label: string; items: AppNotification[] }> => {
+    const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000;
+    const groups: Record<string, AppNotification[]> = { Today: [], Yesterday: [], Earlier: [] };
+    for (const n of items) {
+      const t = new Date(n.created_at).getTime();
+      if (t >= startOfToday) groups.Today.push(n);
+      else if (t >= startOfYesterday) groups.Yesterday.push(n);
+      else groups.Earlier.push(n);
+    }
+    return [
+      { label: 'Today', items: groups.Today },
+      { label: 'Yesterday', items: groups.Yesterday },
+      { label: 'Earlier', items: groups.Earlier },
+    ].filter((g) => g.items.length > 0);
+  };
+
   const openChatNotification = (notification: ChatNotification): void => {
     setChatNotifications((prev: ChatNotification[]) =>
       prev.map((item: ChatNotification) => item.id === notification.id ? { ...item, read: true } : item)
@@ -393,11 +526,36 @@ const Header: React.FC<HeaderProps> = ({
     setShowSignupDropdown(false);
   };
 
-  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === 'Enter' && searchQuery.trim()) {
-      if (onViewChange) onViewChange('job-search');
-      localStorage.setItem('searchQuery', searchQuery.trim());
+  const runSearch = async (): Promise<void> => {
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    setIsSearching(true);
+    setShowSearchResults(true);
+    localStorage.setItem('searchQuery', q);
+
+    try {
+      const response = await fetch(`${SEARCH_API_URL}?q=${encodeURIComponent(q)}&limit=20`);
+      const data = await response.json();
+      setSearchResults(data?.success ? data.results : []);
+    } catch (error) {
+      console.error('Navbar search error:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
     }
+  };
+
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>): void => {
+    if (e.key === 'Enter') {
+      runSearch();
+    }
+  };
+
+  // Logged-in users go straight to the detailed analysis — no auth gate needed.
+  const handleViewJob = (jobId: string): void => {
+    setShowSearchResults(false);
+    navigate(`/jobs/${jobId}`);
   };
 
   const handleProfileClick = (): void => {
@@ -428,6 +586,9 @@ const Header: React.FC<HeaderProps> = ({
       if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
         setShowProfileDropdown(false);
       }
+      if (searchBoxRef.current && !searchBoxRef.current.contains(event.target as Node)) {
+        setShowSearchResults(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -448,7 +609,7 @@ const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Center Section - Search Bar */}
-        <div className="flex-1 mx-0 sm:mx-4 order-3 sm:order-2 w-full sm:w-auto min-w-0">
+        <div className="flex-1 mx-0 sm:mx-4 order-3 sm:order-2 w-full sm:w-auto min-w-0" ref={searchBoxRef}>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 flex-shrink-0" size={18} />
             <input
@@ -457,8 +618,44 @@ const Header: React.FC<HeaderProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={handleSearch}
+              onFocus={() => { if (searchResults.length > 0) setShowSearchResults(true); }}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 text-sm"
             />
+
+            {/* Search Results Dropdown */}
+            {showSearchResults && (
+              <div className="absolute left-0 right-0 mt-2 bg-white rounded-xl border border-gray-200 shadow-2xl z-50 max-h-96 overflow-y-auto">
+                {isSearching ? (
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 text-blue-600 animate-spin mb-2" />
+                    <p className="text-xs text-gray-500">Searching jobs...</p>
+                  </div>
+                ) : searchResults.length > 0 ? (
+                  <div className="py-1">
+                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 border-b border-gray-100">
+                      {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
+                    </div>
+                    {searchResults.map((job) => (
+                      <button
+                        key={job.id}
+                        onClick={() => handleViewJob(job.id)}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{job.title}</p>
+                          <p className="text-xs text-gray-400 truncate">{job.company || job.location?.[0] || ''}</p>
+                        </div>
+                        <ExternalLink className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-8 text-center">
+                    <p className="text-sm text-gray-500">No jobs found for "{searchQuery}".</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -530,9 +727,9 @@ const Header: React.FC<HeaderProps> = ({
                 aria-label="Notifications"
               >
                 <Bell size={20} />
-                {unreadChatCount > 0 && (
+                {notifUnread > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full text-[10px] leading-[18px] text-white text-center font-bold">
-                    {unreadChatCount > 9 ? '9+' : unreadChatCount}
+                    {notifUnread > 9 ? '9+' : notifUnread}
                   </span>
                 )}
               </button>
@@ -551,9 +748,13 @@ const Header: React.FC<HeaderProps> = ({
                     onClick={handleProfileClick}
                     className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:bg-gray-50 rounded-lg p-2 transition-colors duration-200"
                   >
-                    <div className="w-8 sm:w-10 h-8 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0 shadow-md">
-                      {userInitial}
-                    </div>
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="" className="w-8 sm:w-10 h-8 sm:h-10 rounded-full object-cover flex-shrink-0 shadow-md" />
+                    ) : (
+                      <div className="w-8 sm:w-10 h-8 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0 shadow-md">
+                        {userInitial}
+                      </div>
+                    )}
                     <div className="hidden sm:block">
                       <p className="text-sm font-semibold text-gray-800">{userName}</p>
                       <p className="text-xs text-gray-500">{userType}</p>
@@ -566,9 +767,13 @@ const Header: React.FC<HeaderProps> = ({
                       {/* User Info Section */}
                       <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
-                            {userInitial}
-                          </div>
+                          {avatarUrl ? (
+                            <img src={avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover shadow-md" />
+                          ) : (
+                            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                              {userInitial}
+                            </div>
+                          )}
                           <div>
                             <p className="text-base font-semibold text-gray-800">{userName}</p>
                             <p className="text-sm text-gray-600">{userType}</p>
@@ -639,12 +844,9 @@ const Header: React.FC<HeaderProps> = ({
             <div className="p-4 border-b border-gray-100">
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-gray-800">Notifications</h3>
-                {unreadChatCount > 0 && (
+                {notifUnread > 0 && (
                   <button
-                    onClick={() => {
-                      setChatNotifications((prev: ChatNotification[]) => prev.map((item: ChatNotification) => ({ ...item, read: true })));
-                      setChatToast(null);
-                    }}
+                    onClick={handleMarkAllNotificationsRead}
                     className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                   >
                     Mark all read
@@ -653,33 +855,43 @@ const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
             <div className="max-h-96 overflow-y-auto">
-              {chatNotifications.length > 0 ? (
-                chatNotifications.map((notification: ChatNotification) => (
-                  <button
-                    key={notification.id}
-                    onClick={() => openChatNotification(notification)}
-                    className={`w-full text-left p-4 hover:bg-blue-50 border-b border-gray-100 cursor-pointer transition-colors ${notification.read ? 'bg-white' : 'bg-blue-50/60'}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="mt-0.5 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
-                        <MessageCircle size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium text-gray-800 truncate">{notification.title}</p>
-                          {!notification.read && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words">{notification.body}</p>
-                        <p className="text-[11px] text-gray-400 mt-1">
-                          {new Date(notification.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
+              {appNotifications.length > 0 ? (
+                groupNotificationsByDate(appNotifications).map((group) => (
+                  <div key={group.label}>
+                    <p className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{group.label}</p>
+                    {group.items.map((notification: AppNotification) => {
+                      const isUnread = notification.status !== 'read';
+                      return (
+                        <button
+                          key={notification.id}
+                          onClick={() => openAppNotification(notification)}
+                          className={`w-full text-left p-4 hover:bg-blue-50 border-b border-gray-100 cursor-pointer transition-colors ${isUnread ? 'bg-blue-50/60' : 'bg-white'}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                              <MessageCircle size={16} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium text-gray-800 truncate">{notification.title}</p>
+                                {isUnread && <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />}
+                              </div>
+                              {notification.content && (
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words">{notification.content}</p>
+                              )}
+                              <p className="text-[11px] text-gray-400 mt-1">
+                                {new Date(notification.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 ))
               ) : (
                 <div className="p-6 text-center text-sm text-gray-500">
-                  No new notifications
+                  No notifications yet
                 </div>
               )}
             </div>

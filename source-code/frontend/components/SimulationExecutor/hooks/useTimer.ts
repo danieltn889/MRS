@@ -15,7 +15,8 @@ export const MIN_SUBMIT_SECONDS = 3 * 60;
 
 export function useTimer(
   session: SimulationSession | null,
-  onTick?: (timeSpent: number) => void
+  onTick?: (timeSpent: number) => void,
+  onExpire?: () => void
 ) {
   const [timeSpent, setTimeSpent] = useState(0);
   const [timeLimit, setTimeLimit] = useState<number | null>(null);
@@ -25,6 +26,11 @@ export function useTimer(
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isInitializedRef = useRef(false);
   const lastTickRef = useRef<number>(0);
+  const hasExpiredRef = useRef(false);
+
+  // Countdown: how much time is left, and whether the clock has run out.
+  const timeRemaining: number | null = timeLimit != null ? Math.max(0, timeLimit - timeSpent) : null;
+  const isExpired: boolean = timeLimit != null && timeSpent >= timeLimit;
 
   // Calculate real elapsed time from start time
   const calculateElapsedTime = useCallback((): number => {
@@ -49,12 +55,22 @@ export function useTimer(
   // Get color based on elapsed time vs time limit
   const getTimeColor = useCallback((elapsed: number): string => {
     if (!timeLimit) return 'text-green-400';
-    
+
     const percentage = (elapsed / timeLimit) * 100;
     if (percentage < 50) return 'text-green-400';
     if (percentage < 80) return 'text-yellow-400';
     if (percentage < 100) return 'text-orange-400';
     return 'text-red-400';
+  }, [timeLimit]);
+
+  // Countdown color: red when expired, orange under 5 minutes, yellow in the
+  // final stretch, green otherwise.
+  const getCountdownColor = useCallback((remaining: number | null): string => {
+    if (remaining == null) return 'text-green-400';
+    if (remaining <= 0) return 'text-red-400';
+    if (remaining <= 300) return 'text-orange-400';
+    if (timeLimit && remaining <= timeLimit * 0.2) return 'text-yellow-400';
+    return 'text-green-400';
   }, [timeLimit]);
 
   const clearTimer = useCallback(() => {
@@ -163,6 +179,16 @@ export function useTimer(
     }
   }, [session?.status, isPaused, isRunning, startTimer]);
 
+  // Fire onExpire exactly once when the countdown reaches zero, and stop ticking.
+  useEffect(() => {
+    if (isExpired && !hasExpiredRef.current) {
+      hasExpiredRef.current = true;
+      clearTimer();
+      setIsRunning(false);
+      onExpire?.();
+    }
+  }, [isExpired, clearTimer, onExpire]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -173,6 +199,8 @@ export function useTimer(
   return {
     timeSpent,
     timeLimit,
+    timeRemaining,
+    isExpired,
     isRunning,
     isPaused,
     startTimer,
@@ -180,6 +208,7 @@ export function useTimer(
     resumeTimer,
     formatTime,
     getTimeColor,
+    getCountdownColor,
     getCurrentTime,  // 👈 Returns current time for manual save
     clearTimer,
     MIN_SUBMIT_SECONDS,

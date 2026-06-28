@@ -158,15 +158,6 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
     setShowCandidatePerformance(true);
   };
 
-  const handleOpenChat = (sim: Simulation) => {
-    if (onOpenChat) {
-      onOpenChat(sim.id, sim.title);
-    } else {
-      console.log('Open chat for simulation:', sim.id);
-      alert(`Chat for: ${sim.title}\n\nSimulation ID: ${sim.id}\n\nChat feature coming soon!`);
-    }
-  };
-
   const getFilteredSimulations = () => {
     let filtered = simulations.filter(s => {
       // ✅ FIX: Handle null status by converting to string for comparison
@@ -511,23 +502,17 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
                       >
                         <Edit size={16} />
                         Edit
-                      </button>
-                      
-                      {/* ✅ NEW CHAT BUTTON */}
-                      <button
-                        onClick={() => handleOpenChat(sim)}
-                        className="px-4 py-2 flex items-center justify-center gap-2 bg-green-50 hover:bg-green-100 text-green-600 text-sm font-medium rounded-lg transition-colors"
-                      >
-                        <MessageCircle size={16} />
-                        Chat
-                      </button>
-                      
+                      </button>                      
                       <button
                         onClick={() => viewCandidates(sim)}
+                        title={`${sim.total_instances || 0} candidate(s) took this simulation`}
                         className="px-4 py-2 flex items-center justify-center gap-2 bg-purple-50 hover:bg-purple-100 text-purple-600 text-sm font-medium rounded-lg transition-colors"
                       >
                         <Users size={16} />
                         Candidates
+                        <span className="ml-1 inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 bg-gray-900 text-white text-xs font-bold rounded-full">
+                          {sim.total_instances || 0}
+                        </span>
                       </button>
                       <button
                         onClick={() => duplicateSimulation(sim.id)}

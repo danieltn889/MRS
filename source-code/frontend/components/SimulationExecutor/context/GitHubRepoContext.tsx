@@ -424,15 +424,25 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     
     try {
       console.log(`Loading GitHub repo: ${owner}/${repo}`, { branchName: effectiveBranch });
-      
-      // ✅ Pass branch name to API call
-      const response = await githubAPI.getEverything(owner, repo, true, 500, effectiveBranch);
-      
-      if (!response?.data?.code?.structure && !response?.data?.files) {
-        throw new Error('No files found in repository');
+
+      // ✅ Pass branch name to API call. An EMPTY repository (no commits yet) is the
+      // EXPECTED starting state of a simulation — the candidate creates the first
+      // files and commits — so a missing/empty file list is an empty workspace, NOT
+      // an error.
+      let files: any[] = [];
+      try {
+        const response = await githubAPI.getEverything(owner, repo, true, 500, effectiveBranch);
+        const raw = response?.data?.code?.structure || response?.data?.files || [];
+        files = Array.isArray(raw) ? raw : [];
+      } catch (loadErr: any) {
+        const msg = String(loadErr?.message || '').toLowerCase();
+        const status = loadErr?.status || loadErr?.response?.status;
+        const looksEmpty = status === 404 || status === 409 ||
+          msg.includes('empty') || msg.includes('no files') || msg.includes('no commit') || msg.includes('not found');
+        if (!looksEmpty) throw loadErr;
+        console.log('ℹ️ Repository is empty — starting with an empty workspace (the candidate will create the first files/commits).');
+        files = [];
       }
-      
-      const files = response.data.code?.structure || response.data.files || [];
       const fileMap: Record<string, string> = {};
       const fileItems = files.filter((file: any) => file.type !== 'tree');
       
@@ -491,8 +501,10 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       
       setCurrentRepo(newRepo);
       console.log(`✅ Successfully loaded ${Object.keys(fileMap).length} files from ${owner}/${repo}`, { branchName: newRepo.branchName });
-      
-      await fetchAllStats(owner, repo);
+
+      // Stats can be unavailable for an empty repo (no commits) — never let that
+      // failure wipe the (valid) empty workspace we just loaded.
+      try { await fetchAllStats(owner, repo); } catch (e: any) { console.warn('Stats unavailable (likely an empty repo):', e?.message); }
       
       const taskRepo: TaskRepository = {
         owner: newRepo.owner,
