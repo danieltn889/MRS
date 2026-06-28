@@ -116,7 +116,7 @@ const PRIORITY_CONFIG: Record<string, {
   }
 };
 
-const SEARCH_API_URL = 'http://localhost:8001/search';
+const SEARCH_API_URL = import.meta.env.VITE_SEARCH_URL || 'http://localhost:8001/search';
 
 // =====================================================
 // JOB CARD COMPONENT

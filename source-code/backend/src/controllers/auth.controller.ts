@@ -189,7 +189,8 @@ const generateToken = (user: any): string => {
     {
       expiresIn: process.env.JWT_EXPIRE || '30d',
       issuer: 'recruitment-platform',
-      audience: 'recruitment-users'
+      audience: 'recruitment-users',
+      jwtid: crypto.randomUUID() // unique per token → avoids sessions_token_key collision on same-second logins
     } as jwt.SignOptions
   );
 };
@@ -474,7 +475,8 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
       {
         expiresIn: tokenExpiry,
         issuer: 'recruitment-platform',
-        audience: 'recruitment-users'
+        audience: 'recruitment-users',
+        jwtid: crypto.randomUUID() // unique per token → avoids sessions_token_key collision on same-second logins
       } as jwt.SignOptions
     );
 

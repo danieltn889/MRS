@@ -16,7 +16,7 @@ import { getCandidateProfile } from '../services/candidateAPI';
 // Same search endpoint the landing page uses, so the navbar search behaves
 // exactly like the public search (just without the auth gate, since the
 // navbar is only shown to logged-in users).
-const SEARCH_API_URL = 'http://localhost:8001/search';
+const SEARCH_API_URL = import.meta.env.VITE_SEARCH_URL || 'http://localhost:8001/search';
 
 // Add proper type definitions
 interface ChatNotification {

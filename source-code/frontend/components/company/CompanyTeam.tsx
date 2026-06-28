@@ -4,7 +4,7 @@ import { Users, Plus, Edit3, Trash2, X, Mail, Phone, Linkedin, Crown, Upload, Lo
 import type { NotifyFn } from './CompanyProfile';
 import { getCompanyTeam, addTeamMember, updateTeamMember, deleteTeamMember, uploadTeamMemberPhoto } from '../../services/companyAPI';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL).origin : 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL ? new URL(import.meta.env.VITE_API_URL, window.location.origin).origin : 'http://localhost:3001';
 
 interface TeamMember {
   id: string;

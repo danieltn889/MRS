@@ -202,7 +202,7 @@ const JobDetails: React.FC = () => {
 
       if (!token || !user?.id) return;
 
-      const response = await fetch(`http://localhost:3001/api/v1/candidates/full-profile/${user.id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'}/candidates/full-profile/${user.id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 

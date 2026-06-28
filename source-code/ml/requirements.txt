@@ -3,6 +3,8 @@
 fastapi
 uvicorn
 httpx
+requests
+joblib
 numpy
 scipy
 scikit-learn
