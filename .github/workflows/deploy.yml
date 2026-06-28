@@ -28,7 +28,7 @@ jobs:
       - name: Backend tests
         run: |
           cd source-code/backend
-          npm ci
+          npm ci || npm install
           npm run test:audit-chain
 
       - name: Set up SSH

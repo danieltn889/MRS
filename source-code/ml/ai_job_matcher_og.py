@@ -330,8 +330,9 @@ class Factor1_SkillsMatcher:
 # =====================================================
 
 # =====================================================
-# FACTOR 2: QUALIFICATIONS MATCHER (25%) - PURE SEMANTIC + HIERARCHY
+# FACTOR 2: QUALIFICATIONS MATCHER (25%) - PURE SEMANTIC + HIERARCHY .
 # =====================================================
+
 
 class Factor2_QualificationsMatcher:
     def __init__(self, tp):
