@@ -1,6 +1,6 @@
 // services/aiJobMatchingService.ts
 
-const API_GATEWAY_URL = 'http://localhost:8080/matcher';  // ← FIXED: Use gateway port 8080
+const API_GATEWAY_URL = import.meta.env.VITE_ML_GATEWAY_URL || 'http://localhost:8080/matcher';
 const AI_MATCH_TIMEOUT_MS = 300000;
 
 interface JobMatch {

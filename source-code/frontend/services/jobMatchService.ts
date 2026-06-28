@@ -1,4 +1,4 @@
-const API_GATEWAY_URL = 'http://localhost:8000';
+const API_GATEWAY_URL = import.meta.env.VITE_ML_GATEWAY_URL || 'http://localhost:8080/matcher';
 
 export const getJobMatches = async (candidateId) => {
   const response = await fetch(`${API_GATEWAY_URL}/match`, {

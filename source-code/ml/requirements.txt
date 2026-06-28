@@ -1,0 +1,15 @@
+# Python ML services dependencies.
+# Verified working on Python 3.14 (Ubuntu 26.04) — deploy.sh installs these.
+fastapi
+uvicorn
+httpx
+numpy
+scipy
+scikit-learn
+nltk
+sentence-transformers
+transformers
+torch
+psycopg2-binary
+python-dotenv
+pandas
