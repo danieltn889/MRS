@@ -56,7 +56,8 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   isLoadingGitHub = false,
   githubRepo,  // ← Add this prop
 }) => {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(['src']));
+  // Start fully collapsed — folders expand on demand so you view files/code when you want.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [contextMenu, setContextMenu] = useState<{
     x: number;

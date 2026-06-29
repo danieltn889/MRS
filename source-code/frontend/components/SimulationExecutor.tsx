@@ -1013,7 +1013,6 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         {/* WORKSPACE TAB */}
         {activeTab === 'workspace' && (
           <div className="flex flex-col h-full overflow-hidden">
-            // In SimulationExecutor.tsx - update the TaskList component call:
 
             <TaskList
               tasks={tasks}

@@ -676,9 +676,6 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
-                      <StatCard icon={<Star size={11} />} label="Stars" value={fmtNum(fullStats.social?.stars)} />
-                      <StatCard icon={<GitFork size={11} />} label="Forks" value={fmtNum(fullStats.social?.forks)} />
-                      <StatCard icon={<Eye size={11} />} label="Watchers" value={fmtNum(fullStats.social?.watchers)} />
                       <StatCard icon={<GitCommit size={11} />} label="Commits" value={fmtNum(commits?.total)} />
                       <StatCard icon={<Users size={11} />} label="Contributors" value={fmtNum(contributors?.total)} />
                       <StatCard icon={<AlertCircle size={11} />} label="Open Issues" value={fmtNum(fullStats.social?.openIssues)} />

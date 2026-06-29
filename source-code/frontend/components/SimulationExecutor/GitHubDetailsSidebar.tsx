@@ -54,7 +54,8 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
   onClose,
   onRefresh,
 }) => {
-  const [expandedSection, setExpandedSection] = useState<string | null>('issues');
+  // Start with every section collapsed — expand on demand (click) only.
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
   
   // Extract all stats
   const starCount = stats?.social?.stars || 0;
@@ -155,29 +156,7 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
               </button>
             </div>
 
-            {/* SOCIAL METRICS - Always visible summary */}
-            <div className="bg-gray-750 rounded-lg p-3 border border-gray-700">
-              <h4 className="text-gray-400 text-[10px] uppercase tracking-wide mb-2 flex items-center gap-1 border-b border-gray-700 pb-1">
-                <Star size={10} /> Social Engagement
-              </h4>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="text-center bg-gray-800 rounded-lg p-2">
-                  <Star size={14} className="mx-auto text-yellow-400 mb-0.5" />
-                  <p className="text-white font-bold text-sm">{starCount.toLocaleString()}</p>
-                  <p className="text-gray-500 text-[9px]">Stars</p>
-                </div>
-                <div className="text-center bg-gray-800 rounded-lg p-2">
-                  <GitFork size={14} className="mx-auto text-purple-400 mb-0.5" />
-                  <p className="text-white font-bold text-sm">{forkCount.toLocaleString()}</p>
-                  <p className="text-gray-500 text-[9px]">Forks</p>
-                </div>
-                <div className="text-center bg-gray-800 rounded-lg p-2">
-                  <Eye size={14} className="mx-auto text-blue-400 mb-0.5" />
-                  <p className="text-white font-bold text-sm">{watcherCount.toLocaleString()}</p>
-                  <p className="text-gray-500 text-[9px]">Watchers</p>
-                </div>
-              </div>
-            </div>
+            {/* Social engagement (Stars/Forks/Watchers) removed — not relevant to candidate code review. */}
 
             {/* ===== ISSUES SECTION - EXPANDABLE WITH FULL DETAILS ===== */}
             <div className="bg-gray-750 rounded-lg overflow-hidden border border-gray-700">
