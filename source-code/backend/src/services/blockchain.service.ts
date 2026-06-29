@@ -263,20 +263,13 @@ export class BlockchainService {
     console.log(`📊 Using blockchain address: ${address}`);
     console.log(`📊 Address is ${isNew ? 'NEW' : 'EXISTING'} for this simulation`);
     
-    const wallet = new ethers.Wallet(privateKey, this.provider);
-    const contract = this.contract.connect(wallet);
-    
-    const initialBalance = await this.getBalance(address);
-    console.log(`💰 Initial balance: ${initialBalance} ETH`);
-    
-    // Check if address has enough funds
-    if (parseFloat(initialBalance) === 0) {
-      console.log(`⚠️ Address has 0 ETH. Funding with 1 ETH...`);
-      const fundAmount = ethers.utils.parseEther("1");
-      const fundTx = await this.wallet.sendTransaction({ to: address, value: fundAmount });
-      await fundTx.wait();
-      console.log(`✅ Funded ${address} with 1 ETH`);
-    }
+    // The PLATFORM wallet signs + pays gas for EVERY credential. The candidate's address
+    // is still recorded on-chain as the credential owner — storeResult() takes `candidate`
+    // as a parameter and does NOT require the candidate to be the sender. So each candidate
+    // keeps a unique address WITHOUT funding it: only the one platform wallet needs test ETH,
+    // which scales to any number of candidates on a real testnet (Sepolia).
+    void privateKey; // candidate key no longer used to sign — kept only as the owner address
+    const contract = this.contract.connect(this.wallet);
     
     // Format scores to 2 decimal places for blockchain storage
     const overallScore = Number(data.overallScore.toFixed(2));

@@ -81,3 +81,4 @@ Thumbs.db
 *.apk
 *.ipa
 
+source-code/blockchain/local-keys.json
