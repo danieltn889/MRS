@@ -6645,7 +6645,7 @@ Return ONLY valid JSON:
         submitted_on_time: totalTimeSeconds <= timeLimitSeconds
       };
 
-      const PARTICIPATION_MIN_SECONDS = 30 * 60;
+      const PARTICIPATION_MIN_SECONDS = 3 * 60;
       const qualifiesForParticipation = totalTimeSeconds >= PARTICIPATION_MIN_SECONDS;
       let participationBonus = 0;
       let participationMessage = '';
@@ -6653,9 +6653,9 @@ Return ONLY valid JSON:
       if (completionRate === 0) {
         if (qualifiesForParticipation) {
           participationBonus = Math.min(0, Math.floor(totalTimeSeconds / 360));
-          participationMessage = `Participation marks awarded: +${participationBonus} pts (${Math.floor(totalTimeSeconds / 60)} min in session, minimum 30 min met)`;
+          participationMessage = `Participation marks awarded: +${participationBonus} pts (${Math.floor(totalTimeSeconds / 60)} min in session, minimum 3 min met)`;
         } else {
-          participationMessage = `No participation marks: session ended at ${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s — minimum 30 minutes required`;
+          participationMessage = `No participation marks: session ended at ${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s — minimum 3 minutes required`;
         }
       }
 
@@ -6669,7 +6669,7 @@ Return ONLY valid JSON:
         : completionRate === 0 && qualifiesForParticipation
           ? `No tasks completed. ${participationMessage}. Overall: ${finalOverallScore}%. Duration: ${sessionTimeLabel}.`
           : completionRate === 0
-            ? `No tasks completed. Session under 30 minutes (${sessionTimeLabel}) — no participation marks. Score: 0.`
+            ? `No tasks completed. Session under 3 minutes (${sessionTimeLabel}) — no participation marks. Score: 0.`
             : `Completed with ${finalOverallScore}% — ${completionRateLabel} in ${sessionTimeLabel}. Passing threshold: ${passingScore}%.`;
 
       console.log('📐 Completion Angle:', completionAngle, '°');
@@ -7148,7 +7148,7 @@ Return ONLY valid JSON:
             qualifies: qualifiesForParticipation,
             bonus: participationBonus,
             message: participationMessage,
-            min_time_required: '30 minutes',
+            min_time_required: '3 minutes',
             time_spent: sessionCompleteTime.formatted
           },
 
