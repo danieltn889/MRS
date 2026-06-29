@@ -643,7 +643,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
         setSavedJobs(prev => { const newSet = new Set(prev); newSet.delete(jobId); return newSet; });
         alert('Job removed from saved!');
       } else {
-        await saveJob(jobId);
+        // Persist the AI match score this candidate saw for the job.
+        const matchScore = aiMatches.find(m => m.id === jobId)?.matchScore ?? null;
+        await saveJob(jobId, matchScore);
         setSavedJobs(prev => new Set([...prev, jobId]));
         alert('Job saved successfully!');
       }
@@ -1024,13 +1026,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
               return;
             }
 
-            // If there's no simulation, close normally
-            if (!data?.hasSimulation) {
-              setShowApplicationModal(false);
-              setSelectedMatchForApply(null);
-            }
-
-            // If hasSimulation is true, leave the modal open so the simulation prompt renders
+            // Leave the modal open in BOTH cases — it shows the simulation prompt when
+            // the job has one, or the "no simulation yet, you'll be notified" notice when
+            // it doesn't. The modal closes itself when the candidate dismisses it (onClose).
           }}
           job={{
             id: selectedMatchForApply.id,

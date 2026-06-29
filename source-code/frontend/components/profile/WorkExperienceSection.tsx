@@ -1,10 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { 
-  Plus, Edit, Trash2, Save, X, Briefcase, Calendar, MapPin, Building, 
-  Upload, FileText, CheckCircle, Loader, AlertCircle, Eye, Download, 
-  File, Image, FileArchive
+  Plus, Edit, Trash2, Save, X, Briefcase, Calendar, MapPin, Building,
+  Upload, FileText, CheckCircle, Loader, AlertCircle, Eye, Download,
+  File, Image, FileArchive, Search
 } from 'lucide-react';
-import { addWorkExperience, updateWorkExperience, deleteWorkExperience, uploadCandidateDocument } from '../../services/candidateAPI';
+import { addWorkExperience, updateWorkExperience, deleteWorkExperience, uploadCandidateDocument, getSkillsList } from '../../services/candidateAPI';
 import ConfirmDialog from './ConfirmDialog';
 
 // =====================================================
@@ -53,6 +53,7 @@ interface FormData {
   isCurrent: boolean;
   industry: string;
   reasonForLeaving: string;
+  skills: string[];
   proofFiles: File[];
   existingProofFiles: ProofFile[];
   displayOrder: number;
@@ -127,11 +128,16 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     isCurrent: false,
     industry: '',
     reasonForLeaving: '',
+    skills: [],
     proofFiles: [],
     existingProofFiles: [],
     displayOrder: 0
   });
   const [loading, setLoading] = useState<boolean>(false);
+  // Skills used in this role + autocomplete suggestions from the skills catalog.
+  const [skillCatalog, setSkillCatalog] = useState<string[]>([]);
+  const [skillQuery, setSkillQuery] = useState<string>('');
+  const [showSkillSuggest, setShowSkillSuggest] = useState<boolean>(false);
   const [dateError, setDateError] = useState<string>('');
   const [proofUploadStatus, setProofUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
   const [proofUploadProgress, setProofUploadProgress] = useState<number>(0);
@@ -157,15 +163,57 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       isCurrent: false,
       industry: '',
       reasonForLeaving: '',
+      skills: [],
       proofFiles: [],
       existingProofFiles: [],
       displayOrder: 0
     });
+    setSkillQuery('');
+    setShowSkillSuggest(false);
     setDateError('');
     setProofUploadStatus('idle');
     setProofUploadProgress(0);
     setProofUploadMessage('');
   };
+
+  // Load the skills catalog once for autocomplete suggestions.
+  useEffect(() => {
+    (async () => {
+      try {
+        const res: any = await getSkillsList();
+        const list = res?.data || (Array.isArray(res) ? res : []);
+        const names = Array.from(new Set(
+          list.map((s: any) => (typeof s === 'string' ? s : s?.name)).filter(Boolean)
+        )) as string[];
+        setSkillCatalog(names);
+      } catch { /* suggestions are optional */ }
+    })();
+  }, []);
+
+  const addExpSkill = (name: string): void => {
+    const clean = name.trim();
+    if (!clean) return;
+    setFormData(prev =>
+      prev.skills.some(s => s.toLowerCase() === clean.toLowerCase())
+        ? prev
+        : { ...prev, skills: [...prev.skills, clean] }
+    );
+    setSkillQuery('');
+    setShowSkillSuggest(false);
+  };
+
+  const removeExpSkill = (name: string): void => {
+    setFormData(prev => ({ ...prev, skills: prev.skills.filter(s => s !== name) }));
+  };
+
+  const skillSuggestions = skillQuery.trim()
+    ? skillCatalog
+        .filter(s =>
+          s.toLowerCase().includes(skillQuery.trim().toLowerCase()) &&
+          !formData.skills.some(sel => sel.toLowerCase() === s.toLowerCase())
+        )
+        .slice(0, 8)
+    : [];
 
   const validateDateRange = (): string | null => {
     if (!formData.startDate) {
@@ -322,6 +370,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       if (formData.endDate && !formData.isCurrent) submitData.endDate = formData.endDate;
       if (formData.industry) submitData.industry = formData.industry;
       if (formData.reasonForLeaving) submitData.reasonForLeaving = formData.reasonForLeaving;
+      if (formData.skills.length) submitData.skills = formData.skills;
       if (formData.displayOrder) submitData.displayOrder = formData.displayOrder;
 
       // ✅ Upload proof files for real so they persist and can be viewed/downloaded,
@@ -380,6 +429,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       isCurrent: exp.is_current || false,
       industry: exp.industry || '',
       reasonForLeaving: exp.reason_for_leaving || '',
+      skills: Array.isArray((exp as any).skills) ? (exp as any).skills : [],
       proofFiles: [],
       existingProofFiles: getProofFiles(exp),
       displayOrder: exp.display_order || 0
@@ -719,6 +769,49 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 />
               </div>
             )}
+
+            {/* Skills used in this role — auto-search + suggestions from the catalog */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Skills used in this role</label>
+              {formData.skills.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {formData.skills.map((s) => (
+                    <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-sm border border-blue-200">
+                      {s}
+                      <button type="button" onClick={() => removeExpSkill(s)} className="text-blue-500 hover:text-blue-700" aria-label={`Remove ${s}`}>
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={skillQuery}
+                  onChange={(e) => { setSkillQuery(e.target.value); setShowSkillSuggest(true); }}
+                  onFocus={() => setShowSkillSuggest(true)}
+                  onBlur={() => setTimeout(() => setShowSkillSuggest(false), 150)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addExpSkill(skillQuery); } }}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Search a skill (e.g. React) and press Enter to add"
+                />
+                {showSkillSuggest && skillSuggestions.length > 0 && (
+                  <ul className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-auto">
+                    {skillSuggestions.map((s) => (
+                      <li key={s}>
+                        <button type="button" onMouseDown={(e) => { e.preventDefault(); addExpSkill(s); }}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50">
+                          {s}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <p className="text-xs text-gray-400 mt-1">Pick from the suggestions or type your own and press Enter.</p>
+            </div>
 
             <div className="border-t border-gray-200 pt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Work Proof or Certificate</label>

@@ -667,6 +667,118 @@ const seedDatabase = async (): Promise<void> => {
     logger.info('Skills seeded');
 
     // =====================================================
+    // COMPLETE CANDIDATE PROFILE — turikumwenimanadaniel727@gmail.com
+    // Fully fills this candidate's profile (bio, links, education, experience,
+    // skills, preferences) so they pass the 80% profile gate and receive job
+    // feeds / can apply. Idempotent — safe to re-run.
+    // =====================================================
+    logger.info('Seeding complete profile for primary candidate...');
+
+    const primaryCandRes = await client.query<CompanyRow>(
+      `SELECT id FROM users WHERE email = $1::CITEXT`,
+      ['turikumwenimanadaniel727@gmail.com']
+    );
+    const primaryCandId = primaryCandRes.rows[0]?.id;
+
+    if (primaryCandId) {
+      // 1) rich candidate_profiles (override the generic placeholder)
+      await client.query(
+        `
+        INSERT INTO candidate_profiles (
+          user_id, first_name, last_name, phone, country, city, timezone,
+          date_of_birth, gender, linkedin_url, github_url, portfolio_url,
+          willing_to_relocate, willing_to_travel, notice_period_days,
+          expected_salary, currency, profile_completion, headline, summary,
+          languages, job_preferences, availability, created_at, updated_at
+        )
+        VALUES (
+          $1::UUID, 'Daniel', 'Turikumwenimana', '+250-788-000727', 'Rwanda', 'Kigali', 'Africa/Kigali',
+          '1999-05-12'::DATE, 'male',
+          'https://linkedin.com/in/daniel-turikumwenimana',
+          'https://github.com/turikumwenimanadaniel727', 'https://daniel-portfolio.dev',
+          true, true, 30,
+          '{"min":40000,"max":60000,"period":"year"}'::JSONB, 'USD', 90,
+          'Full-Stack Software Engineer',
+          'Full-stack engineer with 4+ years building web apps using React, Node.js, TypeScript and PostgreSQL. Passionate about clean architecture, CI/CD, and shipping reliable products.',
+          '["English","French","Kinyarwanda"]'::JSONB,
+          '{"job_types":["full_time"],"locations":["Kigali","Remote"],"remote_preference":"hybrid","industries":["Software","FinTech"],"company_sizes":["startup","mid"],"employment_types":["full_time"]}'::JSONB,
+          '{"status":"actively_looking","available_from":null,"notice_period":"1 month","open_to_opportunities":true}'::JSONB,
+          NOW(), NOW()
+        )
+        ON CONFLICT (user_id) DO UPDATE SET
+          first_name=EXCLUDED.first_name, last_name=EXCLUDED.last_name, phone=EXCLUDED.phone,
+          country=EXCLUDED.country, city=EXCLUDED.city, timezone=EXCLUDED.timezone,
+          date_of_birth=EXCLUDED.date_of_birth, gender=EXCLUDED.gender,
+          linkedin_url=EXCLUDED.linkedin_url, github_url=EXCLUDED.github_url, portfolio_url=EXCLUDED.portfolio_url,
+          willing_to_relocate=EXCLUDED.willing_to_relocate, willing_to_travel=EXCLUDED.willing_to_travel,
+          notice_period_days=EXCLUDED.notice_period_days, expected_salary=EXCLUDED.expected_salary,
+          currency=EXCLUDED.currency, profile_completion=EXCLUDED.profile_completion,
+          headline=EXCLUDED.headline, summary=EXCLUDED.summary, languages=EXCLUDED.languages,
+          job_preferences=EXCLUDED.job_preferences, availability=EXCLUDED.availability, updated_at=NOW()
+        `,
+        [primaryCandId]
+      );
+
+      // 2) education (fixed id → idempotent)
+      await client.query(
+        `
+        INSERT INTO education (
+          id, user_id, institution, degree, field_of_study, start_date, end_date,
+          is_current, grade, grade_scale, description, display_order, created_at, updated_at
+        )
+        VALUES (
+          'c1eebc99-9c0b-4ef8-bb6d-6bb9bd380e01'::UUID, $1::UUID,
+          'University of Rwanda', 'BSc', 'Computer Science',
+          '2017-09-01'::DATE, '2021-07-01'::DATE, false, '4.0', 'GPA',
+          'Graduated with honors. Focus on software engineering and data structures.', 1, NOW(), NOW()
+        )
+        ON CONFLICT (id) DO NOTHING
+        `,
+        [primaryCandId]
+      );
+
+      // 3) work experience (fixed id → idempotent; employment_type/location_type per CHECK)
+      await client.query(
+        `
+        INSERT INTO work_experience (
+          id, user_id, company, title, employment_type, location, location_type,
+          start_date, end_date, is_current, description, achievements, skills,
+          industry, display_order, created_at, updated_at
+        )
+        VALUES (
+          'c2eebc99-9c0b-4ef8-bb6d-6bb9bd380e02'::UUID, $1::UUID,
+          'LMB Tech', 'Software Engineer', 'full-time', 'Kigali, Rwanda', 'hybrid',
+          '2021-08-01'::DATE, NULL, true,
+          'Full-stack software development of web applications using React, Node.js, TypeScript and PostgreSQL. Led a small team of engineers and mentored junior developers, providing technical leadership across delivery.',
+          ARRAY['Cut API latency 40% via query optimization', 'Led migration to TypeScript', 'Led a small team of 4 engineers'],
+          ARRAY['React', 'Node.js', 'TypeScript', 'PostgreSQL', 'Software Development', 'Team Leadership'],
+          'Software', 1, NOW(), NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          title=EXCLUDED.title, description=EXCLUDED.description,
+          achievements=EXCLUDED.achievements, skills=EXCLUDED.skills, updated_at=NOW()
+        `,
+        [primaryCandId]
+      );
+
+      // 4) link proficiency skills to existing seeded skills
+      await client.query(
+        `
+        INSERT INTO user_skills (user_id, skill_id, proficiency_level, years_experience, is_primary, verified, created_at, updated_at)
+        SELECT $1::UUID, s.id, 4, 4, true, true, NOW(), NOW()
+        FROM skills s
+        WHERE s.name IN ('JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'SQL', 'Git', 'AWS', 'Docker')
+        ON CONFLICT (user_id, skill_id) DO NOTHING
+        `,
+        [primaryCandId]
+      );
+
+      logger.info('Complete candidate profile seeded for turikumwenimanadaniel727@gmail.com');
+    } else {
+      logger.warn('Primary candidate not found — complete profile skipped');
+    }
+
+    // =====================================================
     // GITHUB CONNECTIONS (keep existing)
     // =====================================================
     logger.info('Seeding GitHub connections...');
@@ -724,6 +836,53 @@ const seedDatabase = async (): Promise<void> => {
       [simulationTemplateId, defaultCompanyId]
     );
     logger.info('Simulation template seeded');
+
+    // =====================================================
+    // JOB-LINKED SIMULATION TEMPLATES
+    // Attach an ACTIVE simulation template to each seeded job (via job_id) so that
+    // applicants get a simulation instead of the "no simulation yet" notice.
+    // Idempotent — re-running re-links and keeps it active.
+    // =====================================================
+    logger.info('Seeding job-linked simulation templates...');
+
+    const jobSimTasks = `[
+      {"task_index":1,"task_name":"Fork and Clone Repository","task_type":"github_setup","description":"Fork the provided repository and clone it locally.","requires_github_repo":true},
+      {"task_index":2,"task_name":"Implement Feature / Fix Bug","task_type":"code_fix","description":"Implement the required change in the codebase.","requires_github_repo":true,"min_commits":1,"depends_on":1},
+      {"task_index":3,"task_name":"Write Tests","task_type":"testing","description":"Add tests for your change.","requires_github_repo":true,"min_commits":1,"depends_on":2,"min_score":70},
+      {"task_index":4,"task_name":"Open Pull Request","task_type":"github_pr","description":"Open a Pull Request with your changes.","requires_pr":true,"depends_on":3}
+    ]`;
+
+    const jobsForSim = await client.query<{ id: string; title: string; company_id: string }>(
+      `SELECT id, title, company_id FROM jobs ORDER BY title`
+    );
+    let simIdx = 0;
+    for (const job of jobsForSim.rows) {
+      simIdx += 1;
+      const tplId = `d0eebc99-9c0b-4ef8-bb6d-6bb9bd3800${simIdx.toString().padStart(2, '0')}`;
+      const slug = `sim-${job.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`.slice(0, 90);
+      await client.query(
+        `
+        INSERT INTO simulation_templates (
+          id, company_id, job_id, name, slug, description, type, difficulty,
+          duration_minutes, tasks, scoring_rubric, pass_fail_criteria,
+          is_public, is_active, created_at, updated_at
+        )
+        VALUES (
+          $1::UUID, $2::UUID, $3::UUID,
+          $4::VARCHAR, $5::VARCHAR, $6::TEXT,
+          'technical'::VARCHAR, 'intermediate'::VARCHAR, 90::INTEGER,
+          $7::JSONB,
+          '{"passing_score":70,"weights":{"technical":40,"communication":30,"github_usage":30}}'::JSONB,
+          '{"passing_score":70,"min_tasks_completed":3}'::JSONB,
+          true, true, NOW(), NOW()
+        )
+        ON CONFLICT (id) DO UPDATE SET
+          job_id = EXCLUDED.job_id, is_active = TRUE, tasks = EXCLUDED.tasks, updated_at = NOW()
+        `,
+        [tplId, job.company_id, job.id, `${job.title} — Technical Simulation`, slug, `Hands-on technical simulation for the ${job.title} role.`, jobSimTasks]
+      );
+    }
+    logger.info(`Job-linked simulation templates seeded (${jobsForSim.rows.length})`);
 
     // =====================================================
     // SIMULATION FOR CANDIDATE (keep existing)

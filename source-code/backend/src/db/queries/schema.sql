@@ -756,6 +756,7 @@ CREATE TABLE saved_jobs (
     priority VARCHAR(20) CHECK (priority IN ('high', 'medium', 'low')),
     folder   VARCHAR(255),
     notified BOOLEAN DEFAULT FALSE,
+    match_score NUMERIC(5,2),
     PRIMARY KEY (user_id, job_id)
 );
 

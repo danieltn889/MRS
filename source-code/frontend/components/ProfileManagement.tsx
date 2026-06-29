@@ -565,6 +565,8 @@ interface CandidateBasicInfoFormData {
   headline: string;
   yearsExperience: string;
   bio: string;
+  dateOfBirth: string;
+  gender: string;
 }
 
 const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSectionProps): JSX.Element => {
@@ -572,6 +574,7 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
   const [formData, setFormData] = useState<CandidateBasicInfoFormData>({
     firstName: '', lastName: '', email: '', phone: '',
     location: '', headline: '', yearsExperience: '', bio: '',
+    dateOfBirth: '', gender: '',
   });
   const [errors,      setErrors]      = useState<Partial<Record<keyof CandidateBasicInfoFormData, string>>>({});
   const [saveStatus,  setSaveStatus]  = useState<'idle' | 'error'>('idle');
@@ -657,6 +660,8 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
                          || profile.profile.metadata?.years_experience?.toString()
                          || '',
         bio:             profile.profile.bio || profile.profile.summary || '',
+        dateOfBirth:     profile.profile.date_of_birth ? String(profile.profile.date_of_birth).split('T')[0] : '',
+        gender:          profile.profile.gender || '',
       });
       setPhotoUrl((profile.profile as any).profile_photo_url || null);
     }
@@ -692,12 +697,22 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
       case 'bio':
         if (value.length > 600) return 'Must be 600 characters or fewer';
         return '';
+      case 'dateOfBirth': {
+        if (value) {
+          const d = new Date(value);
+          if (isNaN(d.getTime())) return 'Enter a valid date';
+          const ageYears = (Date.now() - d.getTime()) / (365.25 * 24 * 3600 * 1000);
+          if (ageYears < 12)  return 'You must be at least 12 years old';
+          if (ageYears > 100) return 'Enter a valid date of birth';
+        }
+        return '';
+      }
       default:
         return '';
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setErrors(prev => ({ ...prev, [name]: validate(name as keyof CandidateBasicInfoFormData, value) }));
@@ -729,6 +744,8 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
         headline:        formData.headline.trim() || undefined,
         yearsExperience: formData.yearsExperience ? parseInt(formData.yearsExperience, 10) : undefined,
         bio:             formData.bio.trim()      || undefined,
+        dateOfBirth:     formData.dateOfBirth     || undefined,
+        gender:          formData.gender          || undefined,
       });
       await onUpdate();
       setShowModal(true);
@@ -757,6 +774,8 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
             { label: 'Last Name',    value: formData.lastName  },
             { label: 'Phone',        value: formData.phone     },
             { label: 'Location',     value: formData.location  },
+            { label: 'Date of Birth', value: formData.dateOfBirth },
+            { label: 'Gender',       value: formData.gender    },
             { label: 'Headline',     value: formData.headline  },
             { label: 'Experience',   value: formData.yearsExperience ? `${formData.yearsExperience} yrs` : '' },
             { label: 'Bio',          value: formData.bio.length > 60 ? formData.bio.slice(0, 60) + '…' : formData.bio },
@@ -863,6 +882,27 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
             <input type="text" name="location" value={formData.location} onChange={handleChange}
               className={inputClass('location')} placeholder="e.g. Kigali, Rwanda" maxLength={100} />
             <FieldError msg={errors.location} />
+          </div>
+        </div>
+        {/* Date of Birth + Gender */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Date of Birth</label>
+            <input type="date" name="dateOfBirth" value={formData.dateOfBirth} onChange={handleChange}
+              max={new Date(new Date().setFullYear(new Date().getFullYear() - 12)).toISOString().split('T')[0]}
+              className={inputClass('dateOfBirth')} />
+            <FieldError msg={errors.dateOfBirth} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Gender</label>
+            <select name="gender" value={formData.gender} onChange={handleChange}
+              className={inputClass('gender')}>
+              <option value="">Prefer not to say</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="non-binary">Non-binary</option>
+              <option value="other">Other</option>
+            </select>
           </div>
         </div>
         {/* Bio */}

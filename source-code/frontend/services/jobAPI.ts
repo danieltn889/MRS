@@ -423,11 +423,13 @@ export const debugUserCompany = async () => {
 // SAVE JOB (for candidates)
 // =====================================================
 
-export const saveJob = async (jobId: string) => {
+export const saveJob = async (jobId: string, matchScore?: number | null) => {
   try {
     const response = await fetch(`${API_BASE_URL}/jobs/saved/${jobId}`, {
       method: 'POST',
       headers: getAuthHeaders(),
+      // Persist the match score the candidate saw, so Saved Jobs keeps it.
+      body: JSON.stringify({ match_score: matchScore ?? null }),
     });
     return await handleResponse(response);
   } catch (error) {

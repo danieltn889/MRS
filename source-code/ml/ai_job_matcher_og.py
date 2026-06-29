@@ -1013,6 +1013,20 @@ class Factor3_ExperienceMatcher:
             "general_min_years": general_min
         }
     
+    def _requirement_keyword_overlap(self, exp_text, req_text):
+        """Relevance from the ROLE's responsibilities and SKILLS, not just the title.
+        Returns the fraction of the requirement's significant words that appear in the
+        candidate's full experience text (title + description + skills + industry), so a
+        'Software Engineer' whose role lists 'software development' / 'team leadership'
+        satisfies those requirements even when WordNet title similarity is low. Both
+        sides are cleaned the same way, so the tokens line up."""
+        req_tokens = {t for t in str(req_text).split() if len(t) > 2}
+        if not req_tokens:
+            return 0.0
+        exp_tokens = set(str(exp_text).split())
+        hits = sum(1 for t in req_tokens if t in exp_tokens)
+        return hits / len(req_tokens)
+
     def match_specific_requirements(self, candidate_experiences, job_requirements):
         specific_reqs = job_requirements.get("specific_requirements", [])
         
@@ -1039,32 +1053,37 @@ class Factor3_ExperienceMatcher:
                 similarity = max(
                     self.tp.semantic_similarity(exp["cleaned"], req_cleaned),
                     self.tp.semantic_similarity(exp.get("cleaned_full", exp["cleaned"]), req_cleaned),
+                    # Direct keyword/skill overlap with the role's responsibilities + skills,
+                    # so relevance isn't gated by fuzzy title-only similarity.
+                    self._requirement_keyword_overlap(exp.get("cleaned_full", exp["cleaned"]), req_cleaned),
                 )
 
-                # Only count an experience toward the score if it is at least 50%
-                # semantically relevant to the requirement (spec: experience matching).
-                if similarity >= 0.5:
-                    if exp_years >= req_years:
-                        years_score = 1.0
-                    else:
-                        ratio = exp_years / req_years if req_years > 0 else 1.0
-                        years_score = 0.5 + (ratio * 0.5)
-                        years_score = min(0.85, years_score)
-                    
-                    # Skills/content relevance drives the score; years is a minor factor.
-                    combined = (similarity * 0.85) + (years_score * 0.15)
+                # Score by the BEST relevance the experience has to this requirement —
+                # never a hard zero. Strong matches (>= 50% similarity) are flagged;
+                # weaker ones still earn PARTIAL credit equal to their semantic
+                # relevance, so a related-but-not-exact role isn't 0%.
+                if exp_years >= req_years:
+                    years_score = 1.0
+                else:
+                    ratio = exp_years / req_years if req_years > 0 else 1.0
+                    years_score = 0.5 + (ratio * 0.5)
+                    years_score = min(0.85, years_score)
 
-                    if combined > best_score:
-                        best_score = combined
-                        best_match = {
-                            "requirement_title": req_title,
-                            "requirement_years": req_years,
-                            "matched_title": exp_title,
-                            "candidate_years": exp_years,
-                            "similarity": round(similarity, 4),
-                            "years_score": round(years_score, 4),
-                            "combined_score": round(combined, 4)
-                        }
+                # Relevance drives the score; years is a minor factor.
+                combined = (similarity * 0.85) + (years_score * 0.15)
+
+                if combined > best_score:
+                    best_score = combined
+                    best_match = {
+                        "requirement_title": req_title,
+                        "requirement_years": req_years,
+                        "matched_title": exp_title,
+                        "candidate_years": exp_years,
+                        "similarity": round(similarity, 4),
+                        "years_score": round(years_score, 4),
+                        "combined_score": round(combined, 4),
+                        "is_strong": similarity >= 0.5
+                    }
             
             if best_match:
                 matches.append(best_match)

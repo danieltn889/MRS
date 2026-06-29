@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Briefcase, MapPin, Clock, DollarSign, Building2, Calendar,
@@ -311,7 +311,7 @@ const JobDetails: React.FC = () => {
         setIsSaved(false);
         alert('Job removed from saved!');
       } else {
-        await saveJob(id!);
+        await saveJob(id!, matchScore);
         setIsSaved(true);
         alert('Job saved successfully!');
       }
@@ -328,6 +328,18 @@ const JobDetails: React.FC = () => {
     }
     setShowApplicationModal(true);
   };
+
+  // Auto-open the application when arriving with ?apply=1 (e.g. from Saved Jobs),
+  // once the candidate profile has loaded.
+  const autoApplyDone = useRef(false);
+  useEffect(() => {
+    if (autoApplyDone.current) return;
+    const wantsApply = new URLSearchParams(window.location.search).get('apply') === '1';
+    if (wantsApply && fullCandidateProfile) {
+      autoApplyDone.current = true;
+      setShowApplicationModal(true);
+    }
+  }, [fullCandidateProfile]);
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -1186,9 +1198,10 @@ const JobDetails: React.FC = () => {
       setIsApplying(false);
     }}
     onSuccess={() => {
+      // Mark as applied, but DON'T close the modal or alert here — the modal shows its
+      // own next-steps screen (simulation details, or the "no simulation yet" notice)
+      // and closes itself when the user dismisses it.
       setHasApplied(true);
-      setShowApplicationModal(false);
-      alert('Application submitted successfully!');
     }}
     job={{
       id: job.id,

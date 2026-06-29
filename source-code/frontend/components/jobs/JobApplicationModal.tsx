@@ -1150,11 +1150,10 @@ const JobApplicationModal = ({
 
         console.log('🎯 Has any simulation:', hasAnySimulation);
 
-        if (hasAnySimulation) {
-          console.log('🎯 Showing simulation prompt');
-          setShowSimulationPrompt(true);
-        }
-        // No else-alert — success message is always shown
+        // Always switch to the "next steps" screen. It shows the simulation details
+        // when the job has one, or a "no simulation yet — you'll be notified" notice.
+        console.log('🎯 Showing next-steps screen, hasSimulation =', hasAnySimulation);
+        setShowSimulationPrompt(true);
 
         if (onSuccess) {
           onSuccess({
@@ -1202,7 +1201,30 @@ const JobApplicationModal = ({
       simulationTemplates.length > 0 ||
       totalTemplates > 0;
 
-    if (!hasAnySimulation) return null;
+    // No simulation set for this job yet → reassure the candidate they'll be notified.
+    if (!hasAnySimulation) {
+      return (
+        <div className="text-center py-8 max-w-lg mx-auto">
+          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle className="w-9 h-9 text-green-600" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 mb-2">Application submitted! 🎉</h3>
+          <p className="text-gray-600 mb-4">
+            This job doesn&apos;t have a job simulation yet. <strong>As soon as the recruiter sets one,
+            you&apos;ll be notified</strong> and it will appear under <em>My Simulations</em>.
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 mb-6 text-left">
+            💡 Tip: keep your profile up to date so you&apos;re ready the moment the simulation goes live.
+          </div>
+          <button
+            onClick={() => { setShowSimulationPrompt(false); onClose(); }}
+            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
+          >
+            Got it
+          </button>
+        </div>
+      );
+    }
 
     // Helper to format date
     const formatAvailabilityDate = (dateStr: string | null | undefined): string => {

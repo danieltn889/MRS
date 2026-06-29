@@ -104,8 +104,14 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
     try {
       setProfileLoading(true);
       const token = localStorage.getItem('authToken');
-      const userId = user?.id || localStorage.getItem('userId');
-      
+      // The logged-in id lives inside the `user` object in localStorage (not a
+      // separate `userId` key), so fall back to parsing it — otherwise the profile
+      // never loads and the Apply modal's render gate blocks it.
+      let userId = user?.id || localStorage.getItem('userId');
+      if (!userId) {
+        try { userId = JSON.parse(localStorage.getItem('user') || '{}')?.id || null; } catch { /* ignore */ }
+      }
+
       if (!token || !userId) {
         setProfileLoading(false);
         return;
@@ -288,20 +294,21 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
   }, [savedJobs, searchQuery, filterPriority, filterTags]);
 
   const handleApplyJob = (job: SavedJob): void => {
-    setSelectedJobForApply(job);
-    setShowApplicationModal(true);
+    // Open the full job details page and auto-start the application there — same
+    // experience as applying from search (see details, then apply).
+    window.location.href = `/jobs/${job.id}?apply=1`;
   };
 
   // The JobApplicationModal performs the submission itself and calls this on
   // success — so here we ONLY sync local state (mark applied, close the modal).
   // Re-submitting here would cause a duplicate application.
   const handleApplicationSubmit = (_data?: any): void => {
+    // Mark as applied but keep the modal open — it shows its own next-steps screen
+    // (simulation details, or the "no simulation yet" notice) and closes itself (onClose).
     if (selectedJobForApply) {
       appliedJobsManager.addAppliedJob(selectedJobForApply.id);
       setAppliedJobs(appliedJobsManager.getAllAppliedJobs());
     }
-    setShowApplicationModal(false);
-    setSelectedJobForApply(null);
   };
 
   if (loading || profileLoading) {
@@ -578,7 +585,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
       </div>
 
       {/* Job Application Modal */}
-      {showApplicationModal && selectedJobForApply && fullCandidateProfile && (
+      {showApplicationModal && selectedJobForApply && (
         <JobApplicationModal
           isOpen={showApplicationModal}
           onClose={() => {

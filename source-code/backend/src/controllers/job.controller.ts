@@ -4204,11 +4204,12 @@ class JobController extends BaseController {
         return;
       }
 
-      // Save the job
+      // Save the job, capturing the AI match score the candidate saw (if provided)
+      const savedMatchScore = req.body?.match_score ?? req.body?.matchScore ?? null;
       await DatabaseService.execute(
-        `INSERT INTO saved_jobs (user_id, job_id, saved_at) 
-       VALUES ($1, $2, NOW())`,
-        [userId, jobId]
+        `INSERT INTO saved_jobs (user_id, job_id, saved_at, match_score)
+       VALUES ($1, $2, NOW(), $3)`,
+        [userId, jobId, savedMatchScore]
       );
 
       this.sendSuccess(res, { jobId, saved: true }, 'Job saved successfully');
@@ -4273,7 +4274,8 @@ class JobController extends BaseController {
         sj.notes,
         sj.tags,
         sj.priority,
-        sj.folder
+        sj.folder,
+        sj.match_score
       FROM saved_jobs sj
       JOIN jobs j ON sj.job_id = j.id
       LEFT JOIN companies c ON j.company_id = c.id
