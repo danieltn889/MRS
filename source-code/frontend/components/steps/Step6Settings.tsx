@@ -38,7 +38,7 @@ const Step6Settings: React.FC<Props> = ({ simulation, setSimulation }) => {
     <div className="p-6 space-y-6">
       <div>
         <h3 className="text-lg font-bold text-gray-900">Environment & Settings</h3>
-        <p className="text-sm text-gray-500 mt-0.5">Configure the simulation environment and candidate experience.</p>
+        <p className="text-sm text-gray-500 mt-0.5">Configure the practical assessment environment and candidate experience.</p>
       </div>
 
       {/* Environment + Attempts + Time Limit */}
@@ -81,7 +81,7 @@ const Step6Settings: React.FC<Props> = ({ simulation, setSimulation }) => {
             autoComplete="off"
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
-          <p className="text-xs text-gray-400 mt-1">How many times a candidate may retake this simulation</p>
+          <p className="text-xs text-gray-400 mt-1">How many times a candidate may retake this practical assessment</p>
         </div>
       </div>
 
@@ -115,7 +115,7 @@ const Step6Settings: React.FC<Props> = ({ simulation, setSimulation }) => {
 
       {/* Options */}
       <div className="bg-gray-50 rounded-xl p-5 space-y-3">
-        <h4 className="text-sm font-semibold text-gray-700">Simulation Options</h4>
+        <h4 className="text-sm font-semibold text-gray-700">Practical Assessment Options</h4>
         {OPTIONS.map(opt => (
           <label key={opt.key} className="flex items-center gap-3 cursor-pointer">
             <input

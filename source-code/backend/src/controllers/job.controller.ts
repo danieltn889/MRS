@@ -238,6 +238,7 @@ class JobController extends BaseController {
         FROM jobs j
         LEFT JOIN companies c ON j.company_id = c.id
         WHERE j.status = 'active'
+        AND (j.published_at IS NULL OR j.published_at <= NOW())
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
       `;
 
@@ -245,7 +246,23 @@ class JobController extends BaseController {
       let paramIndex = 1;
 
       if (search) {
-        query += ` AND (j.title ILIKE $${paramIndex} OR j.description ILIKE $${paramIndex} OR c.name ILIKE $${paramIndex})`;
+        query += ` AND (
+          j.title ILIKE $${paramIndex}
+          OR j.description ILIKE $${paramIndex}
+          OR c.name ILIKE $${paramIndex}
+          OR j.work_arrangement ILIKE $${paramIndex}
+          OR j.job_type ILIKE $${paramIndex}
+          OR j.experience_level ILIKE $${paramIndex}
+          OR COALESCE(j.tags::text, '') ILIKE $${paramIndex}
+          OR COALESCE(j.locations::text, '') ILIKE $${paramIndex}
+          OR COALESCE(j.requirements::text, '') ILIKE $${paramIndex}
+          OR COALESCE(j.responsibilities::text, '') ILIKE $${paramIndex}
+          OR EXISTS (
+            SELECT 1 FROM job_skills js
+            JOIN skills s ON js.skill_id = s.id
+            WHERE js.job_id = j.id AND s.name ILIKE $${paramIndex}
+          )
+        )`;
         params.push(`%${search}%`);
         paramIndex++;
       }
@@ -306,13 +323,30 @@ class JobController extends BaseController {
         SELECT COUNT(*) as total FROM jobs j
         LEFT JOIN companies c ON j.company_id = c.id
         WHERE j.status = 'active'
+        AND (j.published_at IS NULL OR j.published_at <= NOW())
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
       `;
       const countParams: any[] = [];
       let countIndex = 1;
 
       if (search) {
-        countQuery += ` AND (j.title ILIKE $${countIndex} OR j.description ILIKE $${countIndex} OR c.name ILIKE $${countIndex})`;
+        countQuery += ` AND (
+          j.title ILIKE $${countIndex}
+          OR j.description ILIKE $${countIndex}
+          OR c.name ILIKE $${countIndex}
+          OR j.work_arrangement ILIKE $${countIndex}
+          OR j.job_type ILIKE $${countIndex}
+          OR j.experience_level ILIKE $${countIndex}
+          OR COALESCE(j.tags::text, '') ILIKE $${countIndex}
+          OR COALESCE(j.locations::text, '') ILIKE $${countIndex}
+          OR COALESCE(j.requirements::text, '') ILIKE $${countIndex}
+          OR COALESCE(j.responsibilities::text, '') ILIKE $${countIndex}
+          OR EXISTS (
+            SELECT 1 FROM job_skills js
+            JOIN skills s ON js.skill_id = s.id
+            WHERE js.job_id = j.id AND s.name ILIKE $${countIndex}
+          )
+        )`;
         countParams.push(`%${search}%`);
         countIndex++;
       }
@@ -579,15 +613,15 @@ class JobController extends BaseController {
         const jobResult = await client.query(`
         INSERT INTO jobs (
           company_id, created_by, title, slug, department, job_type, work_arrangement,
-          locations, description, responsibilities, requirements, salary_min, 
-          salary_max, salary_currency, salary_visible, benefits, status, visibility, 
-          published_at, expires_at, application_limit, screening_questions, 
-          application_instructions, skills_required, skills_preferred, documents, 
+          locations, description, responsibilities, requirements, salary_min,
+          salary_max, salary_currency, salary_period, salary_visible, benefits, status, visibility,
+          published_at, expires_at, application_limit, screening_questions,
+          application_instructions, skills_required, skills_preferred, documents,
           tags, education_required, language_requirements, experience_requirements,
           experience_level, experience_min, experience_max, ai_match_required_score,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 
-                  $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+                  $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
                   NOW(), NOW())
         RETURNING *
       `, [
@@ -602,9 +636,10 @@ class JobController extends BaseController {
           jobData.description,
           JSON.stringify(responsibilities),
           JSON.stringify(requirements),
-          jobData.salaryMin || null,
-          jobData.salaryMax || null,
+          jobData.salaryMin ?? null,
+          jobData.salaryMax ?? null,
           jobData.salaryCurrency || 'Rwf',
+          jobData.salaryPeriod || 'month',
           jobData.salaryVisible !== false,
           JSON.stringify(benefits),
           status,
@@ -626,8 +661,8 @@ class JobController extends BaseController {
           JSON.stringify(languageRequirements),
           JSON.stringify(experienceRequirements),
           normalizedExperienceLevel,
-          jobData.experienceMin || null,
-          jobData.experienceMax || null,
+          jobData.experienceMin ?? null,
+          jobData.experienceMax ?? null,
           aiMatchRequiredScore
         ]);
 
@@ -676,8 +711,10 @@ class JobController extends BaseController {
       const newStatus = jobData.status || existingJob.status;
 
       if (newStatus === 'active' && existingJob.status !== 'active') {
-        publishedAt = new Date();
-        expiresAt = new Date(Date.now() + postingDuration * 24 * 60 * 60 * 1000);
+        publishedAt = jobData.publishedAt ? new Date(jobData.publishedAt) : new Date();
+        expiresAt = jobData.expiresAt
+          ? new Date(jobData.expiresAt)
+          : new Date((publishedAt as Date).getTime() + postingDuration * 24 * 60 * 60 * 1000);
       } else if (jobData.publishedAt) {
         publishedAt = new Date(jobData.publishedAt);
         if (jobData.expiresAt) {
@@ -717,43 +754,44 @@ class JobController extends BaseController {
       const updatedJob = await this.withTransaction(async (client) => {
         const jobResult = await client.query(`
         UPDATE jobs SET
-          title = $1, 
-          department = $2, 
-          job_type = $3, 
+          title = $1,
+          department = $2,
+          job_type = $3,
           work_arrangement = $4,
-          locations = $5::jsonb, 
-          description = $6, 
-          responsibilities = $7::jsonb, 
-          requirements = $8::jsonb, 
-          salary_min = $9, 
-          salary_max = $10, 
-          salary_currency = $11, 
-          salary_visible = $12, 
-          benefits = $13::jsonb, 
-          status = $14, 
-          visibility = $15, 
-          published_at = $16, 
-          expires_at = $17, 
-          application_limit = $18, 
-          screening_questions = $19::jsonb, 
-          application_instructions = $20, 
-          skills_required = $21::jsonb,
-          skills_preferred = $22::jsonb, 
-          documents = $23::jsonb, 
-          tags = $24, 
-          education_required = $25::jsonb, 
-          language_requirements = $26::jsonb,
-          experience_requirements = $27::jsonb, 
-          experience_level = $28,
-          experience_min = $29, 
-          experience_max = $30, 
-          ai_match_required_score = $31,
+          locations = $5::jsonb,
+          description = $6,
+          responsibilities = $7::jsonb,
+          requirements = $8::jsonb,
+          salary_min = $9,
+          salary_max = $10,
+          salary_currency = $11,
+          salary_period = $12,
+          salary_visible = $13,
+          benefits = $14::jsonb,
+          status = $15,
+          visibility = $16,
+          published_at = $17,
+          expires_at = $18,
+          application_limit = $19,
+          screening_questions = $20::jsonb,
+          application_instructions = $21,
+          skills_required = $22::jsonb,
+          skills_preferred = $23::jsonb,
+          documents = $24::jsonb,
+          tags = $25,
+          education_required = $26::jsonb,
+          language_requirements = $27::jsonb,
+          experience_requirements = $28::jsonb,
+          experience_level = $29,
+          experience_min = $30,
+          experience_max = $31,
+          ai_match_required_score = $32,
           updated_at = NOW()
-        WHERE id = $32
+        WHERE id = $33
         RETURNING *
       `, [
           jobData.title || existingJob.title,
-          jobData.department || existingJob.department,
+          jobData.department ?? existingJob.department,
           normalizedJobType,
           normalizedWorkArrangement,
           JSON.stringify(locations),
@@ -763,6 +801,7 @@ class JobController extends BaseController {
           jobData.salaryMin !== undefined ? jobData.salaryMin : existingJob.salary_min,
           jobData.salaryMax !== undefined ? jobData.salaryMax : existingJob.salary_max,
           jobData.salaryCurrency || existingJob.salary_currency || 'Rwf',
+          jobData.salaryPeriod || existingJob.salary_period || 'month',
           jobData.salaryVisible !== undefined ? jobData.salaryVisible : existingJob.salary_visible,
           JSON.stringify(benefits),
           newStatus,
@@ -965,12 +1004,17 @@ class JobController extends BaseController {
 
       // ✅ FIX: Exclude archived jobs from the list
       const result = await DatabaseService.execute(`
-      SELECT *
+      SELECT *,
+        CASE
+          WHEN status = 'active' AND published_at IS NOT NULL AND published_at > NOW() THEN 'scheduled'
+          WHEN status = 'active' AND (expires_at IS NOT NULL AND expires_at <= NOW())  THEN 'expired'
+          ELSE status
+        END AS effective_status
       FROM jobs
       WHERE company_id = $1
         AND status != 'archived'
         AND status != 'deleted'
-      ORDER BY 
+      ORDER BY
         CASE status
           WHEN 'active' THEN 1
           WHEN 'draft' THEN 2
@@ -1666,6 +1710,7 @@ class JobController extends BaseController {
         FROM jobs j
         LEFT JOIN companies c ON j.company_id = c.id
         WHERE j.status = 'active'
+        AND (j.published_at IS NULL OR j.published_at <= NOW())
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
         AND j.locations::text ILIKE $1
         ORDER BY j.created_at DESC
@@ -1676,7 +1721,8 @@ class JobController extends BaseController {
 
       const countResult = await DatabaseService.execute(
         `SELECT COUNT(*) as total FROM jobs j
-         WHERE j.status = 'active' 
+         WHERE j.status = 'active'
+         AND (j.published_at IS NULL OR j.published_at <= NOW())
          AND (j.expires_at IS NULL OR j.expires_at > NOW())
          AND j.locations::text ILIKE $1`,
         [`%${location}%`]
@@ -1702,6 +1748,7 @@ class JobController extends BaseController {
         FROM jobs j
         LEFT JOIN companies c ON j.company_id = c.id
         WHERE j.status = 'active'
+        AND (j.published_at IS NULL OR j.published_at <= NOW())
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
       `;
       const params: any[] = [];
@@ -1747,6 +1794,7 @@ class JobController extends BaseController {
         FROM jobs j
         LEFT JOIN companies c ON j.company_id = c.id
         WHERE j.status = 'active'
+        AND (j.published_at IS NULL OR j.published_at <= NOW())
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
         AND j.experience_level = $1
         ORDER BY j.created_at DESC
@@ -1755,7 +1803,10 @@ class JobController extends BaseController {
 
       const countResult = await DatabaseService.execute(`
         SELECT COUNT(*) as total FROM jobs
-        WHERE status = 'active' AND experience_level = $1
+        WHERE status = 'active'
+        AND (published_at IS NULL OR published_at <= NOW())
+        AND (expires_at IS NULL OR expires_at > NOW())
+        AND experience_level = $1
       `, [this.normalizeExperienceLevel(level)]);
 
       const total = parseInt(countResult.rows[0]?.total || '0');

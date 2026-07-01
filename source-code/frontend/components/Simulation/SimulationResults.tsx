@@ -524,7 +524,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                   )}
                   <div>
                     <h2 className={`text-2xl font-bold ${passed ? 'text-green-700' : 'text-red-700'}`}>
-                      {passed ? '✓ Simulation Passed!' : '✗ Simulation Not Passed'}
+                      {passed ? '✓ Practical Assessment Passed!' : '✗ Practical Assessment Not Passed'}
                     </h2>
                     <p className="text-gray-600 mt-1 max-w-2xl">{submissionResults.message}</p>
                     <div className="flex gap-3 mt-2 text-sm text-gray-500">
@@ -1282,11 +1282,11 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
             <div className="bg-white rounded-xl shadow-sm border p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Target size={18} className="text-purple-500" />
-                Simulation Information
+                Practical Assessment Information
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs text-gray-400">Simulation Name</p>
+                  <p className="text-xs text-gray-400">Practical Assessment Name</p>
                   <p className="font-medium">{simulationTemplate.name || 'N/A'}</p>
                 </div>
                 <div>

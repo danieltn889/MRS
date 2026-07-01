@@ -33,7 +33,7 @@ const Step7Availability: React.FC<Props> = ({ simulation, setSimulation }) => {
     <div className="p-6 space-y-6">
       <div>
         <h3 className="text-lg font-bold text-gray-900">Availability Configuration</h3>
-        <p className="text-sm text-gray-500 mt-0.5">Control when and how candidates can access this simulation.</p>
+        <p className="text-sm text-gray-500 mt-0.5">Control when and how candidates can access this practical assessment.</p>
       </div>
 
       {/* Date range + Timezone */}

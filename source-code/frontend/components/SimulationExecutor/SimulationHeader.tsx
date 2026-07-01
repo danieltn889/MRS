@@ -90,7 +90,7 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
       <div className="flex items-center space-x-3">
         <Code className="h-5 w-5 text-blue-400" />
         <h1 className="text-white font-semibold text-sm">
-          {currentTask?.title ?? 'Simulation'}
+          {currentTask?.title ?? 'Practical Assessment'}
         </h1>
         <span className="text-gray-400 text-xs">
           Task {currentTaskIndex + 1} / {totalTasks}
@@ -223,7 +223,7 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
           <button
             onClick={onPause}
             className="px-2.5 py-1.5 bg-yellow-600 text-white rounded hover:bg-yellow-700 flex items-center gap-1 text-xs"
-            title="Pause simulation"
+            title="Pause practical assessment"
           >
             <Pause size={13} />
             Pause
@@ -231,7 +231,7 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
           <button
             onClick={onSubmit}
             className="px-2.5 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 text-xs"
-            title={minSubmitRemainingSeconds > 0 ? `Submit available in ${formatTime(minSubmitRemainingSeconds)}` : 'Submit simulation'}
+            title={minSubmitRemainingSeconds > 0 ? `Submit available in ${formatTime(minSubmitRemainingSeconds)}` : 'Submit practical assessment'}
           >
             <Send size={13} />
             Submit

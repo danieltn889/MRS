@@ -152,7 +152,7 @@ const Step2Objectives: React.FC<Props> = ({ simulation, setSimulation, suggestio
         <div>
           <h3 className="text-lg font-bold text-gray-900">Learning Objectives</h3>
           <p className="text-sm text-gray-500 mt-0.5">
-            Define what candidates should demonstrate during this simulation.
+            Define what candidates should demonstrate during this practical assessment.
           </p>
         </div>
         {totalObjectives > 0 && (

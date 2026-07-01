@@ -242,7 +242,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
             <BarChart3 size={20} color="#8b5cf6" />
             <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{stats.simulations?.with_simulation || 0}</span>
           </div>
-          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Completed Simulations</p>
+          <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Completed Practical Assessments</p>
         </div>
 
         <div style={{
@@ -376,7 +376,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Candidate</th>
                   <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Tasks Score (100%)</th>
                   <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Recruiter (30%)</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Simulation Score (100%)</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Practical Assessment Score (100%)</th>
                   <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>AI (70%)</th>
                   <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Overall Score</th>
                   <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Applied</th>
@@ -587,7 +587,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
               <div>
                 <h3 style={{ margin: 0, color: '#fff', fontSize: 20 }}>Candidate Details</h3>
                 <p style={{ margin: '4px 0 0', color: 'rgba(255,255,255,0.8)', fontSize: 13 }}>
-                  Simulation Performance & Analysis
+                  Practical Assessment Performance & Analysis
                 </p>
               </div>
               <button
@@ -646,7 +646,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   <div style={{ fontSize: 28, fontWeight: 700, color: getScoreColor(parseFloat(selectedCandidate.simulation_overall_score)) }}>
                     {Math.round(parseFloat(selectedCandidate.simulation_overall_score))}%
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Simulation Score</div>
+                  <div style={{ fontSize: 12, color: '#64748b' }}>Practical Assessment Score</div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
                     {selectedCandidate.tasks_completed_count}/{selectedCandidate.total_tasks_count} tasks
                   </div>
@@ -692,7 +692,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   How this score is calculated
                 </h5>
                 <p style={{ fontSize: 13, color: '#475569', margin: '0 0 8px', lineHeight: 1.6 }}>
-                  The <strong>Simulation</strong> score is generated automatically by AI when the candidate <strong>submits</strong> the simulation — a weighted blend of code/answer <strong>Quality</strong>, <strong>Speed</strong> (time efficiency), <strong>Behavioral</strong> competencies (communication, problem-solving, punctuality…) and <strong>GitHub</strong> practices.
+                  The <strong>Practical Assessment</strong> score is generated automatically by AI when the candidate <strong>submits</strong> the practical assessment — a weighted blend of code/answer <strong>Quality</strong>, <strong>Speed</strong> (time efficiency), <strong>Behavioral</strong> competencies (communication, problem-solving, punctuality…) and <strong>GitHub</strong> practices.
                 </p>
                 <p style={{ fontSize: 13, color: '#475569', margin: '0 0 8px', lineHeight: 1.6 }}>
                   The <strong>Overall</strong> combines that AI score with the recruiter's task evaluation:
@@ -701,7 +701,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   const w = computeWeighted(selectedCandidate);
                   return (
                     <div style={{ fontSize: 13, color: '#0f172a', background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
-                      AI Simulation <strong>{Math.round(w.aiScore)}%</strong> × 70% = <strong>{(w.aiScore * 0.7).toFixed(1)}</strong>
+                      AI Practical Assessment <strong>{Math.round(w.aiScore)}%</strong> × 70% = <strong>{(w.aiScore * 0.7).toFixed(1)}</strong>
                       &nbsp;+&nbsp;
                       Recruiter Tasks <strong>{Math.round(w.recruiterAvg)}%</strong> × 30% = <strong>{(w.recruiterAvg * 0.3).toFixed(1)}</strong>
                       &nbsp;=&nbsp;
@@ -748,7 +748,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                       <span style={{ fontFamily: 'monospace' }}>Behavioral = (Adaptability + Communication) ÷ 2</span>
                     </p>
                     <div style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 5 — AI Simulation Overall</strong> (weights from the rubric; defaults):
+                      <strong style={{ color: '#7c3aed' }}>Step 5 — AI Practical Assessment Overall</strong> (weights from the rubric; defaults):
                       <table style={{ borderCollapse: 'collapse', margin: '4px 0', fontSize: 12 }}>
                         <tbody>
                           <tr><td style={{ padding: '1px 16px 1px 0' }}>Quality</td><td><strong>0.60</strong></td></tr>
@@ -758,7 +758,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                         </tbody>
                       </table>
                       <span style={{ fontFamily: 'monospace' }}>AI Overall = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</span>
-                      <div style={{ marginTop: 2 }}>This is the <strong>Simulation Score</strong> column.</div>
+                      <div style={{ marginTop: 2 }}>This is the <strong>Practical Assessment Score</strong> column.</div>
                     </div>
                     <p style={{ margin: '0 0 6px' }}>
                       <strong style={{ color: '#7c3aed' }}>Step 6 — Pass / Fail:</strong> passed = AI Overall ≥ passingScore (rubric's passingScore, default 70).
@@ -773,7 +773,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                     </div>
                     <p style={{ margin: '0 0 6px' }}>
                       <strong style={{ color: '#7c3aed' }}>Step 7 — Final platform Overall (the table):</strong><br />
-                      <span style={{ fontFamily: 'monospace' }}>Final = AI Simulation × 70% + Recruiter Task Avg × 30%</span> — recruiter avg = Σ(per-task recruiter scores) ÷ total (unscored = 0).
+                      <span style={{ fontFamily: 'monospace' }}>Final = AI Practical Assessment × 70% + Recruiter Task Avg × 30%</span> — recruiter avg = Σ(per-task recruiter scores) ÷ total (unscored = 0).
                     </p>
                     <div style={{ margin: '6px 0', padding: 8, background: '#fff', borderRadius: 8 }}>
                       <strong>Worked example</strong> — Quality 85, Speed 70, Behavioral 60, GitHub 50:<br />
@@ -807,7 +807,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                       if (!rows.length) return null;
                       return (
                         <div style={{ marginTop: 8, padding: 10, background: '#fff', borderRadius: 8 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 4, color: '#0f172a' }}>AI Simulation composition:</div>
+                          <div style={{ fontWeight: 600, marginBottom: 4, color: '#0f172a' }}>AI Practical Assessment composition:</div>
                           {rows.map((c) => (
                             <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between' }}>
                               <span>{c.label}</span>

@@ -117,21 +117,21 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
       setLoading(true);
       await simulationAPI.duplicateSimulation(simId);
       await fetchSimulations();
-      alert('✅ Simulation duplicated successfully!');
+      alert('✅ Practical Assessment duplicated successfully!');
     } catch (error: any) {
-      alert(`❌ Error duplicating simulation: ${error?.message || 'Failed.'}`);
+      alert(`❌ Error duplicating practical assessment: ${error?.message || 'Failed.'}`);
     } finally {
       setLoading(false);
     }
   };
 
   const archiveSimulation = async (simId: string) => {
-    if (!confirm('📦 Archive this simulation? It can be restored later.')) return;
+    if (!confirm('📦 Archive this practical assessment? It can be restored later.')) return;
     try {
       setLoading(true);
       await simulationAPI.archiveSimulation(simId);
       await fetchSimulations();
-      alert('✅ Simulation archived!');
+      alert('✅ Practical Assessment archived!');
     } catch (error: any) {
       alert(`❌ Error: ${error?.message}`);
     } finally {
@@ -145,7 +145,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
       setLoading(true);
       await simulationAPI.deleteSimulation(simId);
       await fetchSimulations();
-      alert('✅ Simulation deleted!');
+      alert('✅ Practical Assessment deleted!');
     } catch (error: any) {
       alert(`❌ Error: ${error?.message}`);
     } finally {
@@ -293,7 +293,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-500">Loading simulations...</p>
+          <p className="text-gray-500">Loading practical assessments...</p>
         </div>
       </div>
     );
@@ -310,16 +310,16 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
                 ← Back to Dashboard
               </button>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent">
-                Simulation Management
+                Practical Assessment Management
               </h1>
-              <p className="text-sm text-gray-500 mt-0.5">Create and manage candidate assessment simulations</p>
+              <p className="text-sm text-gray-500 mt-0.5">Create and manage candidate assessment practical assessments</p>
             </div>
             <button
               onClick={onCreateNew}
               className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-xl hover:from-purple-700 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg flex items-center gap-2 font-medium"
             >
               <Plus size={18} />
-              <span>Create Simulation</span>
+              <span>Create Practical Assessment</span>
             </button>
           </div>
         </div>
@@ -375,7 +375,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search simulations..."
+                  placeholder="Search practical assessments..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-9 pr-4 py-1.5 border border-gray-200 rounded-lg text-sm w-64 focus:ring-2 focus:ring-purple-500 focus:border-transparent"
@@ -400,20 +400,20 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
         {filteredSims.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-200">
             <Puzzle className="mx-auto h-16 w-16 text-gray-300" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">No simulations found</h3>
+            <h3 className="mt-4 text-lg font-medium text-gray-900">No practical assessments found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm ? 'No simulations match your search.' :
-               statusFilter !== 'all' ? `No ${statusFilter} simulations.` : 'Get started by creating your first simulation.'}
+              {searchTerm ? 'No practical assessments match your search.' :
+               statusFilter !== 'all' ? `No ${statusFilter} practical assessments.` : 'Get started by creating your first practical assessment.'}
             </p>
             {statusFilter !== 'all' && (
               <button onClick={() => setStatusFilter('all')} className="mt-4 text-purple-600 hover:text-purple-700 text-sm">
-                View all simulations
+                View all practical assessments
               </button>
             )}
             {statusFilter === 'all' && !searchTerm && (
               <button onClick={onCreateNew} className="mt-6 inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                 <Plus size={16} className="mr-2" />
-                Create New Simulation
+                Create New Practical Assessment
               </button>
             )}
           </div>
@@ -445,7 +445,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
                         </div>
                         <div className="flex-1">
                           <h3 className="font-bold text-xl text-gray-900 group-hover:text-purple-600 transition-colors">
-                            {sim.title || 'Untitled Simulation'}
+                            {sim.title || 'Untitled Practical Assessment'}
                           </h3>
                           <p className="text-sm text-gray-500 mt-0.5">{sim.jobRole || 'No job role assigned'}</p>
                         </div>
@@ -460,7 +460,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
 
                     {/* Description */}
                     <p className="text-gray-600 mb-4 leading-relaxed">
-                      {sim.description || 'No description provided for this simulation.'}
+                      {sim.description || 'No description provided for this practical assessment.'}
                     </p>
 
                     {/* Stats Row */}
@@ -505,7 +505,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
                       </button>                      
                       <button
                         onClick={() => viewCandidates(sim)}
-                        title={`${sim.total_instances || 0} candidate(s) took this simulation`}
+                        title={`${sim.total_instances || 0} candidate(s) took this practical assessment`}
                         className="px-4 py-2 flex items-center justify-center gap-2 bg-purple-50 hover:bg-purple-100 text-purple-600 text-sm font-medium rounded-lg transition-colors"
                       >
                         <Users size={16} />
@@ -556,7 +556,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
 
             {/* Total count */}
             <div className="mt-6 text-center text-xs text-gray-400">
-              Showing {displaySims.length} of {filteredSims.length} simulations
+              Showing {displaySims.length} of {filteredSims.length} practical assessments
             </div>
           </>
         )}

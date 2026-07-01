@@ -17,7 +17,7 @@ const Step10Publish: React.FC<Props> = ({
   onSave, onPublish, onDuplicate, onArchive,
 }) => {
   const checklistItems = [
-    { label: 'Simulation title and description completed', ok: !!(simulation.title?.trim()) && !!(simulation.description?.trim()) },
+    { label: 'Practical assessment title and description completed', ok: !!(simulation.title?.trim()) && !!(simulation.description?.trim()) },
     { label: 'Job linked and role specified',              ok: !!(simulation.jobId) && !!(simulation.jobRole?.trim()) },
     { label: 'At least one learning objective defined',    ok: simulation.objectives.filter(o => o?.trim()).length > 0 },
     { label: 'At least one task with title and description', ok: simulation.tasks.length > 0 && simulation.tasks.every(t => t.title?.trim() && t.description?.trim()) },
@@ -41,12 +41,12 @@ const Step10Publish: React.FC<Props> = ({
     <div className="p-6 space-y-6">
       <div>
         <h3 className="text-lg font-bold text-gray-900">Review & Publish</h3>
-        <p className="text-sm text-gray-500 mt-0.5">Final review before making this simulation available to candidates.</p>
+        <p className="text-sm text-gray-500 mt-0.5">Final review before making this practical assessment available to candidates.</p>
       </div>
 
       {/* Summary */}
       <div className="bg-gray-50 rounded-xl p-5">
-        <h4 className="text-sm font-semibold text-gray-700 mb-4">Simulation Summary</h4>
+        <h4 className="text-sm font-semibold text-gray-700 mb-4">Practical Assessment Summary</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
           {summaryItems.map(({ label, value }) => (
             <div key={label} className="flex items-center justify-between border-b border-gray-100 pb-2">

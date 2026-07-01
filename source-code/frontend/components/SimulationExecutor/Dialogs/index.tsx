@@ -183,9 +183,9 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
             <div className="bg-orange-500/20 rounded-full p-3 inline-flex mx-auto mb-3">
               <Timer size={32} className="text-orange-400" />
             </div>
-            <h2 className="text-2xl font-bold text-white">Resume Simulation</h2>
+            <h2 className="text-2xl font-bold text-white">Resume Practical Assessment</h2>
             <p className="text-gray-400 mt-1">
-              You have an in-progress simulation session
+              You have an in-progress practical assessment session
             </p>
           </div>
         </div>
@@ -205,7 +205,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
 
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-500 text-sm">Simulation:</span>
+                <span className="text-gray-500 text-sm">Practical Assessment:</span>
                 <span className="text-white text-sm font-medium">{sessionData.simulationName}</span>
               </div>
               {sessionData.jobTitle && (
@@ -354,7 +354,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
               ) : (
                 <>
                   <Play size={16} />
-                  Resume Simulation
+                  Resume Practical Assessment
                 </>
               )}
             </button>
@@ -535,7 +535,7 @@ export const SessionStartDialog: React.FC<SessionStartDialogProps> = ({
             ) : (
               <>
                 <Play size={16} />
-                Start Simulation
+                Start Practical Assessment
               </>
             )}
           </button>
@@ -803,7 +803,7 @@ export const StartDialog: React.FC<StartDialogProps> = ({ session, onStart, onEx
         <div className="text-center mb-6">
           <Play className="mx-auto h-16 w-16 text-green-500 mb-4" />
           <h2 className="text-2xl font-bold text-white">
-            {isPaused ? 'Resume Simulation?' : 'Ready to Start?'}
+            {isPaused ? 'Resume Practical Assessment?' : 'Ready to Start?'}
           </h2>
           <p className="text-gray-400 mt-2">
             {isPaused
@@ -852,7 +852,7 @@ export const PauseDialog: React.FC<PauseDialogProps> = ({ open, onResume, sessio
           onClick={onResume}
           className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
         >
-          Resume Simulation
+          Resume Practical Assessment
         </button>
       </div>
     </div>
@@ -895,7 +895,7 @@ export const SubmitDialog: React.FC<SubmitDialogProps> = ({
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
         <Send className="mx-auto h-14 w-14 text-green-500 mb-4" />
-        <h2 className="text-2xl font-bold text-white">Submit Simulation?</h2>
+        <h2 className="text-2xl font-bold text-white">Submit Practical Assessment?</h2>
         <p className="text-gray-400 mt-2">This cannot be undone.</p>
 
         <div className={`mt-4 mb-4 rounded-lg border p-3 text-left ${remainingSeconds > 0
@@ -1729,8 +1729,8 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full p-6 border border-gray-700 text-center max-h-[90vh] overflow-y-auto">
         <CheckCircle className="mx-auto h-14 w-14 text-green-500 mb-4" />
-        <h2 className="text-2xl font-bold text-white">Simulation Submitted</h2>
-        <p className="text-gray-400 mt-2">{result?.message || 'Your simulation was submitted successfully.'}</p>
+        <h2 className="text-2xl font-bold text-white">Practical Assessment Submitted</h2>
+        <p className="text-gray-400 mt-2">{result?.message || 'Your practical assessment was submitted successfully.'}</p>
 
         {result?.emailSent && (
           <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-900/30 border border-green-700 text-green-300 text-sm">

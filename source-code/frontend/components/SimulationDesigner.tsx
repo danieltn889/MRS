@@ -62,10 +62,10 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">
-                {isDraft ? 'Draft Saved!' : 'Simulation Published!'}
+                {isDraft ? 'Draft Saved!' : 'Practical Assessment Published!'}
               </h3>
               <p className="text-xs text-white/80">
-                {isDraft ? 'Your simulation has been saved as a draft.' : 'Your simulation is now live for candidates.'}
+                {isDraft ? 'Your practical assessment has been saved as a draft.' : 'Your practical assessment is now live for candidates.'}
               </p>
             </div>
           </div>
@@ -76,7 +76,7 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
           <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
             <FileCheck size={18} className={isDraft ? 'text-blue-500 shrink-0 mt-0.5' : 'text-green-500 shrink-0 mt-0.5'} />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-gray-900 truncate">{sim.title || 'Untitled Simulation'}</p>
+              <p className="text-sm font-bold text-gray-900 truncate">{sim.title || 'Untitled Practical Assessment'}</p>
               {sim.jobRole && (
                 <p className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                   <Briefcase size={11} /> {sim.jobRole}
@@ -213,7 +213,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       passFailCriteria: { overallScore: { minimum: 70, maximum: 100 }, sectionScores: [], criticalTasks: [], behavioralMetrics: [], timeManagement: { completionRequired: true, timeBonus: false }, qualityStandards: [], automatedRules: [] },
       availability: { ...defaultAvailability },
       practiceEnabled: true,
-      practiceSimulation: { enabled: true, type: 'section', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: "This practice simulation will help you understand the format and types of tasks you'll encounter.", resources: [] },
+      practiceSimulation: { enabled: true, type: 'section', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: "This practical assessment will help you understand the format and types of tasks you'll encounter.", resources: [] },
     });
   };
 
@@ -280,8 +280,8 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
               }),
             }
           : { ...defaultAvailability },
-        practiceEnabled:    data.practiceEnabled ?? data.tasks_structure?.practiceEnabled ?? false,
-        practiceSimulation: data.practiceSimulation || data.tasks_structure?.practiceSimulation || { enabled: true, type: 'section', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: '', resources: [] },
+        practiceEnabled:    data.practiceEnabled ?? data.tasks_structure?.practiceEnabled ?? data.practiceSimulation?.enabled ?? data.tasks_structure?.practiceSimulation?.enabled ?? false,
+        practiceSimulation: data.practiceSimulation || data.tasks_structure?.practiceSimulation || { enabled: false, type: 'section', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: '', resources: [] },
         metadata:    data.metadata,
       };
 
@@ -302,7 +302,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
     switch (step) {
       case 1:
         if (!sim.jobId?.trim())              errors.push('A linked job is required');
-        if (!(sim.title ?? '').trim())       errors.push('Simulation title is required');
+        if (!(sim.title ?? '').trim())       errors.push('Practical assessment title is required');
         if (!(sim.jobRole ?? '').trim())     errors.push('Job role is required');
         if (!(sim.description ?? '').trim()) errors.push('Description is required');
         if ((sim.duration ?? 0) < 15)        errors.push('Duration must be at least 15 minutes');
@@ -411,7 +411,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       setValidationErrors([]);
       setSaveResult({ action: 'draft', simulation: updated });
     } catch (error: any) {
-      const msg = error?.message || 'Failed to save simulation.';
+      const msg = error?.message || 'Failed to save practical assessment.';
       setValidationErrors([`Save failed: ${msg}`]);
     } finally {
       setLoading(false);
@@ -452,13 +452,13 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
 
   const duplicateSimulation = async () => {
     if (!simulation || String(simulation.id).match(/^\d{13}$/)) {
-      alert('Save the simulation before duplicating.');
+      alert('Save the practical assessment before duplicating.');
       return;
     }
     try {
       setLoading(true);
       await simulationAPI.duplicateSimulation(simulation.id);
-      alert('Simulation duplicated!');
+      alert('Practical Assessment duplicated!');
       handleBackToList();
     } catch (error: any) {
       alert(`Error duplicating: ${error?.message || 'Failed.'}`);
@@ -468,11 +468,11 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
   };
 
   const archiveSimulation = async () => {
-    if (!simulation || !confirm('Archive this simulation?')) return;
+    if (!simulation || !confirm('Archive this practical assessment?')) return;
     try {
       setLoading(true);
       if (!String(simulation.id).match(/^\d{13}$/)) await simulationAPI.archiveSimulation(simulation.id);
-      alert('Simulation archived!');
+      alert('Practical Assessment archived!');
       handleBackToList();
     } catch (error: any) {
       alert(`Error archiving: ${error?.message || 'Failed.'}`);
@@ -527,7 +527,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4" />
-          <p className="text-sm text-gray-500">Loading simulation…</p>
+          <p className="text-sm text-gray-500">Loading practical assessment…</p>
         </div>
       </div>
     );
@@ -592,7 +592,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
               <div className="h-5 w-px bg-gray-200 flex-shrink-0" />
               <div className="min-w-0">
                 <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent truncate">
-                  {editingId ? 'Edit Simulation' : 'Create Simulation'}
+                  {editingId ? 'Edit Practical Assessment' : 'Create Practical Assessment'}
                 </h1>
                 {simulation.jobRole && (
                   <p className="text-xs text-gray-500 truncate">{simulation.jobRole}</p>

@@ -95,16 +95,16 @@ const defaultAvailability = {
 // STEPS
 // ============================================
 const STEPS = [
-  { id: 1, title: 'Basics', description: 'Define simulation fundamentals' },
+  { id: 1, title: 'Basics', description: 'Define practical assessment fundamentals' },
   { id: 2, title: 'Objectives', description: 'Set learning and assessment goals' },
   { id: 3, title: 'Tasks', description: 'Design individual tasks and scenarios' },
   { id: 4, title: 'Scoring', description: 'Configure evaluation criteria' },
   { id: 5, title: 'Pass/Fail', description: 'Set passing standards and criteria' },
   { id: 6, title: 'Settings', description: 'Environment and technical settings' },
   { id: 7, title: 'Availability', description: 'Configure scheduling and access' },
-  { id: 8, title: 'Practice', description: 'Set up practice simulation options' },
-  { id: 9, title: 'Testing', description: 'Validate and test simulation' },
-  { id: 10, title: 'Publish', description: 'Review and publish simulation' },
+  { id: 8, title: 'Practice', description: 'Set up practice round options' },
+  { id: 9, title: 'Testing', description: 'Validate and test practical assessment' },
+  { id: 10, title: 'Publish', description: 'Review and publish practical assessment' },
 ];
 
 // ============================================
@@ -253,7 +253,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
     const errors: string[] = [];
     switch (currentStep) {
       case 1:
-        if (!simulation.title.trim()) errors.push('Simulation title is required');
+        if (!simulation.title.trim()) errors.push('Practical assessment title is required');
         if (!simulation.jobRole.trim()) errors.push('Job role is required');
         if (!simulation.description.trim()) errors.push('Description is required');
         if (simulation.duration < 15 || simulation.duration > 480) errors.push('Duration must be 15–480 minutes');
@@ -264,7 +264,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
       case 3:
         if (simulation.tasks.length === 0) errors.push('At least one task is required');
         const totalDuration = simulation.tasks.reduce((s, t) => s + t.duration, 0);
-        if (totalDuration > simulation.duration) errors.push('Total task duration exceeds simulation time limit');
+        if (totalDuration > simulation.duration) errors.push('Total task duration exceeds practical assessment time limit');
         break;
       case 4: 
         if (simulation.scoring.qualityWeight + simulation.scoring.speedWeight + simulation.scoring.behavioralWeight !== 100) 
@@ -346,7 +346,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
       const savedId = result?.data?.id || result?.id;
       if (savedId) {
         setSimulation(prev => prev ? { ...prev, id: savedId, status: 'draft' } : null);
-        alert('Simulation saved successfully!');
+        alert('Practical Assessment saved successfully!');
         onSaved?.();
       }
     } catch (e: any) {
@@ -386,7 +386,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
       }
       
       setSimulation(prev => prev ? { ...prev, id: newId, status: 'active' } : null);
-      alert('Simulation published successfully!');
+      alert('Practical Assessment published successfully!');
       onSaved?.();
     } catch (e: any) {
       alert(e?.response?.data?.message || e?.message || 'Failed to publish.');
@@ -425,7 +425,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
             <div className="flex items-center gap-3">
               <button onClick={onBack} className="text-gray-500 hover:text-gray-700 text-sm">← Back</button>
               <div>
-                <h1 className="text-lg font-bold text-gray-900">{simulationId ? 'Edit Simulation' : 'Create Simulation'}</h1>
+                <h1 className="text-lg font-bold text-gray-900">{simulationId ? 'Edit Practical Assessment' : 'Create Practical Assessment'}</h1>
                 <p className="text-xs text-gray-500">{simulation.jobRole || 'Configure your assessment'}</p>
               </div>
             </div>
@@ -468,11 +468,11 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
             {/* STEP 1: Basics - COMPLETE with Job Linking */}
             {currentStep === 1 && (
               <div className="p-6">
-                <h3 className="text-lg font-semibold mb-6">Simulation Basics</h3>
+                <h3 className="text-lg font-semibold mb-6">Practical Assessment Basics</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Simulation Title */}
                   <div>
-                    <label className="block text-sm font-medium mb-2">Simulation Title *</label>
+                    <label className="block text-sm font-medium mb-2">Practical Assessment Title *</label>
                     <input 
                       type="text" 
                       value={simulation.title}
@@ -598,7 +598,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                     onChange={e => setSimulation(p => p ? { ...p, description: e.target.value } : null)}
                     rows={4} 
                     className="w-full px-3 py-2 border rounded-md"
-                    placeholder="Describe what this simulation assesses and what candidates can expect..." 
+                    placeholder="Describe what this practical assessment assesses and what candidates can expect..." 
                   />
                 </div>
               </div>
@@ -1003,7 +1003,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                   </div>
                 </div>
                 <div className="mb-6">
-                  <h4 className="font-medium mb-4">Simulation Options</h4>
+                  <h4 className="font-medium mb-4">Practical Assessment Options</h4>
                   <div className="space-y-3">
                     {[
                       { key: 'allowPause', label: 'Allow candidates to pause and resume' },
@@ -1011,7 +1011,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                       { key: 'randomizeTasks', label: 'Randomize task order' },
                       { key: 'allowHints', label: 'Provide hints during tasks' },
                       { key: 'recordScreen', label: 'Record screen activity' },
-                      { key: 'recordAudio', label: 'Record audio during simulation' },
+                      { key: 'recordAudio', label: 'Record audio during practical assessment' },
                     ].map(opt => (
                       <div key={opt.key} className="flex items-center gap-3">
                         <input 
@@ -1127,7 +1127,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
             {/* STEP 8: Practice */}
             {currentStep === 8 && (
               <div className="p-6">
-                <h3 className="text-lg font-semibold mb-6">Practice Simulation Setup</h3>
+                <h3 className="text-lg font-semibold mb-6">Practice Round Setup</h3>
                 <div className="bg-gray-50 rounded-lg p-4">
                   <div className="flex items-center gap-3 mb-4">
                     <input 
@@ -1137,7 +1137,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                       onChange={e => setSimulation(p => p ? { ...p, practiceEnabled: e.target.checked } : null)}
                       className="rounded border-gray-300 text-blue-600" 
                     />
-                    <label htmlFor="practiceEnabled" className="text-sm font-medium text-gray-700">Enable practice simulation for candidates</label>
+                    <label htmlFor="practiceEnabled" className="text-sm font-medium text-gray-700">Enable practice round for candidates</label>
                   </div>
                   {simulation.practiceEnabled && (
                     <div className="ml-6 space-y-4">
@@ -1149,7 +1149,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                             onChange={e => setSimulation(p => p ? { ...p, practiceSimulation: { ...p.practiceSimulation!, type: e.target.value as any, enabled: true } } : null)}
                             className="w-full px-3 py-2 border rounded-md"
                           >
-                            <option value="full">Full simulation</option>
+                            <option value="full">Full practical assessment</option>
                             <option value="section">Section practice</option>
                             <option value="timed">Timed practice</option>
                             <option value="untimed">Untimed practice</option>
@@ -1199,7 +1199,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                           onChange={e => setSimulation(p => p ? { ...p, practiceSimulation: { ...p.practiceSimulation!, instructions: e.target.value, enabled: true } } : null)}
                           rows={2} 
                           className="w-full px-3 py-2 border rounded-md"
-                          placeholder="Instructions for candidates about the practice simulation..." 
+                          placeholder="Instructions for candidates about the practice round..." 
                         />
                       </div>
                     </div>
@@ -1215,7 +1215,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                 <div className="grid grid-cols-2 gap-6">
                   <div className="bg-gray-50 rounded-lg p-4 text-center">
                     <Eye className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600 mb-4">Experience the simulation as a candidate would see it</p>
+                    <p className="text-sm text-gray-600 mb-4">Experience the practical assessment as a candidate would see it</p>
                     <button onClick={() => setShowPreview(true)} className="px-4 py-2 bg-blue-600 text-white rounded-md w-full hover:bg-blue-700">
                       Start Preview
                     </button>
@@ -1266,7 +1266,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
               <div className="p-6">
                 <h3 className="text-lg font-semibold mb-6">Review & Publish</h3>
                 <div className="bg-gray-50 rounded-lg p-6 mb-6">
-                  <h4 className="font-medium mb-4">Simulation Summary</h4>
+                  <h4 className="font-medium mb-4">Practical Assessment Summary</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                       { label: 'Title', value: simulation.title },
@@ -1335,14 +1335,14 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[85vh] overflow-auto">
             <div className="p-6 border-b flex justify-between items-center sticky top-0 bg-white">
-              <h2 className="text-xl font-semibold text-gray-900">Simulation Preview</h2>
+              <h2 className="text-xl font-semibold text-gray-900">Practical Assessment Preview</h2>
               <button onClick={() => setShowPreview(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={24} />
               </button>
             </div>
             <div className="p-6 space-y-6">
               <div className="bg-gray-50 rounded-lg p-4">
-                <h3 className="font-medium text-gray-900 mb-2">{simulation.title || 'Untitled Simulation'}</h3>
+                <h3 className="font-medium text-gray-900 mb-2">{simulation.title || 'Untitled Practical Assessment'}</h3>
                 <p className="text-sm text-gray-600 mb-2">{simulation.description || 'No description provided'}</p>
                 <div className="flex gap-4 text-sm text-gray-500">
                   <span>Role: {simulation.jobRole || 'Not specified'}</span>

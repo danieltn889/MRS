@@ -1210,11 +1210,11 @@ const JobApplicationModal = ({
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">Application submitted! 🎉</h3>
           <p className="text-gray-600 mb-4">
-            This job doesn&apos;t have a job simulation yet. <strong>As soon as the recruiter sets one,
-            you&apos;ll be notified</strong> and it will appear under <em>My Simulations</em>.
+            This job doesn&apos;t have a job practical assessment yet. <strong>As soon as the recruiter sets one,
+            you&apos;ll be notified</strong> and it will appear under <em>My Practical Assessments</em>.
           </p>
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 mb-6 text-left">
-            💡 Tip: keep your profile up to date so you&apos;re ready the moment the simulation goes live.
+            💡 Tip: keep your profile up to date so you&apos;re ready the moment the practical assessment goes live.
           </div>
           <button
             onClick={() => { setShowSimulationPrompt(false); onClose(); }}
@@ -1281,7 +1281,7 @@ const JobApplicationModal = ({
         if (now > endDate) {
           return {
             available: false,
-            message: `❌ This simulation expired on ${formatAvailabilityDate(availability.endDate)}`
+            message: `❌ This practical assessment expired on ${formatAvailabilityDate(availability.endDate)}`
           };
         }
       }
@@ -1430,9 +1430,9 @@ const JobApplicationModal = ({
               <Rocket className="w-5 h-5 text-blue-600" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-blue-800 text-base">🎯 Next Step: Complete the Simulation</h4>
+              <h4 className="font-semibold text-blue-800 text-base">🎯 Next Step: Complete the Practical Assessment</h4>
               <p className="text-sm mt-1 text-blue-700">
-                {message || `This job requires ${totalTemplates} simulation${totalTemplates > 1 ? 's' : ''} to evaluate your skills.`}
+                {message || `This job requires ${totalTemplates} practical assessment${totalTemplates > 1 ? 's' : ''} to evaluate your skills.`}
               </p>
             </div>
           </div>
@@ -1568,7 +1568,7 @@ const JobApplicationModal = ({
                         className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-base font-semibold rounded-lg hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95"
                       >
                         <Play className="w-5 h-5" />
-                        Start Simulation
+                        Start Practical Assessment
                       </button>
                     ) : (
                       <button

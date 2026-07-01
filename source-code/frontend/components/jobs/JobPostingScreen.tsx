@@ -911,18 +911,18 @@ const validate = (data: JobFormData, step: number, isEditing = false): Validatio
   if (step === 5) {
     if (data.applicationLimit && (isNaN(parseInt(data.applicationLimit)) || parseInt(data.applicationLimit) < 1))
       errors.applicationLimit = 'Application limit must be a positive number';
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date().toISOString().slice(0, 16);
     if (!data.publishedAt) {
-      errors.publishedAt = 'Publish date is required';
-    } else if (!isEditing && data.publishedAt < today) {
-      errors.publishedAt = 'Publish date cannot be in the past';
+      errors.publishedAt = 'Publish date & time is required';
+    } else if (!isEditing && data.publishedAt < now) {
+      errors.publishedAt = 'Publish date & time cannot be in the past';
     }
     if (!data.expiresAt) {
-      errors.expiresAt = 'Expiry date is required';
-    } else if (!isEditing && data.expiresAt <= today) {
-      errors.expiresAt = 'Expiry date must be in the future';
+      errors.expiresAt = 'Expiry date & time is required';
+    } else if (!isEditing && data.expiresAt <= now) {
+      errors.expiresAt = 'Expiry date & time must be in the future';
     } else if (data.publishedAt && data.expiresAt <= data.publishedAt) {
-      errors.expiresAt = 'Expiry date must be after the publish date';
+      errors.expiresAt = 'Expiry date & time must be after the publish date';
     }
     const emptyQuestion = data.screeningQuestions.some(q => !q.question.trim());
     if (emptyQuestion) errors.screeningQuestions = 'All screening questions must have text';
@@ -1214,8 +1214,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         qualifications: job.qualifications || edObj.minimum_degree || '',
         qualificationEntries,
         salaryType,
-        salaryMin: job.salary_min ? String(job.salary_min) : '',
-        salaryMax: job.salary_max ? String(job.salary_max) : '',
+        // 'under' uses salary_max in the DB but the shared input is bound to salaryMin
+        salaryMin: salaryType === 'under'
+          ? (job.salary_max != null ? String(job.salary_max) : '')
+          : (job.salary_min != null ? String(job.salary_min) : ''),
+        salaryMax: salaryType !== 'under' && job.salary_max != null ? String(job.salary_max) : '',
         salaryCurrency: job.salary_currency || 'Rwf',
         salaryPeriod: job.salary_period || 'month',
         salaryVisible: job.salary_visible !== false,
@@ -1248,8 +1251,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
           if (typeof r === 'string') { try { return JSON.parse(r).instructions || r; } catch { return r; } }
           return r.instructions || '';
         })(),
-        publishedAt: job.published_at ? new Date(job.published_at).toISOString().split('T')[0] : DEFAULT_FORM_DATA.publishedAt,
-        expiresAt: job.expires_at ? new Date(job.expires_at).toISOString().split('T')[0] : DEFAULT_FORM_DATA.expiresAt,
+        publishedAt: job.published_at ? new Date(job.published_at).toISOString().slice(0, 16) : DEFAULT_FORM_DATA.publishedAt,
+        expiresAt: job.expires_at ? new Date(job.expires_at).toISOString().slice(0, 16) : DEFAULT_FORM_DATA.expiresAt,
         visibility: job.visibility || 'public',
         applicationLimit: job.application_limit?.toString() || '100000',
         tags: job.tags || [],
@@ -2221,11 +2224,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                   <Divider />
 
                   <FormRow>
-                    <FormField label="Publish Date" required error={errors.publishedAt}>
-                      <Input type="date" value={formData.publishedAt} onChange={v => update('publishedAt', v)} hasError={!!errors.publishedAt} />
+                    <FormField label="Publish Date & Time" required error={errors.publishedAt}>
+                      <Input type="datetime-local" value={formData.publishedAt} onChange={v => update('publishedAt', v)} hasError={!!errors.publishedAt} />
                     </FormField>
-                    <FormField label="Expiry Date" required error={errors.expiresAt}>
-                      <Input type="date" value={formData.expiresAt} onChange={v => update('expiresAt', v)} hasError={!!errors.expiresAt} />
+                    <FormField label="Expiry Date & Time" required error={errors.expiresAt}>
+                      <Input type="datetime-local" value={formData.expiresAt} onChange={v => update('expiresAt', v)} hasError={!!errors.expiresAt} />
                     </FormField>
                   </FormRow>
                   {errors.screeningQuestions && (
@@ -2307,8 +2310,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                         ['Required Skills', `${formData.requiredSkills.length} skills`],
                         ['Screening Qs', `${formData.screeningQuestions.length} questions`],
                         ['AI Match Min', `${formData.aiMatchRequiredScore || 70}%`],
-                        ['Publish', formData.publishedAt ? new Date(formData.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'],
-                        ['Expires', formData.expiresAt ? new Date(formData.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'],
+                        ['Publish', formData.publishedAt ? new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'],
+                        ['Expires', formData.expiresAt ? new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'],
                       ].map(([k, v]) => (
                         <div key={k} style={{ fontSize: 13 }}>
                           <span style={{ color: C.textMuted }}>{k}: </span>
@@ -2406,8 +2409,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 { label: 'Location', value: formData.locations.filter(Boolean).join(', ') || '—' },
                 { label: 'Salary', value: formData.salaryType === 'negotiable' ? 'Negotiable' : formData.salaryType === 'above' ? `Above ${formData.salaryMin} ${formData.salaryCurrency}` : formData.salaryType === 'under' ? `Under ${formData.salaryMin} ${formData.salaryCurrency}` : (formData.salaryMin || formData.salaryMax) ? `${formData.salaryMin || '—'} – ${formData.salaryMax || '—'} ${formData.salaryCurrency}/${formData.salaryPeriod}` : '—' },
                 { label: 'Visibility', value: formData.visibility.charAt(0).toUpperCase() + formData.visibility.slice(1) },
-                { label: 'Publish', value: formData.publishedAt ? new Date(formData.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' },
-                { label: 'Expires', value: formData.expiresAt ? new Date(formData.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—' },
+                { label: 'Publish', value: formData.publishedAt ? new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' },
+                { label: 'Expires', value: formData.expiresAt ? new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <p style={previewLabel}>{label}</p>
@@ -2585,8 +2588,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
             <div style={{ marginTop: 32, padding: 16, background: C.bg, borderRadius: C.radiusSm }}>
               <p style={{ fontSize: 12, color: C.textMuted }}>
                 <strong>Application window:</strong>{' '}
-                {new Date(formData.publishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })} –{' '}
-                {new Date(formData.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} –{' '}
+                {new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 {formData.applicationLimit && ` · Max ${formData.applicationLimit} applications`}
               </p>
             </div>

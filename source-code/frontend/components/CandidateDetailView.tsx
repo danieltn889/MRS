@@ -20,7 +20,7 @@ const TAB_CONFIG: { id: TabId; label: string; icon: React.FC<any> }[] = [
   { id: 'experience', label: 'Experience', icon: Briefcase },
   { id: 'education', label: 'Education', icon: GraduationCap },
   { id: 'skills', label: 'Skills', icon: Code },
-  { id: 'simulations', label: 'Simulations', icon: Activity },
+  { id: 'simulations', label: 'Practical Assessments', icon: Activity },
   { id: 'timeline', label: 'Timeline', icon: Calendar },
 ];
 
@@ -445,7 +445,7 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
         {activeTab === 'simulations' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             {!c.simulations?.length ? (
-              <EmptyState icon={<Activity size={48} color="#cbd5e1" />} message="No simulations taken" />
+              <EmptyState icon={<Activity size={48} color="#cbd5e1" />} message="No practical assessments taken" />
             ) : (
               c.simulations.map((sim, idx) => {
                 const overallScore = sim.overall_score ? parseFloat(sim.overall_score) : sim.evaluation_overall_score || 0;

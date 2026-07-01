@@ -166,7 +166,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
 
     // Check if it's a valid repository name (not a simulation)
     if (parsed.repo.startsWith('sim-')) {
-      setRepoError('Cannot load simulation repository. Please enter a real GitHub repository URL.');
+      setRepoError('Cannot load practical assessment repository. Please enter a real GitHub repository URL.');
       return;
     }
 
@@ -675,9 +675,9 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                         <Github size={13} /> Repository created successfully
                       </p>
                       <p className="text-gray-300 leading-relaxed">
-                        Your simulation repository has been created successfully. The repository is{' '}
+                        Your practical assessment repository has been created successfully. The repository is{' '}
                         <span className="text-green-300 font-medium">empty</span> and ready for you to begin
-                        your work. You will create the first files and commits during the simulation.
+                        your work. You will create the first files and commits during the practical assessment.
                       </p>
                       <p className="text-gray-500 mt-2 flex items-center gap-1">
                         Use the <FilePlus size={12} className="inline text-gray-400" /> /{' '}

@@ -80,7 +80,7 @@ const Results = ({ onBack }: { onBack: () => void }) => {
         id: item.session_id || item.id,
         sessionId: item.session_id || item.id,
         simulationId: item.simulation_id,
-        simulationName: item.simulation_name || 'Simulation',
+        simulationName: item.simulation_name || 'Practical Assessment',
         simulationType: item.simulation_type || 'technical',
         difficulty: item.difficulty || 'intermediate',
         duration: item.duration_minutes || 30,
@@ -161,7 +161,7 @@ h1{color:#7c3aed;margin:0 0 4px} .row{display:flex;justify-content:space-between
 <h1>Assessment Verification Certificate</h1>
 <p style="color:#6b7280">This document attests that the assessment below is recorded and verifiable.</p>
 <div class="row"><span class="k">Candidate</span><span>${currentUserName}</span></div>
-<div class="row"><span class="k">Simulation</span><span>${r.simulationName}</span></div>
+<div class="row"><span class="k">Practical Assessment</span><span>${r.simulationName}</span></div>
 <div class="row"><span class="k">Final Score</span><span>${r.score ?? '—'}%</span></div>
 <div class="row"><span class="k">Submission ID</span><span>${r.sessionId}</span></div>
 <div class="row"><span class="k">Blockchain Tx</span><span>${sub?.blockchain?.txHash || '—'}</span></div>
@@ -206,7 +206,7 @@ h1{color:#7c3aed;margin:0 0 4px} .row{display:flex;justify-content:space-between
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">My Results</h1>
-          <p className="text-gray-600">Simulation performance, evaluation details, and blockchain verification</p>
+          <p className="text-gray-600">Practical Assessment performance, evaluation details, and blockchain verification</p>
         </div>
         <button onClick={onBack} className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Back to Dashboard</button>
       </div>
@@ -281,7 +281,7 @@ h1{color:#7c3aed;margin:0 0 4px} .row{display:flex;justify-content:space-between
                   ) : (
                     <>
                       {/* Simulation Information */}
-                      <Section title="Simulation Information" icon={<FileText className="w-4 h-4 text-blue-600" />}>
+                      <Section title="Practical Assessment Information" icon={<FileText className="w-4 h-4 text-blue-600" />}>
                         <Grid items={[
                           ['Title', r.simulationName],
                           ['Category', r.simulationType],
@@ -384,7 +384,7 @@ h1{color:#7c3aed;margin:0 0 4px} .row{display:flex;justify-content:space-between
                             <p className="text-xs font-semibold text-gray-500 mb-2">Verified data (protected by blockchain)</p>
                             <Grid small items={[
                               ['Candidate ID', sub?.candidateId || '—'],
-                              ['Simulation ID', r.simulationId || '—'],
+                              ['Practical Assessment ID', r.simulationId || '—'],
                               ['Overall score', sub?.score != null ? `${sub.score}%` : `${r.score ?? '—'}%`],
                               ['Technical', sub?.scoreBreakdown?.technical != null ? `${sub.scoreBreakdown.technical}%` : '—'],
                               ['Communication', sub?.scoreBreakdown?.communication != null ? `${sub.scoreBreakdown.communication}%` : '—'],
@@ -436,7 +436,7 @@ h1{color:#7c3aed;margin:0 0 4px} .row{display:flex;justify-content:space-between
         <div className="text-center py-12">
           <TrendingUp className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No results found</h3>
-          <p className="text-gray-600">Complete a simulation to see your assessment and verification here.</p>
+          <p className="text-gray-600">Complete a practical assessment to see your assessment and verification here.</p>
         </div>
       )}
     </div>

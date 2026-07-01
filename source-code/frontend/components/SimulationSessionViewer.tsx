@@ -167,7 +167,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
           id: item.session_id || item.id,
           sessionId: item.session_id || item.id,
           simulationId: item.simulation_id,
-          simulationName: item.simulation_name || 'Simulation',
+          simulationName: item.simulation_name || 'Practical Assessment',
           simulationType: item.simulation_type || 'technical',
           difficulty: item.difficulty || 'intermediate',
           duration: item.duration_minutes || 30,
@@ -216,7 +216,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
       
     } catch (error: any) {
       console.error('Error loading simulation sessions:', error);
-      setError(error.message || 'Failed to load simulation sessions');
+      setError(error.message || 'Failed to load practical assessment sessions');
       setSessions([]);
     } finally {
       setLoading(false);
@@ -280,7 +280,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
           id: sessionData?.id || sessionId,
           sessionId: sessionData?.id || sessionId,
           simulationId: templateData?.id || apiData.simulation_id,
-          simulationName: templateData?.name || apiData.simulation_name || 'Simulation',
+          simulationName: templateData?.name || apiData.simulation_name || 'Practical Assessment',
           simulationType: templateData?.type || 'technical',
           difficulty: templateData?.difficulty || 'intermediate',
           duration: templateData?.duration_minutes || 30,
@@ -321,7 +321,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
       }
     } catch (error) {
       console.error('Error loading simulation details:', error);
-      setError('Failed to load simulation details');
+      setError('Failed to load practical assessment details');
     } finally {
       setLoading(false);
     }
@@ -344,14 +344,14 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
       }
     } catch (error: any) {
       console.error('Error resuming simulation:', error);
-      setError(error.message || 'Failed to resume simulation. Please try again.');
+      setError(error.message || 'Failed to resume practical assessment. Please try again.');
     } finally {
       setResumingId(null);
     }
   };
 
   const handleCancel = async (sessionId: string, simulationId: string) => {
-    if (!confirm('Are you sure you want to cancel this simulation? Your progress will be lost.')) {
+    if (!confirm('Are you sure you want to cancel this practical assessment? Your progress will be lost.')) {
       return;
     }
     
@@ -365,10 +365,10 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
         setSelectedSession(null);
       }
       
-      alert('Simulation cancelled successfully');
+      alert('Practical Assessment cancelled successfully');
     } catch (error: any) {
       console.error('Error cancelling simulation:', error);
-      alert(error.message || 'Failed to cancel simulation');
+      alert(error.message || 'Failed to cancel practical assessment');
     } finally {
       setResumingId(null);
     }
@@ -751,7 +751,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
             
             {/* Feedback Summary */}
             <div className="bg-gray-100 rounded-lg p-4 mb-6">
-              <p className="text-gray-700">{feedback.summary || feedback.detailed_feedback || submissionResults.message || `You scored ${Math.round(score)}% on the ${selectedSession.simulationName} simulation. The passing threshold is ${summary.passing_score || 70}%.`}</p>
+              <p className="text-gray-700">{feedback.summary || feedback.detailed_feedback || submissionResults.message || `You scored ${Math.round(score)}% on the ${selectedSession.simulationName} practical assessment. The passing threshold is ${summary.passing_score || 70}%.`}</p>
             </div>
             
             {/* Footer actions */}
@@ -844,7 +844,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
         <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-500">Total Simulations</p>
+              <p className="text-sm text-gray-500">Total Practical Assessments</p>
               <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
             </div>
             <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
@@ -906,7 +906,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-1">No sessions found</h3>
             <p className="text-gray-500">
-              No simulation sessions found for this simulation ID.
+              No practical assessment sessions found for this practical assessment ID.
             </p>
             <button
               onClick={onBack}
@@ -924,7 +924,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900">
-              {isSpecificSimulation ? 'Simulation Sessions' : 'My Simulation Sessions'}
+              {isSpecificSimulation ? 'Practical Assessment Sessions' : 'My Practical Assessment Sessions'}
             </h2>
             {!isSpecificSimulation && (
               <div className="flex gap-2">
@@ -968,11 +968,11 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <BarChart3 className="w-8 h-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-1">No simulations found</h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-1">No practical assessments found</h3>
             <p className="text-gray-500">
-              {filter === 'all' 
-                ? "You haven't started any simulations yet. Apply to jobs that have assessments!" 
-                : `No ${filter} simulations found`}
+              {filter === 'all'
+                ? "You haven't started any practical assessments yet. Apply to jobs that have assessments!"
+                : `No ${filter} practical assessments found`}
             </p>
             <button
               onClick={() => window.location.href = '/job-match'}
@@ -1235,7 +1235,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                   ) : (
                     <Play className="w-4 h-4" />
                   )}
-                  Resume Simulation
+                  Resume Practical Assessment
                 </button>
                 <button
                   onClick={() => handleCancel(selectedSession.sessionId, selectedSession.simulationId)}
@@ -1324,7 +1324,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-gray-600">Loading simulation sessions...</p>
+          <p className="text-gray-600">Loading practical assessment sessions...</p>
         </div>
       </div>
     );
@@ -1341,7 +1341,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 ← Back
               </button>
               <h1 className="text-xl font-bold text-gray-900">
-                {isSpecificSimulation ? 'Simulation Details' : 'My Simulation Sessions'}
+                {isSpecificSimulation ? 'Practical Assessment Details' : 'My Practical Assessment Sessions'}
               </h1>
             </div>
           </div>

@@ -27,6 +27,7 @@ interface ChatPanelProps {
   onFocusMessages?: () => void;
   currentUserId?: string;
   currentUserEmail?: string;
+  isSessionClosed?: boolean;
 }
 
 const MAX_CHAT_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -59,10 +60,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onFocusMessages,
   currentUserId,
   currentUserEmail,
+  isSessionClosed = false,
 }) => {
   const [newMessage, setNewMessage] = useState('');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [fileError, setFileError] = useState('');
+  const [sendError, setSendError] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -92,11 +95,25 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
 
   const handleSend = async () => {
     if (!newMessage.trim() && attachments.length === 0) return;
-    await onSendMessage(newMessage, attachments, replyingTo?.id ?? null);
-    setNewMessage('');
-    setAttachments([]);
-    onReplyCancel();
-    scrollToBottom();
+    if (isSessionClosed) {
+      setSendError('This session has ended — messaging is closed.');
+      return;
+    }
+    try {
+      setSendError('');
+      await onSendMessage(newMessage, attachments, replyingTo?.id ?? null);
+      setNewMessage('');
+      setAttachments([]);
+      onReplyCancel();
+      scrollToBottom();
+    } catch (error: any) {
+      const message = error?.message || '';
+      setSendError(
+        /completed session/i.test(message)
+          ? 'This session has ended — messaging is closed.'
+          : 'Failed to send message. Please try again.'
+      );
+    }
   };
 
   const handleFileSelect = async (files: FileList | null) => {
@@ -284,8 +301,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       <div
         className="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col"
         tabIndex={0}
-        onFocus={onFocusMessages}
-        onClick={onFocusMessages}
+        onFocus={() => onFocusMessages?.()}
+        onClick={() => onFocusMessages?.()}
       >
         {hasMoreMessages && (
           <div className="text-center mb-2">
@@ -398,73 +415,84 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       {/* Input area — hidden while editing (edit happens inline in ChatMessage) */}
       {!editingMessage && (
         <div className="border-t border-gray-700 p-3 space-y-2 flex-shrink-0">
-          <div className="flex gap-1.5">
-            <textarea
-              ref={messageInputRef}
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder={
-                replyingTo
-                  ? `Reply to ${replyingTo.author?.first_name || replyingTo.user_email?.split('@')[0] || 'User'}…`
-                  : 'Type a message… (Enter to send)'
-              }
-              className="flex-1 px-3 py-2 bg-gray-700 text-white text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-500 resize-none"
-              rows={2}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!newMessage.trim() && attachments.length === 0}
-              className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 self-end flex items-center gap-1"
-            >
-              <Send size={14} />
-            </button>
-          </div>
+          {isSessionClosed ? (
+            <p className="text-sm text-gray-400 text-center py-2">
+              This session has ended — messaging is closed.
+            </p>
+          ) : (
+            <>
+              {sendError && (
+                <p className="text-xs text-red-400">{sendError}</p>
+              )}
+              <div className="flex gap-1.5">
+                <textarea
+                  ref={messageInputRef}
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  placeholder={
+                    replyingTo
+                      ? `Reply to ${replyingTo.author?.first_name || replyingTo.user_email?.split('@')[0] || 'User'}…`
+                      : 'Type a message… (Enter to send)'
+                  }
+                  className="flex-1 px-3 py-2 bg-gray-700 text-white text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder-gray-500 resize-none"
+                  rows={2}
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!newMessage.trim() && attachments.length === 0}
+                  className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-40 self-end flex items-center gap-1"
+                >
+                  <Send size={14} />
+                </button>
+              </div>
 
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 cursor-pointer text-xs">
-              <Upload size={12} />
-              <span>Attach</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt,.csv"
-                onChange={(e) => handleFileSelect(e.target.files)}
-              />
-            </label>
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 cursor-pointer text-xs">
+                  <Upload size={12} />
+                  <span>Attach</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt,.csv"
+                    onChange={(e) => handleFileSelect(e.target.files)}
+                  />
+                </label>
 
-            <button
-              onClick={isRecording ? stopRecording : startRecording}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors ${
-                isRecording
-                  ? 'bg-red-600 text-white animate-pulse hover:bg-red-700'
-                  : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              <Mic size={12} />
-              {isRecording
-                ? `${Math.floor(recordingTime / 60)}:${String(recordingTime % 60).padStart(2, '0')} Stop`
-                : 'Voice'}
-            </button>
+                <button
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs transition-colors ${
+                    isRecording
+                      ? 'bg-red-600 text-white animate-pulse hover:bg-red-700'
+                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                  }`}
+                >
+                  <Mic size={12} />
+                  {isRecording
+                    ? `${Math.floor(recordingTime / 60)}:${String(recordingTime % 60).padStart(2, '0')} Stop`
+                    : 'Voice'}
+                </button>
 
-            <span className={`ml-auto text-xs ${attachments.length === MAX_CHAT_ATTACHMENTS ? 'text-yellow-500' : 'text-gray-600'}`}>
-              {attachments.length}/{MAX_CHAT_ATTACHMENTS}
-            </span>
+                <span className={`ml-auto text-xs ${attachments.length === MAX_CHAT_ATTACHMENTS ? 'text-yellow-500' : 'text-gray-600'}`}>
+                  {attachments.length}/{MAX_CHAT_ATTACHMENTS}
+                </span>
 
-            {socketConnected && (
-              <span className="text-xs text-green-500 flex items-center gap-1">
-                <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse" />
-                Live
-              </span>
-            )}
-          </div>
+                {socketConnected && (
+                  <span className="text-xs text-green-500 flex items-center gap-1">
+                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse" />
+                    Live
+                  </span>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 

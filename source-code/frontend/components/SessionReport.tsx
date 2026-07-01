@@ -474,7 +474,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   {passed ? <Trophy size={48} style={{ color: '#16a34a' }} /> : <AlertTriangle size={48} style={{ color: '#dc2626' }} />}
                   <div>
-                    <h2 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: passed ? '#16a34a' : '#dc2626' }}>{passed ? '✓ Simulation Passed!' : '✗ Simulation Not Passed'}</h2>
+                    <h2 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: passed ? '#16a34a' : '#dc2626' }}>{passed ? '✓ Practical Assessment Passed!' : '✗ Practical Assessment Not Passed'}</h2>
                     <p style={{ margin: '8px 0 0', color: '#374151' }}>{submissionResults.message || `Score: ${submissionResults.score}%`}</p>
                     <div style={{ display: 'flex', gap: 12, marginTop: 8, fontSize: 12, color: '#6b7280' }}>
                       <span>Submitted: {submissionResults.submittedAt ? new Date(submissionResults.submittedAt).toLocaleString() : formatDate(session.completed_at)}</span>
@@ -665,8 +665,8 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
             {(() => {
               const events: Array<{ label: string; time: string }> = [];
               const push = (label: string, time?: string | null) => { if (time) events.push({ label, time }); };
-              push('Simulation assigned', session.created_at || sessionData.application?.created_at);
-              push('Simulation started', session.started_at);
+              push('Practical Assessment assigned', session.created_at || sessionData.application?.created_at);
+              push('Practical Assessment started', session.started_at);
               push('Final submission', session.completed_at || submissionResults.submittedAt);
               push('AI evaluation completed', submissionResults.timeTracking?.sessionCompletedAt || submissionResults.generatedAt);
               push('Results published', submissionResults.submittedAt || session.completed_at);
@@ -787,7 +787,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               <div style={{ background: '#fff', borderRadius: 16, padding: 48, textAlign: 'center', border: '1px solid #f1f5f9' }}>
                 <AlertTriangle size={48} style={{ color: '#f59e0b', marginBottom: 16 }} />
                 <h3 style={{ margin: 0, color: '#374151' }}>No Submission Results Available</h3>
-                <p style={{ color: '#6b7280', marginTop: 8 }}>The simulation has been completed but detailed results are not yet available.</p>
+                <p style={{ color: '#6b7280', marginTop: 8 }}>The practical assessment has been completed but detailed results are not yet available.</p>
               </div>
             )}
           </div>
@@ -813,7 +813,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                   }
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 16, color: passed ? '#16a34a' : '#dc2626' }}>
-                      {passed ? 'Simulation Passed' : 'Simulation Not Passed'}
+                      {passed ? 'Practical Assessment Passed' : 'Practical Assessment Not Passed'}
                     </div>
                     <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
                       {submissionResults.message || `Score: ${submissionResults.score}%`}
@@ -943,12 +943,50 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               </button>
               {showCalc && (
                 <div style={{ marginTop: 14, fontSize: 13, color: '#475569', lineHeight: 1.8 }}>
-                  <div><strong>1. Each task (0–100):</strong> (Completion + Time + Quality + Answer-quality) ÷ 4.</div>
-                  <div><strong>2. Competencies (0–100):</strong> Punctuality, Speed, Technical, Adaptability, Communication, Collaboration, Initiative, Attention to Detail, GitHub — each scored by the AI from the candidate's work, chat, time and GitHub repo.</div>
-                  <div><strong>3. Composites:</strong> Quality = (Technical + Punctuality + Adaptability) ÷ 3 · Behavioral = (Adaptability + Communication) ÷ 2.</div>
-                  <div style={{ marginTop: 4, color: '#0f172a' }}><strong>4. Overall Score = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</strong> (weights from the simulation rubric; defaults shown). Pass mark default 70%.</div>
-                  <div style={{ marginTop: 8, padding: '10px 12px', background: '#faf5ff', borderRadius: 8 }}>
-                    <strong>Recruiter task marks:</strong> admin/recruiter can set a 0–100% score and comment on each completed task above. Where used, the final blends 70% AI + 30% recruiter task average.
+                  <div><strong>Step 0 — Trigger:</strong> when the candidate submits the session, the AI evaluation runs over their task progress, chat, time data and GitHub repo.</div>
+
+                  <div style={{ marginTop: 8 }}><strong>Step 1 — Each task (0–100):</strong> four sub-scores per task — completion (100 done / partial / 0), time (taken vs limit), quality (code/essay quality), answer-quality (code ≤50 + essay ≤50 + completeness ≤30, normalized).</div>
+                  <div style={{ marginLeft: 12, color: '#0f172a' }}>Task overall = (completion + time + quality + answer-quality) ÷ 4</div>
+
+                  <div style={{ marginTop: 8 }}><strong>Step 2 — Aggregate task metrics:</strong></div>
+                  <div style={{ marginLeft: 12 }}>completionRate = completed ÷ total × 100</div>
+                  <div style={{ marginLeft: 12 }}>averageTaskScore = Σ(task overall) ÷ total</div>
+                  <div style={{ marginLeft: 12 }}>overallTaskPercentage = pointsEarned ÷ (total×100) × 100</div>
+
+                  <div style={{ marginTop: 8 }}><strong>Step 3 — Competency scores (0–100):</strong></div>
+                  <div style={{ marginLeft: 12 }}>• Punctuality — weighted on-time + partial credit across tasks ÷ total weight.</div>
+                  <div style={{ marginLeft: 12 }}>• Speed — time-efficiency, weighted across tasks (fast within limit → high).</div>
+                  <div style={{ marginLeft: 12 }}>• Technical — average quality of the technical tasks (default 50 if none).</div>
+                  <div style={{ marginLeft: 12 }}>• Adaptability — base − abandonment penalty + creativity bonus (clamped 0–100).</div>
+                  <div style={{ marginLeft: 12 }}>• Communication — from chat analysis.</div>
+                  <div style={{ marginLeft: 12 }}>• Collaboration — volume (msgs) + balance (msg ratio × 30) + responsiveness (≤30), capped 100.</div>
+                  <div style={{ marginLeft: 12 }}>• GitHub — repo analysis (commits, structure, practices).</div>
+
+                  <div style={{ marginTop: 8 }}><strong>Step 4 — Composites:</strong></div>
+                  <div style={{ marginLeft: 12 }}>Quality = (Technical + Punctuality + Adaptability) ÷ 3 · Behavioral = (Adaptability + Communication) ÷ 2.</div>
+
+                  <div style={{ marginTop: 8 }}><strong>Step 5 — AI Practical Assessment Overall</strong> (weights from the rubric; defaults shown — Quality 0.60, Speed 0.15, Behavioral 0.10, GitHub 0.15):</div>
+                  <div style={{ marginLeft: 12, color: '#0f172a' }}>AI Overall = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</div>
+                  <div style={{ marginLeft: 12 }}>This is the Practical Assessment Score column.</div>
+
+                  <div style={{ marginTop: 8 }}><strong>Step 6 — Pass / Fail:</strong> passed = AI Overall ≥ passingScore (rubric's passingScore, default 70).</div>
+
+                  <div style={{ marginTop: 10, padding: '10px 12px', background: '#faf5ff', borderRadius: 8 }}>
+                    <div><strong>How the recruiter marks tasks (the 30%):</strong></div>
+                    <div style={{ marginTop: 4 }}>• The recruiter reviews each submitted task only — not the AI competencies.</div>
+                    <div>• Each task gets a score from 0–100% plus an optional comment (saved per task).</div>
+                    <div>• The system auto-averages all task scores — a task left unscored counts as 0.</div>
+                    <div style={{ marginLeft: 12, color: '#0f172a' }}>Recruiter Task Avg = Σ(task scores) ÷ total tasks</div>
+                    <div>• That average is the recruiter's contribution; the AI provides the other 70%. The recruiter always has the final decision.</div>
+                  </div>
+
+                  <div style={{ marginTop: 8 }}><strong>Step 7 — Final platform Overall</strong> (the table):</div>
+                  <div style={{ marginLeft: 12, color: '#0f172a' }}><strong>Final = AI Practical Assessment × 70% + Recruiter Task Avg × 30%</strong> — recruiter avg = Σ(per-task recruiter scores) ÷ total (unscored = 0).</div>
+
+                  <div style={{ marginTop: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 8 }}>
+                    <div><strong>Worked example</strong> — Quality 85, Speed 70, Behavioral 60, GitHub 50:</div>
+                    <div style={{ marginTop: 4 }}>AI = 85×.60 + 70×.15 + 60×.10 + 50×.15 = 51 + 10.5 + 6 + 7.5 = 75%</div>
+                    <div>Recruiter avg 80% → 80×.30 = 24 · AI 75×.70 = 52.5 → <strong>Final = 76.5%</strong></div>
                   </div>
                 </div>
               )}
@@ -1100,11 +1138,11 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
             {/* Simulation Info */}
             <div style={{ background: '#fff', borderRadius: 16, padding: 24, border: '1px solid #f1f5f9' }}>
               <div style={{ fontWeight: 700, fontSize: 15, color: '#111827', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Target size={17} style={{ color: '#7c3aed' }} /> Simulation Details
+                <Target size={17} style={{ color: '#7c3aed' }} /> Practical Assessment Details
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
                 {[
-                  { label: 'Simulation', val: template.name },
+                  { label: 'Practical Assessment', val: template.name },
                   { label: 'Job Title', val: job.title },
                   { label: 'Company', val: company.name },
                   { label: 'Difficulty', val: template.difficulty },

@@ -499,7 +499,7 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
             <table style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  {['Candidate', 'Match', 'Status', 'Applied', 'Top Skills', 'Current Role', 'Simulation', 'Actions'].map(h => (
+                  {['Candidate', 'Match', 'Status', 'Applied', 'Top Skills', 'Current Role', 'Practical Assessment', 'Actions'].map(h => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b' }}>{h}</th>
                   ))}
                 </tr>
@@ -598,7 +598,7 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                             </div>
                           </div>
                         ) : (
-                          <span style={{ fontSize: 12, color: '#cbd5e1' }}>No simulation</span>
+                          <span style={{ fontSize: 12, color: '#cbd5e1' }}>No practical assessment</span>
                         )}
                       </td>
 

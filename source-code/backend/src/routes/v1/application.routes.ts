@@ -105,7 +105,7 @@ async function notifyCandidateOfApplication(
         applicationId,
         jobId: opts.jobId || row.job_id,
         status: opts.status,
-        url: `/applications/${applicationId}`,
+        url: `/?view=application-history`,
       },
     });
 
@@ -877,6 +877,39 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
       return res.status(409).json({ success: false, message: reason });
     }
 
+    // Block withdrawal if the job application period has closed or the job is no longer active.
+    if (status === 'withdrawn' && authReq.user!.user_type === 'candidate') {
+      const jobStatusResult = await client.query(
+        `SELECT status, expires_at FROM jobs WHERE id = $1`,
+        [application.job_id]
+      );
+      const jobRow = jobStatusResult.rows[0];
+      const isJobExpired = jobRow?.expires_at && new Date(jobRow.expires_at) < new Date();
+      if (!jobRow || jobRow.status !== 'active' || isJobExpired) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          message: 'Withdrawal is not allowed because the application period for this job has closed or the job is no longer active.'
+        });
+      }
+
+      // Block withdrawal if any simulation has been started or scheduled for this application.
+      const simCheck = await client.query(
+        `SELECT 1 FROM simulations WHERE application_id = $1
+         UNION ALL
+         SELECT 1 FROM scheduled_simulations WHERE application_id = $1
+         LIMIT 1`,
+        [id]
+      );
+      if (simCheck.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({
+          success: false,
+          message: 'You cannot withdraw this application because a work simulation has already been started or scheduled for this position.'
+        });
+      }
+    }
+
     // Update application
     const updateFields = ['updated_at = NOW()'];
     const updateValues = [];
@@ -967,7 +1000,7 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
           category: 'application',
           title: 'Candidate withdrew an application',
           content: 'A candidate has withdrawn their application.',
-          data: { applicationId: id, jobId: application.job_id, status: 'withdrawn' },
+          data: { applicationId: id, jobId: application.job_id, status: 'withdrawn', url: `/?view=job-candidates&jobId=${application.job_id}` },
         });
       }
     }
@@ -1095,7 +1128,7 @@ router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (r
         category: 'application',
         title: 'Candidate withdrew an application',
         content: 'A candidate has withdrawn their application.',
-        data: { applicationId: id, jobId: application.job_id, status: 'withdrawn' },
+        data: { applicationId: id, jobId: application.job_id, status: 'withdrawn', url: `/?view=job-candidates&jobId=${application.job_id}` },
       });
     }
 
@@ -1185,7 +1218,7 @@ router.post('/:id/send-results', [protect, authorize('recruiter', 'company_admin
       category: 'application',
       title: passed ? 'You passed the assessment' : 'Your assessment results are available',
       content: `${row.job_title || 'Your role'} — overall ${Math.round(Number(finalScore) || 0)}%`,
-      data: { applicationId: id, url: `/applications/${id}` },
+      data: { applicationId: id, url: `/?view=application-history` },
     });
 
     logger.info(`Results email sent for application ${id} by ${authReq.user!.id}`);

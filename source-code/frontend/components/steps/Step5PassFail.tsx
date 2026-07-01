@@ -175,7 +175,7 @@ const Step5PassFail: React.FC<Props> = ({
         <div className="flex items-start justify-between">
           <div>
             <h3 className="text-lg font-bold text-gray-900">Task Priority</h3>
-            <p className="text-sm text-gray-500 mt-0.5">Define the standards candidates must meet to pass this simulation.</p>
+            <p className="text-sm text-gray-500 mt-0.5">Define the standards candidates must meet to pass this practical assessment.</p>
           </div>
           <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-medium">
             Step {currentStep}/{totalSteps}

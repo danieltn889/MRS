@@ -47,8 +47,8 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
         const rawData = response.data.data || response.data;
         const mappedSimulations: Simulation[] = (Array.isArray(rawData) ? rawData : []).map((sim, index) => ({
           id: sim.id || `sim-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
-          simulationName: sim.simulationName || sim.title || 'Untitled Simulation',
-          title: sim.simulationName || sim.title || 'Untitled Simulation',
+          simulationName: sim.simulationName || sim.title || 'Untitled Practical Assessment',
+          title: sim.simulationName || sim.title || 'Untitled Practical Assessment',
           description: sim.description || '',
           duration: sim.duration || 45,
           status: resolveStatus(sim),
@@ -177,7 +177,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
     return (
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Simulations</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Practical Assessments</h3>
           <button 
             onClick={handleRefresh} 
             className="p-1 hover:bg-gray-100 rounded-full transition-colors"
@@ -197,7 +197,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
     return (
       <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Simulations</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Practical Assessments</h3>
           <button 
             onClick={handleRefresh} 
             className="p-1 hover:bg-gray-100 rounded-full transition-colors" 
@@ -210,8 +210,8 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
           <div className="text-gray-400 mb-2">
             <Calendar size={48} className="mx-auto" />
           </div>
-          <p className="text-sm text-gray-500">No simulations available</p>
-          <p className="text-xs text-gray-400 mt-1">Complete job applications to get simulations</p>
+          <p className="text-sm text-gray-500">No practical assessments available</p>
+          <p className="text-xs text-gray-400 mt-1">Complete job applications to get practical assessments</p>
         </div>
       </div>
     );
@@ -220,7 +220,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
   return (
     <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Simulations</h3>
+        <h3 className="text-base sm:text-lg font-semibold text-gray-800">Upcoming Practical Assessments</h3>
         <button 
           onClick={handleRefresh} 
           className="p-1 hover:bg-gray-100 rounded-full transition-colors" 
@@ -265,7 +265,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h4 className="font-semibold text-sm sm:text-base text-gray-800 line-clamp-2">
-                      {sim.simulationName || sim.title || 'Untitled Simulation'}
+                      {sim.simulationName || sim.title || 'Untitled Practical Assessment'}
                     </h4>
                     <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${statusInfo.bgColor} ${statusInfo.textColor}`}>
                       <StatusIcon size={10} />
@@ -362,7 +362,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
                   className="w-full py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg font-semibold hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 text-sm"
                 >
                   <Play size={14} />
-                  Start Simulation
+                  Start Practical Assessment
                 </button>
               )}
 
@@ -376,7 +376,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
                   className="w-full py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-lg font-semibold hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95 text-sm"
                 >
                   <Timer size={14} />
-                  Resume Simulation
+                  Resume Practical Assessment
                 </button>
               )}
 
@@ -401,7 +401,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
                   className="w-full py-2 bg-gray-300 text-gray-500 rounded-lg font-semibold cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                 >
                   <AlertCircle size={14} />
-                  Simulation Expired
+                  Practical Assessment Expired
                 </button>
               )}
             </div>
@@ -412,7 +412,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
       {/* Footer Info */}
       <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
         <p className="text-xs text-blue-900">
-          💡 <span className="font-semibold">Tip:</span> Complete simulations to showcase your skills and improve your job match scores.
+          💡 <span className="font-semibold">Tip:</span> Complete practical assessments to showcase your skills and improve your job match scores.
         </p>
       </div>
     </div>

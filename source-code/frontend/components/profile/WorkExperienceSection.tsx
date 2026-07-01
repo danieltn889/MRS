@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { 
+import {
   Plus, Edit, Trash2, Save, X, Briefcase, Calendar, MapPin, Building,
   Upload, FileText, CheckCircle, Loader, AlertCircle, Eye, Download,
   File, Image, FileArchive, Search
 } from 'lucide-react';
 import { addWorkExperience, updateWorkExperience, deleteWorkExperience, uploadCandidateDocument, getSkillsList } from '../../services/candidateAPI';
 import ConfirmDialog from './ConfirmDialog';
+import { extractDocxText } from '../../utils/documentTextExtractor';
 
 // =====================================================
 // TYPE DEFINITIONS
@@ -144,6 +145,8 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
   const [proofUploadMessage, setProofUploadMessage] = useState<string>('');
   const [viewingProofFile, setViewingProofFile] = useState<ProofFile | null>(null);
   const [isProofModalOpen, setIsProofModalOpen] = useState<boolean>(false);
+  const [docxPreviewText, setDocxPreviewText] = useState<string | null>(null);
+  const [docxPreviewLoading, setDocxPreviewLoading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | number | null>(null);
   const [deleting, setDeleting] = useState<boolean>(false);
   const proofInputRef = useRef<HTMLInputElement>(null);
@@ -492,11 +495,28 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
   const openProofViewer = (file: ProofFile): void => {
     setViewingProofFile(file);
     setIsProofModalOpen(true);
+    setDocxPreviewText(null);
+
+    const isOffice = /\.(docx?)$/i.test(file.file_name || '');
+    if (!isOffice) return;
+
+    const url = file.file_url
+      || (() => { const f = formData.proofFiles.find(pf => pf.name === file.file_name); return f ? URL.createObjectURL(f) : null; })();
+    if (!url) return;
+
+    setDocxPreviewLoading(true);
+    fetch(url)
+      .then(r => r.blob())
+      .then(blob => extractDocxText(blob))
+      .then(result => setDocxPreviewText(result.text || ''))
+      .catch(() => setDocxPreviewText(''))
+      .finally(() => setDocxPreviewLoading(false));
   };
 
   const closeProofViewer = (): void => {
     setIsProofModalOpen(false);
     setViewingProofFile(null);
+    setDocxPreviewText(null);
   };
 
   const downloadProofFile = async (file: ProofFile): Promise<void> => {
@@ -551,6 +571,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
 
     const isImage = viewingProofFile.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
     const isPDF = viewingProofFile.file_name?.match(/\.pdf$/i);
+    const isDocx = viewingProofFile.file_name?.match(/\.(docx?)$/i);
     const fileExtension = viewingProofFile.file_name?.split('.').pop()?.toUpperCase() || 'FILE';
     const previewUrl = getProofPreviewUrl(viewingProofFile);
 
@@ -583,18 +604,41 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
               </div>
             ) : isPDF && previewUrl ? (
               <iframe src={previewUrl} title={viewingProofFile.file_name} className="w-full h-[70vh] rounded-lg bg-white shadow-inner" />
+            ) : isDocx ? (
+              docxPreviewLoading ? (
+                <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
+                  <div className="text-center">
+                    <Loader size={40} className="text-blue-500 animate-spin mx-auto mb-3" />
+                    <p className="text-sm text-gray-500">Reading document…</p>
+                  </div>
+                </div>
+              ) : docxPreviewText ? (
+                <div className="bg-white rounded-lg shadow-inner h-[70vh] overflow-auto">
+                  <pre className="p-6 text-sm text-gray-800 font-sans leading-relaxed whitespace-pre-wrap break-words">
+                    {docxPreviewText}
+                  </pre>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
+                  <div className="text-center p-8">
+                    <FileText size={60} className="text-blue-200 mx-auto mb-4" />
+                    <p className="text-gray-600 font-medium mb-1">Could not read document text</p>
+                    <p className="text-sm text-gray-400">Download the file to open it in Microsoft Word</p>
+                    <button onClick={() => downloadProofFile(viewingProofFile)} className="mt-5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto">
+                      <Download size={16} /> Download File
+                    </button>
+                  </div>
+                </div>
+              )
             ) : (
               <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner">
                 <div className="text-center p-8">
                   <File size={80} className="text-gray-300 mx-auto mb-6" />
-                  <p className="text-gray-600 font-medium">Document</p>
+                  <p className="text-gray-600 font-medium">Cannot preview this file type</p>
                   <p className="text-sm text-gray-400 mt-1">{viewingProofFile.file_name}</p>
-                  <div className="mt-6 flex gap-3 justify-center">
-                    <button onClick={() => downloadProofFile(viewingProofFile)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2">
-                      <Download size={16} /> Download File
-                    </button>
-                    <button onClick={closeProofViewer} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Close</button>
-                  </div>
+                  <button onClick={() => downloadProofFile(viewingProofFile)} className="mt-5 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 mx-auto">
+                    <Download size={16} /> Download File
+                  </button>
                 </div>
               </div>
             )}

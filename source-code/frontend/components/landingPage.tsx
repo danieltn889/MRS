@@ -117,6 +117,42 @@ const PRIORITY_CONFIG: Record<string, {
 };
 
 const SEARCH_API_URL = import.meta.env.VITE_SEARCH_URL || 'http://localhost:8001/search';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+
+// =====================================================
+// BACKEND JOB NORMALIZER
+// =====================================================
+
+function normalizeBackendJob(job: any): JobResult {
+  const locs: string[] = Array.isArray(job.locations)
+    ? (job.locations as any[])
+        .map((l) => (typeof l === 'object' ? l.city || l.country || '' : String(l)))
+        .filter(Boolean)
+    : [];
+
+  let salary: string | null = null;
+  if (job.salary_min && job.salary_max) {
+    const currency = job.salary_currency || 'RWF';
+    salary = `${currency} ${Number(job.salary_min).toLocaleString()} – ${Number(job.salary_max).toLocaleString()}`;
+  } else if (job.salary_min) {
+    salary = `From ${job.salary_currency || 'RWF'} ${Number(job.salary_min).toLocaleString()}`;
+  }
+
+  return {
+    id: job.id,
+    title: job.title,
+    company: job.company_name || 'Company',
+    description: job.description,
+    job_type: job.job_type || 'full-time',
+    work_arrangement: job.work_arrangement || 'onsite',
+    location: locs,
+    salary,
+    experience_level: job.experience_level,
+    skills: Array.isArray(job.skills_required)
+      ? job.skills_required.map((s: any) => (typeof s === 'string' ? s : s?.name)).filter(Boolean)
+      : [],
+  };
+}
 
 // =====================================================
 // JOB CARD COMPONENT
@@ -127,31 +163,34 @@ interface JobCardProps {
   isExpanded: boolean;
   onToggle: () => void;
   onViewJob: (id: string) => void;
+  showMatchBadge?: boolean;
 }
 
-function JobCard({ job, isExpanded, onToggle, onViewJob }: JobCardProps) {
+function JobCard({ job, isExpanded, onToggle, onViewJob, showMatchBadge = true }: JobCardProps) {
   const ps = PRIORITY_CONFIG[job.match_priority || 'SKILLS'] || PRIORITY_CONFIG['SKILLS'];
 
   return (
     <div
       className={`border rounded-xl bg-white transition-all duration-200 overflow-hidden ${
-        isExpanded ? 'border-blue-300 shadow-lg' : 'border-gray-100 hover:border-gray-200'
+        isExpanded ? 'border-blue-300 shadow-lg' : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
       }`}
     >
       <button
         onClick={onToggle}
         className="w-full text-left flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
       >
-        <div className="w-9 h-9 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
-          <Briefcase className="w-4 h-4 text-gray-400" />
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-blue-50 to-purple-50 border border-gray-100 flex items-center justify-center flex-shrink-0">
+          <Briefcase className="w-4 h-4 text-blue-500" />
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-semibold text-sm text-gray-900 truncate">{job.title}</span>
-            <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${ps.bgColor} ${ps.textColor}`}>
-              {ps.icon} {ps.labelShort}
-            </span>
+            {showMatchBadge && (
+              <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${ps.bgColor} ${ps.textColor}`}>
+                {ps.icon} {ps.labelShort}
+              </span>
+            )}
             {job.match_score != null && (
               <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full flex-shrink-0">
                 {Math.round(job.match_score * 100)}%
@@ -159,15 +198,15 @@ function JobCard({ job, isExpanded, onToggle, onViewJob }: JobCardProps) {
             )}
           </div>
           <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-400 flex-wrap">
-            <span>{job.company || 'Company'}</span>
+            <span>{job.company}</span>
             {job.location?.[0] && (
               <span className="flex items-center gap-1">
                 <MapPin className="w-3 h-3" />
                 {job.location[0]}
               </span>
             )}
-            <span>{job.job_type || 'Full-time'}</span>
-            <span className="capitalize">{job.work_arrangement || 'Onsite'}</span>
+            <span className="capitalize">{(job.job_type || 'full-time').replace('-', ' ')}</span>
+            <span className="capitalize">{job.work_arrangement || 'onsite'}</span>
             {job.experience_level && (
               <span className="capitalize">🎯 {job.experience_level}</span>
             )}
@@ -299,6 +338,12 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
   const [showAllResults, setShowAllResults] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
 
+  // All-jobs browse section
+  const [allJobs, setAllJobs] = useState<JobResult[]>([]);
+  const [isLoadingAllJobs, setIsLoadingAllJobs] = useState(true);
+  const [totalJobs, setTotalJobs] = useState(0);
+  const [showAllBrowseJobs, setShowAllBrowseJobs] = useState(false);
+
   // Auth gate for viewing the detailed analysis
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -307,6 +352,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -324,7 +370,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Load recent jobs on page load
+  // Load recent jobs from search service (for quick-access pills)
   useEffect(() => {
     const loadRecentJobs = async () => {
       try {
@@ -333,8 +379,8 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
         if (data.success) {
           setRecentJobs(data.results);
         }
-      } catch (error) {
-        console.error('Error loading recent jobs:', error);
+      } catch {
+        // silent — recent pills are optional
       } finally {
         setIsLoadingRecent(false);
       }
@@ -342,8 +388,34 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
     loadRecentJobs();
   }, []);
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  // Load all active jobs from backend API for the Browse section
+  useEffect(() => {
+    const loadAllJobs = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/jobs?limit=50&page=1`);
+        const data = await res.json();
+        if (data.success && data.data) {
+          const raw: any[] = data.data.data || data.data.jobs || data.data || [];
+          const jobs = Array.isArray(raw) ? raw.map(normalizeBackendJob) : [];
+          setAllJobs(jobs);
+          setTotalJobs(data.data.pagination?.total || jobs.length);
+        }
+      } catch {
+        // silent
+      } finally {
+        setIsLoadingAllJobs(false);
+      }
+    };
+    loadAllJobs();
+  }, []);
+
+  // =====================================================
+  // SEARCH
+  // =====================================================
+
+  const handleSearch = async (queryOverride?: string) => {
+    const q = (queryOverride !== undefined ? queryOverride : searchQuery).trim();
+    if (!q) return;
 
     setIsSearching(true);
     setShowResults(true);
@@ -353,7 +425,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
 
     try {
       const response = await fetch(
-        `${SEARCH_API_URL}?q=${encodeURIComponent(searchQuery)}&limit=50`
+        `${SEARCH_API_URL}?q=${encodeURIComponent(q)}&limit=50`
       );
       const data: SearchResponse = await response.json();
 
@@ -365,66 +437,96 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
         setSearchResults([]);
         setSearchBreakdown(null);
       }
-    } catch (error) {
-      console.error('Search error:', error);
-      setSearchResults([]);
+    } catch {
+      // Fallback: use backend API search (expanded fields via our improved controller)
+      try {
+        const res = await fetch(
+          `${API_BASE_URL}/jobs?search=${encodeURIComponent(q)}&limit=50`
+        );
+        const data = await res.json();
+        const raw: any[] = data.data?.data || data.data?.jobs || data.data || [];
+        const jobs = Array.isArray(raw) ? raw.map(normalizeBackendJob) : [];
+        setSearchResults(jobs);
+        setSearchBreakdown(null);
+        setProcessingTime(null);
+      } catch {
+        setSearchResults([]);
+      }
     } finally {
       setIsSearching(false);
     }
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearch();
+  // Real-time debounced search: fires 300 ms after the user stops typing
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    setShowAllBrowseJobs(false);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!value.trim()) {
+      setShowResults(false);
+      setSearchResults([]);
+      setSearchBreakdown(null);
+      setProcessingTime(null);
+      return;
     }
+
+    debounceRef.current = setTimeout(() => {
+      handleSearch(value.trim());
+    }, 300);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchQuery(e.target.value);
-    // Clear results when user starts typing new query
-    if (showResults) {
-      setShowResults(false);
+  const handleClear = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setSearchQuery('');
+    setShowResults(false);
+    setSearchResults([]);
+    setSearchBreakdown(null);
+    setProcessingTime(null);
+    setShowAllBrowseJobs(false);
+    searchInputRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      handleSearch();
+    }
+    if (e.key === 'Escape') {
+      handleClear();
     }
   };
 
   const handleJobClick = (jobId: string) => {
     const targetPath = `/jobs/${jobId}`;
-
-    // Already logged in: go straight to the detailed analysis (SPA navigation
-    // keeps the search results in place).
     if (isAuthenticated) {
       navigate(targetPath);
       return;
     }
-
-    // Not logged in: remember exactly where the user wanted to go so we can
-    // bring them back after login, then show a friendly prompt instead of
-    // silently bouncing them to the login screen.
     sessionStorage.setItem('redirectAfterLogin', targetPath);
-    const job = [...searchResults, ...recentJobs].find(j => j.id === jobId);
+    const job = [...searchResults, ...recentJobs, ...allJobs].find(j => j.id === jobId);
     setPendingJob({ id: jobId, title: job?.title || 'this job' });
     setShowLoginPrompt(true);
   };
 
   const handleGoToLogin = () => {
     setShowLoginPrompt(false);
-    // redirectAfterLogin is already set; Login reads it and returns the user
-    // straight to the detailed analysis page — no need to search again.
     onLogin();
   };
 
   const handlePopularSearch = (term: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setSearchQuery(term);
-    setTimeout(() => {
-      handleSearch();
-    }, 50);
+    handleSearch(term);
   };
 
   const toggleJob = (id: string) => {
     setExpandedJobId(prev => (prev === id ? null : id));
   };
 
-  // Group results by priority
+  // Group search results by priority (for dropdown)
   const getResultsByPriority = () => {
     const groups: Record<string, JobResult[]> = {
       "JOB TITLE": [],
@@ -453,6 +555,9 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
   };
 
   const displayedResults = getDisplayedResults();
+
+  // Browse section always shows every loaded job — the search dropdown handles filtered suggestions
+  const browsedJobs = showAllBrowseJobs ? allJobs : allJobs.slice(0, 10);
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -548,33 +653,61 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
 
             {/* Subheadline */}
             <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed">
-              Virtual work simulations powered by AI behavioral analytics and blockchain verification find the perfect cultural and technical fit for your organisation.
+              Virtual work practical assessments powered by AI behavioral analytics and blockchain verification find the perfect cultural and technical fit for your organisation.
             </p>
 
-            {/* Search Container */}
+            {/* ── Search Container ── */}
             <div className="max-w-2xl mx-auto relative z-20" ref={dropdownRef}>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
+
+              {/* Input wrapper — focus ring via CSS focus-within */}
+              <div className="flex items-center bg-white border border-gray-200 rounded-2xl shadow-md transition-all duration-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
+                {/* Search icon */}
+                <div className="pl-4 flex-shrink-0 pointer-events-none">
+                  {isSearching
+                    ? <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                    : <Search className="w-5 h-5 text-gray-400" />
+                  }
                 </div>
+
+                {/* Input */}
                 <input
                   ref={searchInputRef}
                   type="text"
-                  placeholder="Search by title, degree, field of study, skills, or responsibilities..."
+                  placeholder="Search by title, skills, company, location, or employment type…"
                   value={searchQuery}
                   onChange={handleInputChange}
-                  onKeyPress={handleKeyPress}
-                  className="w-full pl-12 pr-32 py-4 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 placeholder-gray-400 bg-white shadow-sm"
+                  onKeyDown={handleKeyDown}
+                  aria-label="Search jobs"
+                  aria-autocomplete="list"
+                  aria-expanded={showResults}
+                  aria-haspopup="listbox"
+                  className="flex-1 py-4 px-3 outline-none text-gray-900 placeholder-gray-400 bg-transparent text-sm"
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-2">
+
+                {/* Clear (X) button — only when there is text */}
+                {searchQuery && (
                   <button
-                    onClick={handleSearch}
-                    disabled={isSearching}
-                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 text-sm"
+                    onClick={handleClear}
+                    className="p-1.5 mr-1 rounded-full hover:bg-gray-100 transition-colors flex-shrink-0"
+                    aria-label="Clear search"
+                    tabIndex={0}
                   >
-                    {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Search'}
+                    <X className="w-4 h-4 text-gray-400" />
                   </button>
-                </div>
+                )}
+
+                {/* Search button */}
+                <button
+                  onClick={() => {
+                    if (debounceRef.current) clearTimeout(debounceRef.current);
+                    handleSearch();
+                  }}
+                  disabled={isSearching}
+                  className="m-2 px-5 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg transition-all disabled:opacity-50 text-sm flex-shrink-0"
+                  aria-label="Submit search"
+                >
+                  Search
+                </button>
               </div>
 
               {/* Loading Indicator */}
@@ -582,17 +715,21 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                 <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-gray-200 shadow-2xl z-50 p-8">
                   <div className="flex flex-col items-center justify-center py-8">
                     <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-4" />
-                    <p className="text-gray-500">Searching for jobs...</p>
-                    <p className="text-xs text-gray-400 mt-2">Analyzing job titles, qualifications, requirements and skills</p>
+                    <p className="text-gray-500">Searching for jobs…</p>
+                    <p className="text-xs text-gray-400 mt-2">Scanning titles, qualifications, skills, and more</p>
                   </div>
                 </div>
               )}
 
-              {/* Search Results Dropdown */}
+              {/* ── Search Results Dropdown ── */}
               {showResults && !isSearching && (
-                <div className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-gray-200 shadow-2xl z-50 flex flex-col" style={{ maxHeight: '32rem' }}>
-                  
-                  {/* Header with results count */}
+                <div
+                  role="listbox"
+                  aria-label="Search results"
+                  className="absolute left-0 right-0 mt-2 bg-white rounded-2xl border border-gray-200 shadow-2xl z-50 flex flex-col"
+                  style={{ maxHeight: '32rem' }}
+                >
+                  {/* Header */}
                   <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 flex-shrink-0">
                     <div>
                       <span className="font-semibold text-gray-900">
@@ -605,6 +742,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                     <button
                       onClick={() => setShowResults(false)}
                       className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+                      aria-label="Close results"
                     >
                       <X className="w-4 h-4 text-gray-400" />
                     </button>
@@ -651,7 +789,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   )}
 
                   {/* Results List */}
-                  <div className="overflow-y-auto flex-1 px-3 py-2">
+                  <div className="overflow-y-auto flex-1 px-3 py-2" role="group">
                     {searchResults.length > 0 ? (
                       <div className="flex flex-col gap-1.5">
                         {displayedResults.map((job) => (
@@ -661,10 +799,10 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                             isExpanded={expandedJobId === job.id}
                             onToggle={() => toggleJob(job.id)}
                             onViewJob={handleJobClick}
+                            showMatchBadge
                           />
                         ))}
 
-                        {/* See All Button */}
                         {!showAllResults && !activePriorityFilter && searchResults.length > 5 && (
                           <button
                             onClick={() => setShowAllResults(true)}
@@ -675,17 +813,25 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                         )}
                       </div>
                     ) : (
-                      /* NO RESULTS FOUND */
-                      <div className="flex flex-col items-center justify-center py-12 text-center">
-                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                          <Search className="w-8 h-8 text-gray-400" />
+                      <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                        <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mb-3">
+                          <Search className="w-7 h-7 text-gray-300" />
                         </div>
-                        <h4 className="text-md font-semibold text-gray-900 mb-2">No results found</h4>
-                        <p className="text-sm text-gray-500 max-w-md">
-                          We couldn't find any jobs matching "{searchQuery}".
+                        <h4 className="font-semibold text-gray-900 mb-1">No keyword matches</h4>
+                        <p className="text-sm text-gray-500 mb-4 max-w-xs">
+                          Try a job title, skill, or technology — or scroll down to browse every active job.
                         </p>
-                        <div className="flex flex-wrap justify-center gap-2 mt-4">
-                          <span className="text-xs text-gray-400">Try:</span>
+                        <button
+                          onClick={() => {
+                            setShowResults(false);
+                            document.getElementById('browse-jobs')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className="px-5 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-semibold rounded-xl hover:shadow-md transition-all mb-4"
+                        >
+                          Browse all jobs ↓
+                        </button>
+                        <div className="flex flex-wrap justify-center gap-2">
+                          <span className="text-xs text-gray-400">Quick searches:</span>
                           {['Software Engineer', 'Data Analyst', 'Product Manager', 'React Developer', 'Node.js'].map((term) => (
                             <button
                               key={term}
@@ -702,7 +848,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                 </div>
               )}
 
-              {/* Recent Jobs - Only show when no search active */}
+              {/* Recent Jobs — shown only when search is idle */}
               {!showResults && !isSearching && !isLoadingRecent && recentJobs.length > 0 && (
                 <div className="mt-4 text-left">
                   <p className="text-xs text-gray-400 mb-2">📌 Recent Jobs</p>
@@ -735,11 +881,105 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
               </div>
             </div>
 
+            {/* Browse All Jobs CTA — always visible, outside the dropdown */}
+            <div className="mt-6 flex justify-center">
+              <button
+                onClick={() =>
+                  document.getElementById('browse-jobs')?.scrollIntoView({ behavior: 'smooth' })
+                }
+                className="inline-flex items-center gap-2 px-6 py-3 bg-white border-2 border-blue-200 text-blue-700 font-semibold rounded-2xl hover:bg-blue-50 hover:border-blue-400 transition-all shadow-sm text-sm"
+              >
+                <Briefcase className="w-4 h-4" />
+                Browse all active jobs
+                <ChevronRight className="w-4 h-4 rotate-90" />
+              </button>
+            </div>
+
             {/* Trust Badges */}
             <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-500 mt-8">
               <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-green-500" /> No credit card required</span>
               <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-green-500" /> 14-day free trial</span>
               <span className="flex items-center gap-1.5"><Check className="w-4 h-4 text-green-500" /> Free for candidates</span>
+            </div>
+          </div>
+        </section>
+
+        {/* ══════════════════════════════════════════════
+            BROWSE ALL JOBS SECTION
+            Shows all active jobs by default; instantly
+            filters as the user types in the search box.
+        ══════════════════════════════════════════════ */}
+        <section id="browse-jobs" className="py-16 bg-gradient-to-b from-blue-50/40 to-white">
+          <div className="w-full px-4 sm:px-6 lg:px-8">
+            <div className="max-w-4xl mx-auto">
+
+              {/* Section header */}
+              <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
+                <div>
+                  <h2 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                    Latest Job Openings
+                  </h2>
+                  <p className="text-gray-500 mt-1 text-sm">
+                    {isLoadingAllJobs
+                      ? 'Loading positions…'
+                      : `${totalJobs} active position${totalJobs !== 1 ? 's' : ''} available right now`}
+                  </p>
+                </div>
+              </div>
+
+              {/* Loading skeletons */}
+              {isLoadingAllJobs && (
+                <div className="flex flex-col gap-2">
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 animate-pulse">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-gray-200 rounded-lg flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-200 rounded w-1/2 mb-2" />
+                          <div className="h-3 bg-gray-100 rounded w-3/4" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Job list — always shows ALL active jobs regardless of search query */}
+              {!isLoadingAllJobs && allJobs.length > 0 && (
+                <>
+                  <div className="flex flex-col gap-2">
+                    {browsedJobs.map(job => (
+                      <JobCard
+                        key={job.id}
+                        job={job}
+                        isExpanded={expandedJobId === job.id}
+                        onToggle={() => toggleJob(job.id)}
+                        onViewJob={handleJobClick}
+                        showMatchBadge={false}
+                      />
+                    ))}
+                  </div>
+
+                  {!showAllBrowseJobs && allJobs.length > 10 && (
+                    <button
+                      onClick={() => setShowAllBrowseJobs(true)}
+                      className="mt-6 w-full py-3 border-2 border-blue-200 text-blue-600 font-semibold rounded-xl hover:bg-blue-50 transition-colors text-sm"
+                    >
+                      Show all {allJobs.length} jobs ↓
+                    </button>
+                  )}
+                </>
+              )}
+
+              {/* No jobs at all */}
+              {!isLoadingAllJobs && allJobs.length === 0 && (
+                <div className="text-center py-16 text-gray-400">
+                  <Briefcase className="w-12 h-12 mx-auto mb-4 text-gray-200" />
+                  <p className="text-lg font-medium">No active job openings at the moment.</p>
+                  <p className="text-sm mt-1">Check back soon — new positions are added regularly.</p>
+                </div>
+              )}
+
             </div>
           </div>
         </section>
@@ -773,7 +1013,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   },
                   {
                     icon: Target, gradient: 'from-emerald-500 to-teal-600', glow: 'shadow-emerald-200',
-                    title: 'Real Work Simulations',
+                    title: 'Real Work Practical Assessments',
                     desc: 'Interactive tasks that mirror actual job responsibilities. Assess real skills, not just resumes.',
                     tags: ['Real Tasks', 'Skill-Based', 'Job-Ready'],
                   },
@@ -900,7 +1140,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                         <Badge className="w-5 h-5 text-blue-600" />
                       </div>
-                      <span className="text-sm font-bold text-gray-700">Featured Simulation</span>
+                      <span className="text-sm font-bold text-gray-700">Featured Practical Assessment</span>
                     </div>
                     <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-100 px-2.5 py-1 rounded-full">
                       <Star className="w-3 h-3" /> Popular
@@ -942,7 +1182,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                       'Demonstrate technical and soft skills in real scenarios',
                       'Blockchain-verified performance records',
                       'Stand out to top Rwandan tech companies',
-                      'Free access to all simulations',
+                      'Free access to all practical assessments',
                     ].map(item => (
                       <li key={item} className="flex items-start gap-3">
                         <div className="w-5 h-5 rounded-full bg-green-100 border border-green-200 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -1013,7 +1253,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   <span className="font-extrabold text-white text-lg">SimuHire Rwanda</span>
                 </div>
                 <p className="text-sm leading-relaxed text-gray-500">
-                  AI + Blockchain powered recruitment simulations for Rwanda's digital economy.
+                  AI + Blockchain powered recruitment practical assessments for Rwanda's digital economy.
                 </p>
               </div>
               {[
@@ -1044,8 +1284,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
         </div>
       </footer>
 
-      {/* Login Required Prompt — shown when an unauthenticated user tries to
-          view the detailed analysis ("View full job"). */}
+      {/* Login Required Prompt */}
       {showLoginPrompt && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"

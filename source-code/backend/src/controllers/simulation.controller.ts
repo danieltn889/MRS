@@ -168,6 +168,7 @@ const CreateTemplateSchema = z.object({
 });
 
 const UpdateTemplateSchema = z.object({
+  // canonical names
   name: z.string().min(3).max(255).optional(),
   description: z.string().max(5000).optional(),
   type: z.enum(['technical', 'behavioral', 'cognitive', 'situational', 'role_play', 'case_study']).optional(),
@@ -176,7 +177,21 @@ const UpdateTemplateSchema = z.object({
   tasks: z.array(z.any()).min(1).optional(),
   scoring_rubric: z.record(z.string(), z.any()).optional(),
   job_id: z.string().uuid().optional(),
-  availability: z.record(z.string(), z.any()).optional()
+  availability: z.record(z.string(), z.any()).optional(),
+  // camelCase aliases the frontend sends
+  title: z.string().min(3).max(255).optional(),
+  duration: z.number().int().min(5).max(480).optional(),
+  scoring: z.record(z.string(), z.any()).optional(),
+  jobId: z.string().uuid().optional(),
+  jobRole: z.string().max(255).optional(),
+  objectives: z.array(z.string()).optional(),
+  settings: z.record(z.string(), z.any()).optional(),
+  practiceEnabled: z.boolean().optional(),
+  practiceSimulation: z.any().optional(),
+  compliance: z.array(z.any()).optional(),
+  passFailCriteria: z.record(z.string(), z.any()).optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  metadata: z.record(z.string(), z.any()).optional(),
 });
 
 const CreateSimulationSchema = z.object({
@@ -1411,9 +1426,15 @@ class SimulationController extends BaseController {
       const values: any[] = [];
       let idx = 1;
 
-      if (updates.name) {
+      // Normalise camelCase aliases from frontend
+      const titleVal = (updates as any).title || updates.name;
+      const durationVal = (updates as any).duration || updates.duration_minutes;
+      const scoringVal = (updates as any).scoring || updates.scoring_rubric;
+      const jobIdVal = (updates as any).jobId || updates.job_id;
+
+      if (titleVal) {
         updateFields.push(`name = $${idx++}`, `slug = $${idx++}`);
-        values.push(updates.name, updates.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
+        values.push(titleVal, titleVal.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''));
       }
       if (updates.description !== undefined) {
         updateFields.push(`description = $${idx++}`);
@@ -1427,9 +1448,9 @@ class SimulationController extends BaseController {
         updateFields.push(`difficulty = $${idx++}`);
         values.push(updates.difficulty);
       }
-      if (updates.duration_minutes) {
+      if (durationVal) {
         updateFields.push(`duration_minutes = $${idx++}`);
-        values.push(updates.duration_minutes);
+        values.push(durationVal);
       }
       if (updates.tasks) {
         const tasksJson = JSON.stringify(updates.tasks);
@@ -1444,23 +1465,54 @@ class SimulationController extends BaseController {
         updateFields.push(`tasks = $${idx++}`, `total_tasks = $${idx++}`);
         values.push(tasksJson, updates.tasks.length);
       }
-      if (updates.scoring_rubric) {
+      if (scoringVal) {
         updateFields.push(`scoring_rubric = $${idx++}`);
-        values.push(JSON.stringify(updates.scoring_rubric));
+        values.push(JSON.stringify(scoringVal));
       }
-      if (updates.job_id !== undefined) {
-        if (updates.job_id) {
-          const jobResult = await DatabaseService.query('SELECT id FROM jobs WHERE id = $1', [updates.job_id]);
+      if ((updates as any).passFailCriteria !== undefined) {
+        updateFields.push(`pass_fail_criteria = $${idx++}`);
+        values.push(JSON.stringify((updates as any).passFailCriteria || {}));
+      }
+      if (jobIdVal !== undefined) {
+        if (jobIdVal) {
+          const jobResult = await DatabaseService.query('SELECT id FROM jobs WHERE id = $1', [jobIdVal]);
           if (!jobResult.rows[0]) {
             ResponseService.error(res, 'Job not found', 404);
             return;
           }
         }
         updateFields.push(`job_id = $${idx++}`);
-        values.push(updates.job_id || null);
+        values.push(jobIdVal || null);
+      }
+      if ((updates as any).status) {
+        const statusMap: Record<string, boolean> = { active: true, draft: false, archived: false };
+        updateFields.push(`is_active = $${idx++}`);
+        values.push(statusMap[(updates as any).status] ?? false);
       }
 
-      if (updates.availability) {
+      // Build updated tasks_structure (merge existing + new values)
+      const tasksStructureFields = ['jobRole', 'objectives', 'settings', 'practiceEnabled', 'practiceSimulation', 'compliance'];
+      const hasTasksStructureChange = tasksStructureFields.some(f => (updates as any)[f] !== undefined);
+      if (hasTasksStructureChange) {
+        let currentTs = simulation.tasks_structure || {};
+        if (typeof currentTs === 'string') {
+          try { currentTs = JSON.parse(currentTs); } catch { currentTs = {}; }
+        }
+        const newTs = {
+          ...currentTs,
+          jobRole:           (updates as any).jobRole           !== undefined ? (updates as any).jobRole           : currentTs.jobRole,
+          objectives:        (updates as any).objectives        !== undefined ? (updates as any).objectives        : currentTs.objectives,
+          settings:          (updates as any).settings          !== undefined ? (updates as any).settings          : currentTs.settings,
+          practiceEnabled:   (updates as any).practiceEnabled   !== undefined ? (updates as any).practiceEnabled   : currentTs.practiceEnabled,
+          practiceSimulation:(updates as any).practiceSimulation!== undefined ? (updates as any).practiceSimulation: currentTs.practiceSimulation,
+          compliance:        (updates as any).compliance        !== undefined ? (updates as any).compliance        : currentTs.compliance,
+        };
+        updateFields.push(`tasks_structure = $${idx++}`);
+        values.push(JSON.stringify(newTs));
+      }
+
+      const availabilityVal = (updates as any).availability || ((updates as any).metadata?.availability);
+      if (availabilityVal) {
         let currentMetadata = simulation.metadata || {};
         if (typeof currentMetadata === 'string') {
           try {
@@ -1471,7 +1523,7 @@ class SimulationController extends BaseController {
         }
         const updatedMetadata = {
           ...currentMetadata,
-          availability: updates.availability
+          availability: availabilityVal
         };
         updateFields.push(`metadata = $${idx++}`);
         values.push(JSON.stringify(updatedMetadata));
@@ -1493,7 +1545,29 @@ class SimulationController extends BaseController {
       templateCache.del(`template_${id}`);
       templateCache.del('templates_list');
 
-      ResponseService.success(res, result.rows[0], 'Simulation updated');
+      const t = result.rows[0];
+      let ts = t.tasks_structure || {};
+      if (typeof ts === 'string') { try { ts = JSON.parse(ts); } catch { ts = {}; } }
+      ResponseService.success(res, {
+        id: t.id,
+        title: t.name,
+        jobRole: ts.jobRole,
+        jobId: t.job_id,
+        description: t.description,
+        duration: t.duration_minutes,
+        difficulty: t.difficulty,
+        objectives: ts.objectives || [],
+        tasks: t.tasks,
+        scoring: t.scoring_rubric,
+        settings: ts.settings || {},
+        passFailCriteria: t.pass_fail_criteria,
+        availability: t.metadata?.availability || {},
+        practiceEnabled: ts.practiceEnabled ?? false,
+        practiceSimulation: ts.practiceSimulation || null,
+        compliance: ts.compliance || [],
+        status: t.is_active ? 'active' : 'draft',
+        tasks_structure: ts,
+      }, 'Simulation updated');
     } catch (error: any) {
       ResponseService.error(res, 'Failed to update simulation', 500, null, this.formatError(error));
     }
@@ -6557,16 +6631,21 @@ Return ONLY valid JSON:
       }
 
       // Extract all scores from the analysis
-      const overallScore = fullScoreAnalysis.scores.overall;
-      const qualityScore = fullScoreAnalysis.scores.quality;
-      const technicalScore = fullScoreAnalysis.scores.technical;
-      const punctualityScore = fullScoreAnalysis.scores.punctuality;
-      const adaptabilityScore = fullScoreAnalysis.scores.adaptability;
-      const speedScore = fullScoreAnalysis.scores.speed;
-      const behavioralScore = fullScoreAnalysis.scores.behavioral;
-      const communicationScore = fullScoreAnalysis.scores.communication;
-      const collaborationScore = fullScoreAnalysis.scores.collaboration;
-      const githubScore = fullScoreAnalysis.scores.github;
+      // Clamp to [0, 100] — the evaluations table CHECK constraints reject anything outside
+      // this range, and upstream sources (e.g. the communication classifier) aren't guaranteed
+      // to return values within bounds.
+      const clampScore = (value: any): number => Math.max(0, Math.min(100, Number(value) || 0));
+
+      const overallScore = clampScore(fullScoreAnalysis.scores.overall);
+      const qualityScore = clampScore(fullScoreAnalysis.scores.quality);
+      const technicalScore = clampScore(fullScoreAnalysis.scores.technical);
+      const punctualityScore = clampScore(fullScoreAnalysis.scores.punctuality);
+      const adaptabilityScore = clampScore(fullScoreAnalysis.scores.adaptability);
+      const speedScore = clampScore(fullScoreAnalysis.scores.speed);
+      const behavioralScore = clampScore(fullScoreAnalysis.scores.behavioral);
+      const communicationScore = clampScore(fullScoreAnalysis.scores.communication);
+      const collaborationScore = clampScore(fullScoreAnalysis.scores.collaboration);
+      const githubScore = clampScore(fullScoreAnalysis.scores.github);
       const completionRate = fullScoreAnalysis.summary.completion_rate;
       const passed = fullScoreAnalysis.summary.passed;
       const passingScore = fullScoreAnalysis.summary.passing_score;
@@ -6659,7 +6738,7 @@ Return ONLY valid JSON:
         }
       }
 
-      const finalOverallScore = Math.min(100, overallScore + participationBonus);
+      const finalOverallScore = Math.max(0, Math.min(100, overallScore + participationBonus));
       const finalPassed = finalOverallScore >= passingScore;
 
       const completionRateLabel = `${Math.round(completionRate)}% completion (${completedTasksCount}/${totalTasks} tasks)`;
@@ -11038,7 +11117,7 @@ Return ONLY valid JSON:
               sessionId: actualSessionId,
               simulationId: actualSimulationId,
               messageId: savedMessage.id,
-              url: `/simulation/chat/${actualSimulationId}`,
+              url: `/simulation/execute/${actualSessionId}?tab=chat`,
             },
             priority: 'normal',
           });

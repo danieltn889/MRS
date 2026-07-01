@@ -16,6 +16,23 @@ const normalizeWhitespace = (value: string): string =>
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 
+// Watermark patterns added by free scanner apps (CamScanner, Adobe Scan free tier, etc.)
+const WATERMARK_PATTERNS: RegExp[] = [
+  /\b(?:downloaded\s+from\s+)?CamScanner\b/gi,
+  /\bScanned\s+(?:with|by|using)\s+CamScanner\b/gi,
+  /\bSign\s+up\s+to\s+see\s+full\s+version\b/gi,
+  /\bwww\.camscanner\.com\b/gi,
+];
+
+const stripWatermarks = (text: string): string => {
+  let result = text;
+  for (const pattern of WATERMARK_PATTERNS) {
+    result = result.replace(pattern, '');
+  }
+  // Collapse blank lines left behind after removal
+  return result.replace(/\n{3,}/g, '\n\n').trim();
+};
+
 const MIN_READABLE_PAGE_TEXT_LENGTH = 10;
 const OCR_RENDER_SCALE = 3;
 const OCR_MAX_PIXELS = 14_000_000;
@@ -99,7 +116,9 @@ const cleanupOcrText = (text: string): string => {
         const alphanumericCount = line.replace(/[^A-Za-z0-9]/g, '').length;
         const noiseCount = line.replace(/[A-Za-z0-9\s]/g, '').length;
 
-        return alphanumericCount >= 3 && noiseCount <= Math.max(8, alphanumericCount * 1.5);
+        // Lenient filter: keep any line with at least 1 alphanumeric char and not pure noise.
+        // This prevents over-filtering compressed or low-quality scans.
+        return alphanumericCount >= 1 && noiseCount <= Math.max(12, alphanumericCount * 2);
       })
       .join('\n')
   );
@@ -225,10 +244,15 @@ export const extractPdfText = async (file: Blob): Promise<ExtractedDocumentText>
     }
   }
 
-  const text = normalizeWhitespace(pages.filter(Boolean).join('\n\n'));
-  if (!text) {
-    throw new Error('No readable text found in this PDF. If it is scanned, upload a clearer scan or image.');
-  }
+  // Keep any partial pdfjs text for pages where OCR also returned nothing
+  // so we never lose text that pdfjs managed to get, even if short.
+  const combinedPages = pages.map((pageText, index) => {
+    const pageNumber = index + 1;
+    const needsOcr = pagesNeedingOcr.includes(pageNumber);
+    return needsOcr && !pageText ? '' : pageText;
+  });
+
+  const text = stripWatermarks(normalizeWhitespace(combinedPages.filter(Boolean).join('\n\n')));
 
   const hasEmbeddedText = pages.some((pageText, index) => {
     const pageNumber = index + 1;
@@ -236,6 +260,7 @@ export const extractPdfText = async (file: Blob): Promise<ExtractedDocumentText>
   });
   const method: ExtractionMethod = usedOcr ? (hasEmbeddedText ? 'mixed' : 'ocr') : 'text';
 
+  // Return empty text with a flag instead of throwing — let callers decide how to handle it.
   return { text, method, pageCount: pdf.numPages };
 };
 
@@ -249,12 +274,12 @@ export const extractDocxText = async (file: Blob): Promise<ExtractedDocumentText
 
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const paragraphs = Array.from(doc.getElementsByTagNameNS('*', 'p'));
-  const text = normalizeWhitespace(
+  const text = stripWatermarks(normalizeWhitespace(
     paragraphs
       .map((p) => Array.from(p.getElementsByTagNameNS('*', 't')).map((t) => t.textContent ?? '').join(''))
       .filter(Boolean)
       .join('\n')
-  );
+  ));
 
   if (!text) {
     throw new Error('No readable text found in this Word document.');
@@ -285,13 +310,9 @@ export const extractImageText = async (file: Blob): Promise<ExtractedDocumentTex
     canvasContext.fillRect(0, 0, canvas.width, canvas.height);
     canvasContext.drawImage(image, 0, 0, canvas.width, canvas.height);
 
-    const text = await recognizeCanvasText(canvas);
+    const text = stripWatermarks(await recognizeCanvasText(canvas));
     canvas.width = 0;
     canvas.height = 0;
-
-    if (!text) {
-      throw new Error('No readable text found in this image.');
-    }
 
     return { text, method: 'ocr', pageCount: 1 };
   } finally {

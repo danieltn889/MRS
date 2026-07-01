@@ -17,7 +17,7 @@ const Step8Practice: React.FC<Props> = ({ simulation, setSimulation }) => {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h3 className="text-lg font-bold text-gray-900">Practice Simulation Setup</h3>
+        <h3 className="text-lg font-bold text-gray-900">Practice Round Setup</h3>
         <p className="text-sm text-gray-500 mt-0.5">Give candidates a chance to warm up before the real assessment.</p>
       </div>
 
@@ -31,7 +31,7 @@ const Step8Practice: React.FC<Props> = ({ simulation, setSimulation }) => {
                 onChange={e => setPractice({ type: e.target.value as PracticeSimulation['type'] })}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500"
               >
-                <option value="full">Full simulation</option>
+                <option value="full">Full practical assessment</option>
                 <option value="timed">Timed practice</option>
               </select>
             </div>

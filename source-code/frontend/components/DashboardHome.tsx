@@ -1,7 +1,8 @@
 // components/DashboardHome/index.tsx
 import React, { useState, useEffect } from 'react';
 import {
-  User, Briefcase, Search, Users, AlertCircle, Building2, Filter, Calendar, BarChart3, Target
+  User, Briefcase, Search, Users, AlertCircle, Building2, Filter, Calendar, BarChart3, Target,
+  CheckCircle, XCircle, Info, X as XIcon
 } from 'lucide-react';
 import ProfileProgressRing from './ProfileProgressRing';
 import SimulationScheduler from './Simulation/SimulationScheduler';
@@ -151,6 +152,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     additional: DEFAULT_ADDITIONAL_STATS
   });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [withdrawalNotif, setWithdrawalNotif] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   // Check user type
   const userTypeValue = user?.userType || user?.user_type || '';
@@ -219,82 +221,63 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
   // DashboardHome/index.tsx - Replace the handleWithdrawApplication function
 
+  const showNotif = (type: 'success' | 'error' | 'info', message: string) => {
+    setWithdrawalNotif({ type, message });
+    setTimeout(() => setWithdrawalNotif(null), 6000);
+  };
+
   const handleWithdrawApplication = async (job: any) => {
     console.log('🔄 Withdrawing application for job:', job.id);
 
     try {
-      // Show confirmation
       if (!window.confirm(`Are you sure you want to withdraw your application for "${job.title}" at ${job.company}?`)) {
         return;
       }
 
-      // 🔑 KEY FIX: Get the application ID from the job object
-      // The job object should have an applicationId field
       let applicationId = job.applicationId || job.application_id;
 
-      // If no applicationId, try to fetch it from the API
       if (!applicationId) {
-        console.log('📤 No application ID found, fetching from API...');
-
         const token = localStorage.getItem('authToken');
         if (!token) {
-          alert('❌ Please log in again.');
+          showNotif('error', 'Please log in again.');
           return;
         }
 
-        // Fetch the application for this job
         const response = await fetch(`${API_BASE_URL}/applications`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
         });
 
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.data?.applications) {
-            // Find the application for this job
             const app = data.data.applications.find((a: any) => a.job_id === job.id);
-            if (app) {
-              applicationId = app.id;
-              console.log('✅ Found application ID:', applicationId);
-            }
+            if (app) applicationId = app.id;
           }
         }
       }
 
       if (!applicationId) {
-        alert('❌ Application not found. Please try again.');
+        showNotif('error', 'Application not found. Please try again.');
         return;
       }
 
-      console.log('📤 Withdrawing application ID:', applicationId);
-
-      // Call the withdraw API
       const response = await withdrawApplication(applicationId);
 
       if (response.success) {
-        // Remove from applied jobs using the manager
         appliedJobsManager.removeAppliedJob(job.id);
-
-        // Update local state directly
         setAppliedJobs(prevApplied => prevApplied.filter(id => id !== job.id));
-
-        // Show success message
-        alert('✅ Application withdrawn successfully!');
+        showNotif('success', `Application for "${job.title}" has been withdrawn.`);
       } else {
-        alert('❌ Failed to withdraw application: ' + (response.message || 'Unknown error'));
+        showNotif('error', response.message || 'Failed to withdraw application.');
       }
     } catch (error: any) {
       console.error('Error withdrawing application:', error);
-      const msg = error?.message || error?.response?.data?.message || 'Unknown error';
-      // If the backend says it's already withdrawn/final, the local "applied" state is
-      // stale — sync it so the card stops offering Withdraw (and allows re-apply).
-      if (/withdrawn|cannot be withdrawn|already/i.test(String(msg))) {
+      const msg = error?.response?.data?.message || error?.message || 'Unknown error';
+      if (/offer has already been accepted|already withdrawn|already rejected/i.test(String(msg))) {
         appliedJobsManager.removeAppliedJob(job.id);
         setAppliedJobs(prevApplied => prevApplied.filter(id => id !== job.id));
       }
-      alert('❌ Failed to withdraw application: ' + msg);
+      showNotif('error', msg);
     }
   };
 
@@ -791,8 +774,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           </button>
           <button onClick={() => onViewChange?.('simulations-list')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
             <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors"><Target className="w-6 h-6 text-orange-600" /></div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Manage Simulations</h3>
-            <p className="text-gray-500 text-sm">Create and manage skill assessment simulations</p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Manage Practical Assessments</h3>
+            <p className="text-gray-500 text-sm">Create and manage skill assessment practical assessments</p>
           </button>
         </div>
       </div>
@@ -832,6 +815,22 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
   return (
     <>
+      {/* Withdrawal / action notification toast */}
+      {withdrawalNotif && (
+        <div className={`fixed top-4 right-4 z-50 flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg max-w-sm border text-sm font-medium transition-all
+          ${withdrawalNotif.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
+            withdrawalNotif.type === 'info'    ? 'bg-blue-50 border-blue-200 text-blue-800' :
+                                                 'bg-red-50 border-red-200 text-red-800'}`}>
+          {withdrawalNotif.type === 'success' ? <CheckCircle size={18} className="shrink-0 mt-0.5 text-green-600" /> :
+           withdrawalNotif.type === 'info'    ? <Info size={18} className="shrink-0 mt-0.5 text-blue-600" /> :
+                                                <XCircle size={18} className="shrink-0 mt-0.5 text-red-600" />}
+          <span className="flex-1">{withdrawalNotif.message}</span>
+          <button onClick={() => setWithdrawalNotif(null)} className="shrink-0 opacity-60 hover:opacity-100">
+            <XIcon size={16} />
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         <div className="lg:col-span-3 w-full">
           <div className="mb-8">

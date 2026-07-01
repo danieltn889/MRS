@@ -60,8 +60,8 @@ const Step1Basics: React.FC<Props> = ({ simulation, setSimulation, jobs }) => {
     <div className="p-6 space-y-7">
 
       <div>
-        <h3 className="text-lg font-bold text-gray-900">Simulation Basics</h3>
-        <p className="text-sm text-gray-500 mt-0.5">Define the core details of your simulation.</p>
+        <h3 className="text-lg font-bold text-gray-900">Practical Assessment Basics</h3>
+        <p className="text-sm text-gray-500 mt-0.5">Define the core details of your practical assessment.</p>
       </div>
 
       {/* ── Job link — REQUIRED, first ── */}
@@ -115,7 +115,7 @@ const Step1Basics: React.FC<Props> = ({ simulation, setSimulation, jobs }) => {
               onChange={handleJobSelect}
               className="w-full px-4 py-2.5 border-2 border-red-300 bg-red-50 rounded-xl text-sm focus:ring-2 focus:ring-purple-400 focus:border-purple-400 focus:bg-white transition-all"
             >
-              <option value="">Select a job to link to this simulation…</option>
+              <option value="">Select a job to link to this practical assessment…</option>
               {jobs.map(job => (
                 <option key={job.id} value={job.id}>
                   {job.title}

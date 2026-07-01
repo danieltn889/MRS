@@ -180,7 +180,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       }
     } catch (err: any) {
       console.error('Failed to load simulations:', err);
-      setError(err.message || 'Failed to load simulations');
+      setError(err.message || 'Failed to load practical assessments');
       setSimulations([]);
     } finally {
       setLoading(false);
@@ -250,7 +250,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       
       setResumeSessionData({
         sessionId: session.id,
-        simulationName: simulation.simulationName || simulation.name || 'Simulation',
+        simulationName: simulation.simulationName || simulation.name || 'Practical Assessment',
         jobTitle: simulation.jobTitle,
         companyName: simulation.companyName,
         startedAt: session.started_at,
@@ -296,7 +296,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     });
     
     if (!simulation.id || simulation.id === 'null') {
-      alert('This simulation is not yet available.');
+      alert('This practical assessment is not yet available.');
       return;
     }
 
@@ -353,11 +353,11 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         await loadSimulations();
         await loadStats();
       } else {
-        throw new Error(resumeResponse.message || 'Failed to resume simulation');
+        throw new Error(resumeResponse.message || 'Failed to resume practical assessment');
       }
     } catch (err: any) {
       console.error('❌ Failed to resume simulation:', err);
-      alert(err.message || 'Failed to resume simulation. Please try again.');
+      alert(err.message || 'Failed to resume practical assessment. Please try again.');
     } finally {
       setIsResuming(false);
       setStartingSimulation(null);
@@ -424,7 +424,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       }
     } catch (err: any) {
       console.error('❌ Failed to start simulation:', err);
-      setDialogError(err.message || 'Failed to start simulation. Please try again.');
+      setDialogError(err.message || 'Failed to start practical assessment. Please try again.');
     } finally {
       setDialogLoading(false);
     }
@@ -498,7 +498,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     });
     
     if (!simulation.id || simulation.id === 'null') {
-      alert('Cannot review simulation: Assessment not available');
+      alert('Cannot review practical assessment: Assessment not available');
       return;
     }
 
@@ -563,7 +563,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         <div className="flex items-center justify-center h-64">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
-            <p className="text-gray-600">Loading your simulations…</p>
+            <p className="text-gray-600">Loading your practical assessments…</p>
           </div>
         </div>
       </div>
@@ -578,10 +578,10 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
               <Play className="w-8 h-8 text-blue-600" />
-              Job Simulations
+              Job Practical Assessments
             </h1>
             <p className="text-gray-600 mt-2">
-              Complete simulations for jobs you've applied to and showcase your skills
+              Complete practical assessments for jobs you've applied to and showcase your skills
             </p>
           </div>
           <div className="flex gap-2">
@@ -644,11 +644,11 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       {simulations.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg shadow-md">
           <Building2 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No simulations available</h3>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">No practical assessments available</h3>
           <p className="text-gray-600 max-w-md mx-auto">
             {selectedStatus !== 'all'
-              ? `You don't have any ${selectedStatus.replace('_', ' ')} simulations.`
-              : "The employers you applied to haven't created simulations yet. Check back later!"}
+              ? `You don't have any ${selectedStatus.replace('_', ' ')} practical assessments.`
+              : "The employers you applied to haven't created practical assessments yet. Check back later!"}
           </p>
         </div>
       ) : (
@@ -760,12 +760,12 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Cannot View Results</h2>
               <p className="text-gray-600 mb-4">
-                This simulation has a score of <strong>{String(noSessionSimulation.score)}%</strong> but no session data is available.
+                This practical assessment has a score of <strong>{String(noSessionSimulation.score)}%</strong> but no session data is available.
               </p>
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-left">
                 <p className="text-sm text-yellow-800 font-medium mb-2">This may happen if:</p>
                 <ul className="text-sm text-yellow-700 space-y-1 list-disc list-inside">
-                  <li>The simulation was completed in a previous version</li>
+                  <li>The practical assessment was completed in a previous version</li>
                   <li>The session was deleted or archived</li>
                   <li>There was an issue creating the session</li>
                 </ul>

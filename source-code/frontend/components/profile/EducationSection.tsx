@@ -455,14 +455,31 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
       }, 300);
 
       const result = await TranscriptExtractor.extractTextFromFile(file);
-      
-      clearInterval(progressInterval);
-      setUploadProgress(90);
-      setProcessingMessage('Parsing modules and skills...');
 
-      const { modules, skills } = TranscriptExtractor.parseTranscript(result.text);
-      
+      clearInterval(progressInterval);
       setUploadProgress(100);
+
+      // Even if text extraction returned nothing (heavily compressed or image-only PDF),
+      // still accept the file — the user can fill details manually.
+      if (!result.text) {
+        setUploadStatus('success');
+        setExtractionStatus('error');
+        setProcessingMessage('File uploaded — text could not be auto-read');
+        setFormData(prev => ({
+          ...prev,
+          transcriptFile: file,
+          extractedText: '',
+          extractedModules: [],
+          extractedSkills: [],
+          extractionMethod: 'none'
+        }));
+        setShowExtractedData(false);
+        return;
+      }
+
+      setProcessingMessage('Parsing modules and skills...');
+      const { modules, skills } = TranscriptExtractor.parseTranscript(result.text);
+
       setUploadStatus('success');
       setExtractionStatus('success');
       setProcessingMessage('Extraction complete!');
@@ -483,12 +500,19 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
         clearInterval(progressInterval);
       }
       console.error('Error processing transcript:', error);
-      setUploadStatus('error');
+      // Still accept the file even if extraction failed completely
+      setUploadStatus('success');
       setExtractionStatus('error');
-      setProcessingMessage('Error processing transcript');
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to process transcript: ${errorMessage}\n\nTip: For best results, upload a clear image (JPG/PNG) or a text-based PDF.`);
+      setProcessingMessage('File uploaded — text could not be auto-read');
+      setFormData(prev => ({
+        ...prev,
+        transcriptFile: file,
+        extractedText: '',
+        extractedModules: [],
+        extractedSkills: [],
+        extractionMethod: 'none'
+      }));
+      setShowExtractedData(false);
     }
   };
 
@@ -1108,18 +1132,20 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                           <FileText size={18} className="text-blue-600" />
                           <span className="text-sm text-gray-700">{transcript.file_name}</span>
                           <span className="text-xs text-gray-400">({formatFileSize(transcript.file_size)})</span>
-                          <a
-                            href={transcript.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-auto text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            View Transcript
-                          </a>
+                          {transcript.file_url && !/\.(docx?|xlsx?|pptx?)$/i.test(transcript.file_name || '') && (
+                            <a
+                              href={transcript.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-auto text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              View Transcript
+                            </a>
+                          )}
                           <a
                             href={transcript.file_url}
                             download={transcript.file_name}
-                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                            className="ml-auto text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                           >
                             <Download size={14} />
                             Download

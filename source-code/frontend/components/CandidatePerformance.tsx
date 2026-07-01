@@ -345,7 +345,7 @@ const ChatModal: React.FC<ChatModalProps> = ({ simulationRecordId, sessionId, ca
               Chat with {candidateName}
             </h3>
             <p style={{ color: '#9ca3af', margin: '4px 0 0', fontSize: 12 }}>
-              Simulation: {simulationRecordId.slice(0, 8)}...
+              Practical Assessment: {simulationRecordId.slice(0, 8)}...
             </p>
           </div>
           <button
@@ -589,7 +589,7 @@ const CandidateCard: React.FC<{
               <div><strong>1. Each task (0–100):</strong> (Completion + Time + Quality + Answer-quality) ÷ 4.</div>
               <div><strong>2. Competencies (0–100):</strong> Punctuality, Speed, Technical, Adaptability, Communication, Collaboration, Initiative, Attention to Detail — each scored by the AI from the candidate's work, chat, time and GitHub.</div>
               <div><strong>3. Composites:</strong> Quality = (Technical + Punctuality + Adaptability) ÷ 3 · Behavioral = (Adaptability + Communication) ÷ 2.</div>
-              <div style={{ marginTop: 4, color: '#0f172a' }}><strong>4. Overall Score = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</strong> (weights from the simulation rubric; defaults shown). Pass mark default 70%.</div>
+              <div style={{ marginTop: 4, color: '#0f172a' }}><strong>4. Overall Score = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</strong> (weights from the practical assessment rubric; defaults shown). Pass mark default 70%.</div>
             </div>
           )}
         </div>

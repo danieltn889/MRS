@@ -93,7 +93,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
         {/* ── Sticky header ── */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white rounded-t-2xl sticky top-0 z-10 shrink-0">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Simulation Preview</h2>
+            <h2 className="text-lg font-bold text-gray-900">Practical Assessment Preview</h2>
             <p className="text-xs text-gray-500">Everything filled in — candidate-facing view</p>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors">
@@ -108,7 +108,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
           <div className="bg-gradient-to-br from-purple-600 to-indigo-700 rounded-2xl p-6 text-white">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1 min-w-0">
-                <h3 className="text-xl font-bold mb-1 leading-snug">{s.title || 'Untitled Simulation'}</h3>
+                <h3 className="text-xl font-bold mb-1 leading-snug">{s.title || 'Untitled Practical Assessment'}</h3>
                 {s.jobRole && (
                   <div className="flex items-center gap-1.5 text-purple-200 text-sm mb-3">
                     <Briefcase size={13} /> {s.jobRole}
@@ -320,7 +320,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
 
           {/* ── Practice Simulation ── */}
           {practice?.enabled && (
-            <Section title="Practice Simulation" icon={Play} iconColor="text-indigo-500" defaultOpen={false}>
+            <Section title="Practice Round" icon={Play} iconColor="text-indigo-500" defaultOpen={false}>
               <div className="space-y-1 mb-3">
                 <Row label="Type"             value={<span className="capitalize">{practice.type}</span>} />
                 <Row label="Difficulty"       value={<span className="capitalize">{practice.difficulty}</span>} />

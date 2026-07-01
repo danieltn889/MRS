@@ -416,7 +416,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
                 ) : (
                   <>
                     <Timer className="w-4 h-4" />
-                    Resume Simulation
+                    Resume Practical Assessment
                   </>
                 )}
               </button>
@@ -471,7 +471,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
                 ) : (
                   <>
                     <Play className="w-4 h-4" />
-                    Start Simulation
+                    Start Practical Assessment
                   </>
                 )}
               </button>

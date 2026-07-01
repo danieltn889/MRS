@@ -14,6 +14,7 @@ interface JobCardProps {
   isAiMatch?: number;
   isApplied?: boolean;
   isSaved?: boolean;
+  hasSimulation?: boolean;
   getMatchColor?: (score: number) => string;
   getScoreColor?: (score: number) => string;
   onViewDetails?: (job: any) => void;
@@ -50,6 +51,7 @@ const JobCard: React.FC<JobCardProps> = ({
   isAiMatch,
   isApplied = false,
   isSaved   = false,
+  hasSimulation = false,
   getMatchColor = () => 'bg-green-100 text-green-800',
   getScoreColor = () => 'bg-green-600',
   onViewDetails          = () => {},
@@ -147,9 +149,11 @@ const JobCard: React.FC<JobCardProps> = ({
   const applicationCount = rawJob.application_count || job.applications || 0;
   
   // Status
-  const status = rawJob.status || job.status || 'active';
+  const status = rawJob.effective_status || rawJob.status || job.status || 'active';
+  const now = new Date();
+  const isScheduled = !!publishedAt && new Date(publishedAt) > now;
   const daysRemaining = job.daysRemaining || getDaysRemainingProp(expiresAt);
-  const isExpired = daysRemaining === 'Expired' || (expiresAt ? new Date(expiresAt) < new Date() : false);
+  const isExpired = daysRemaining === 'Expired' || (expiresAt ? new Date(expiresAt) < now : false);
   
   // Matched/Missing skills - DECLARE BEFORE USING
   const skillsBD = job.skillsBreakdown;
@@ -212,8 +216,16 @@ const JobCard: React.FC<JobCardProps> = ({
               {viewCount > 0 && <span className="flex items-center gap-1"><Eye size={12} />{viewCount} views</span>}
             </div>
 
+            {/* Scheduled banner — not yet open */}
+            {isScheduled && (
+              <div className="mb-3 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 bg-blue-50 text-blue-700">
+                <Calendar size={13} />
+                Opens on {formatFullDate(publishedAt!)}
+              </div>
+            )}
+
             {/* Expiry banner */}
-            {expiresAt && (
+            {!isScheduled && expiresAt && (
               <div className={`mb-3 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${isExpired ? 'bg-red-50 text-red-700' : 'bg-yellow-50 text-yellow-700'}`}>
                 <Timer size={13} />
                 {isExpired
@@ -548,16 +560,31 @@ const JobCard: React.FC<JobCardProps> = ({
                   View Application
                 </button>
                 {!isExpired && (
-                  <button type="button" onClick={() => onWithdrawApplication(job)}
-                    className="w-full px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-semibold transition-colors">
-                    Withdraw
-                  </button>
+                  hasSimulation ? (
+                    <div className="relative group">
+                      <button
+                        type="button"
+                        disabled
+                        className="w-full px-4 py-2 bg-gray-200 text-gray-400 rounded-xl text-sm font-semibold cursor-not-allowed flex items-center justify-center gap-1.5"
+                      >
+                        <Shield size={14} /> Withdraw Locked
+                      </button>
+                      <div className="absolute bottom-full left-0 right-0 mb-1 bg-gray-800 text-white text-xs rounded-lg p-2 hidden group-hover:block z-10 text-center leading-snug pointer-events-none">
+                        Cannot withdraw — a practical assessment has been started for this position.
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => onWithdrawApplication(job)}
+                      className="w-full px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-semibold transition-colors">
+                      Withdraw
+                    </button>
+                  )
                 )}
               </>
             ) : (
-              <button type="button" onClick={() => onApplyNow(job)} disabled={isExpired}
+              <button type="button" onClick={() => onApplyNow(job)} disabled={isExpired || isScheduled}
                 className="w-full px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                {isExpired ? 'Expired' : <><CheckCircle size={15} /> Apply Now</>}
+                {isExpired ? 'Expired' : isScheduled ? 'Not Open Yet' : <><CheckCircle size={15} /> Apply Now</>}
               </button>
             )}
           </div>

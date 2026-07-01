@@ -120,15 +120,21 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
     });
   }, [authUser, user, loading]);
 
-  // Handle deep links
+  // Handle deep links (e.g. notification clicks navigating to /?view=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const viewParam = params.get('view');
     const sessionIdParam = params.get('sessionId');
+    const jobIdParam = params.get('jobId');
     if (viewParam === 'session-report' && sessionIdParam) {
       setReportReturnView('simulations-list');
       setEditingSimulationId(sessionIdParam);
       setCurrentView('session-report');
+    } else if (viewParam === 'job-candidates' && jobIdParam) {
+      setSelectedJobForCandidates({ id: jobIdParam, title: '' });
+      setCurrentView('job-candidates');
+    } else if (viewParam === 'application-history') {
+      setCurrentView('application-history');
     }
   }, []);
 

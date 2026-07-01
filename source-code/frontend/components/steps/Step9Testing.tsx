@@ -26,7 +26,7 @@ const Step9Testing: React.FC<Props> = ({ simulation, complianceChecks, onRunComp
           <h4 className="font-semibold text-gray-800 flex items-center gap-2">
             <Eye size={16} className="text-purple-600" /> Preview Mode
           </h4>
-          <p className="text-sm text-gray-500">Experience the simulation exactly as a candidate would.</p>
+          <p className="text-sm text-gray-500">Experience the practical assessment exactly as a candidate would.</p>
           <button
             onClick={onPreview}
             className="w-full px-4 py-2 text-sm font-medium bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all"
@@ -50,7 +50,7 @@ const Step9Testing: React.FC<Props> = ({ simulation, complianceChecks, onRunComp
 
       {/* Stats */}
       <div className="border border-gray-100 rounded-xl p-5">
-        <h4 className="text-sm font-semibold text-gray-700 mb-4">Simulation Statistics</h4>
+        <h4 className="text-sm font-semibold text-gray-700 mb-4">Practical Assessment Statistics</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { value: simulation.tasks.length,     label: 'Tasks',       color: 'purple' },

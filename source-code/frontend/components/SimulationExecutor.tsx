@@ -518,7 +518,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       setShowPostSubmitDialog(true);
     } catch (error: any) {
       setIsEvaluating(false);
-      setSubmitError(error?.message || 'Failed to submit simulation. Please try again.');
+      setSubmitError(error?.message || 'Failed to submit practical assessment. Please try again.');
     }
   };
 
@@ -675,7 +675,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4" />
-          <p className="text-gray-400">Loading simulation…</p>
+          <p className="text-gray-400">Loading practical assessment…</p>
         </div>
       </div>
     );
@@ -701,8 +701,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Simulation Already Completed</h2>
-          <p className="text-gray-400 mb-6">This simulation has already been submitted.</p>
+          <h2 className="text-xl font-bold text-white mb-2">Practical Assessment Already Completed</h2>
+          <p className="text-gray-400 mb-6">This practical assessment has already been submitted.</p>
           <button
             onClick={() => {
               // Use session ID to go to session report
@@ -1147,6 +1147,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
               onFocusMessages={markAsRead}
               currentUserId={user?.id}
               currentUserEmail={user?.email}
+              isSessionClosed={session?.status === 'completed' || session?.status === 'submitted'}
             />
           </div>
         )}

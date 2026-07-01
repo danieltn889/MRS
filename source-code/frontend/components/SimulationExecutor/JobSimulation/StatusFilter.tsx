@@ -14,7 +14,7 @@ interface StatusFilterProps {
 }
 
 const statusOptions: StatusOption[] = [
-  { id: 'all', label: 'All Simulations', icon: BookOpen },
+  { id: 'all', label: 'All Practical Assessments', icon: BookOpen },
   { id: 'not_started', label: 'Not Started', icon: Play },
   { id: 'in_progress', label: 'In Progress', icon: Timer },
   { id: 'completed', label: 'Completed', icon: CheckCircle },

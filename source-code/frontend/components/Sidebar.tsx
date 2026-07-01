@@ -44,8 +44,8 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'users', label: 'User Management', icon: Users },
           { id: 'platform', label: 'Platform Settings', icon: Settings },
           { id: 'analytics', label: 'System Analytics', icon: BarChart3 },
-          { id: 'simulations-list', label: 'All Simulations', icon: List },
-          { id: 'simulation-designer', label: 'Simulation Designer', icon: FileText },
+          { id: 'simulations-list', label: 'All Practical Assessments', icon: List },
+          { id: 'simulation-designer', label: 'Practical Assessment Designer', icon: FileText },
           { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'security', label: 'Security Settings', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User }
@@ -60,8 +60,8 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'performance', label: 'Performance Reporting', icon: Activity },
           { id: 'team', label: 'Team Management', icon: Users },
           { id: 'analytics', label: 'Company Analytics', icon: BarChart3 },
-          { id: 'simulations-list', label: 'My Simulations', icon: List },
-          { id: 'simulation-designer', label: 'Simulation Designer', icon: FileText },
+          { id: 'simulations-list', label: 'My Practical Assessments', icon: List },
+          { id: 'simulation-designer', label: 'Practical Assessment Designer', icon: FileText },
           { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
@@ -74,7 +74,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'applications', label: 'Application Review', icon: CheckSquare },
           { id: 'interviews', label: 'Interview Scheduling', icon: UserCheck },
           { id: 'analytics', label: 'Recruitment Analytics', icon: TrendingUp },
-          { id: 'simulations-list', label: 'My Simulations', icon: List },
+          { id: 'simulations-list', label: 'My Practical Assessments', icon: List },
           { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
@@ -83,8 +83,8 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
         return [
           { id: 'dashboard', label: 'Applicant Dashboard', icon: BarChart3 },
           { id: 'saved-jobs', label: 'Saved Jobs', icon: Bookmark },
-          { id: 'simulation', label: 'Job Simulation', icon: FileText },
-          { id: 'my-simulations', label: 'My Simulations', icon: Play },
+          { id: 'simulation', label: 'Job Practical Assessment', icon: FileText },
+          { id: 'my-simulations', label: 'My Practical Assessments', icon: Play },
           { id: 'applications', label: 'My Applications', icon: CheckSquare },
           { id: 'results', label: 'My Results', icon: TrendingUp },
           { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
@@ -116,7 +116,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           </button>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
@@ -128,29 +128,29 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
                   onViewChange(item.id);
                   onClose();
                 }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 text-sm ${
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-xs ${
                   isActive
                     ? `${activeBg} text-white shadow-md`
                     : `${theme.text} ${theme.hover} hover:text-white`
                 }`}
               >
-                <Icon size={20} className="flex-shrink-0" />
-                <span className="font-medium whitespace-nowrap">{item.label}</span>
+                <Icon size={16} className="flex-shrink-0" />
+                <span className="font-medium leading-tight text-left">{item.label}</span>
               </button>
             );
           })}
         </nav>
 
-        <div className={`p-4 border-t ${theme.border}`}>
+        <div className={`px-3 py-2 border-t ${theme.border}`}>
           <button
             onClick={() => {
               console.log('[Sidebar] Mobile logout clicked');
               onLogout();
             }}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg ${theme.text} ${theme.hover} hover:text-white transition-all duration-200 text-sm`}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg ${theme.text} ${theme.hover} hover:text-white transition-all duration-200 text-xs`}
           >
-            <LogOut size={20} className="flex-shrink-0" />
-            <span className="font-medium whitespace-nowrap">Logout</span>
+            <LogOut size={16} className="flex-shrink-0" />
+            <span className="font-medium">Logout</span>
           </button>
         </div>
       </div>
@@ -166,7 +166,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           </div>
         </div>
 
-        <nav className="flex-1 p-3 sm:p-4 space-y-1 sm:space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;
@@ -177,29 +177,29 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
                   console.log('[Sidebar] Desktop nav clicked:', item.id);
                   onViewChange(item.id);
                 }}
-                className={`w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg transition-all duration-200 text-sm sm:text-base ${
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-xs ${
                   isActive
                     ? `${activeBg} text-white shadow-md`
                     : `${theme.text} ${theme.hover} hover:text-white`
                 }`}
               >
-                <Icon size={20} className="flex-shrink-0" />
-                <span className="font-medium whitespace-nowrap">{item.label}</span>
+                <Icon size={16} className="flex-shrink-0" />
+                <span className="font-medium leading-tight text-left">{item.label}</span>
               </button>
             );
           })}
         </nav>
 
-        <div className={`p-3 sm:p-4 border-t ${theme.border}`}>
+        <div className={`px-3 py-2 border-t ${theme.border}`}>
           <button
             onClick={() => {
               console.log('[Sidebar] Desktop logout clicked');
               onLogout();
             }}
-            className={`w-full flex items-center gap-3 px-3 sm:px-4 py-2 sm:py-3 rounded-lg ${theme.text} ${theme.hover} hover:text-white transition-all duration-200 text-sm sm:text-base`}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg ${theme.text} ${theme.hover} hover:text-white transition-all duration-200 text-xs`}
           >
-            <LogOut size={20} className="flex-shrink-0" />
-            <span className="font-medium hidden sm:inline">Logout</span>
+            <LogOut size={16} className="flex-shrink-0" />
+            <span className="font-medium">Logout</span>
           </button>
         </div>
       </div>
