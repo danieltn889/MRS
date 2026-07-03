@@ -360,6 +360,25 @@ router.delete('/sessions/:sessionId/cancel', protect, [
   validateRequest
 ], authHandler(SimulationController.cancelSimulationSession.bind(SimulationController)));
 
+// Admin: cancel any session
+router.patch('/sessions/:sessionId/admin-cancel', protect, authorize('recruiter', 'company_admin', 'system_admin'), [
+  param('sessionId').isUUID().withMessage('Invalid session ID format'),
+  body('reason').optional().isString().isLength({ max: 500 }),
+  validateRequest
+], authHandler(SimulationController.adminCancelSession.bind(SimulationController)));
+
+// Admin: reset session so candidate can redo
+router.patch('/sessions/:sessionId/admin-reset', protect, authorize('recruiter', 'company_admin', 'system_admin'), [
+  param('sessionId').isUUID().withMessage('Invalid session ID format'),
+  validateRequest
+], authHandler(SimulationController.adminResetSession.bind(SimulationController)));
+
+// Admin: reopen session so candidate can continue from where they left off
+router.patch('/sessions/:sessionId/admin-reopen', protect, authorize('recruiter', 'company_admin', 'system_admin'), [
+  param('sessionId').isUUID().withMessage('Invalid session ID format'),
+  validateRequest
+], authHandler(SimulationController.adminReopenSession.bind(SimulationController)));
+
 // ============================================
 // 4. TASK EXECUTION ROUTES
 // ============================================
@@ -874,7 +893,7 @@ router.delete('/:id', protect, [
   validateRequest
 ], authHandler(SimulationController.deleteSimulation.bind(SimulationController)));
 
-router.post('/:id/publish', protect, [
+router.post('/:id/publish', protect, authorize('recruiter', 'company_admin', 'system_admin'), [
   param('id').isUUID().withMessage('Invalid simulation ID format'),
   validateRequest
 ], authHandler(SimulationController.publishSimulation.bind(SimulationController)));

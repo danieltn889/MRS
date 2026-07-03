@@ -43,7 +43,10 @@ export class BlockchainService {
   private localKeys: LocalAccount[] = [];
 
   constructor() {
-    const rpcUrl = process.env.BLOCKCHAIN_RPC_URL || 'http://localhost:8545';
+    const network = process.env.ETHEREUM_NETWORK || 'localhost';
+    const rpcUrl = network === 'sepolia'
+      ? (process.env.ETHEREUM_SEPOLIA_RPC_URL || process.env.BLOCKCHAIN_RPC_URL || 'https://ethereum-sepolia.publicnode.com')
+      : (process.env.BLOCKCHAIN_RPC_URL || 'http://localhost:8545');
     this.provider = new ethers.providers.JsonRpcProvider(rpcUrl);
     
     const privateKey = this.loadPrivateKey();
@@ -83,6 +86,21 @@ export class BlockchainService {
   }
 
   private loadPrivateKey(): string {
+    // FIRST: check .env ETHEREUM_PRIVATE_KEY — this is the primary source for Sepolia
+    const envKey = process.env.ETHEREUM_PRIVATE_KEY;
+    if (envKey && envKey.trim().length > 10) {
+      const key = envKey.trim().startsWith('0x') ? envKey.trim() : `0x${envKey.trim()}`;
+      try {
+        const w = new ethers.Wallet(key);
+        console.log(`✅ [Blockchain] Using ETHEREUM_PRIVATE_KEY from .env → Wallet: ${w.address}`);
+        return key;
+      } catch {
+        console.warn('⚠️ ETHEREUM_PRIVATE_KEY in .env is invalid, falling back to local-keys.json');
+      }
+    } else {
+      console.warn('⚠️ ETHEREUM_PRIVATE_KEY not set in .env — falling back to local-keys.json (no Sepolia ETH)');
+    }
+
     try {
       const possiblePaths = [
         path.join(__dirname, '../../../blockchain/local-keys.json'),
@@ -91,13 +109,13 @@ export class BlockchainService {
         path.join(process.cwd(), 'blockchain/local-keys.json'),
         path.join(process.cwd(), 'local-keys.json')
       ];
-      
+
       for (const keysPath of possiblePaths) {
         if (fs.existsSync(keysPath)) {
           console.log(`📁 Loading keys from: ${keysPath}`);
           const keysData = JSON.parse(fs.readFileSync(keysPath, 'utf8'));
           this.localKeys = keysData.accounts || [];
-          
+
           if (this.localKeys.length > 0) {
             console.log(`✅ Loaded ${this.localKeys.length} local accounts`);
             const account = this.localKeys[0];
@@ -108,10 +126,10 @@ export class BlockchainService {
           }
         }
       }
-      
-      console.warn('⚠️ local-keys.json not found, using default Hardhat Account #0');
+
+      console.warn('⚠️ local-keys.json not found, using default Hardhat Account #0 (no Sepolia ETH)');
       return '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-      
+
     } catch (error) {
       const err = error as Error;
       console.error('❌ Failed to load private key:', err.message);
@@ -120,11 +138,19 @@ export class BlockchainService {
   }
 
   private loadContractAddress(): string {
-    // FIRST: Try to get from environment variable
+    // FIRST: ETHEREUM_CONTRACT_ADDRESS (Sepolia deployed contract)
+    if (process.env.ETHEREUM_CONTRACT_ADDRESS) {
+      const envAddress = this.cleanAddress(process.env.ETHEREUM_CONTRACT_ADDRESS);
+      if (envAddress && envAddress.match(/^0x[a-fA-F0-9]{40}$/i)) {
+        console.log(`✅ Using contract address from ETHEREUM_CONTRACT_ADDRESS: ${envAddress}`);
+        return envAddress;
+      }
+    }
+    // SECOND: CONTRACT_ADDRESS fallback
     if (process.env.CONTRACT_ADDRESS) {
       const envAddress = this.cleanAddress(process.env.CONTRACT_ADDRESS);
       if (envAddress && envAddress.match(/^0x[a-fA-F0-9]{40}$/i)) {
-        console.log(`✅ Using contract address from ENV: ${envAddress}`);
+        console.log(`✅ Using contract address from CONTRACT_ADDRESS: ${envAddress}`);
         return envAddress;
       }
     }

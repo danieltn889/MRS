@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle, X, Play, Save, Copy, Archive } from 'lucide-react';
+import { CheckCircle, X, Play, Save, Copy, Archive, Loader2 } from 'lucide-react';
 import { Simulation, ComplianceCheck } from '../types/simulationTypes';
 
 interface Props {
@@ -10,11 +10,12 @@ interface Props {
   onPublish: () => void;
   onDuplicate: () => void;
   onArchive: () => void;
+  loading?: boolean;
 }
 
 const Step10Publish: React.FC<Props> = ({
   simulation, complianceChecks, simulationId,
-  onSave, onPublish, onDuplicate, onArchive,
+  onSave, onPublish, onDuplicate, onArchive, loading,
 }) => {
   const checklistItems = [
     { label: 'Practical assessment title and description completed', ok: !!(simulation.title?.trim()) && !!(simulation.description?.trim()) },
@@ -100,10 +101,13 @@ const Step10Publish: React.FC<Props> = ({
         </button>
         <button
           onClick={onPublish}
-          disabled={!canPublish}
+          disabled={!canPublish || loading}
           className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
         >
-          <Play size={15} /> Publish Simulation
+          {loading
+            ? <><Loader2 size={15} className="animate-spin" /> Publishing…</>
+            : <><Play size={15} /> Publish Simulation</>
+          }
         </button>
       </div>
     </div>

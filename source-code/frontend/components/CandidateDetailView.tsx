@@ -485,6 +485,27 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
                           )}
                         </div>
                       </div>
+
+                      {/* View Session Report button */}
+                      {sim.session_id && (
+                        <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          <a
+                            href={`/session-report/${sim.session_id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 6,
+                              padding: '8px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                              background: sim.session_status === 'completed' ? '#7c3aed' : '#d97706',
+                              color: '#fff', textDecoration: 'none', cursor: 'pointer',
+                              border: 'none'
+                            }}
+                          >
+                            <Eye size={14} />
+                            {sim.session_status === 'completed' ? 'View Full Session Report' : sim.session_status === 'in_progress' ? 'View Live Session' : 'View Session'}
+                          </a>
+                        </div>
+                      )}
                     </div>
 
                     {/* Sim body */}

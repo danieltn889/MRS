@@ -259,9 +259,11 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
   
   const setCurrentFile = useCallback((path: string, content: string, language?: string) => {
     setCurrentFilePath(path);
-    setCurrentFileContent(content);
+    // If the caller passed empty content, look up the actual content from the repo context
+    const resolvedContent = content || getRepoFileContent(path) || '';
+    setCurrentFileContent(resolvedContent);
     setCurrentFileLanguage(language || getLanguageFromFileName(path));
-  }, []);
+  }, [getRepoFileContent]);
 
   const resetCurrentFile = useCallback(() => {
     setCurrentFilePath(null);

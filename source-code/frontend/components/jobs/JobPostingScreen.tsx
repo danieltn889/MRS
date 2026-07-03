@@ -1248,7 +1248,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         applicationInstructions: (() => {
           const r = job.application_instructions;
           if (!r) return '';
-          if (typeof r === 'string') { try { return JSON.parse(r).instructions || r; } catch { return r; } }
+          if (typeof r === 'string') { try { return JSON.parse(r).instructions || ''; } catch { return r; } }
           return r.instructions || '';
         })(),
         publishedAt: job.published_at ? new Date(job.published_at).toISOString().slice(0, 16) : DEFAULT_FORM_DATA.publishedAt,

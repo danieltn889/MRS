@@ -619,9 +619,11 @@ class JobController extends BaseController {
           application_instructions, skills_required, skills_preferred, documents,
           tags, education_required, language_requirements, experience_requirements,
           experience_level, experience_min, experience_max, ai_match_required_score,
+          qualifications,
           created_at, updated_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
                   $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35,
+                  $36,
                   NOW(), NOW())
         RETURNING *
       `, [
@@ -663,7 +665,8 @@ class JobController extends BaseController {
           normalizedExperienceLevel,
           jobData.experienceMin ?? null,
           jobData.experienceMax ?? null,
-          aiMatchRequiredScore
+          aiMatchRequiredScore,
+          jobData.qualifications || null
         ]);
 
         return jobResult.rows[0];
@@ -786,8 +789,9 @@ class JobController extends BaseController {
           experience_min = $30,
           experience_max = $31,
           ai_match_required_score = $32,
+          qualifications = $33,
           updated_at = NOW()
-        WHERE id = $33
+        WHERE id = $34
         RETURNING *
       `, [
           jobData.title || existingJob.title,
@@ -828,6 +832,7 @@ class JobController extends BaseController {
           jobData.experienceMin !== undefined ? jobData.experienceMin : existingJob.experience_min,
           jobData.experienceMax !== undefined ? jobData.experienceMax : existingJob.experience_max,
           aiMatchRequiredScore,
+          jobData.qualifications !== undefined ? (jobData.qualifications || null) : existingJob.qualifications,
           id
         ]);
 

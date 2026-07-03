@@ -24,8 +24,13 @@ export const GitHubCallback = () => {
 
     setStatusMsg('Exchanging code for token...');
 
+    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const apiBase = isProduction
+      ? `${window.location.origin}/api/v1`
+      : (import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1');
+
     // Call backend directly and show raw response
-    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'}/github/auth/callback`, {
+    fetch(`${apiBase}/github/auth/callback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 

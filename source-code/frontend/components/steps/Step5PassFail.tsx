@@ -211,9 +211,9 @@ const Step5PassFail: React.FC<Props> = ({
           </label>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { value: 'sequential' as const, label: 'Sequential', desc: 'Complete in order' },
-              { value: 'parallel' as const, label: 'Parallel', desc: 'Any order, all required' },
-              { value: 'weighted' as const, label: 'Weighted', desc: 'Custom importance' },
+              { value: 'sequential' as const, label: 'Sequential', desc: 'Must finish each before starting next' },
+              { value: 'parallel' as const, label: 'Parallel', desc: 'Start any task at any time' },
+              { value: 'weighted' as const, label: 'Weighted', desc: 'Assign custom importance' },
             ].map((mode) => (
               <button
                 key={mode.value}
@@ -295,127 +295,114 @@ const Step5PassFail: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Mandatory vs Optional Tasks - MUTUALLY EXCLUSIVE */}
-        <div className="mt-3 space-y-2">
+        {/* Task Requirements */}
+        <div className="mt-3 space-y-3">
           <label className="text-sm font-medium text-gray-700 block">
-            Task Requirements (Mutually Exclusive)
+            Task Requirements
           </label>
-          <p className="text-xs text-gray-500 mb-2">
-            A task can only be in ONE category. Click a task to move it between categories.
-          </p>
-          
-          <div className="grid grid-cols-2 gap-4">
-            {/* Mandatory Tasks Column */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-red-600">●</span>
-                <span className="text-xs font-medium text-gray-700">Mandatory</span>
-                <span className="text-xs text-gray-400">({taskPriority.mandatoryTasks?.length || 0})</span>
+
+          {simulation.tasks.length === 0 ? (
+            <p className="text-xs text-gray-400 italic">No tasks available — add tasks in Step 3 first.</p>
+          ) : (
+            <>
+              {/* Unassigned pool */}
+              {(() => {
+                const unassigned = simulation.tasks.filter(t =>
+                  !taskPriority.mandatoryTasks?.includes(t.id) &&
+                  !taskPriority.optionalTasks?.includes(t.id)
+                );
+                if (unassigned.length === 0) return null;
+                return (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-1.5">Unassigned — click <strong>M</strong> or <strong>O</strong> to categorize:</p>
+                    <div className="space-y-1 border border-dashed border-gray-300 rounded-lg p-2 bg-gray-50">
+                      {unassigned.map(task => (
+                        <div key={task.id} className="flex items-center gap-2 text-xs p-1.5 rounded bg-white border border-gray-200">
+                          <span className="flex-1 text-gray-700 font-medium truncate">{task.title || `Task ${task.order}`}</span>
+                          {task.duration && <span className="text-gray-400 shrink-0">{task.duration}m</span>}
+                          <button
+                            onClick={() => toggleTaskCategory(task.id, 'mandatory')}
+                            className="shrink-0 px-2 py-0.5 bg-red-100 text-red-700 rounded font-semibold hover:bg-red-200 transition-colors"
+                            title="Make Mandatory"
+                          >M</button>
+                          <button
+                            onClick={() => toggleTaskCategory(task.id, 'optional')}
+                            className="shrink-0 px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-semibold hover:bg-blue-200 transition-colors"
+                            title="Make Optional"
+                          >O</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="grid grid-cols-2 gap-4">
+                {/* Mandatory Tasks Column */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-red-600">🔒</span>
+                    <span className="text-xs font-medium text-gray-700">Mandatory</span>
+                    <span className="text-xs text-gray-400">({taskPriority.mandatoryTasks?.length || 0})</span>
+                  </div>
+                  <div className="space-y-1 min-h-14 max-h-48 overflow-y-auto border border-red-200 rounded-lg p-2 bg-red-50">
+                    {(taskPriority.mandatoryTasks?.length || 0) === 0 ? (
+                      <p className="text-xs text-gray-400 italic py-2 text-center">None yet</p>
+                    ) : (
+                      simulation.tasks
+                        .filter(t => taskPriority.mandatoryTasks?.includes(t.id))
+                        .map(task => (
+                          <div
+                            key={task.id}
+                            className="flex items-center gap-2 text-xs p-2 rounded bg-red-200 text-gray-800 border border-red-300 cursor-pointer hover:bg-red-300 transition-colors"
+                            onClick={() => toggleTaskCategory(task.id, 'mandatory')}
+                            title="Click to remove from Mandatory"
+                          >
+                            <span className="flex-1 font-medium truncate">{task.title || `Task ${task.order}`}</span>
+                            {task.duration && <span className="text-gray-500 shrink-0">{task.duration}m</span>}
+                            <span className="text-red-500 shrink-0 font-bold">×</span>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                  {(taskPriority.mandatoryTasks?.length || 0) === 0 && (
+                    <p className="text-xs text-red-500">⚠️ No mandatory tasks selected</p>
+                  )}
+                </div>
+
+                {/* Optional Tasks Column */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-blue-600">○</span>
+                    <span className="text-xs font-medium text-gray-700">Optional</span>
+                    <span className="text-xs text-gray-400">({taskPriority.optionalTasks?.length || 0})</span>
+                  </div>
+                  <div className="space-y-1 min-h-14 max-h-48 overflow-y-auto border border-blue-200 rounded-lg p-2 bg-blue-50">
+                    {(taskPriority.optionalTasks?.length || 0) === 0 ? (
+                      <p className="text-xs text-gray-400 italic py-2 text-center">None yet</p>
+                    ) : (
+                      simulation.tasks
+                        .filter(t => taskPriority.optionalTasks?.includes(t.id))
+                        .map(task => (
+                          <div
+                            key={task.id}
+                            className="flex items-center gap-2 text-xs p-2 rounded bg-blue-200 text-gray-800 border border-blue-300 cursor-pointer hover:bg-blue-300 transition-colors"
+                            onClick={() => toggleTaskCategory(task.id, 'optional')}
+                            title="Click to remove from Optional"
+                          >
+                            <span className="flex-1 font-medium truncate">{task.title || `Task ${task.order}`}</span>
+                            {task.duration && <span className="text-gray-500 shrink-0">{task.duration}m</span>}
+                            <span className="text-blue-500 shrink-0 font-bold">×</span>
+                          </div>
+                        ))
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="space-y-1 max-h-48 overflow-y-auto border border-red-200 rounded-lg p-2 bg-red-50">
-                {simulation.tasks.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No tasks available</p>
-                ) : (
-                  simulation.tasks.map(task => {
-                    const { isMandatory, isOptional } = getTaskStatus(task.id);
-                    
-                    return (
-                      <div 
-                        key={task.id} 
-                        className={`flex items-center gap-2 text-xs p-2 rounded transition-all cursor-pointer ${
-                          isMandatory 
-                            ? 'bg-red-200 text-gray-800 border-2 border-red-400 shadow-sm' 
-                            : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
-                        }`}
-                        onClick={() => toggleTaskCategory(task.id, 'mandatory')}
-                      >
-                        <span className={isMandatory ? 'text-red-600' : 'text-gray-400'}>
-                          {isMandatory ? '🔒' : '○'}
-                        </span>
-                        <span className={isMandatory ? 'font-medium' : ''}>
-                          {task.title || `Task ${task.order}`}
-                        </span>
-                        {task.duration && (
-                          <span className="text-xs text-gray-400 ml-auto">
-                            {task.duration} min
-                          </span>
-                        )}
-                        {isOptional && (
-                          <span className="text-xs bg-blue-200 text-blue-700 px-1.5 py-0.5 rounded">
-                            in Optional
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              <p className="text-xs text-red-500">
-                {taskPriority.mandatoryTasks?.length === 0 && simulation.tasks.length > 0 && 
-                  '⚠️ No mandatory tasks selected'}
-              </p>
-            </div>
-            
-            {/* Optional Tasks Column */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-blue-600">○</span>
-                <span className="text-xs font-medium text-gray-700">Optional</span>
-                <span className="text-xs text-gray-400">({taskPriority.optionalTasks?.length || 0})</span>
-              </div>
-              <div className="space-y-1 max-h-48 overflow-y-auto border border-blue-200 rounded-lg p-2 bg-blue-50">
-                {simulation.tasks.length === 0 ? (
-                  <p className="text-xs text-gray-400 italic">No tasks available</p>
-                ) : (
-                  simulation.tasks.map(task => {
-                    const { isMandatory, isOptional } = getTaskStatus(task.id);
-                    
-                    return (
-                      <div 
-                        key={task.id} 
-                        className={`flex items-center gap-2 text-xs p-2 rounded transition-all cursor-pointer ${
-                          isOptional 
-                            ? 'bg-blue-200 text-gray-800 border-2 border-blue-400 shadow-sm' 
-                            : 'bg-gray-50 text-gray-400 border border-gray-200 hover:bg-gray-100'
-                        }`}
-                        onClick={() => toggleTaskCategory(task.id, 'optional')}
-                      >
-                        <span className={isOptional ? 'text-blue-600' : 'text-gray-400'}>
-                          {isOptional ? '○' : '•'}
-                        </span>
-                        <span className={isOptional ? 'font-medium' : ''}>
-                          {task.title || `Task ${task.order}`}
-                        </span>
-                        {task.duration && (
-                          <span className="text-xs text-gray-400 ml-auto">
-                            {task.duration} min
-                          </span>
-                        )}
-                        {isMandatory && (
-                          <span className="text-xs bg-red-200 text-red-700 px-1.5 py-0.5 rounded">
-                            in Mandatory
-                          </span>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              <p className="text-xs text-blue-500">
-                {taskPriority.optionalTasks?.length === 0 && simulation.tasks.length > 0 && 
-                  '💡 Click a task to make it optional'}
-              </p>
-            </div>
-          </div>
-          
-          {/* Legend */}
-          <div className="flex gap-4 text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
-            <span>💡 Click on any task to toggle its category</span>
-            <span>|</span>
-            <span>🔒 = Mandatory</span>
-            <span>○ = Optional</span>
-            <span>• = Unassigned</span>
-          </div>
+
+              <p className="text-xs text-gray-400">Click a task in Mandatory or Optional to move it back to Unassigned.</p>
+            </>
+          )}
         </div>
 
         {/* Quick Stats */}

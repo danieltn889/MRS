@@ -5,7 +5,7 @@ import {
   Eye, GitCommit, Users, Activity, TrendingUp, Search, Loader2, Edit,
   RefreshCw, Download, Save, Brain, FolderGit2, ExternalLink, Copy, Timer,
   GitPullRequest, Code, ChevronDown, ChevronUp, MessageCircle, Calendar,
-  User, GitBranch, Clock, XCircle, FileCode
+  User, GitBranch, Clock, XCircle, FileCode, BarChart2
 } from 'lucide-react';
 import aiEvaluationService from '../../../services/aiEvaluation.service';
 import { calculateGitHubScoreForRepo, verifyGitHubUser } from '../../../services/simulationAPI';
@@ -72,6 +72,9 @@ interface StartDialogProps {
   session: SimulationSession | null;
   onStart: () => void;
   onExit: () => void;
+  maxAttempts?: number;
+  attemptNumber?: number;
+  priorityMode?: 'sequential' | 'parallel' | 'weighted';
 }
 
 // ============================================
@@ -790,27 +793,64 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
 // EXISTING DIALOGS
 // ============================================
 
-export const StartDialog: React.FC<StartDialogProps> = ({ session, onStart, onExit }) => {
+export const StartDialog: React.FC<StartDialogProps> = ({
+  session,
+  onStart,
+  onExit,
+  maxAttempts,
+  attemptNumber,
+  priorityMode,
+}) => {
   if (session?.status === 'completed' || session?.status === 'submitted') {
     return null;
   }
 
   const isPaused = session?.status === 'paused';
+  const showAttemptInfo = maxAttempts && maxAttempts > 1 && attemptNumber;
+  const remainingAfter = showAttemptInfo ? Math.max(0, maxAttempts - attemptNumber) : null;
+
+  const modeInfo = {
+    sequential: { label: 'Sequential', color: 'text-red-400', bg: 'bg-red-900/20 border-red-700/50', desc: 'You must finish each task completely before starting the next one.' },
+    parallel:   { label: 'Parallel',   color: 'text-green-400', bg: 'bg-green-900/20 border-green-700/50', desc: 'You can start and switch between any tasks in any order.' },
+    weighted:   { label: 'Weighted',   color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-700/50', desc: 'Tasks have different importance weights affecting your final score.' },
+  };
+  const modeData = priorityMode ? modeInfo[priorityMode] : null;
 
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700">
-        <div className="text-center mb-6">
-          <Play className="mx-auto h-16 w-16 text-green-500 mb-4" />
+        <div className="text-center mb-5">
+          <Play className="mx-auto h-14 w-14 text-green-500 mb-3" />
           <h2 className="text-2xl font-bold text-white">
             {isPaused ? 'Resume Practical Assessment?' : 'Ready to Start?'}
           </h2>
-          <p className="text-gray-400 mt-2">
-            {isPaused
-              ? 'Continue from where you left off.'
-              : "Ensure you're in a quiet environment."}
+          <p className="text-gray-400 mt-1 text-sm">
+            {isPaused ? 'Continue from where you left off.' : "Ensure you're in a quiet environment."}
           </p>
         </div>
+
+        {/* Attempt info */}
+        {showAttemptInfo && (
+          <div className="mb-4 p-3 bg-blue-900/20 border border-blue-700/50 rounded-lg">
+            <p className="text-blue-300 text-sm font-medium">
+              Attempt {attemptNumber} of {maxAttempts}
+              {remainingAfter !== null && remainingAfter > 0
+                ? ` · ${remainingAfter} attempt${remainingAfter !== 1 ? 's' : ''} remaining after this`
+                : ' · This is your last attempt'}
+            </p>
+          </div>
+        )}
+
+        {/* Priority mode info */}
+        {modeData && (
+          <div className={`mb-4 p-3 border rounded-lg ${modeData.bg}`}>
+            <p className={`text-sm font-semibold ${modeData.color} mb-0.5`}>
+              {modeData.label} Mode
+            </p>
+            <p className="text-gray-300 text-xs">{modeData.desc}</p>
+          </div>
+        )}
+
         <div className="flex space-x-3">
           <button
             onClick={onExit}
@@ -1493,6 +1533,18 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                 </div>
               )}
 
+              {supportsGithub && !code?.trim() && !displayRepo && (
+                <div className="p-3 bg-yellow-900/40 border border-yellow-600/60 rounded-lg flex items-start gap-2">
+                  <AlertCircle size={15} className="text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-yellow-300 text-sm font-medium">Code editor is empty</p>
+                    <p className="text-yellow-400/80 text-xs mt-0.5">
+                      For technical tasks, write your code in the <strong>code editor panel</strong> on the left side of the screen. Code typed in the Comment box below does not count toward your Technical score.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <label className="flex items-center gap-3 rounded border border-gray-700 p-3 bg-gray-900 cursor-pointer">
                 <input type="checkbox" checked={draft.completed} onChange={(e) => onDraftChange({ ...draft, completed: e.target.checked })} className="h-5 w-5 text-green-600 rounded" />
                 <span className="text-white font-medium">I have completed this task</span>
@@ -1516,7 +1568,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
               {supportsGithub && (
                 <div>
                   <label className="block text-gray-400 text-xs font-medium mb-1.5">🔗 GitHub Repository URL (Commit Link)</label>
-                  <input type="url" value={displayGithubUrl} onChange={(e) => onDraftChange({ ...draft, githubCommitUrl: e.target.value })} placeholder="https://github.com/user/repo/commit/…" className="w-full rounded border border-gray-700 bg-gray-900 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                  <input type="url" value={displayGithubUrl} readOnly placeholder="https://github.com/user/repo/commit/…" className="w-full rounded border border-gray-700 bg-gray-800 text-gray-400 px-3 py-2 text-sm cursor-default select-all" />
                   {displayRepo && !draft.githubCommitUrl && (
                     <p className="text-green-400 text-xs mt-1.5 flex items-center gap-1">
                       <CheckCircle size={10} /> Auto-filled with repository: {displayRepo.owner}/{displayRepo.repo}
@@ -1617,6 +1669,7 @@ interface PostSubmitDialogProps {
   onExit: () => void;
   session?: SimulationSession | null;
   result?: any;
+  timeSpent?: number;
   formatTime?: (seconds: number) => string;
   githubAnalysis?: {
     has_repo?: boolean;
@@ -1656,9 +1709,30 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
   onExit,
   session,
   result,
+  timeSpent,
   formatTime,
   githubAnalysis,
 }) => {
+  const [countdown, setCountdown] = useState(8);
+
+  // Auto-redirect to full session report after 8 seconds
+  useEffect(() => {
+    if (!open) return;
+    setCountdown(8);
+    const tick = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(tick);
+          const sessionId = session?.id || result?.sessionId;
+          if (sessionId) window.location.href = `/session-report/${sessionId}`;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [open]);
+
   if (!open) return null;
 
   const scoreBreakdown = result?.scoreBreakdown || {};
@@ -1755,7 +1829,7 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
           <div className="bg-gray-900 rounded-lg p-4 border border-gray-700 text-center">
             <p className="text-gray-400 text-xs uppercase">Time Spent</p>
             <p className="text-xl font-bold text-blue-300 mt-2">
-              {summary.total_time_formatted || displayTime(summary.total_time_seconds)}
+              {summary.total_time_formatted || displayTime(summary.total_time_seconds || timeSpent || session?.timeSpent)}
             </p>
           </div>
         </div>
@@ -1917,24 +1991,159 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
           </div>
         )}
 
-        {scoreRows.length > 0 && (
-          <div className="mt-4 bg-gray-900 rounded-lg border border-gray-700 p-4 text-left">
-            <p className="text-white font-semibold text-sm mb-3">Score Breakdown</p>
-            <div className="space-y-2">
-              {scoreRows.map(([label, value]) => (
-                <div key={label as string}>
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-gray-400">{label as string}</span>
-                    <span className="text-gray-200">{Math.round(Number(value))}%</span>
-                  </div>
-                  <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.max(0, Math.min(100, Number(value)))}%` }} />
+        {/* ── Full Scoring Transparency Panel ── */}
+        {(() => {
+          const sb = result?.scoreBreakdown || {};
+          const wb = sb.weighted_breakdown || {};
+          const qb = sb.quality_breakdown || {};
+          const bb = sb.behavioral_breakdown || {};
+
+          const rawScores = [
+            { label: 'Technical', key: 'technical', color: 'bg-blue-500', desc: 'Code quality from editor / GitHub repo' },
+            { label: 'Speed', key: 'speed', color: 'bg-green-500', desc: 'Tasks completed within time limit' },
+            { label: 'Punctuality', key: 'punctuality', color: 'bg-emerald-500', desc: 'On-time task completion' },
+            { label: 'Adaptability', key: 'adaptability', color: 'bg-yellow-500', desc: 'Handling unexpected tasks / changes' },
+            { label: 'Communication', key: 'communication', color: 'bg-sky-500', desc: 'Chat message quality and tone' },
+            { label: 'GitHub', key: 'github', color: 'bg-purple-500', desc: 'Repository structure, commits, docs' },
+            { label: 'Collaboration', key: 'collaboration', color: 'bg-pink-500', desc: 'Interaction volume and balance' },
+          ].filter(r => sb[r.key] !== undefined && sb[r.key] !== null);
+
+          const fmtW = (w: number) => `${(w * 100).toFixed(1)}%`;
+          const fmtScore = (v: any) => Math.round(Number(v || 0));
+
+          const qualityScore = fmtScore(sb.quality ?? qb.total);
+          const speedScore = fmtScore(sb.speed ?? wb.speed?.score);
+          const behavioralScore = fmtScore(sb.behavioral ?? bb.total);
+          const githubScore = fmtScore(sb.github ?? wb.github?.score);
+
+          const wQ = Number(wb.quality?.weight ?? 0);
+          const wS = Number(wb.speed?.weight ?? 0);
+          const wB = Number(wb.behavioral?.weight ?? 0);
+          const wG = Number(wb.github?.weight ?? 0);
+
+          const cQ = (qualityScore * wQ).toFixed(1);
+          const cS = (speedScore * wS).toFixed(1);
+          const cB = (behavioralScore * wB).toFixed(1);
+          const cG = (githubScore * wG).toFixed(1);
+
+          const hasWeights = wQ + wS + wB + wG > 0;
+
+          const scoreBar = (val: number, color: string) => (
+            <div className="h-2 bg-gray-700 rounded-full overflow-hidden flex-1">
+              <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${Math.max(0, Math.min(100, val))}%` }} />
+            </div>
+          );
+
+          return (
+            <div className="mt-4 bg-gray-900 rounded-lg border border-gray-700 text-left overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
+                <BarChart2 size={15} className="text-purple-400" />
+                <span className="text-white font-semibold text-sm">How Your Score Was Calculated</span>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* STEP 1: Raw scores */}
+                <div>
+                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 1 — Individual Metrics (Raw Scores)</p>
+                  <div className="space-y-2">
+                    {rawScores.map(({ label, key, color, desc }) => {
+                      const val = fmtScore(sb[key]);
+                      return (
+                        <div key={key}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-gray-300 text-xs w-28 flex-shrink-0">{label}</span>
+                            {scoreBar(val, color)}
+                            <span className={`text-xs font-bold w-9 text-right flex-shrink-0 ${val >= 80 ? 'text-green-400' : val >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{val}%</span>
+                          </div>
+                          <p className="text-gray-600 text-[10px] pl-[7.5rem]">{desc}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
+
+                {/* STEP 2: Composite formulas */}
+                <div className="border-t border-gray-700 pt-3">
+                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 2 — Composite Scores</p>
+                  <div className="space-y-2">
+                    {/* Quality */}
+                    <div className="bg-gray-800 rounded p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-gray-300 text-xs font-medium">Quality Score</span>
+                        <span className={`text-sm font-bold ${qualityScore >= 80 ? 'text-green-400' : qualityScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{qualityScore}%</span>
+                      </div>
+                      <p className="text-gray-500 text-[11px]">
+                        = (Technical + Punctuality + Adaptability) ÷ 3
+                      </p>
+                      <p className="text-gray-400 text-[11px] mt-0.5">
+                        = ({fmtScore(qb.technical?.score ?? sb.technical)}% + {fmtScore(qb.punctuality?.score ?? sb.punctuality)}% + {fmtScore(qb.adaptability?.score ?? sb.adaptability)}%) ÷ 3 = <strong className="text-white">{qualityScore}%</strong>
+                      </p>
+                    </div>
+
+                    {/* Behavioral */}
+                    <div className="bg-gray-800 rounded p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-gray-300 text-xs font-medium">Behavioral Score</span>
+                        <span className={`text-sm font-bold ${behavioralScore >= 80 ? 'text-green-400' : behavioralScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{behavioralScore}%</span>
+                      </div>
+                      <p className="text-gray-500 text-[11px]">
+                        = (Adaptability + Communication) ÷ 2
+                      </p>
+                      <p className="text-gray-400 text-[11px] mt-0.5">
+                        = ({fmtScore(bb.adaptability?.score ?? sb.adaptability)}% + {fmtScore(bb.communication?.score ?? sb.communication)}%) ÷ 2 = <strong className="text-white">{behavioralScore}%</strong>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* STEP 3: Weighted overall */}
+                {hasWeights && (
+                  <div className="border-t border-gray-700 pt-3">
+                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 3 — Weighted Overall Score</p>
+                    <div className="bg-gray-800 rounded p-3 space-y-2">
+                      {[
+                        { label: 'Quality', score: qualityScore, weight: wQ, contrib: cQ, color: 'text-purple-400' },
+                        { label: 'Speed', score: speedScore, weight: wS, contrib: cS, color: 'text-green-400' },
+                        { label: 'Behavioral', score: behavioralScore, weight: wB, contrib: cB, color: 'text-sky-400' },
+                        { label: 'GitHub', score: githubScore, weight: wG, contrib: cG, color: 'text-yellow-400' },
+                      ].map(({ label, score, weight, contrib, color }) => (
+                        <div key={label} className="flex items-center text-[11px] gap-1">
+                          <span className={`w-20 flex-shrink-0 font-medium ${color}`}>{label}</span>
+                          <span className="text-gray-300">{score}%</span>
+                          <span className="text-gray-500 mx-1">×</span>
+                          <span className="text-gray-300">{fmtW(weight)}</span>
+                          <span className="text-gray-500 mx-1">=</span>
+                          <span className="text-white font-semibold">{contrib}</span>
+                        </div>
+                      ))}
+                      <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between items-center">
+                        <span className="text-gray-400 text-xs">Total ({fmtW(wQ)} + {fmtW(wS)} + {fmtW(wB)} + {fmtW(wG)} = 100%)</span>
+                        <span className={`text-base font-bold ${score >= 70 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                          {Math.round(Number(cQ) + Number(cS) + Number(cB) + Number(cG))}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 4: Pass/Fail */}
+                <div className={`rounded p-3 border ${passed ? 'bg-green-900/30 border-green-700' : 'bg-red-900/20 border-red-800'}`}>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-gray-300">Step 4 — Pass / Fail</p>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        Your score {Math.round(Number(score))}% {passed ? '≥' : '<'} {result?.passingScore ?? result?.summary?.passing_score ?? 70}% threshold
+                      </p>
+                    </div>
+                    <span className={`text-sm font-bold px-3 py-1 rounded-full ${passed ? 'bg-green-800 text-green-300' : 'bg-red-900 text-red-300'}`}>
+                      {passed ? 'PASSED' : 'NOT PASSED'}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         <div className="mt-4 bg-gray-900 rounded-lg border border-gray-700 p-4 text-left">
           <div className="flex items-center justify-between mb-3">
@@ -1966,17 +2175,26 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
           </div>
         </div>
 
-        {/* FIXED: Buttons with window.location.href using simulationId */}
-        <div className="flex gap-3 mt-4">
+        {/* Auto-redirect countdown notice */}
+        <div className="mt-4 flex items-center justify-center gap-2 text-gray-400 text-sm">
+          <div className="w-6 h-6 rounded-full border-2 border-blue-500 flex items-center justify-center text-blue-400 font-bold text-xs flex-shrink-0">
+            {countdown}
+          </div>
+          <span>Redirecting to your full feedback report in <span className="text-blue-400 font-semibold">{countdown}s</span>…</span>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3 mt-3">
           <button
             onClick={handleReviewResults}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-semibold flex items-center justify-center gap-2"
           >
-            Review Full Results
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            View Full Feedback Now
           </button>
           <button
             onClick={onExit}
-            className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+            className="px-4 py-3 border border-gray-600 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors text-sm"
           >
             Exit
           </button>

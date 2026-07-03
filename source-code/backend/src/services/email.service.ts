@@ -86,9 +86,12 @@ class EmailService {
         },
       };
 
+      console.log(`📨 [EmailService] Sending to ${to} — "${subject}"`);
       const info = await this.transporter.sendMail(mailOptions);
+      console.log(`✅ [EmailService] Sent OK: ${info.messageId} → ${to}`);
       logger.info(`Email sent successfully: ${info.messageId}`);
     } catch (error) {
+      console.error(`❌ [EmailService] FAILED sending to ${to}:`, (error as Error).message);
       logger.error('Error sending email:', error);
       throw error;
     }
@@ -169,9 +172,12 @@ class EmailService {
       taskNames: string[];
       githubUrl?: string | null;
       recipientRole?: 'candidate' | 'company';
+      score?: number | null;
+      passed?: boolean | null;
+      scoreBreakdown?: Record<string, { score: number; weight: number; contribution?: string }> | null;
     }
   ): Promise<void> {
-    const { candidateName, simulationName, submissionId, submittedAt, taskNames, githubUrl, recipientRole = 'candidate' } = data;
+    const { candidateName, simulationName, submissionId, submittedAt, taskNames, githubUrl, recipientRole = 'candidate', score, passed, scoreBreakdown } = data;
 
     const tasksHtml = taskNames && taskNames.length
       ? `<ul style="margin:8px 0;padding-left:20px;color:#374151">${taskNames.map((t) => `<li>${t}</li>`).join('')}</ul>`
@@ -181,16 +187,48 @@ class EmailService {
       ? `<tr><td style="padding:6px 0;color:#6b7280;width:160px">Repository</td><td style="padding:6px 0"><a href="${githubUrl}" style="color:#2563eb">${githubUrl}</a></td></tr>`
       : '';
 
+    // Marks section shown only to the candidate when score data is available.
+    const categoryLabels: Record<string, string> = {
+      quality: 'Code Quality', speed: 'Speed', behavioral: 'Behavioral', github: 'GitHub'
+    };
+    const scoresHtml = recipientRole === 'candidate' && score != null
+      ? `
+        <div style="margin-top:20px;padding:16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px">
+          <div style="text-align:center;margin-bottom:12px">
+            <div style="font-size:32px;font-weight:800;color:#5b21b6">${Math.round(score)}%</div>
+            <div style="margin-top:6px">
+              <span style="display:inline-block;padding:4px 14px;border-radius:999px;font-size:13px;font-weight:700;background:${passed ? '#dcfce7' : '#fee2e2'};color:${passed ? '#166534' : '#991b1b'}">
+                ${passed ? '✓ PASSED' : '✗ DID NOT PASS'}
+              </span>
+            </div>
+          </div>
+          ${scoreBreakdown && Object.keys(scoreBreakdown).length > 0 ? `
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">
+            <tr style="border-bottom:1px solid #e5e7eb">
+              <th style="padding:6px 0;text-align:left;color:#6b7280;font-weight:600">Category</th>
+              <th style="padding:6px 0;text-align:right;color:#6b7280;font-weight:600">Score</th>
+              <th style="padding:6px 0;text-align:right;color:#6b7280;font-weight:600">Weight</th>
+            </tr>
+            ${Object.entries(scoreBreakdown).map(([key, val]) => `
+            <tr style="border-bottom:1px solid #f3f4f6">
+              <td style="padding:6px 0;color:#374151">${categoryLabels[key] || key}</td>
+              <td style="padding:6px 0;text-align:right;color:#111827;font-weight:600">${Math.round(val.score)}%</td>
+              <td style="padding:6px 0;text-align:right;color:#6b7280">${Math.round(val.weight * 100)}%</td>
+            </tr>`).join('')}
+          </table>` : ''}
+        </div>`
+      : '';
+
     const intro =
       recipientRole === 'company'
         ? `<p style="color:#374151;margin:0 0 8px"><strong>${candidateName}</strong> has submitted the <strong>${simulationName}</strong> simulation. The submission is now under review.</p>`
         : `<p style="color:#374151;margin:0 0 8px">Hi <strong>${candidateName}</strong>,</p>
-           <p style="color:#374151;margin:0 0 8px">Thank you — your simulation has been <strong>submitted successfully</strong> and is now <strong>under review</strong>. We'll be in touch with the outcome.</p>`;
+           <p style="color:#374151;margin:0 0 8px">Thank you — your simulation has been <strong>submitted successfully</strong>. Here are your results.</p>`;
 
     const subject =
       recipientRole === 'company'
         ? `New simulation submission — ${simulationName}`
-        : `Submission received — ${simulationName}`;
+        : `Your results — ${simulationName}`;
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
@@ -205,12 +243,10 @@ class EmailService {
             <tr><td style="padding:6px 0;color:#6b7280">Submitted at</td><td style="padding:6px 0;color:#111827">${submittedAt}</td></tr>
             ${githubHtml}
           </table>
+          ${scoresHtml}
           <div style="margin-top:12px">
-            <div style="color:#6b7280;font-size:14px;margin-bottom:4px">Tasks</div>
+            <div style="color:#6b7280;font-size:14px;margin-bottom:4px">Tasks completed</div>
             ${tasksHtml}
-          </div>
-          <div style="margin-top:20px;padding:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;color:#166534;font-size:14px">
-            Your submission has been received and is now under review.
           </div>
           <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
         </div>
@@ -324,6 +360,46 @@ class EmailService {
             <tr><td style="padding:6px 0;color:#6b7280">Status</td><td style="padding:6px 0"><span style="color:${statusColor};font-weight:700">${statusLabel}</span></td></tr>
           </table>
           ${simBlock}
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
+        </div>
+      </div>
+      ${this.standardFooter()}`;
+
+    await this.sendEmail({ to, subject, html });
+  }
+
+  /**
+   * Alert sent to a recruiter / job creator when a new candidate applies to their job.
+   */
+  async sendNewApplicationAlert(
+    to: string,
+    data: {
+      recruiterName?: string;
+      candidateName: string;
+      candidateEmail: string;
+      jobTitle: string;
+      applicationId: string;
+      appliedAt: string;
+    }
+  ): Promise<void> {
+    const { recruiterName, candidateName, candidateEmail, jobTitle, applicationId, appliedAt } = data;
+    const subject = `New application — ${jobTitle}`;
+    const frontendUrl = process.env.FRONTEND_URL || '';
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
+        <div style="background:linear-gradient(135deg,#7c3aed,#2563eb);border-radius:12px;padding:24px;text-align:center">
+          <h1 style="color:#fff;margin:0;font-size:20px">📋 New Application</h1>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:24px;margin-top:16px">
+          ${recruiterName ? `<p style="color:#374151;margin:0 0 8px">Hi <strong>${recruiterName}</strong>,</p>` : ''}
+          <p style="color:#374151;margin:0 0 12px">A new candidate has applied for <strong>${jobTitle}</strong>.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px">
+            <tr><td style="padding:6px 0;color:#6b7280;width:160px">Candidate</td><td style="padding:6px 0;color:#111827;font-weight:600">${candidateName}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280">Email</td><td style="padding:6px 0;color:#111827">${candidateEmail}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280">Position</td><td style="padding:6px 0;color:#111827">${jobTitle}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280">Applied at</td><td style="padding:6px 0;color:#111827">${appliedAt}</td></tr>
+          </table>
+          ${frontendUrl ? `<div style="margin-top:20px"><a href="${frontendUrl}/applications/${applicationId}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Review Application</a></div>` : ''}
           <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
         </div>
       </div>

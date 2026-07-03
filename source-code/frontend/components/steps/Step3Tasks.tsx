@@ -118,6 +118,7 @@ const TaskTitleInput: React.FC<{
 const TASK_TYPES = [
   'technical', 'behavioral', 'situational',
   'collaborative', 'creative', 'communication', 'prioritization',
+  'emergency', 'change_request',
 ] as const;
 
 const LANGUAGES = [
@@ -153,16 +154,29 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
       duration: 15,
       instructions: '',
       resources: [],
-      evaluation: { 
-        criteria: [], 
-        automatedScoring: false, 
-        weight: 10, 
-        timeBonus: false, 
-        qualityThreshold: 70 
+      evaluation: {
+        criteria: [],
+        automatedScoring: false,
+        weight: 10,
+        timeBonus: false,
+        qualityThreshold: 70
       },
       order: simulation.tasks.length + 1,
     };
-    setSimulation(prev => prev ? { ...prev, tasks: [...prev.tasks, newTask] } : null);
+    setSimulation(prev => {
+      if (!prev) return null;
+      const newTasks = [...prev.tasks, newTask];
+      const totalDuration = newTasks.reduce((s, t) => s + (t.duration || 15), 0);
+      return {
+        ...prev,
+        tasks: newTasks,
+        duration: Math.max(prev.duration ?? 60, totalDuration),
+        settings: {
+          ...prev.settings,
+          timeLimit: Math.max(prev.settings?.timeLimit ?? 60, totalDuration),
+        },
+      };
+    });
   };
 
   const addCriterion = (taskId: string) => {

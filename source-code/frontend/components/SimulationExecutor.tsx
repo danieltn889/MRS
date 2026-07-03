@@ -71,6 +71,20 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const [showGitHubStatsModal, setShowGitHubStatsModal] = useState(false);
   const [statsTaskIndex, setStatsTaskIndex] = useState<number | null>(null);
 
+  // Task guide state — shown in chat when a task is selected
+  const [taskGuide, setTaskGuide] = useState<{ taskIndex: number; title: string; instructions: string; description: string } | null>(null);
+
+  // Per-task time alert (non-blocking toast)
+  const [taskTimeAlert, setTaskTimeAlert] = useState<{ taskIndex: number; taskTitle: string; duration: number } | null>(null);
+  // Persistent set of tasks whose time has elapsed (stays after toast dismisses)
+  const [elapsedTasks, setElapsedTasks] = useState<Set<number>>(new Set());
+  const taskStartTimeRef = useRef<number | null>(null);
+  const taskAlertShownRef = useRef<Set<number>>(new Set());
+
+  // Captures timeSpent at the moment of submission so the PostSubmitDialog
+  // always shows the correct value even if the timer resets afterward
+  const submittedTimeRef = useRef<number>(0);
+
   // Flag to prevent auto-save while starting a task
   const isStartingTaskRef = useRef(false);
   // Debounce timer for manual save
@@ -125,6 +139,12 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
   // Get the SIMULATION ID from the session
   const simulationIdForChat = session?.simulationId;
+
+  // Extract priority mode from session — must be after session is declared
+  const priorityMode: 'sequential' | 'parallel' | 'weighted' =
+    (session as any)?.passFailCriteria?.taskPriority?.mode ||
+    (session as any)?.simulationData?.passFailCriteria?.taskPriority?.mode ||
+    'parallel';
 
   const {
     messages,
@@ -209,6 +229,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [showTaskCompletionDialog, setShowTaskCompletionDialog] = useState(false);
   const [showPostSubmitDialog, setShowPostSubmitDialog] = useState(false);
+  const [localSubmitResult, setLocalSubmitResult] = useState<any>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [selectedTaskIndex, setSelectedTaskIndex] = useState<number | null>(null);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -467,6 +488,49 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     }, 500);
   };
 
+  // Reset task start-time and alert flag when the selected task changes
+  useEffect(() => {
+    if (selectedTaskIndex !== null) {
+      taskStartTimeRef.current = Date.now();
+    }
+  }, [selectedTaskIndex]);
+
+  // Per-task time-elapsed notification (non-blocking)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (selectedTaskIndex === null || taskStartTimeRef.current === null) return;
+      const task = tasks[selectedTaskIndex];
+      if (!task?.duration || task.duration <= 0) return;
+
+      // Don't notify for already-completed tasks
+      const status = taskProgress?.find(p => p.task_index === selectedTaskIndex)?.status;
+      if (status === 'completed') return;
+
+      // Don't show the same alert twice for the same task selection
+      if (taskAlertShownRef.current.has(selectedTaskIndex)) return;
+
+      const elapsedMinutes = (Date.now() - taskStartTimeRef.current) / 60000;
+      if (elapsedMinutes >= task.duration) {
+        taskAlertShownRef.current.add(selectedTaskIndex);
+        // Mark task as elapsed (persists after toast dismisses)
+        setElapsedTasks(prev => new Set(prev).add(selectedTaskIndex));
+        setTaskTimeAlert({
+          taskIndex: selectedTaskIndex,
+          taskTitle: task.title || `Task ${selectedTaskIndex + 1}`,
+          duration: task.duration,
+        });
+      }
+    }, 15000); // check every 15 seconds
+    return () => clearInterval(interval);
+  }, [selectedTaskIndex, tasks, taskProgress]);
+
+  // Auto-dismiss the task time alert after 20 seconds
+  useEffect(() => {
+    if (!taskTimeAlert) return;
+    const t = setTimeout(() => setTaskTimeAlert(null), 20000);
+    return () => clearTimeout(t);
+  }, [taskTimeAlert]);
+
   // Periodic auto-save: persist progress every 20s while the simulation is
   // running so nothing is lost on refresh/crash (the backend restores it on
   // reload). A ref keeps the interval pointed at the latest save closure.
@@ -513,7 +577,10 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
       setSubmitError(null);
       setShowSubmitDialog(false);
       setIsEvaluating(true);
-      await submitSimulation(progress, latestTimeSpent);
+      submittedTimeRef.current = latestTimeSpent;
+      const submitResult = await submitSimulation(progress, latestTimeSpent);
+      console.log('📊 [submit] result:', JSON.stringify(submitResult?.summary));
+      setLocalSubmitResult(submitResult);
       setIsEvaluating(false);
       setShowPostSubmitDialog(true);
     } catch (error: any) {
@@ -684,7 +751,18 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const isExistingSession = session && (session.timeSpent > 0 || session.currentTaskIndex > 0 || Object.keys(session.progress || {}).length > 0);
 
   if (!isCompanyReviewer && showStartDialog && session?.status !== 'completed' && session?.status !== 'submitted' && !isExistingSession) {
-    return <StartDialog session={session} onStart={() => { startTimer(); setShowStartDialog(false); }} onExit={onExit} />;
+    const sessionMaxAttempts = (session as any)?.settings?.maxAttempts || (session as any)?.simulationData?.settings?.maxAttempts;
+    const sessionAttemptNumber = (session as any)?.attemptNumber || (session as any)?.attempt_number;
+    return (
+      <StartDialog
+        session={session}
+        onStart={() => { startTimer(); setShowStartDialog(false); }}
+        onExit={onExit}
+        maxAttempts={sessionMaxAttempts}
+        attemptNumber={sessionAttemptNumber}
+        priorityMode={priorityMode}
+      />
+    );
   }
 
 
@@ -818,6 +896,17 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     setCurrentTask(tasks[idx]);
     setGlobalTaskIndex(idx);
     resetCurrentFile();
+
+    // Update task guide (shown in chat if user opens that tab)
+    const t = tasks[idx];
+    if (t) {
+      setTaskGuide({
+        taskIndex: idx,
+        title: t.title || `Task ${idx + 1}`,
+        description: t.description || '',
+        instructions: t.instructions || '',
+      });
+    }
     const cachedRepo = loadRepoForTask(idx);
 
     try {
@@ -1023,10 +1112,11 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
               onStartTask={startTask}
               onOpenGitHubStats={handleOpenGitHubStats}
               hasGitHubRepoForTask={hasGitHubRepoForTask}
-              // ✅ NEW PROPS
               onOpenChat={() => handleTabChange('chat')}
               onOpenGitHubAnalytics={handleOpenGitHubStats}
               unreadCount={unreadCount}
+              priorityMode={priorityMode}
+              elapsedTasks={elapsedTasks}
             />
 
             <div className="flex flex-1 overflow-hidden min-h-0">
@@ -1101,6 +1191,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
                       handleOpenGitHubStats(taskIndex);
                     }}
                     unreadCount={unreadCount}
+                    tasks={tasks}
+                    onSelectTask={handleSelectTask}
                   />
                 )}
               </div>
@@ -1127,6 +1219,56 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         {/* CHAT TAB */}
         {activeTab === 'chat' && (
           <div className="h-full flex flex-col overflow-hidden">
+            {/* Task Guide Banner — shown when a task is selected */}
+            {taskGuide && (
+              <div className="bg-gray-800 border-b border-gray-600 px-4 py-3 flex-shrink-0">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-blue-400 uppercase tracking-wide">
+                        Task {taskGuide.taskIndex + 1} of {tasks.length}
+                        {priorityMode === 'sequential' && (
+                          <span className="ml-2 text-red-400">· Sequential</span>
+                        )}
+                        {priorityMode === 'parallel' && (
+                          <span className="ml-2 text-green-400">· Parallel</span>
+                        )}
+                        {priorityMode === 'weighted' && (
+                          <span className="ml-2 text-yellow-400">· Weighted</span>
+                        )}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-white truncate">{taskGuide.title}</p>
+                    {taskGuide.description && (
+                      <p className="text-xs text-gray-300 mt-1 line-clamp-2">{taskGuide.description}</p>
+                    )}
+                    {taskGuide.instructions && (
+                      <div className="mt-2 p-2 bg-red-900/30 border border-red-700/50 rounded text-xs text-red-300">
+                        <span className="font-semibold text-red-400">⚠ Instructions: </span>
+                        {taskGuide.instructions}
+                      </div>
+                    )}
+                    {priorityMode === 'sequential' && taskGuide.taskIndex > 0 && (
+                      <p className="text-xs text-red-400 mt-1.5">
+                        🔒 You must fully complete Task {taskGuide.taskIndex} before this task unlocks.
+                      </p>
+                    )}
+                    {priorityMode === 'parallel' && (
+                      <p className="text-xs text-green-400 mt-1.5">
+                        ✓ You can work on any task in any order.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setTaskGuide(null)}
+                    className="text-gray-500 hover:text-white flex-shrink-0 text-xs px-2 py-1 rounded hover:bg-gray-700"
+                    title="Dismiss guide"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
             <ChatPanel
               messages={messages}
               unreadCount={unreadCount}
@@ -1176,6 +1318,45 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
           </div>
         )}
       </div>
+
+      {/* ⏰ Per-task time elapsed — non-blocking toast */}
+      {taskTimeAlert && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-amber-900 border-2 border-amber-500 rounded-xl shadow-2xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl flex-shrink-0 mt-0.5">⏰</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-white font-bold text-sm">
+                  Time's up for this task!
+                </p>
+                <p className="text-amber-200 text-xs mt-1 leading-relaxed">
+                  The <span className="font-semibold text-amber-100">{taskTimeAlert.duration} minute</span> limit for{' '}
+                  <span className="font-semibold text-amber-100">"{taskTimeAlert.taskTitle}"</span> has elapsed.
+                </p>
+                <p className="text-amber-300 text-xs mt-1.5">
+                  You can still continue working — this does not stop your session.
+                </p>
+              </div>
+              <button
+                onClick={() => setTaskTimeAlert(null)}
+                className="text-amber-400 hover:text-white flex-shrink-0 text-xl leading-none font-bold ml-1"
+                title="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+            {/* Auto-dismiss countdown bar */}
+            <div className="mt-3 h-1 bg-amber-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-amber-400 rounded-full"
+                style={{ animation: 'shrinkWidth 20s linear forwards' }}
+              />
+            </div>
+            <p className="text-amber-500 text-[10px] mt-1 text-right">Dismisses in 20 s</p>
+            <style>{`@keyframes shrinkWidth { from { width: 100% } to { width: 0% } }`}</style>
+          </div>
+        </div>
+      )}
 
       {/* GitHub Stats Modal */}
       {showGitHubStatsModal && statsTaskIndex !== null && (
@@ -1233,7 +1414,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         onReviewResults={handlePostSubmitReviewResults}
         onExit={onExit}
         session={session}
-        result={submissionResult}
+        result={localSubmitResult || submissionResult}
+        timeSpent={submittedTimeRef.current || timeSpent}
         formatTime={formatTime}
       />
 

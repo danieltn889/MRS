@@ -57,6 +57,9 @@ interface TaskContentProps {
   onOpenChat?: () => void;
   onOpenGitHubAnalytics?: (taskIndex: number) => void;
   unreadCount?: number;
+  // Navigation
+  tasks?: SimulationTask[];
+  onSelectTask?: (index: number) => void;
 }
 
 const formatDuration = (seconds?: number): string => {
@@ -101,6 +104,8 @@ const TaskContent: React.FC<TaskContentProps> = ({
   onOpenChat,
   onOpenGitHubAnalytics,
   unreadCount = 0,
+  tasks,
+  onSelectTask,
 }) => {
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
@@ -240,7 +245,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
       await onUpdateTaskProgress(taskIndex, { 
         status: 'completed',
         completed_at: new Date().toISOString(),
-        time_spent: elapsedTime,
+        timeSpent: elapsedTime,
         answer: {
           completed: completionDraft.completed,
           comment: completionDraft.comment,
@@ -351,13 +356,26 @@ const TaskContent: React.FC<TaskContentProps> = ({
                 </p>
               </div>
               
+              {task.instructions && (
+                <div className="bg-blue-900/30 border-l-4 border-blue-500 rounded-r p-4 mb-4">
+                  <div className="flex gap-3">
+                    <Lightbulb size={18} className="text-blue-400 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-xs text-blue-400 font-semibold uppercase tracking-wide mb-2">Instructions</p>
+                      <div className="text-gray-300 text-sm whitespace-pre-wrap break-words">
+                        {task.instructions}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="bg-blue-900/20 rounded-lg p-4 border border-blue-800/50">
                 <div className="flex items-center gap-3 mb-2">
                   <AlertCircle size={16} className="text-blue-500" />
                   <p className="text-blue-400 text-sm font-semibold">Ready to begin?</p>
                 </div>
                 <p className="text-gray-400 text-xs leading-relaxed">
-                  Click "Start Task" to unlock the instructions and begin working on this task.
+                  Click "Start Task" to start working on this task.
                 </p>
               </div>
             </div>
@@ -481,59 +499,99 @@ const TaskContent: React.FC<TaskContentProps> = ({
                 </button>
 
                 {/* STATUS BADGE */}
-                {isTaskCompleted ? (
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-green-900/30 border border-green-700 rounded-lg">
-                    <CheckCircle size={14} className="text-green-400" />
-                    <span className="text-green-400 text-sm font-medium">Completed</span>
-                    <span className="text-green-300 text-xs ml-2 font-mono">
-                      {formatDuration(taskTimeSpent)}
-                    </span>
-                  </div>
-                ) : isTaskNotStarted ? (
-                  <>
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-900/30 border border-yellow-700 rounded-lg">
-                      <Lock size={14} className="text-yellow-400" />
-                      <span className="text-yellow-300 text-sm font-medium">Not Started</span>
-                    </div>
-                    <button
-                      onClick={handleStartTask}
-                      disabled={isStarting}
-                      className="px-4 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:opacity-50 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
-                    >
-                      {isStarting ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          Starting...
-                        </>
-                      ) : (
-                        <>
-                          <Play size={14} />
-                          Start Task {taskNumber}
-                        </>
+                {(() => {
+                  const totalTasks = tasks?.length ?? 0;
+                  const currentIdx = taskIndex ?? 0;
+                  const hasPrev = currentIdx > 0;
+                  const hasNext = currentIdx < totalTasks - 1;
+                  const prevProgress = tasks && hasPrev ? taskProgress?.find(p => p.task_index === currentIdx - 1) : null;
+                  const nextProgress = tasks && hasNext ? taskProgress?.find(p => p.task_index === currentIdx + 1) : null;
+
+                  const NavButtons = () => (
+                    <div className="flex items-center gap-1 ml-1">
+                      {hasPrev && (
+                        <button
+                          onClick={() => onSelectTask?.(currentIdx - 1)}
+                          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg flex items-center gap-1 transition-all text-xs font-medium border border-gray-600"
+                          title={`Previous: ${tasks?.[currentIdx - 1]?.title || `Task ${currentIdx}`}`}
+                        >
+                          ← Prev
+                        </button>
                       )}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {/* Status Badge with Timer */}
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/30 border border-blue-700 rounded-lg">
-                      <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                      <span className="text-blue-300 text-sm font-medium">In Progress</span>
-                      <span className="text-blue-300 text-xs font-mono ml-2">
-                        {formatDuration(elapsedTime)}
-                      </span>
+                      {hasNext && (
+                        <button
+                          onClick={async () => {
+                            const next = currentIdx + 1;
+                            if (nextProgress?.status === 'not_started' || !nextProgress) {
+                              await onStartTask?.(next);
+                            }
+                            onSelectTask?.(next);
+                          }}
+                          className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-lg flex items-center gap-1 transition-all text-xs font-medium border border-gray-600"
+                          title={`Next: ${tasks?.[currentIdx + 1]?.title || `Task ${currentIdx + 2}`}`}
+                        >
+                          Next →
+                        </button>
+                      )}
                     </div>
-                    
-                    {/* COMPLETE BUTTON */}
-                    <button
-                      onClick={handleOpenCompletionDialog}
-                      className="px-4 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
-                    >
-                      <CheckCircle size={14} />
-                      Complete Task {taskNumber}
-                    </button>
-                  </>
-                )}
+                  );
+
+                  return isTaskCompleted ? (
+                    <>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-900/30 border border-green-700 rounded-lg">
+                        <CheckCircle size={14} className="text-green-400" />
+                        <span className="text-green-400 text-sm font-medium">Completed</span>
+                        <span className="text-green-300 text-xs ml-2 font-mono">
+                          {formatDuration(taskTimeSpent)}
+                        </span>
+                      </div>
+                      <NavButtons />
+                    </>
+                  ) : isTaskNotStarted ? (
+                    <>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-900/30 border border-yellow-700 rounded-lg">
+                        <Lock size={14} className="text-yellow-400" />
+                        <span className="text-yellow-300 text-sm font-medium">Not Started</span>
+                      </div>
+                      <button
+                        onClick={handleStartTask}
+                        disabled={isStarting}
+                        className="px-4 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 disabled:opacity-50 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
+                      >
+                        {isStarting ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                            Starting...
+                          </>
+                        ) : (
+                          <>
+                            <Play size={14} />
+                            Start Task {taskNumber}
+                          </>
+                        )}
+                      </button>
+                      <NavButtons />
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-900/30 border border-blue-700 rounded-lg">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-blue-300 text-sm font-medium">In Progress</span>
+                        <span className="text-blue-300 text-xs font-mono ml-2">
+                          {formatDuration(elapsedTime)}
+                        </span>
+                      </div>
+                      <button
+                        onClick={handleOpenCompletionDialog}
+                        className="px-4 py-1.5 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
+                      >
+                        <CheckCircle size={14} />
+                        Complete Task {taskNumber}
+                      </button>
+                      <NavButtons />
+                    </>
+                  );
+                })()}
               </div>
             </div>
             
@@ -546,7 +604,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                 title="Open chat with recruiter or admin"
               >
                 <MessageCircle size={12} className="text-blue-400" />
-                <span>💬 <strong className="text-blue-300">Chat</strong> - Ask questions or get clarification</span>
+                <span>💬 <strong className="text-red-400">Chat</strong> - <span className="text-red-300">Ask questions or get clarification</span></span>
               </button>
               <button
                 type="button"
@@ -732,6 +790,36 @@ const TaskContent: React.FC<TaskContentProps> = ({
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* FILE VIEWER: shows selected file from the sidebar explorer */}
+          {currentFilePath && !(task.type === 'technical' || task.type === 'code_editor' || task.type === 'code_execution') && (
+            <div className="space-y-0">
+              <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 rounded-t-lg border border-gray-700">
+                <Code size={12} className="text-blue-400 flex-shrink-0" />
+                <span className="text-xs text-gray-300 font-mono truncate flex-1">{currentFilePath}</span>
+                <span className="text-xs text-gray-500 whitespace-nowrap">View only</span>
+              </div>
+              <div className="rounded-b-lg overflow-hidden border border-t-0 border-gray-700" style={{ height: '55vh', minHeight: '280px' }}>
+                <Editor
+                  height="100%"
+                  width="100%"
+                  language={currentFileLanguage || 'plaintext'}
+                  value={currentFileContent}
+                  theme={editorTheme}
+                  options={{
+                    fontSize,
+                    minimap: { enabled: false },
+                    wordWrap: 'on',
+                    lineNumbers: 'on',
+                    automaticLayout: true,
+                    scrollBeyondLastLine: false,
+                    tabSize: 2,
+                    readOnly: true,
+                  }}
+                />
+              </div>
             </div>
           )}
 

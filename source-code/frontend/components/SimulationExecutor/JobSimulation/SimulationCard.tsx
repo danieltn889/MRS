@@ -79,6 +79,8 @@ interface SimulationCardProps {
   onReviewSimulation: (simulation: any) => void;
   getCurrentDayInTz: (sim: Simulation) => string;
   getCurrentTimeInTz: (sim: Simulation) => string;
+  maxAttempts?: number;
+  usedAttempts?: number;
 }
 
 const SimulationCard: React.FC<SimulationCardProps> = ({
@@ -95,8 +97,14 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
   onReviewSimulation,
   getCurrentDayInTz,
   getCurrentTimeInTz,
+  maxAttempts,
+  usedAttempts = 0,
 }) => {
   const statusBadge = getStatusBadge(simulation.status || '');
+  // Attempts remaining check
+  const attemptsLimit = maxAttempts ?? (simulation as any)?.settings?.maxAttempts ?? 0;
+  const attemptsExhausted = attemptsLimit > 0 && usedAttempts >= attemptsLimit;
+  const remainingAttempts = attemptsLimit > 0 ? Math.max(0, attemptsLimit - usedAttempts) : null;
   const StatusIcon = statusBadge.icon;
   const objectives = simulation.tasksStructure?.objectives ?? [];
   const tasks = simulation.tasks ?? [];
@@ -327,6 +335,21 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
           </div>
         )}
 
+        {/* Attempts info */}
+        {attemptsLimit > 0 && !isTemplateMissing && (
+          <div className={`mb-4 flex items-center gap-2 text-xs px-3 py-2 rounded-lg border ${
+            attemptsExhausted
+              ? 'bg-red-50 border-red-200 text-red-700'
+              : 'bg-blue-50 border-blue-200 text-blue-700'
+          }`}>
+            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+            {attemptsExhausted
+              ? `All ${attemptsLimit} attempt${attemptsLimit !== 1 ? 's' : ''} used — no more retakes allowed`
+              : `Attempt ${usedAttempts + 1} of ${attemptsLimit} — ${remainingAttempts} remaining`
+            }
+          </div>
+        )}
+
         {/* Practice mode badge */}
         {simulation.tasksStructure?.practiceEnabled && !isTemplateMissing && (
           <div className="mb-4 bg-blue-50 rounded-lg p-2">
@@ -443,20 +466,30 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
                 )}
               </button>
               {availability.canStart && (
-                <button
-                  onClick={() => onStartSimulation(simulation, true)}
-                  disabled={startingSimulation === simulation.id}
-                  className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {startingSimulation === simulation.id ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  ) : (
-                    <>
-                      <Play className="w-4 h-4" />
-                      Start New Session
-                    </>
-                  )}
-                </button>
+                attemptsExhausted ? (
+                  <button
+                    disabled
+                    className="w-full px-4 py-2 bg-red-100 text-red-600 border border-red-300 rounded-lg cursor-not-allowed text-sm font-medium flex items-center justify-center gap-2"
+                  >
+                    <AlertCircle className="w-4 h-4" />
+                    All Attempts Used
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => onStartSimulation(simulation, true)}
+                    disabled={startingSimulation === simulation.id}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {startingSimulation === simulation.id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4" />
+                        Start New Session {remainingAttempts !== null && `(${remainingAttempts} left)`}
+                      </>
+                    )}
+                  </button>
+                )
               )}
             </>
           ) : isNotStarted ? (

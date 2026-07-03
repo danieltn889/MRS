@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, Save, CheckCircle, ChevronLeft, AlertCircle, X, Briefcase, Clock, Layers, Target, Play, FileCheck } from 'lucide-react';
+import { Eye, Save, CheckCircle, ChevronLeft, AlertCircle, X, XCircle, Briefcase, Clock, Layers, Target, Play, FileCheck } from 'lucide-react';
 
 import simulationAPI from '../services/simulationAPI';
 import jobAPI from '../services/jobAPI';
@@ -142,6 +142,43 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
   );
 };
 
+// ─── Publish Error Modal ──────────────────────────────────────────────────────
+
+const PublishErrorModal: React.FC<{ message: string; onClose: () => void }> = ({ message, onClose }) => (
+  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4 backdrop-blur-sm">
+    <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+      <div className="px-6 py-5 bg-gradient-to-r from-red-500 to-rose-600">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+            <XCircle size={20} className="text-white" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Publish Failed</h3>
+            <p className="text-xs text-white/80">Something went wrong — your assessment was not published.</p>
+          </div>
+        </div>
+      </div>
+      <div className="px-6 py-5">
+        <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
+          <AlertCircle size={16} className="text-red-500 shrink-0 mt-0.5" />
+          <p className="text-sm text-red-700 font-medium">{message}</p>
+        </div>
+        <p className="text-xs text-gray-400 mt-3">
+          Make sure all required fields are completed, then try again. If the issue persists, contact support.
+        </p>
+      </div>
+      <div className="px-6 pb-6">
+        <button
+          onClick={onClose}
+          className="w-full px-4 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 rounded-xl transition-all shadow-sm"
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulationId }) => {
@@ -151,6 +188,8 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [complianceChecks, setComplianceChecks] = useState<ComplianceCheck[]>([]);
   const [loading, setLoading]               = useState(false);
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [publishError, setPublishError]     = useState<string | null>(null);
   const [jobs, setJobs]                     = useState<any[]>([]);
 
   // ── view mode: 'list' shows SimulationList, 'edit' shows the stepper ────────
@@ -213,7 +252,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       passFailCriteria: { overallScore: { minimum: 70, maximum: 100 }, sectionScores: [], criticalTasks: [], behavioralMetrics: [], timeManagement: { completionRequired: true, timeBonus: false }, qualityStandards: [], automatedRules: [] },
       availability: { ...defaultAvailability },
       practiceEnabled: true,
-      practiceSimulation: { enabled: true, type: 'section', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: "This practical assessment will help you understand the format and types of tasks you'll encounter.", resources: [] },
+      practiceSimulation: { enabled: true, type: 'full', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: "This practical assessment will help you understand the format and types of tasks you'll encounter.", resources: [] },
     });
   };
 
@@ -281,8 +320,9 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
             }
           : { ...defaultAvailability },
         practiceEnabled:    data.practiceEnabled ?? data.tasks_structure?.practiceEnabled ?? data.practiceSimulation?.enabled ?? data.tasks_structure?.practiceSimulation?.enabled ?? false,
-        practiceSimulation: data.practiceSimulation || data.tasks_structure?.practiceSimulation || { enabled: false, type: 'section', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: '', resources: [] },
+        practiceSimulation: data.practiceSimulation || data.tasks_structure?.practiceSimulation || { enabled: false, type: 'full', difficulty: 'easier', includeFeedback: true, maxAttempts: 5, instructions: '', resources: [] },
         metadata:    data.metadata,
+        totalInstances: parseInt(data.total_instances || '0'),
       };
 
       setSimulation(loaded);
@@ -435,8 +475,9 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       return;
     }
     try {
-      setLoading(true);
+      setPublishLoading(true);
       setValidationErrors([]);
+      setPublishError(null);
       const payload = withMetadata(simulation);
       const result = await simulationAPI.publishSimulation(payload);
       const savedId = result?.data?.id || result?.data?.data?.id || result?.id;
@@ -444,9 +485,9 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       setSimulation(updated);
       setSaveResult({ action: 'published', simulation: updated });
     } catch (error: any) {
-      setValidationErrors([`Publish failed: ${error?.message || 'Unknown error'}`]);
+      setPublishError(error?.message || 'Unknown error occurred while publishing.');
     } finally {
-      setLoading(false);
+      setPublishLoading(false);
     }
   };
 
@@ -558,6 +599,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
           onPublish={publishSimulation}
           onDuplicate={duplicateSimulation}
           onArchive={archiveSimulation}
+          loading={publishLoading}
         />
       );
       default: return null;
@@ -732,6 +774,14 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
           result={saveResult}
           onClose={() => setSaveResult(null)}
           onBackToList={() => { setSaveResult(null); handleBackToList(); }}
+        />
+      )}
+
+      {/* ── Publish error modal ── */}
+      {publishError && (
+        <PublishErrorModal
+          message={publishError}
+          onClose={() => setPublishError(null)}
         />
       )}
     </div>

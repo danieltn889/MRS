@@ -21,17 +21,38 @@ const Step8Practice: React.FC<Props> = ({ simulation, setSimulation }) => {
         <p className="text-sm text-gray-500 mt-0.5">Give candidates a chance to warm up before the real assessment.</p>
       </div>
 
+      <div className="flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+        <span className="mt-0.5">ℹ️</span>
+        <span>Settings saved here are stored but the live practice experience for candidates is not yet active.</span>
+      </div>
+
+      <label className="flex items-center gap-3 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+        <input
+          type="checkbox"
+          checked={simulation.practiceEnabled || false}
+          onChange={e =>
+            setSimulation(prev => prev ? { ...prev, practiceEnabled: e.target.checked } : null)
+          }
+          className="rounded border-gray-300 text-purple-600 focus:ring-purple-500 w-4 h-4"
+        />
+        <div>
+          <span className="text-sm font-medium text-gray-800">Enable practice round for candidates</span>
+          <p className="text-xs text-gray-500 mt-0.5">Candidates will get a warm-up before the real simulation starts.</p>
+        </div>
+      </label>
+
       {simulation.practiceEnabled && (
         <div className="space-y-5 pl-1">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">Practice Type</label>
               <select
-                value={simulation.practiceSimulation?.type || 'section'}
+                value={simulation.practiceSimulation?.type || 'full'}
                 onChange={e => setPractice({ type: e.target.value as PracticeSimulation['type'] })}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500"
               >
                 <option value="full">Full practical assessment</option>
+                <option value="section">Partial section</option>
                 <option value="timed">Timed practice</option>
               </select>
             </div>

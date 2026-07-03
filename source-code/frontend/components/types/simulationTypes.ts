@@ -38,7 +38,9 @@ export interface SimulationTask {
     | 'collaborative'
     | 'creative'
     | 'communication'
-    | 'prioritization';
+    | 'prioritization'
+    | 'emergency'
+    | 'change_request';
   duration: number;
   instructions: string;
   resources: Resource[];
@@ -179,6 +181,7 @@ export interface Simulation {
   practiceEnabled?: boolean;
   practiceSimulation?: PracticeSimulation;
   metadata?: any;
+  totalInstances?: number;
 }
 
 export const defaultAvailability: AvailabilityConfig = {

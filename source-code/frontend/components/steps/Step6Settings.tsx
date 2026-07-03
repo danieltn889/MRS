@@ -1,5 +1,5 @@
 import React from 'react';
-import { Mail, Calendar, FileText, Code, Globe, Terminal, File, AlertCircle, Clock, CheckCircle } from 'lucide-react';
+import { Mail, Calendar, FileText, Code, Globe, Terminal, File, AlertCircle, Clock, CheckCircle, Github, MessageSquare, BookOpen, PenTool, LayoutGrid, Database } from 'lucide-react';
 import { Simulation, SimulationSettings } from '../types/simulationTypes';
 
 interface Props {
@@ -16,6 +16,12 @@ const TOOLS = [
   { id: 'terminal',     label: 'Terminal',        icon: <Terminal size={13} /> },
   { id: 'spreadsheet',  label: 'Spreadsheet',     icon: <File size={13} /> },
   { id: 'presentation', label: 'Presentation',    icon: <File size={13} /> },
+  { id: 'github',       label: 'GitHub',          icon: <Github size={13} /> },
+  { id: 'slack',        label: 'Slack',           icon: <MessageSquare size={13} /> },
+  { id: 'notion',       label: 'Notion',          icon: <BookOpen size={13} /> },
+  { id: 'figma',        label: 'Figma',           icon: <PenTool size={13} /> },
+  { id: 'jira',         label: 'Jira',            icon: <LayoutGrid size={13} /> },
+  { id: 'database',     label: 'Database',        icon: <Database size={13} /> },
 ];
 
 const OPTIONS = [

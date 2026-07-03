@@ -161,7 +161,7 @@ export function getAvailabilityStatus(simulation: Simulation, currentDateTime: D
   }
 
   if (!isWithinDailyWindow(simulation, currentDateTime)) {
-    return { available: false, message: `Next: ${getNextAvailableLabel(simulation)}`, canStart: false };
+    return { available: true, message: `Scheduled: ${getNextAvailableLabel(simulation)}`, canStart: true };
   }
 
   return { available: true, message: `Available until ${end.toLocaleDateString()}`, canStart: true };

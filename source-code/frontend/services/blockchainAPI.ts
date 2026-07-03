@@ -49,13 +49,15 @@ export const verifyChain = async (): Promise<VerifyReport> => {
 };
 
 export const browseChain = async (
-  params: { page?: number; limit?: number; eventType?: string; blockNumber?: number } = {}
+  params: { page?: number; limit?: number; eventType?: string; blockNumber?: number; simulationId?: string; candidateId?: string } = {}
 ): Promise<{ blocks: ChainBlock[]; total: number; page: number; limit: number }> => {
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
   if (params.limit) qs.set('limit', String(params.limit));
   if (params.eventType) qs.set('eventType', params.eventType);
   if (params.blockNumber !== undefined && params.blockNumber !== null) qs.set('blockNumber', String(params.blockNumber));
+  if (params.simulationId) qs.set('simulationId', params.simulationId);
+  if (params.candidateId) qs.set('candidateId', params.candidateId);
   const json = await handle(await fetch(`${API_BASE_URL}/blockchain/chain?${qs.toString()}`, { headers: authHeaders() }));
   return json.data;
 };

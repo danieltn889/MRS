@@ -15,7 +15,7 @@ interface SimulationTask {
   id: string;
   title: string;
   description: string;
-  type: 'technical' | 'behavioral' | 'situational' | 'collaborative' | 'creative' | 'communication' | 'prioritization';
+  type: 'technical' | 'behavioral' | 'situational' | 'collaborative' | 'creative' | 'communication' | 'prioritization' | 'emergency' | 'change_request';
   duration: number;
   instructions: string;
   resources: any[];
@@ -668,6 +668,8 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                             <option value="creative">Creative</option>
                             <option value="communication">Communication</option>
                             <option value="prioritization">Prioritization</option>
+                            <option value="emergency">Emergency (tests adaptability)</option>
+                            <option value="change_request">Change Request (tests adaptability)</option>
                           </select>
                         </div>
                         <button onClick={() => deleteTask(task.id)} className="text-red-500 hover:text-red-700"><Trash2 size={16} /></button>

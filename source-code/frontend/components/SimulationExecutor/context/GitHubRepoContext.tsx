@@ -432,7 +432,12 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       let files: any[] = [];
       try {
         const response = await githubAPI.getEverything(owner, repo, true, 500, effectiveBranch);
-        const raw = response?.data?.code?.structure || response?.data?.files || [];
+        // Prefer code.files (content already fetched by backend) over code.structure (paths only)
+        const codeFiles = response?.data?.code?.files;
+        const codeStructure = response?.data?.code?.structure;
+        const raw = (Array.isArray(codeFiles) && codeFiles.length > 0)
+          ? codeFiles
+          : (codeStructure || response?.data?.files || []);
         files = Array.isArray(raw) ? raw : [];
       } catch (loadErr: any) {
         const msg = String(loadErr?.message || '').toLowerCase();
@@ -445,20 +450,22 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       }
       const fileMap: Record<string, string> = {};
       const fileItems = files.filter((file: any) => file.type !== 'tree');
-      
+
       console.log(`Found ${fileItems.length} files in repository (branch: ${effectiveBranch})`);
-      
+
       for (let i = 0; i < fileItems.length; i++) {
         const file = fileItems[i];
-        
+
         try {
           let content = '';
-          
-          if (file.content) {
+
+          if (typeof file.content === 'string' && file.content) {
+            // Content already decoded by the backend getEverything — use it directly
             content = file.content;
           } else if (file.encoding === 'base64' && file.content) {
             content = safeBase64Decode(file.content);
           } else {
+            // Content not in getEverything response — fetch individually
             try {
               const contentResponse = await githubAPI.getFileContent(owner, repo, file.path, effectiveBranch);
               if (contentResponse?.data?.content) {
@@ -468,7 +475,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
               }
             } catch (fetchErr) {
               console.warn(`Could not fetch content for ${file.path}:`, fetchErr);
-              content = `// Could not load content for ${file.path}\n// ${fetchErr instanceof Error ? fetchErr.message : 'Unknown error'}`;
+              content = '';
             }
           }
           
@@ -476,10 +483,10 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
             content = content.substring(0, 5 * 1024 * 1024) + '\n\n// Content truncated...';
           }
           
-          fileMap[file.path] = content || `// Empty file: ${file.path}`;
+          fileMap[file.path] = content || '';
         } catch (err) {
           console.error(`Failed to load ${file.path}:`, err);
-          fileMap[file.path] = `// Error loading ${file.path}\n// ${err instanceof Error ? err.message : String(err)}`;
+          fileMap[file.path] = '';
         }
       }
       

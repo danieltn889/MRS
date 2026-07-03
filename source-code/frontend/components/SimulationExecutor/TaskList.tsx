@@ -1,7 +1,7 @@
 // TaskList.tsx - WITH CHAT AND ANALYTICS BUTTONS
 
 import React from 'react';
-import { CheckCircle, Clock, Circle, ChevronRight, Edit, BarChart3, Play, MessageCircle, Github } from 'lucide-react';
+import { CheckCircle, Clock, Circle, ChevronRight, Edit, BarChart3, Play, MessageCircle, Github, Lock } from 'lucide-react';
 
 interface SimulationTask {
   id: string;
@@ -26,6 +26,8 @@ interface TaskListProps {
   onOpenChat?: () => void;
   onOpenGitHubAnalytics?: (taskIndex: number) => void;
   unreadCount?: number;
+  priorityMode?: 'sequential' | 'parallel' | 'weighted';
+  elapsedTasks?: Set<number>;
 }
 
 const TaskList: React.FC<TaskListProps> = ({
@@ -41,6 +43,8 @@ const TaskList: React.FC<TaskListProps> = ({
   onOpenChat,
   onOpenGitHubAnalytics,
   unreadCount = 0,
+  priorityMode,
+  elapsedTasks,
 }) => {
   const getTaskStatus = (index: number): 'not_started' | 'in_progress' | 'completed' => {
     const progress = taskProgress.find(p => p.task_index === index);
@@ -52,6 +56,13 @@ const TaskList: React.FC<TaskListProps> = ({
   };
 
   const completedCount = tasks.filter((_, i) => getTaskStatus(i) === 'completed').length;
+
+  // Sequential mode: task N is locked if task N-1 is not completed
+  const isTaskLocked = (index: number): boolean => {
+    if (priorityMode !== 'sequential') return false;
+    if (index === 0) return false;
+    return getTaskStatus(index - 1) !== 'completed';
+  };
 
   // Handle Start button click
   const handleStartClick = (e: React.MouseEvent, index: number) => {
@@ -193,22 +204,39 @@ const TaskList: React.FC<TaskListProps> = ({
           const isNotStarted = status === 'not_started';
           const hasRepo = hasGitHubRepoForTask?.(i) || false;
           const taskLabel = getTaskLabel(i);
+          const locked = isTaskLocked(i);
+          const timeElapsed = !isCompleted && (elapsedTasks?.has(i) ?? false);
 
           return (
             <div
               key={i}
-              onClick={() => handleTaskClick(i)}
+              onClick={() => !locked && handleTaskClick(i)}
+              title={locked ? `Complete Task ${i} first (Sequential mode)` : timeElapsed ? `⏰ Time elapsed — ${task.title}` : task.title}
               className={`
-                flex items-center gap-1 px-2 py-1 rounded-lg cursor-pointer transition-all duration-200 flex-shrink-0
+                flex items-center gap-1 px-2 py-1 rounded-lg transition-all duration-200 flex-shrink-0
+                ${locked ? 'cursor-not-allowed opacity-50 border border-red-700/40' : 'cursor-pointer'}
+                ${timeElapsed && !locked ? 'ring-2 ring-amber-500 ring-offset-1 ring-offset-gray-800' : ''}
                 ${getStatusColor(status, isActive)}
               `}
             >
-              {getStatusIcon(status)}
+              {locked
+                ? <Lock size={12} className="text-red-400 flex-shrink-0" />
+                : getStatusIcon(status)}
               
               <span className="text-xs font-mono font-bold tracking-wide truncate">
                 {taskLabel}
               </span>
-              
+
+              {/* ⏰ Time-elapsed badge — persists after toast dismisses */}
+              {timeElapsed && (
+                <span
+                  className="flex-shrink-0 text-[10px] font-bold text-amber-300 bg-amber-800/70 px-1 py-0.5 rounded leading-none"
+                  title="Time allocated for this task has elapsed"
+                >
+                  ⏰
+                </span>
+              )}
+
               {/* ✅ GitHub Stats Button (per task) - shows if repo exists */}
               {hasRepo && (
                 <button
@@ -264,7 +292,7 @@ const TaskList: React.FC<TaskListProps> = ({
               )}
               
               {/* Start Button for Not Started Tasks */}
-              {isNotStarted && (
+              {isNotStarted && !locked && (
                 <button
                   onClick={(e) => handleStartClick(e, i)}
                   className="px-1 py-0.5 rounded bg-blue-700 text-blue-200 hover:bg-blue-600 transition-colors flex-shrink-0 text-xs flex items-center gap-0.5"
@@ -272,6 +300,12 @@ const TaskList: React.FC<TaskListProps> = ({
                 >
                   <Play size={8} /> ▶
                 </button>
+              )}
+              {/* Lock badge for sequential-locked tasks */}
+              {locked && (
+                <span className="text-[10px] text-red-400 px-1 font-mono" title="Finish the previous task first">
+                  locked
+                </span>
               )}
               
               {isActive && (
@@ -283,7 +317,24 @@ const TaskList: React.FC<TaskListProps> = ({
       </div>
 
       {/* ✅ Helpful Info Bar */}
-      <div className="mt-1.5 pt-1.5 border-t border-gray-700 flex items-center gap-4 text-[10px] text-gray-500">
+      <div className="mt-1.5 pt-1.5 border-t border-gray-700 flex items-center gap-4 text-[10px] text-gray-500 flex-wrap">
+        {priorityMode === 'sequential' && (
+          <span className="flex items-center gap-1 text-red-400 font-medium">
+            <Lock size={10} />
+            Sequential — finish each task before starting the next
+          </span>
+        )}
+        {priorityMode === 'parallel' && (
+          <span className="flex items-center gap-1 text-green-400 font-medium">
+            <Play size={10} />
+            Parallel — start any task at any time
+          </span>
+        )}
+        {priorityMode === 'weighted' && (
+          <span className="flex items-center gap-1 text-yellow-400 font-medium">
+            ⚖ Weighted — tasks have custom importance
+          </span>
+        )}
         <span className="flex items-center gap-1">
           <MessageCircle size={10} className="text-blue-400" />
           <span className="text-gray-400">Chat: Ask questions</span>
@@ -291,10 +342,6 @@ const TaskList: React.FC<TaskListProps> = ({
         <span className="flex items-center gap-1">
           <BarChart3 size={10} className="text-purple-400" />
           <span className="text-gray-400">Analytics: View repo stats</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <Github size={10} className="text-gray-400" />
-          <span className="text-gray-400">GitHub: Per-task stats</span>
         </span>
       </div>
     </div>

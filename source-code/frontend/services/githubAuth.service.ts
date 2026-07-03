@@ -1,6 +1,11 @@
-const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const GITHUB_CLIENT_ID = isProduction
+  ? import.meta.env.VITE_PRODUCTION_CLIENT_ID
+  : import.meta.env.VITE_GITHUB_CLIENT_ID;
 const REDIRECT_URI = `${window.location.origin}/auth/github/callback`;
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const API_BASE_URL = isProduction
+  ? `${window.location.origin}/api/v1`
+  : (import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1');
 
 export const githubAuthService = {
   loginWithGitHubPopup: (): Promise<{ success: boolean; username?: string; avatarUrl?: string; token?: string }> => {

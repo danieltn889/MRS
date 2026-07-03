@@ -612,6 +612,18 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                             <Eye size={14} /> View
                           </button>
 
+                          {topSim?.session_id && (
+                            <a
+                              href={`/session-report/${topSim.session_id}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={topSim.session_status === 'in_progress' ? 'View live session' : 'View session report'}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${topSim.session_status === 'completed' ? '#7c3aed' : '#d97706'}`, background: topSim.session_status === 'completed' ? '#ede9fe' : '#fef3c7', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: topSim.session_status === 'completed' ? '#7c3aed' : '#92400e', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                            >
+                              <Activity size={14} /> {topSim.session_status === 'in_progress' ? 'Live' : 'Report'}
+                            </a>
+                          )}
+
                           {c.application_status !== 'shortlisted' && (
                             <button
                               onClick={() => changeStatus(c, 'shortlisted')}

@@ -129,6 +129,63 @@ async function notifyCandidateOfApplication(
   }
 }
 
+/**
+ * Best-effort: notify recruiters (job creator + company team) when a new candidate
+ * applies. In-app notification + email. Never throws.
+ */
+async function notifyRecruiterOfApplication(
+  applicationId: string,
+  opts: { candidateName: string; candidateEmail: string; jobTitle: string; companyId: string; appliedAt: string }
+): Promise<void> {
+  try {
+    // All recruiter/admin users linked to the company.
+    const recruiterResult = await dbQuery(
+      `SELECT DISTINCT u.id, u.email,
+              COALESCE(cp.first_name, '') AS first_name
+         FROM applications a
+         JOIN jobs j ON j.id = a.job_id
+         LEFT JOIN companies c ON c.id = j.company_id
+         JOIN users u ON (
+           u.id IN (j.created_by, c.created_by)
+           OR u.id IN (SELECT ct.user_id FROM company_team ct WHERE ct.company_id = c.id)
+         )
+         LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
+        WHERE a.id = $1 AND u.email IS NOT NULL`,
+      [applicationId]
+    );
+
+    for (const row of recruiterResult.rows) {
+      try {
+        await NotificationService.create({
+          userId: row.id,
+          type: 'new_application',
+          category: 'application',
+          title: 'New application received',
+          content: `${opts.candidateName} applied for ${opts.jobTitle}`,
+          data: { applicationId, jobTitle: opts.jobTitle, candidateName: opts.candidateName },
+        });
+      } catch (notifErr) {
+        logger.warn(`Recruiter in-app notification failed for ${row.id}: ${(notifErr as Error).message}`);
+      }
+
+      try {
+        await emailService.sendNewApplicationAlert(row.email, {
+          recruiterName: row.first_name || undefined,
+          candidateName: opts.candidateName,
+          candidateEmail: opts.candidateEmail,
+          jobTitle: opts.jobTitle,
+          applicationId,
+          appliedAt: opts.appliedAt,
+        });
+      } catch (emailErr) {
+        logger.warn(`Recruiter alert email failed for ${row.email}: ${(emailErr as Error).message}`);
+      }
+    }
+  } catch (err) {
+    logger.warn(`notifyRecruiterOfApplication failed for ${applicationId}: ${(err as Error).message}`);
+  }
+}
+
 // Utility function to wrap AuthenticatedRequest handlers
 const withAuth = (handler: (req: AuthenticatedRequest, res: express.Response) => Promise<any>) => {
   return handler as any;
@@ -1583,6 +1640,15 @@ router.post(
           statusLabel: 'Applied',
           jobId,
           emailKind: 'received',
+        });
+
+        const candidateName = authReq.user!.name || authReq.user!.email.split('@')[0];
+        await notifyRecruiterOfApplication(applicationId, {
+          candidateName,
+          candidateEmail: authReq.user!.email,
+          jobTitle: job.title,
+          companyId: job.company_id,
+          appliedAt: new Date().toLocaleString(),
         });
       }
 

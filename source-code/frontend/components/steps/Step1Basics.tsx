@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Briefcase, AlertCircle, CheckCircle, X, Eye, Loader2 } from 'lucide-react';
+import { Briefcase, AlertCircle, CheckCircle, X, Eye, Loader2, Lock } from 'lucide-react';
 import { Simulation } from '../types/simulationTypes';
 import JobViewModal from '../jobs/JobViewModal';
 import { getJob } from '../../services/jobAPI';
@@ -33,8 +33,9 @@ const Step1Basics: React.FC<Props> = ({ simulation, setSimulation, jobs }) => {
     finally { setModalLoading(false); }
   };
 
-  const hasLinkedJob = Boolean(simulation.jobId?.trim());
-  const selectedJob  = hasLinkedJob
+  const hasLinkedJob  = Boolean(simulation.jobId?.trim());
+  const hasSessions   = (simulation.totalInstances ?? 0) > 0;
+  const selectedJob   = hasLinkedJob
     ? (jobs.find(j => j.id === simulation.jobId) ?? null)
     : null;
 
@@ -49,9 +50,9 @@ const Step1Basics: React.FC<Props> = ({ simulation, setSimulation, jobs }) => {
     const job = jobs.find(j => j.id === jobId);
     if (job) {
       set({
-        jobId:    job.id,
-        jobRole:  job.title || simulation.jobRole,
-        title:    simulation.title || `${job.title} Assessment`,
+        jobId:   job.id,
+        jobRole: job.title,
+        title:   `${job.title} Assessment`,
       });
     }
   };
@@ -72,18 +73,23 @@ const Step1Basics: React.FC<Props> = ({ simulation, setSimulation, jobs }) => {
 
         {displayJob ? (
           /* ── Selected / linked state ── */
-          <div className="flex items-start gap-3 p-4 bg-purple-50 border border-purple-200 rounded-xl">
-            <div className="w-9 h-9 rounded-lg bg-purple-600 flex items-center justify-center flex-shrink-0">
-              <Briefcase size={17} className="text-white" />
+          <div className={`flex items-start gap-3 p-4 rounded-xl border ${hasSessions ? 'bg-gray-50 border-gray-200' : 'bg-purple-50 border-purple-200'}`}>
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${hasSessions ? 'bg-gray-400' : 'bg-purple-600'}`}>
+              {hasSessions ? <Lock size={17} className="text-white" /> : <Briefcase size={17} className="text-white" />}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-purple-900 truncate">{displayJob.title}</p>
-              <div className="flex flex-wrap gap-3 mt-1 text-xs text-purple-600">
+              <p className={`text-sm font-semibold truncate ${hasSessions ? 'text-gray-700' : 'text-purple-900'}`}>{displayJob.title}</p>
+              <div className={`flex flex-wrap gap-3 mt-1 text-xs ${hasSessions ? 'text-gray-500' : 'text-purple-600'}`}>
                 {displayJob.company_name && <span>{displayJob.company_name}</span>}
                 {displayJob.department   && <span>· {displayJob.department}</span>}
                 {displayJob.job_type     && <span>· {displayJob.job_type}</span>}
                 {displayJob.status && <span className="capitalize">· {displayJob.status}</span>}
               </div>
+              {hasSessions && (
+                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                  <Lock size={10} /> Locked — {simulation.totalInstances} active session{simulation.totalInstances !== 1 ? 's' : ''} in progress
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <CheckCircle size={15} className="text-green-500" />
@@ -98,13 +104,15 @@ const Step1Basics: React.FC<Props> = ({ simulation, setSimulation, jobs }) => {
                   : <Eye size={12} />}
                 View
               </button>
-              <button
-                onClick={() => set({ jobId: undefined })}
-                className="p-1 rounded-lg text-purple-400 hover:text-red-500 hover:bg-red-50 transition-colors"
-                title="Unlink job"
-              >
-                <X size={15} />
-              </button>
+              {!hasSessions && (
+                <button
+                  onClick={() => set({ jobId: undefined })}
+                  className="p-1 rounded-lg text-purple-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  title="Unlink job"
+                >
+                  <X size={15} />
+                </button>
+              )}
             </div>
           </div>
         ) : (

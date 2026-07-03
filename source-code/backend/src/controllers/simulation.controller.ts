@@ -274,7 +274,6 @@ interface CodeQualityResult {
     hasReturns: boolean;
     hasErrorHandling: boolean;
     hasClasses: boolean;
-    hasImports: boolean;
     linesOfCode: number;
     codeLength: number;
     language: string;
@@ -342,12 +341,16 @@ class SimulationController extends BaseController {
       return null;
     }
 
-    const teamResult = await DatabaseService.query(
-      'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
+    // Check company_team first, then fall back to companies where user is the creator.
+    const result = await DatabaseService.query(
+      `SELECT COALESCE(
+         (SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1),
+         (SELECT id FROM companies WHERE created_by = $1 LIMIT 1)
+       ) AS company_id`,
       [userId]
     );
 
-    return teamResult.rows[0]?.company_id || null;
+    return result.rows[0]?.company_id || null;
   }
 
   private async acquireLock(key: string): Promise<boolean> {
@@ -1382,7 +1385,11 @@ class SimulationController extends BaseController {
       const simulation = result.rows[0];
       const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
 
-      if (!simulation.is_public && simulation.company_id !== userCompanyId && req.user.user_type !== 'system_admin') {
+      const canView = simulation.is_public
+        || simulation.created_by === req.user.id
+        || simulation.company_id === userCompanyId
+        || ['recruiter', 'company_admin', 'system_admin'].includes(req.user.user_type);
+      if (!canView) {
         ResponseService.forbidden(res, 'Access denied');
         return;
       }
@@ -1417,7 +1424,10 @@ class SimulationController extends BaseController {
 
       const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
 
-      if (simulation.company_id !== userCompanyId && simulation.created_by !== req.user.id && req.user.user_type !== 'system_admin') {
+      const canEdit = simulation.created_by === req.user.id
+        || simulation.company_id === userCompanyId
+        || ['recruiter', 'company_admin', 'system_admin'].includes(req.user.user_type);
+      if (!canEdit) {
         ResponseService.forbidden(res, 'Permission denied');
         return;
       }
@@ -1879,9 +1889,9 @@ class SimulationController extends BaseController {
         return;
       }
 
-      const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
-
-      if (simulation.company_id !== userCompanyId && req.user.user_type !== 'system_admin') {
+      // Only recruiters, company_admins, and system_admins reach here (enforced by route).
+      // Additionally block candidates who somehow bypass the route middleware.
+      if (!['recruiter', 'company_admin', 'system_admin'].includes(req.user.user_type)) {
         ResponseService.forbidden(res, 'Permission denied');
         return;
       }
@@ -2704,10 +2714,10 @@ Return ONLY valid JSON:
   private analyzeCodeFiles(files: any[]): { count: number; score: number; maxScore: number; details: string } {
     console.log('💻 [analyzeCodeFiles] Counting code files...');
 
-    const codeExtensions = /\.(js|ts|py|java|go|rs|cpp|c|hpp|h|html|css|scss|sass|less|json|rb|php|swift|kt|kts|sql|sh|bash|zsh)$/i;
+    const codeExtensions = /\.(js|jsx|mjs|cjs|ts|tsx|vue|svelte|html|htm|css|scss|sass|less|py|java|go|rs|cpp|c|cc|cxx|hpp|h|rb|php|swift|kt|kts|cs|dart|lua|pl|r|m|scala|ex|exs|erl|hs|clj|sql|sh|bash|zsh|ps1|fish|yaml|yml|xml|tf|ipynb|json)$/i;
 
     const codeFiles = files.filter((f: any) =>
-      f.name?.match(codeExtensions) && f.type !== 'dir'
+      (f.name?.match(codeExtensions) || f.path?.match(codeExtensions)) && f.type !== 'dir'
     );
 
     const count = codeFiles.length;
@@ -2717,26 +2727,10 @@ Return ONLY valid JSON:
 
     console.log(`   Found ${count} code files`);
 
-    if (count >= 15) {
+    if (count >= 1) {
       score = 20;
-      details = `Excellent (${count} files)`;
-      console.log(`   → 20/20: EXCELLENT (15+ files)`);
-    } else if (count >= 10) {
-      score = 16;
-      details = `Great (${count} files)`;
-      console.log(`   → 16/20: GREAT (10-14 files)`);
-    } else if (count >= 6) {
-      score = 12;
-      details = `Good (${count} files)`;
-      console.log(`   → 12/20: GOOD (6-9 files)`);
-    } else if (count >= 3) {
-      score = 8;
-      details = `Adequate (${count} files)`;
-      console.log(`   → 8/20: ADEQUATE (3-5 files)`);
-    } else if (count >= 1) {
-      score = 4;
-      details = `Minimal (${count} files)`;
-      console.log(`   → 4/20: MINIMAL (1-2 files)`);
+      details = `${count} file${count > 1 ? 's' : ''} — full marks`;
+      console.log(`   → 20/20: ${count} code file(s) present`);
     } else {
       score = 0;
       details = `No code files`;
@@ -2756,30 +2750,14 @@ Return ONLY valid JSON:
     let earned = 0;
     let details = '';
 
-    if (commitCount >= 12) {
+    if (commitCount >= 2) {
       earned = 40;
-      details = `10+ commits (${commitCount}) - EXCELLENT`;
-      console.log(`   → 40/40: EXCELLENT (10+ commits)`);
-    } else if (commitCount >= 10) {
-      earned = 35;
-      details = `8-9 commits (${commitCount}) - VERY GOOD`;
-      console.log(`   → 35/40: VERY GOOD (8-9 commits)`);
-    } else if (commitCount >= 8) {
-      earned = 30;
-      details = `6-7 commits (${commitCount}) - GOOD`;
-      console.log(`   → 30/40: GOOD (6-7 commits)`);
-    } else if (commitCount >= 6) {
+      details = `${commitCount} commits — full marks`;
+      console.log(`   → 40/40: ${commitCount} commits present`);
+    } else if (commitCount === 1) {
       earned = 20;
-      details = `4-5 commits (${commitCount}) - ABOVE AVERAGE`;
-      console.log(`   → 20/40: ABOVE AVERAGE (4-5 commits)`);
-    } else if (commitCount >= 4) {
-      earned = 15;
-      details = `2-3 commits (${commitCount}) - AVERAGE`;
-      console.log(`   → 15/40: AVERAGE (2-3 commits)`);
-    } else if (commitCount >= 2) {
-      earned = 8;
-      details = `1 commit - MINIMAL`;
-      console.log(`   → 8/40: MINIMAL (1 commit)`);
+      details = `1 commit — partial`;
+      console.log(`   → 20/40: only 1 commit`);
     } else {
       earned = 0;
       details = `No commits`;
@@ -2953,7 +2931,7 @@ Return ONLY valid JSON:
         matchedCount: 0, totalCommitsAnalyzed: 0,
         aiMatchedCount: 0, mlMatchedCount: 0, combinedMatchedCount: 0
       },
-      totalPossible: 120
+      totalPossible: 110  // config files (10pts) removed from scoring
     };
 
     // Guard: check github_links
@@ -3076,14 +3054,10 @@ Return ONLY valid JSON:
           : 0;
         detailedMarks.readme.taskCoverage = Math.round(taskCoveragePercentage);
 
-        const readmeScoreResult = this.calculateReadmeScore(
-          true,
-          aiReadmeAnalysis.quality,
-          taskCoveragePercentage
-        );
-
-        detailedMarks.readme.earned = readmeScoreResult.score;
-        detailedMarks.readme.details = readmeScoreResult.details;
+        // Use GROQ AI score directly: 0-100 → scaled to readme max points
+        const groqReadmeScore = aiReadmeAnalysis.readmeScore ?? 50;
+        detailedMarks.readme.earned = Math.round((groqReadmeScore / 100) * detailedMarks.readme.max);
+        detailedMarks.readme.details = `README present — AI quality score: ${groqReadmeScore}/100`;
       } else {
         const readmeScoreResult = this.calculateReadmeScore(false, 'none', 0);
         detailedMarks.readme.earned = readmeScoreResult.score;
@@ -3091,11 +3065,11 @@ Return ONLY valid JSON:
       }
 
       // ============================================
-      // CONFIG FILES ANALYSIS using helper function
+      // CONFIG FILES — not scored (detect only for display)
       // ============================================
-      console.log('\n⚙️ [STEP 5] Config Files Analysis...');
+      console.log('\n⚙️ [STEP 5] Config Files (display only, not scored)...');
       const configResult = this.detectConfigFiles(files);
-      detailedMarks.configFile.earned = configResult.score;
+      detailedMarks.configFile.earned = 0;  // not counted in score
       detailedMarks.configFile.present = configResult.found.length > 0;
       detailedMarks.configFile.found = configResult.found;
       detailedMarks.configFile.details = configResult.details;
@@ -3119,26 +3093,20 @@ Return ONLY valid JSON:
       detailedMarks.codeFiles.details = codeFilesResult.details;
 
       // ============================================
-      // COMMIT COUNT SCORE using helper function
+      // STEP 8: Count commits + compute lines of code (for fallback)
       // ============================================
-      console.log('\n📊 [STEP 8] Commit Count Score...');
-      const commitCountResult = this.scoreCommitCount(commitsWithChanges.length);
-      detailedMarks.commits.earned = commitCountResult.earned;
+      console.log('\n📊 [STEP 8] Counting commits and lines of code...');
       detailedMarks.commits.count = commitsWithChanges.length;
-      detailedMarks.commits.details = commitCountResult.details;
+      const totalLines = commitsWithChanges.reduce((sum: number, c: any) =>
+        sum + (c.linesAdded || 0) + (c.linesDeleted || 0), 0);
+      console.log(`   ${commitsWithChanges.length} commits, ${totalLines} total lines`);
 
-      // Commit MESSAGE quality: reward meaningful messages, penalize generic/spam ones.
+      // Log commit message quality for info only.
       const commitQuality = this.analyzeCommitMessageQuality(commitsWithChanges);
-      // Bounded factor 0.7..1.0 so commit points are reduced by up to 30% when the
-      // history is dominated by generic/empty messages.
-      const qualityFactor = 0.7 + 0.3 * (commitQuality.total > 0 ? commitQuality.meaningful / commitQuality.total : 1);
-      detailedMarks.commits.earned = Math.round(detailedMarks.commits.earned * qualityFactor);
-      detailedMarks.commits.details += ` | message quality: ${commitQuality.details}`;
       (detailedMarks.commits as any).messageQuality = commitQuality;
-      console.log(`📝 Commit message quality: ${commitQuality.details} (factor ${qualityFactor.toFixed(2)})`);
 
       // ============================================
-      // AI + ML COMMIT MATCHING
+      // AI + ML COMMIT MATCHING (against simulation tasks)
       // ============================================
       console.log('\n🤖 [STEP 9] AI + ML Commit Matching...');
       let aiMatchedCount = 0;
@@ -3150,6 +3118,7 @@ Return ONLY valid JSON:
         // AI Matching
         const aiResults = await this.runAIMatching(commitsWithChanges, simulationTasks);
         aiMatchedCount = aiResults.matchedCount;
+        const groqAvgConfidence = aiResults.avgConfidence; // 0-100 from GROQ
 
         // ML Matching
         const mlResults = await this.runMLMatching(commitsWithChanges, simulationTasks);
@@ -3168,6 +3137,44 @@ Return ONLY valid JSON:
         const commitMatchingScore = this.scoreCommitMatching(matchPercentage, combinedMatchedCount, combined.totalAnalyzed);
         detailedMarks.commitMatching.earned = commitMatchingScore.earned;
         detailedMarks.commitMatching.details = commitMatchingScore.details;
+
+        // COMMIT SCORE (40 pts): use GROQ confidence directly when available
+        if (commitsWithChanges.length < 2) {
+          detailedMarks.commits.earned = commitsWithChanges.length === 1 ? 20 : 0;
+          detailedMarks.commits.details = commitsWithChanges.length === 1 ? '1 commit — partial' : 'No commits';
+        } else if (groqAvgConfidence > 0) {
+          // GROQ gave us confidence scores — use them directly
+          detailedMarks.commits.earned = Math.min(detailedMarks.commits.max, Math.round((groqAvgConfidence / 100) * detailedMarks.commits.max));
+          detailedMarks.commits.details = `${commitsWithChanges.length} commits | GROQ confidence: ${Math.round(groqAvgConfidence)}%`;
+        } else {
+          // GROQ had no matches — fall back to lines of code
+          let linesEarned = 0;
+          if (totalLines >= 500)      linesEarned = 40;
+          else if (totalLines >= 200) linesEarned = 32;
+          else if (totalLines >= 100) linesEarned = 24;
+          else if (totalLines >= 50)  linesEarned = 16;
+          else if (totalLines >= 20)  linesEarned = 8;
+          else                        linesEarned = 4;
+          detailedMarks.commits.earned = Math.min(detailedMarks.commits.max, linesEarned);
+          detailedMarks.commits.details = `${commitsWithChanges.length} commits | ${totalLines} lines (GROQ found no task match)`;
+        }
+        console.log(`   → commits: ${detailedMarks.commits.earned}/${detailedMarks.commits.max} — ${detailedMarks.commits.details}`);
+      } else {
+        // No simulation tasks — fall back to lines of code
+        if (commitsWithChanges.length >= 2) {
+          let linesEarned = 0;
+          if (totalLines >= 500)      linesEarned = 40;
+          else if (totalLines >= 200) linesEarned = 32;
+          else if (totalLines >= 100) linesEarned = 24;
+          else if (totalLines >= 50)  linesEarned = 16;
+          else if (totalLines >= 20)  linesEarned = 8;
+          else                        linesEarned = 4;
+          detailedMarks.commits.earned = Math.min(detailedMarks.commits.max, linesEarned);
+          detailedMarks.commits.details = `${commitsWithChanges.length} commits | ${totalLines} lines`;
+        } else {
+          detailedMarks.commits.earned = commitsWithChanges.length === 1 ? 20 : 0;
+          detailedMarks.commits.details = commitsWithChanges.length === 1 ? '1 commit — partial' : 'No commits';
+        }
       }
 
       // ============================================
@@ -3275,17 +3282,27 @@ Return ONLY valid JSON:
   // ADDITIONAL HELPER FUNCTIONS FOR MATCHING
   // ============================================
 
-  private async runAIMatching(commits: any[], tasks: any[]): Promise<{ matchedCount: number; results: any[] }> {
+  private async runAIMatching(commits: any[], tasks: any[]): Promise<{ matchedCount: number; results: any[]; avgConfidence: number }> {
     console.log('🤖 Running AI matching...');
     const results = [];
     let matchedCount = 0;
+    let totalConfidence = 0;
+    let confidenceCount = 0;
 
     for (let i = 0; i < Math.min(commits.length, 10); i++) {
       const commit = commits[i];
       try {
         const matchResult = await this.matchCommitToTasksWithAI(commit, tasks);
         results.push(matchResult);
-        if (matchResult.matchedTasks?.length > 0) matchedCount++;
+        if (matchResult.matchedTasks?.length > 0) {
+          matchedCount++;
+          for (const mt of matchResult.matchedTasks) {
+            if (typeof mt.confidence === 'number') {
+              totalConfidence += mt.confidence;
+              confidenceCount++;
+            }
+          }
+        }
       } catch (err) {
         results.push({
           commitSha: commit.shortSha,
@@ -3296,8 +3313,9 @@ Return ONLY valid JSON:
       }
     }
 
-    console.log(`   AI matched: ${matchedCount}/${results.length}`);
-    return { matchedCount, results };
+    const avgConfidence = confidenceCount > 0 ? totalConfidence / confidenceCount : 0;
+    console.log(`   AI matched: ${matchedCount}/${results.length}, avg confidence: ${avgConfidence.toFixed(1)}`);
+    return { matchedCount, results, avgConfidence };
   }
 
   private async runMLMatching(commits: any[], tasks: any[]): Promise<{ matchedCount: number; results: any[] }> {
@@ -3421,7 +3439,6 @@ Return ONLY valid JSON:
           hasReturns: false,
           hasErrorHandling: false,
           hasClasses: false,
-          hasImports: false,
           linesOfCode: 0,
           codeLength: 0,
           language: language || 'none',
@@ -3441,7 +3458,6 @@ Return ONLY valid JSON:
     let hasReturns = false;
     let hasErrorHandling = false;
     let hasClasses = false;
-    let hasImports = false;
 
     const detectedFeatures: string[] = [];
 
@@ -3545,20 +3561,6 @@ Return ONLY valid JSON:
         swift: /\bclass\s+\w+|struct\s+\w+/,
         kotlin: /\bclass\s+\w+|interface\s+\w+/
       },
-      imports: {
-        python: /^(import|from)\s+/m,
-        javascript: /^(import|require\()/m,
-        typescript: /^(import|from\s+['"])/m,
-        java: /^import\s+/m,
-        csharp: /^using\s+/m,
-        cpp: /^#include/m,
-        go: /^import\s+/m,
-        rust: /^use\s+/m,
-        ruby: /^(require|include)\s+/m,
-        php: /^(use|require|include)\s+/m,
-        swift: /^import\s+/m,
-        kotlin: /^import\s+/m
-      }
     };
 
     // Detect features
@@ -3583,7 +3585,6 @@ Return ONLY valid JSON:
     hasReturns = checkFeature('returns');
     hasErrorHandling = checkFeature('errorHandling');
     hasClasses = checkFeature('classes');
-    hasImports = checkFeature('imports');
 
     if (hasFunctions) detectedFeatures.push('functions');
     if (hasVariables) detectedFeatures.push('variables');
@@ -3592,7 +3593,6 @@ Return ONLY valid JSON:
     if (hasReturns) detectedFeatures.push('returns');
     if (hasErrorHandling) detectedFeatures.push('error_handling');
     if (hasClasses) detectedFeatures.push('classes');
-    if (hasImports) detectedFeatures.push('imports');
 
     // ============================================
     // CALCULATE SCORE WITH DETAILED LOGGING
@@ -3660,15 +3660,8 @@ Return ONLY valid JSON:
       console.log(`   ❌ Classes/OOP: +0 points (total: ${score})`);
     }
 
-    // Project structure (20 points)
-    console.log('\n📌 PROJECT STRUCTURE (max 20 points):');
-    if (hasImports) {
-      score += 10;
-      console.log(`   ✅ Imports/Includes: +10 points (total: ${score})`);
-    } else {
-      console.log(`   ❌ Imports/Includes: +0 points (total: ${score})`);
-    }
-
+    // Project structure (10 points)
+    console.log('\n📌 PROJECT STRUCTURE (max 10 points):');
     if (linesOfCode > 10) {
       score += 5;
       console.log(`   ✅ Lines of code > 10: +5 points (total: ${score})`);
@@ -3706,7 +3699,6 @@ Return ONLY valid JSON:
         hasReturns,
         hasErrorHandling,
         hasClasses,
-        hasImports,
         linesOfCode,
         codeLength: code.length,
         language: detectedLanguage,
@@ -3773,7 +3765,8 @@ Return ONLY valid JSON:
 
             // Find all code files
             const codeFiles = files.filter((file: any) =>
-              file.name?.match(/\.(js|ts|py|java|go|rs|cpp|c|html|css|json|jsx|tsx)$/i)
+              (file.name?.match(/\.(js|jsx|mjs|cjs|ts|tsx|vue|svelte|html|htm|css|scss|sass|less|py|java|go|rs|cpp|c|cc|cxx|hpp|h|rb|php|swift|kt|kts|cs|dart|lua|pl|r|m|scala|ex|exs|erl|hs|clj|sql|sh|bash|zsh|ps1|fish|yaml|yml|xml|tf|ipynb|json)$/i) ||
+               file.path?.match(/\.(js|jsx|mjs|cjs|ts|tsx|vue|svelte|html|htm|css|scss|sass|less|py|java|go|rs|cpp|c|cc|cxx|hpp|h|rb|php|swift|kt|kts|cs|dart|lua|pl|r|m|scala|ex|exs|erl|hs|clj|sql|sh|bash|zsh|ps1|fish|yaml|yml|xml|tf|ipynb|json)$/i))
             );
 
             // ✅ ANALYZE CODE QUALITY FROM GITHUB REPOSITORY
@@ -3795,10 +3788,11 @@ Return ONLY valid JSON:
               codeQualityDetails = qualityResult.details;
               console.log(`✅ Code quality analysis from GitHub repo: ${codeQuality}% (${codeFiles.length} files, ${combinedCode.length} chars)`);
             } else {
-              // Fallback to inline code if no code files found
-              if (answer.code) {
-                console.log('⚠️ No code files in GitHub repo, falling back to inline code');
-                const qualityResult = this.detectCodeQuality(answer.code, answer.language);
+              // Fallback to inline code or comment if no code files found in repo
+              const codeSource = answer.code || answer.comment || '';
+              if (codeSource.trim()) {
+                console.log('⚠️ No code files in GitHub repo, falling back to inline code/comment');
+                const qualityResult = this.detectCodeQuality(codeSource, answer.language);
                 codeQuality = qualityResult.score;
                 codeQualityDetails = qualityResult.details;
               }
@@ -3846,19 +3840,21 @@ Return ONLY valid JSON:
         console.error('❌ GitHub analysis failed:', error.message);
         githubAnalysis = { error: error.message, hasRepo: false };
 
-        // ✅ FALLBACK: Use inline code if GitHub fetch fails
-        if (answer.code) {
-          console.log('⚠️ Falling back to inline code analysis');
-          const qualityResult = this.detectCodeQuality(answer.code, answer.language);
+        // ✅ FALLBACK: Use inline code or comment if GitHub fetch fails
+        const codeSource = answer.code || answer.comment || '';
+        if (codeSource.trim()) {
+          console.log('⚠️ Falling back to inline code/comment analysis after GitHub failure');
+          const qualityResult = this.detectCodeQuality(codeSource, answer.language);
           codeQuality = qualityResult.score;
           codeQualityDetails = qualityResult.details;
         }
       }
     } else {
-      // ✅ No GitHub URL - use inline code if provided
-      if (answer.code) {
-        console.log('📝 Using inline code for quality analysis');
-        const qualityResult = this.detectCodeQuality(answer.code, answer.language);
+      // ✅ No GitHub URL - use inline code if provided, fallback to comment field
+      const codeSource = answer.code || answer.comment || '';
+      if (codeSource.trim()) {
+        console.log(`📝 Using ${answer.code ? 'inline code' : 'comment field as code fallback'} for quality analysis`);
+        const qualityResult = this.detectCodeQuality(codeSource, answer.language);
         codeQuality = qualityResult.score;
         codeQualityDetails = qualityResult.details;
       }
@@ -4293,12 +4289,13 @@ Return ONLY valid JSON:
           console.log(`   Started at: ${taskStartedAt.toISOString()}`);
           console.log(`   Elapsed: ${(taskElapsedSeconds / 60).toFixed(1)} min`);
 
-          if (taskElapsedSeconds <= taskTimeLimit) {
+          const GRACE_SECONDS = 5 * 60; // 5-minute grace period
+          if (taskElapsedSeconds <= taskTimeLimit + GRACE_SECONDS) {
             wasOnTime = true;
             punctualityPercentage = 100;
             creditEarned = taskWeight;
             onTimeWeightSum += taskWeight;
-            console.log(`   ✅ ON TIME! +${taskWeight} weight (total on-time: ${onTimeWeightSum})`);
+            console.log(`   ✅ ON TIME! (within 5-min grace) +${taskWeight} weight (total on-time: ${onTimeWeightSum})`);
           } else {
             overtimeSeconds = taskElapsedSeconds - taskTimeLimit;
             const maxOvertimeAllowed = taskTimeLimit;
@@ -4373,9 +4370,8 @@ Return ONLY valid JSON:
       for (let i = 0; i < templateTasks.length; i++) {
         const task = templateTasks[i];
 
-        // Detect unexpected tasks
-        const isUnexpected = task.type === 'technical' ||
-          task.type === 'emergency' ||
+        // Detect unexpected tasks — only genuine surprises, not planned technical tasks
+        const isUnexpected = task.type === 'emergency' ||
           task.type === 'change_request';
 
         if (isUnexpected) {
@@ -4460,34 +4456,124 @@ Return ONLY valid JSON:
       console.log(`   Creative solutions: ${creativeCount}`);
       console.log('───────────────────────────────────────────────────────────────');
 
-      // Calculate averages
-      let avgQuality = 0;
-      let avgSpeed = 0;
+      let adaptabilityScore = 0;
+      let adaptabilityPath = 'B';
+      let avgQuality = 0, avgSpeed = 0;
+      let abandonmentRate = 0, abandonmentPenalty = 0;
+      let creativityRate = 0, creativityBonus = 0;
+      let baseScore = 0;
+
       if (unexpectedEventsCount > 0) {
+        // ── Path A: simulation has emergency / change_request tasks ──────────
+        adaptabilityPath = 'A';
         avgQuality = qualitySum / unexpectedEventsCount;
-        avgSpeed = speedSum / unexpectedEventsCount;
-        console.log(`\n📈 Averages:`);
-        console.log(`   Average Quality: ${avgQuality.toFixed(1)}`);
-        console.log(`   Average Speed: ${avgSpeed.toFixed(1)}`);
+        avgSpeed   = speedSum   / unexpectedEventsCount;
+        console.log(`\n📈 Averages — Quality: ${avgQuality.toFixed(1)}, Speed: ${avgSpeed.toFixed(1)}`);
+
+        abandonmentRate    = abandonedCount  / unexpectedEventsCount;
+        abandonmentPenalty = abandonmentRate  * 30;
+        creativityRate     = creativeCount   / unexpectedEventsCount;
+        creativityBonus    = creativityRate  * 15;
+        console.log(`   Abandonment penalty: -${abandonmentPenalty.toFixed(1)},  Creativity bonus: +${creativityBonus.toFixed(1)}`);
+
+        baseScore = Math.round((avgQuality * 0.5) + (avgSpeed * 0.5));
+        adaptabilityScore = Math.max(0, Math.min(100, baseScore - abandonmentPenalty + creativityBonus));
+        console.log(`\n🎯 Path A — Final Adaptability: (${avgQuality.toFixed(1)}×0.5 + ${avgSpeed.toFixed(1)}×0.5) - ${abandonmentPenalty.toFixed(1)} + ${creativityBonus.toFixed(1)} = ${adaptabilityScore}`);
+
+      } else {
+        // ── Path B: no emergency/change_request tasks ────────────────────────
+        // Points are split proportionally across tasks so the SUM = final score.
+        // With n tasks: each task is worth 100/n → on-time=40/n, git=40/n, code=20/n
+        console.log('\n⚡ Path B — No unexpected events. Scoring all tasks on time + git + code.');
+
+        const numTasks = templateTasks.length || 1;
+        const maxTimePerTask  = 40 / numTasks;
+        const maxGitPerTask   = 40 / numTasks;
+        const maxCodePerTask  = 20 / numTasks;
+
+        const implementedTaskTitles: string[] = (
+          githubAnalysis?.taskImplementationReport?.implementedTasks || []
+        ).map((t: any) => (t.taskTitle || t.title || '').toLowerCase().trim());
+
+        const taskAdaptScores: number[] = [];
+
+        for (let i = 0; i < templateTasks.length; i++) {
+          const task     = templateTasks[i];
+          const progress = taskProgress.find((tp: any) => tp.task_index === i);
+
+          // 1. Time score — 40/n pts per task (5-minute grace allowed)
+          let timeScore = 0;
+          let timeTakenMin = 0;
+          if (progress?.completed_at && progress?.started_at) {
+            timeTakenMin = (new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000 / 60;
+            const limitMin = task.duration || task.duration_minutes || 30;
+            timeScore = timeTakenMin <= limitMin + 5 ? maxTimePerTask : 0;
+          }
+
+          // 2. Git commit score — 40/n pts per task (credit even if late)
+          let gitScore = 0;
+          if (implementedTaskTitles.length > 0) {
+            const taskTitle = (task.title || task.task_name || '').toLowerCase().trim();
+            const found = implementedTaskTitles.some(t =>
+              t === taskTitle ||
+              t.includes(taskTitle.substring(0, Math.min(taskTitle.length, 20))) ||
+              taskTitle.includes(t.substring(0, Math.min(t.length, 20)))
+            );
+            if (found) { gitScore = maxGitPerTask; }
+          } else if (githubAnalysis && (githubDetailedMarks?.commits?.count || 0) > 0) {
+            // Candidate pushed commits — give full In Git marks.
+            // GitHub quality is scored separately in the GitHub section.
+            gitScore = maxGitPerTask;
+          }
+
+          // 3. Code written score — 20/n pts per task
+          let codeScore = 0;
+          if (progress?.answer) {
+            const src = progress.answer.code || progress.answer.comment || progress.answer.essay || '';
+            if (src.trim().length > 10) codeScore = maxCodePerTask;
+          }
+          // per-task GitHub commit URL
+          if (!codeScore && progress?.github_commit_url) {
+            codeScore = maxCodePerTask;
+          }
+          // session-level GitHub has code files (candidate used external editor)
+          if (!codeScore && (githubDetailedMarks?.codeFiles?.count || 0) > 0) {
+            codeScore = maxCodePerTask;
+          }
+          // If code landed in git, the candidate wrote code — don't penalise external editors
+          if (!codeScore && gitScore > 0) {
+            codeScore = maxCodePerTask;
+          }
+
+          const taskAdaptScore = timeScore + gitScore + codeScore;
+          taskAdaptScores.push(taskAdaptScore);
+
+          adaptabilityBreakdown.push({
+            task_index: i,
+            task_title: task.title || task.task_name || `Task ${i + 1}`,
+            task_type: task.type || 'regular',
+            time_taken_minutes: Math.round(timeTakenMin),
+            time_score: Math.round(timeScore),
+            git_score: Math.round(gitScore),
+            code_score: Math.round(codeScore),
+            total_score: Math.round(taskAdaptScore),
+            max_time: Math.round(maxTimePerTask),
+            max_git: Math.round(maxGitPerTask),
+            max_code: Math.round(maxCodePerTask),
+            max_total: Math.round(maxTimePerTask + maxGitPerTask + maxCodePerTask),
+            found_in_git: gitScore > 0,
+            code_written: codeScore > 0,
+          });
+
+          console.log(`   Task ${i + 1} "${task.title || ''}": time=${Math.round(timeScore)}/${Math.round(maxTimePerTask)}, git=${Math.round(gitScore)}/${Math.round(maxGitPerTask)}, code=${Math.round(codeScore)}/${Math.round(maxCodePerTask)} → ${Math.round(taskAdaptScore)}/${Math.round(maxTimePerTask+maxGitPerTask+maxCodePerTask)}`);
+        }
+
+        // Sum (not average) — points are already scaled to 100 total across all tasks
+        adaptabilityScore = Math.min(100, Math.round(taskAdaptScores.reduce((a, b) => a + b, 0)));
+
+        console.log(`\n🎯 Path B — Final Adaptability: sum(${taskAdaptScores.map(s => Math.round(s)).join(', ')}) = ${adaptabilityScore}/100`);
       }
 
-      // Calculate penalties and bonuses
-      const abandonmentRate = unexpectedEventsCount > 0 ? abandonedCount / unexpectedEventsCount : 0;
-      const abandonmentPenalty = abandonmentRate * 30;
-      const creativityRate = unexpectedEventsCount > 0 ? creativeCount / unexpectedEventsCount : 0;
-      const creativityBonus = creativityRate * 15;
-
-      console.log(`\n📐 Adjustments:`);
-      console.log(`   Abandonment rate: ${(abandonmentRate * 100).toFixed(1)}% → Penalty: -${abandonmentPenalty.toFixed(1)}`);
-      console.log(`   Creativity rate: ${(creativityRate * 100).toFixed(1)}% → Bonus: +${creativityBonus.toFixed(1)}`);
-
-      // Calculate base score (50% quality + 50% speed)
-      let baseScore = Math.round((avgQuality * 0.5) + (avgSpeed * 0.5));
-      console.log(`\n📊 Base Score: (${avgQuality.toFixed(1)} × 0.5) + (${avgSpeed.toFixed(1)} × 0.5) = ${baseScore}`);
-
-      // Final score
-      let adaptabilityScore = Math.max(0, Math.min(100, baseScore - abandonmentPenalty + creativityBonus));
-      console.log(`\n🎯 Final Adaptability Score: ${baseScore} - ${abandonmentPenalty.toFixed(1)} + ${creativityBonus.toFixed(1)} = ${adaptabilityScore}`);
       console.log('═══════════════════════════════════════════════════════════════\n');
 
       // ============================================
@@ -4509,42 +4595,27 @@ Return ONLY valid JSON:
           let techCodeAnalysis: any = null;
 
           if (progress?.answer) {
-            // ✅ FIXED: Await the async method and use the result
-            console.log(`📊 [Task ${i}] Calculating answer quality...`);
-            console.log(`   - Has githubCommitUrl: ${!!progress.answer.githubCommitUrl}`);
-            console.log(`   - Has inline code: ${!!progress.answer.code}`);
-            console.log(`   - Has essay: ${!!progress.answer.essay}`);
+            const hasCode = !!(progress.answer.code || progress.answer.githubCommitUrl);
+            const isCompleted = progress.status === 'completed' || progress.answer.completed === true;
 
-            const qualityResult = await this.calculateAnswerQuality(progress.answer);
-
-            // ✅ Debug: Log what we got back
-            console.log(`   - Result codeQuality: ${qualityResult.codeQuality}`);
-            console.log(`   - Result essayQuality: ${qualityResult.essayQuality}`);
-            console.log(`   - Result completeness: ${qualityResult.completeness}`);
-            console.log(`   - Result score: ${qualityResult.score}`);
-            console.log(`   - Has githubAnalysis: ${!!qualityResult.githubAnalysis}`);
-            console.log(`   - GitHub score: ${qualityResult.githubScore || 0}`);
-
-            // ✅ Use codeQuality (which should come from either GitHub or inline code)
-            techScore = qualityResult.codeQuality;
+            // Binary scoring: completed + code submitted = full marks.
+            // Code quality is measured separately in the GitHub section.
+            if (isCompleted && hasCode) {
+              techScore = 100;
+            } else if (isCompleted && !hasCode) {
+              techScore = 50; // completed but no code recorded
+            } else if (hasCode) {
+              techScore = 60; // code submitted but not marked complete
+            } else {
+              techScore = 0;
+            }
 
             techCodeAnalysis = {
-              hasFunctions: qualityResult.details.codeQualityDetails?.hasFunctions || false,
-              hasConditionals: qualityResult.details.codeQualityDetails?.hasConditionals || false,
-              hasReturns: qualityResult.details.codeQualityDetails?.hasReturns || false,
-              hasErrorHandling: qualityResult.details.codeQualityDetails?.hasErrorHandling || false,
-              hasLoops: qualityResult.details.codeQualityDetails?.hasLoops || false,
-              hasClasses: qualityResult.details.codeQualityDetails?.hasClasses || false,
-              hasVariables: qualityResult.details.codeQualityDetails?.hasVariables || false,
-              hasImports: qualityResult.details.codeQualityDetails?.hasImports || false,
-              linesOfCode: qualityResult.details.codeQualityDetails?.linesOfCode || 0,
-              codeLength: qualityResult.details.codeQualityDetails?.codeLength || 0,
-              language: qualityResult.details.codeQualityDetails?.language || 'unknown',
-              detectedFeatures: qualityResult.details.codeQualityDetails?.detectedFeatures || [],
-              completed: progress.answer.completed === true
+              completed: isCompleted,
+              hasCode,
             };
 
-            console.log(`   ✅ Final techScore: ${techScore}`);
+            console.log(`📊 [Task ${i}] Technical binary score: ${techScore} (completed=${isCompleted}, hasCode=${hasCode})`);
           }
 
           technicalScoreSum += techScore;
@@ -4591,15 +4662,16 @@ Return ONLY valid JSON:
           if (progress?.started_at && progress?.completed_at) {
             taskTimeSpent = Math.floor((new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000);
 
-            // ✅ BINARY SCORING: ON TIME = 100, LATE = 0
-            if (taskTimeSpent <= taskTimeLimit) {
+            // ON TIME (with 5-min grace) = 100, LATE but completed = 50
+            const _graceS = 5 * 60;
+            if (taskTimeSpent <= taskTimeLimit + _graceS) {
               taskSpeedScore = 100;
               scoringMethod = 'on_time';
-              console.log(`   ✅ Task ${i + 1}: ON TIME (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s ≤ ${taskDurationMinutes}m) → Speed: 100`);
+              console.log(`   ✅ Task ${i + 1}: ON TIME (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s ≤ ${taskDurationMinutes}m + 5min grace) → Speed: 100`);
             } else {
-              taskSpeedScore = 0;
+              taskSpeedScore = 50;
               scoringMethod = 'late';
-              console.log(`   ❌ Task ${i + 1}: LATE (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s > ${taskDurationMinutes}m) → Speed: 0`);
+              console.log(`   ⚠️ Task ${i + 1}: LATE (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s > ${taskDurationMinutes}m + 5min grace) → Speed: 50`);
             }
             totalSpeedScoreSum += taskSpeedScore * taskWeight;
             tasksWithTimeData++;
@@ -4648,7 +4720,9 @@ Return ONLY valid JSON:
       }
 
       const sessionSpeedScore = Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
-      const speedScore = tasksWithTimeData > 0 ? weightedSpeedScore : sessionSpeedScore;
+      // Always use per-task weighted score — session-level time fallback was awarding
+      // high speed scores even when tasks were never completed (misleading).
+      const speedScore = weightedSpeedScore;
 
       const speedBreakdown = {
         total_time_seconds: totalTimeSeconds,
@@ -4700,44 +4774,30 @@ Return ONLY valid JSON:
         const candidateMessages = communicationScoreResult.candidateMessages;
         const recruiterMessages = communicationScoreResult.recruiterMessages;
 
-        // Factor 1: Total interaction volume (max 40 points)
-        let volumeScore = 0;
-        if (messageCount >= 12) volumeScore = 40;
-        else if (messageCount >= 8) volumeScore = 30;
-        else if (messageCount >= 4) volumeScore = 20;
-        else if (messageCount >= 2) volumeScore = 10;
-        else if (messageCount >= 1) volumeScore = 5;
-
-        // Factor 2: Balanced conversation (max 30 points)
-        // Both parties should participate roughly equally
-        let balanceScore = 0;
-        const total = candidateMessages + recruiterMessages;
-        if (total > 0) {
-          const ratio = Math.min(candidateMessages, recruiterMessages) / Math.max(candidateMessages, recruiterMessages, 1);
-          balanceScore = Math.round(ratio * 30);
+        // Score based purely on content quality — message count does not matter.
+        // 2 excellent messages score the same as 20 excellent messages.
+        if (recruiterMessages === 0 && candidateMessages > 0) {
+          // One-sided: candidate tried but recruiter never replied.
+          collaborationScore = 10;
+        } else if (recruiterMessages > 0 && candidateMessages > 0) {
+          // Two-way conversation — score = GROQ communication quality score.
+          // If classifier also has data, blend it in lightly.
+          const groqScore = communicationScoreResult.score || 0;
+          if (communicationScoreResult.classifierAnalysis && groqScore > 0) {
+            collaborationScore = Math.min(100, Math.round(groqScore * 0.7 + communicationScoreResult.score * 0.3));
+          } else if (groqScore > 0) {
+            collaborationScore = Math.min(100, groqScore);
+          } else {
+            // Fallback: two-way participation earns 65% base
+            collaborationScore = 65;
+          }
         }
-
-        // Factor 3: Meaningful responses (max 30 points)
-        // Check if candidate responded to recruiter questions
-        let responsivenessScore = 0;
-        // You could track question/answer pairs or use the avgResponseTime
-        if (communicationScoreResult.classifierAnalysis) {
-          // If you have classifier data, use it
-          responsivenessScore = communicationScoreResult.score || 20;
-        } else {
-          // Fallback: if candidate has messages, give partial credit
-          responsivenessScore = candidateMessages > 0 ? 20 : 0;
-        }
-
-        collaborationScore = Math.min(100, volumeScore + balanceScore + responsivenessScore);
 
         console.log('📊 Collaboration Score Breakdown:', {
           messageCount,
           candidateMessages,
           recruiterMessages,
-          volumeScore,
-          balanceScore,
-          responsivenessScore,
+          classifierScore: communicationScoreResult.score,
           collaborationScore
         });
       } else {
@@ -4749,12 +4809,32 @@ Return ONLY valid JSON:
       // ============================================
       // 13. Final Overall Score
       // ============================================
-      const weights = scoringRubric.weights || {
-        quality: 0.60,
-        speed: 0.15,
-        behavioral: 0.10,
-        github: 0.15
+      const rubricWeights = scoringRubric.weights || {};
+      const totalPoints   = Number(scoringRubric.totalPoints) || 100;
+
+      // Read from rubric, trying multiple key naming conventions
+      const rawQ = Number(rubricWeights.quality    ?? scoringRubric.qualityWeight    ?? NaN);
+      const rawS = Number(rubricWeights.speed      ?? scoringRubric.speedWeight      ?? NaN);
+      const rawB = Number(rubricWeights.behavioral ?? scoringRubric.behavioralWeight ?? rubricWeights.communication ?? NaN);
+      const rawG = Number(rubricWeights.github     ?? rubricWeights.github_usage     ?? NaN);
+
+      // Convert point-based values (>1) to fractions; missing values become 0
+      const toFrac = (v: number) => isNaN(v) ? 0 : (v > 1 ? v / totalPoints : v);
+      const weights = {
+        quality:    toFrac(rawQ),
+        speed:      toFrac(rawS),
+        behavioral: toFrac(rawB),
+        github:     toFrac(rawG),
       };
+
+      // Re-normalise so all four weights sum to exactly 1.0
+      const weightSum = weights.quality + weights.speed + weights.behavioral + weights.github;
+      if (weightSum > 0) {
+        weights.quality    /= weightSum;
+        weights.speed      /= weightSum;
+        weights.behavioral /= weightSum;
+        weights.github     /= weightSum;
+      }
 
       const weightedScores = {
         quality: { score: qualityScore, weight: weights.quality, contribution: (qualityScore * weights.quality).toFixed(2) },
@@ -4881,6 +4961,7 @@ Return ONLY valid JSON:
             tasks: punctualityBreakdown
           },
           adaptability_breakdown: {
+            path: adaptabilityPath,
             events_count: unexpectedEventsCount,
             abandoned_count: abandonedCount,
             creative_solutions_count: creativeCount,
@@ -4893,7 +4974,12 @@ Return ONLY valid JSON:
             avg_response_speed: Math.round(avgSpeed),
             score: adaptabilityScore,
             assessment: (() => {
-              if (unexpectedEventsCount === 0) return 'No unexpected events to assess';
+              if (adaptabilityPath === 'B') {
+                if (adaptabilityScore >= 80) return 'Excellent - completed tasks on time with strong git commits and code';
+                if (adaptabilityScore >= 60) return 'Good - solid task completion and code delivery';
+                if (adaptabilityScore >= 40) return 'Satisfactory - some tasks completed on time or found in git';
+                return 'Needs improvement - tasks not submitted on time or missing from git commits';
+              }
               if (abandonmentRate > 0.5) return 'Poor - abandoned most unexpected tasks';
               if (abandonmentRate > 0.3) return 'Needs improvement - gave up on several challenges';
               if (creativityRate > 0.7 && adaptabilityScore >= 80) return 'Excellent - highly adaptable and creative';
@@ -5127,17 +5213,10 @@ Return ONLY valid JSON:
       );
 
     // Detect code files (source code files only)
+    const _allCodeExt = /\.(js|jsx|mjs|cjs|ts|tsx|vue|svelte|html|htm|css|scss|sass|less|py|java|go|rs|cpp|c|cc|cxx|hpp|h|rb|php|swift|kt|kts|cs|dart|lua|pl|r|m|scala|ex|exs|erl|hs|clj|sql|sh|bash|zsh|ps1|fish|yaml|yml|xml|tf|ipynb|json)$/i;
     const codeFiles = fileStructure.filter((f: any) => {
-      const path = f.path || '';
-      return f.type === 'blob' && (
-        path.endsWith('.js') || path.endsWith('.ts') ||
-        path.endsWith('.jsx') || path.endsWith('.tsx') ||
-        path.endsWith('.py') || path.endsWith('.java') ||
-        path.endsWith('.go') || path.endsWith('.rs') ||
-        path.endsWith('.cpp') || path.endsWith('.c') ||
-        path.endsWith('.html') || path.endsWith('.css') ||
-        path.endsWith('.json') || path.endsWith('.md')
-      );
+      const p = f.path || f.name || '';
+      return (f.type === 'blob' || f.type === 'file') && _allCodeExt.test(p);
     });
 
     const codeFilesCount = codeFiles.length;
@@ -5627,11 +5706,8 @@ Return ONLY valid JSON:
     // Check unexpected tasks
     for (const task of tasks) {
       console.log(`   Evaluating Task ${task.order || task.task_index}: ${task.name} (type: ${task.type || task.task_type})`);
-      // In calculateFullSessionScores, find the adaptability section and change:
-      const isUnexpected = task.task_type === 'technical' ||
-        task.task_type === 'emergency' ||
+      const isUnexpected = task.task_type === 'emergency' ||
         task.task_type === 'change_request' ||
-        task.type === 'technical' ||
         task.type === 'emergency' ||
         task.type === 'change_request';
       if (isUnexpected) {
@@ -6033,7 +6109,8 @@ Return ONLY valid JSON:
           return `${sender}: ${content}`;
         }).join('\n');
 
-        const prompt = `Analyze these chat messages between candidate and recruiter.
+        const prompt = `Analyze these chat messages between a candidate and recruiter during a TIMED job simulation.
+IMPORTANT: This is a short, timed simulation (not a full interview). Candidates are under time pressure completing tasks. A few clear, relevant messages is GOOD communication. Do NOT penalize for brevity — reward clarity, relevance to the tasks, and professionalism. Score generously for any genuine attempt to communicate.
 
       TASKS:
       ${taskContext.substring(0, 500) || 'No specific tasks'}
@@ -6208,8 +6285,11 @@ Return ONLY valid JSON:
           candidate_summary: this.generateCandidateMessageSummary(messages, simulationTasks)
         };
       } else {
-        // Combine both analyses
-        finalScore = Math.round((communicationScore * 0.5) + (aiSuggestedScore * 0.5));
+        // GROQ is the primary score. Classifier only blends in if it actually returned a real value.
+        const classifierHasScore = classifierAnalysis?.communication_score > 0;
+        finalScore = classifierHasScore
+          ? Math.round((communicationScore * 0.3) + (aiSuggestedScore * 0.7))
+          : Math.round(aiSuggestedScore);
 
         finalAnalysis = {
           method: 'combined',
@@ -6393,8 +6473,12 @@ Return ONLY valid JSON:
     simulationName: string;
     taskNames: string[];
     githubUrl?: string | null;
+    score?: number | null;
+    passed?: boolean | null;
+    scoreBreakdown?: Record<string, { score: number; weight: number; contribution?: string }> | null;
   }): Promise<{ emailSent: boolean; recipients: string[]; deduped: boolean }> {
-    const { sessionId, candidateUserId, candidateEmail, simulationName, taskNames, githubUrl } = params;
+    const { sessionId, candidateUserId, candidateEmail, simulationName, taskNames, githubUrl, score, passed, scoreBreakdown } = params;
+    console.log(`📧 [sendSubmissionEmails] Starting — session=${sessionId} candidate=${candidateEmail} score=${score}`);
     try {
       // Idempotency guard — if we've already logged a confirmation for this
       // submission, don't send again (handles accidental double-submits/retries).
@@ -6403,6 +6487,7 @@ Return ONLY valid JSON:
         [sessionId]
       );
       if (existing.rows.length > 0) {
+        console.log(`📧 [sendSubmissionEmails] DEDUPED — already sent for session ${sessionId}`);
         return { emailSent: true, recipients: [], deduped: true };
       }
 
@@ -6453,6 +6538,7 @@ Return ONLY valid JSON:
       try {
         await emailService.sendSubmissionConfirmation(candidateEmail, {
           candidateName, simulationName, submissionId: sessionId, submittedAt, taskNames, githubUrl: githubUrl ?? null, recipientRole: 'candidate',
+          score: score ?? null, passed: passed ?? null, scoreBreakdown: scoreBreakdown ?? null,
         });
         attempts.push({ to: candidateEmail, role: 'candidate', ok: true });
       } catch (e: any) {
@@ -6622,6 +6708,7 @@ Return ONLY valid JSON:
           (stage, label, percent) => this.emitEvalProgress(req.user.id, validSessionId, stage, label, percent)
         );
         console.log('✅ Full score analysis completed');
+        communicationAnalysis = fullScoreAnalysis.communication_analysis || null;
         this.emitEvalProgress(req.user.id, validSessionId, 'finalizing', 'Finalizing report', 95);
       } catch (calcError: any) {
         console.error('❌ Score calculation failed:', calcError);
@@ -7395,6 +7482,9 @@ Return ONLY valid JSON:
           simulationName: fullScoreAnalysis.simulation_name || 'Simulation',
           taskNames,
           githubUrl: repoUrl,
+          score: finalOverallScore ?? null,
+          passed: finalPassed ?? null,
+          scoreBreakdown: fullScoreAnalysis?.scores?.weighted_breakdown ?? null,
         });
         if (submissionResults) {
           (submissionResults as any).emailSent = emailResult.emailSent;
@@ -12469,6 +12559,166 @@ Return ONLY valid JSON:
   }
 
 
+
+  // ============================================================
+  // ADMIN: Cancel any session (regardless of owner or status)
+  // ============================================================
+  async adminCancelSession(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { sessionId } = req.params;
+      const { reason } = req.body || {};
+
+      if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
+        ResponseService.error(res, 'Invalid session ID format', 400);
+        return;
+      }
+
+      const result = await DatabaseService.query(`
+        UPDATE simulation_sessions
+        SET status = 'cancelled', completed_at = NOW(), updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, simulation_id, user_id, status
+      `, [sessionId]);
+
+      if (!result.rows[0]) {
+        ResponseService.notFound(res, 'Session not found');
+        return;
+      }
+
+      ResponseService.success(res, { sessionId, status: 'cancelled' }, 'Session cancelled by admin');
+    } catch (error: any) {
+      ResponseService.error(res, 'Failed to cancel session', 500, null, this.formatError(error));
+    }
+  }
+
+  // ============================================================
+  // ADMIN: Reset session so candidate can redo the simulation
+  // ============================================================
+  async adminResetSession(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { sessionId } = req.params;
+
+      if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
+        ResponseService.error(res, 'Invalid session ID format', 400);
+        return;
+      }
+
+      await DatabaseService.execute(`
+        DELETE FROM session_task_progress WHERE session_id = $1
+      `, [sessionId]);
+
+      const result = await DatabaseService.query(`
+        UPDATE simulation_sessions
+        SET status = 'not_started', started_at = NULL, completed_at = NULL,
+            answers = '{}', score = NULL, current_task = 0,
+            time_spent = 0, updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, simulation_id, user_id
+      `, [sessionId]);
+
+      if (!result.rows[0]) {
+        ResponseService.notFound(res, 'Session not found');
+        return;
+      }
+
+      ResponseService.success(res, { sessionId, status: 'not_started' }, 'Session reset — candidate can redo from scratch');
+    } catch (error: any) {
+      ResponseService.error(res, 'Failed to reset session', 500, null, this.formatError(error));
+    }
+  }
+
+  // ============================================================
+  // ADMIN: Reopen session — keep all progress, let candidate continue
+  // ============================================================
+  async adminReopenSession(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { sessionId } = req.params;
+
+      if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
+        ResponseService.error(res, 'Invalid session ID format', 400);
+        return;
+      }
+
+      const result = await DatabaseService.query(`
+        UPDATE simulation_sessions
+        SET status = 'in_progress', completed_at = NULL,
+            updated_at = NOW()
+        WHERE id = $1
+        RETURNING id, simulation_id, user_id, status, current_task
+      `, [sessionId]);
+
+      if (!result.rows[0]) {
+        ResponseService.notFound(res, 'Session not found');
+        return;
+      }
+
+      const { user_id, simulation_id, current_task } = result.rows[0];
+
+      // Fetch candidate email, name, and simulation/job details for the email
+      try {
+        const infoResult = await DatabaseService.query(`
+          SELECT
+            u.email,
+            cp.first_name,
+            cp.last_name,
+            st.name  AS simulation_name,
+            j.title  AS job_title
+          FROM users u
+          LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
+          LEFT JOIN simulations sim       ON sim.id = $2
+          LEFT JOIN simulation_templates st ON st.id = sim.template_id
+          LEFT JOIN jobs j                ON j.id = sim.job_id
+          WHERE u.id = $1
+        `, [user_id, simulation_id]);
+
+        const info = infoResult.rows[0];
+        if (info?.email) {
+          const firstName  = info.first_name || 'Candidate';
+          const simName    = info.simulation_name || 'Practical Assessment';
+          const jobTitle   = info.job_title ? ` for ${info.job_title}` : '';
+          const dashUrl    = `${process.env.FRONTEND_URL || 'http://16.192.28.113'}/dashboard`;
+          const taskNum    = (current_task || 0) + 1;
+
+          await emailService.sendEmail({
+            to: info.email,
+            subject: `Your simulation has been reopened — continue from Task ${taskNum}`,
+            html: `
+              <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
+                <div style="background:linear-gradient(135deg,#7c3aed,#4f46e5);padding:28px 32px;border-radius:12px 12px 0 0">
+                  <h1 style="color:#fff;margin:0;font-size:22px">SimuHire Rwanda</h1>
+                  <p style="color:#e9d5ff;margin:6px 0 0;font-size:14px">Practical Assessment Platform</p>
+                </div>
+                <div style="padding:28px 32px;background:#fff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+                  <p style="font-size:16px;font-weight:600;margin:0 0 12px">Hello ${firstName},</p>
+                  <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 20px">
+                    A recruiter has <strong>reopened your practical assessment</strong>${jobTitle}.
+                    All your previous progress is saved — you can pick up right where you left off at <strong>Task ${taskNum}</strong>.
+                  </p>
+                  <div style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:4px;padding:14px 18px;margin:0 0 24px">
+                    <strong style="color:#5b21b6;font-size:14px">📋 ${simName}</strong><br/>
+                    <span style="font-size:13px;color:#6d28d9">Resuming from Task ${taskNum} — your previous answers are intact</span>
+                  </div>
+                  <a href="${dashUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:15px">
+                    Open My Dashboard →
+                  </a>
+                  <p style="font-size:12px;color:#9ca3af;margin:24px 0 0">
+                    Log in at <a href="${dashUrl}" style="color:#7c3aed">${dashUrl}</a>, go to your Jobs, find the simulation and click <em>Continue</em>.
+                  </p>
+                </div>
+              </div>
+            `,
+          });
+          console.log(`✅ Reopen email sent to ${info.email} for session ${sessionId}`);
+        }
+      } catch (emailErr: any) {
+        console.error('⚠️ Reopen email failed (session still reopened):', emailErr.message);
+      }
+
+      ResponseService.success(res, { sessionId, status: 'in_progress', currentTask: current_task }, 'Session reopened — candidate notified by email');
+    } catch (error: any) {
+      ResponseService.error(res, 'Failed to reopen session', 500, null, this.formatError(error));
+    }
+  }
 
   async getSimulationCandidates(req: AuthenticatedRequest, res: Response): Promise<void> {
     console.log('═══════════════════════════════════════════════════════════════');
