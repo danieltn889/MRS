@@ -18,6 +18,7 @@ import JobApplicationModal from './jobs/JobApplicationModal';
 import appliedJobsManager from '../src/utils/AppliedJobsManager';
 import { getJobMatchesFromAI } from '../services/aiJobMatchingService';
 import { saveJob, unsaveJob, loadSavedJobsFromAPI } from '../services/jobStorageService';
+import { useFeedTracker } from '../hooks/useFeedTracker';
 import {
   formatNumber, formatDate, formatFullDate, getDaysRemaining,
   getExpiryStatusColor, getMatchColor, getScoreColor, transformMatchData
@@ -47,11 +48,27 @@ interface AIMatch {
   screeningQuestions?: any[];
   expiresAt?: string;
   matchScore?: number;
+  matcherScore?: number | null;
+  hybridScore?: number | null;
+  scoreSource?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+  reasons?: string[];
+  // Full profile-matcher 4-factor breakdown — null/absent fields when
+  // scoreSource is "hybrid-only" (the matcher never scored this job).
   matchLevel?: string;
-  criteriaScores?: any;
-  skillsBreakdown?: any;
-  experienceBreakdown?: any;
+  criteriaScores?: {
+    skills_match?: number | null;
+    qualifications_match?: number | null;
+    experience_match?: number | null;
+    preferences_match?: number | null;
+  };
+  skillsBreakdown?: {
+    matched_skills?: string[];
+    missing_skills?: string[];
+    total_required?: number;
+    total_matched?: number;
+  };
   qualificationsBreakdown?: any;
+  experienceBreakdown?: any;
   preferencesBreakdown?: any;
   rawJob?: any;
   benefits?: string[];
@@ -119,6 +136,7 @@ const DEFAULT_ADDITIONAL_STATS: AdditionalStats = {
 };
 
 const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewChange }) => {
+  const { trackView, trackSave, trackUnsave } = useFeedTracker();
   const [allJobs, setAllJobs] = useState<any[]>([]);
   const [aiMatches, setAiMatches] = useState<AIMatch[]>([]);
 
@@ -317,129 +335,64 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     setJobError(null);
 
     try {
-      console.log('📊 Fetching AI matches for candidate:', candidateId);
+      console.log('📊 Fetching combined feed (matcher+hybrid) for candidate:', candidateId);
       const data = await fetchWithTimeout(getJobMatchesFromAI(candidateId));
 
+      // candidateInfo (name/level/skills) already comes from fetchFullCandidateProfile —
+      // the combined feed has no "candidate" field, only scored jobs.
       if (data && data.success && data.matches) {
-        const completeProfile = data.candidate?.complete_profile || {};
-        const stats = completeProfile.statistics || {};
-        const totalExperience = stats.total_years_experience || 0;
-
-        const workSkills: string[] = [];
-        if (completeProfile.work_experience) {
-          completeProfile.work_experience.forEach((exp: any) => {
-            if (exp.skills && Array.isArray(exp.skills)) {
-              exp.skills.forEach((skill: string) => {
-                if (!workSkills.includes(skill)) workSkills.push(skill);
-              });
-            }
-          });
-        }
-
-        const profileSkills = data.candidate?.skills || [];
-        const allSkills = [...new Set([...profileSkills, ...workSkills])];
-
-        setCandidateInfo({
-          name: data.candidate?.name || data.candidate?.full_name || 'Candidate',
-          level: data.candidate?.level || completeProfile?.headline || 'Professional',
-          total_experience_years: totalExperience,
-          skills: allSkills.slice(0, 5)
-        });
-
         const transformedMatches = data.matches.map((match: any) => {
           const jobData = match.job || {};
           const companyData = jobData.company || {};
-          const criteriaScores = match.criteria_scores || {};
-          const skillsBD = match.skills_breakdown || {};
-          const expBD = match.experience_breakdown || {};
-          const qualsBD = match.qualifications_breakdown || {};
-          const prefsBD = match.preferences_breakdown || {};
+          // Real 4-factor breakdown from the matcher (skills/quals/experience/
+          // preferences) — null when score_source is "hybrid-only", i.e. the
+          // matcher had no data for this job at all, not a real 0.
+          const matcherBD = match.matcher_breakdown || null;
+          const criteriaScores = matcherBD?.criteria_scores || {};
+          const skillsBD = matcherBD?.skills_breakdown || {};
 
           return {
-            id: jobData.id || match.id,
+            id: jobData.id || match.job_id,
             title: jobData.title || match.title,
             company: companyData.name || jobData.company_name || match.company || 'Unknown Company',
-            location: jobData.locations?.[0]?.city || jobData.location || match.location || 'Location not specified',
-            salary: match.salary,
-            type: jobData.job_type || match.type || 'Full-time',
-            workArrangement: jobData.work_arrangement || match.workArrangement || 'Onsite',
-            description: jobData.description || match.description,
-            requirements: jobData.requirements || match.requirements || [],
-            skills: jobData.skills_required?.map((s: any) => typeof s === 'string' ? s : s.name) || match.skills || [],
-            screeningQuestions: jobData.screening_questions || match.screeningQuestions || [],
-            expiresAt: jobData.expires_at || match.expiresAt,
-            publishedAt: jobData.published_at || match.publishedAt,
-            matchScore: match.match_score || match.matchScore || 0,
-            matchLevel: match.match_level || match.matchLevel || '',
+            location: jobData.locations?.[0]?.city || 'Location not specified',
+            salary: jobData.salary_min && jobData.salary_max
+              ? `${jobData.salary_currency || ''} ${jobData.salary_min}-${jobData.salary_max} ${jobData.salary_period || ''}`.trim()
+              : undefined,
+            type: jobData.job_type || 'Full-time',
+            workArrangement: jobData.work_arrangement || 'Onsite',
+            description: jobData.description,
+            requirements: jobData.qualifications ? [jobData.qualifications] : [],
+            skills: jobData.skills_required?.map((s: any) => typeof s === 'string' ? s : s.name) || [],
+            screeningQuestions: jobData.screening_questions || [],
+            expiresAt: jobData.expires_at,
+            publishedAt: jobData.published_at,
+
+            // New combined-feed scoring: total_score blends matcher (70%) and
+            // hybrid (30%); either half may be null if that service had no
+            // data for this job (score_source tells you which happened).
+            matchScore: Math.round(match.total_score || 0),
+            matcherScore: match.matcher_score !== null && match.matcher_score !== undefined ? Math.round(match.matcher_score) : null,
+            hybridScore: match.hybrid_score !== null && match.hybrid_score !== undefined ? Math.round(match.hybrid_score) : null,
+            scoreSource: match.score_source,
+            reasons: match.reasons || [],
+            matchLevel: matcherBD?.match_level || '',
             criteriaScores: {
-              skills_match: criteriaScores.skills_match || 0,
-              qualifications_match: criteriaScores.qualifications_match || 0,
-              experience_match: criteriaScores.experience_match || 0,
-              preferences_match: criteriaScores.preferences_match || 0
+              skills_match: criteriaScores.skills_match ?? null,
+              qualifications_match: criteriaScores.qualifications_match ?? null,
+              experience_match: criteriaScores.experience_match ?? null,
+              preferences_match: criteriaScores.preferences_match ?? null
             },
             skillsBreakdown: {
               matched_skills: skillsBD.matched_skills || [],
               missing_skills: skillsBD.missing_skills || [],
               total_required: skillsBD.total_required || 0,
-              total_matched: skillsBD.total_matched || 0,
-              individual_scores: skillsBD.individual_scores || []
+              total_matched: skillsBD.total_matched || 0
             },
-            experienceBreakdown: {
-              match_type: expBD.match_type || 'unknown',
-              total_requirements: expBD.total_requirements || 0,
-              matched_requirements: expBD.matched_requirements || 0,
-              specific_matches: expBD.specific_matches || [],
-              unmatched_requirements: expBD.unmatched_requirements || [],
-              total_years: expBD.total_years || 0,
-              required_years: expBD.required_years || 0,
-              gap_years: expBD.gap_years || 0,
-              candidate_years: expBD.candidate_years || 0
-            },
-            qualificationsBreakdown: {
-              candidate_degrees: qualsBD.candidate_degrees || [],
-              candidate_fields: qualsBD.candidate_fields || [],
-              candidate_combined: qualsBD.candidate_combined || [],
-              candidate_certifications: qualsBD.candidate_certifications || [],
-              job_degree_required: qualsBD.job_degree_required || '',
-              job_allowed_fields: qualsBD.job_allowed_fields || [],
-              job_certifications: qualsBD.job_certifications || [],
-              best_similarity: qualsBD.best_similarity || 0,
-              best_matched_field: qualsBD.best_matched_field || null,
-              best_matched_candidate_value: qualsBD.best_matched_candidate_value || '',
-              best_job_requirement: qualsBD.best_job_requirement || '',
-              match_type: qualsBD.match_type || 'none',
-              match_quality: qualsBD.match_quality || '',
-              explanation: qualsBD.explanation || '',
-              is_degree_required: qualsBD.is_degree_required || false,
-              component_scores: qualsBD.component_scores || {}
-            },
-            preferencesBreakdown: {
-              missing_job_data: prefsBD.missing_job_data || [],
-              type_match: prefsBD.type_match || 0,
-              type_match_details: prefsBD.type_match_details || [],
-              type_match_note: prefsBD.type_match_note || null,
-              remote_match: prefsBD.remote_match || 0,
-              remote_match_note: prefsBD.remote_match_note || null,
-              location_match: prefsBD.location_match || 0,
-              location_match_details: prefsBD.location_match_details || null,
-              location_match_note: prefsBD.location_match_note || null,
-              industry_match: prefsBD.industry_match || 0,
-              industry_match_details: prefsBD.industry_match_details || [],
-              industry_match_note: prefsBD.industry_match_note || null,
-              salary_match: prefsBD.salary_match || 0,
-              salary_match_details: prefsBD.salary_match_details || {},
-              salary_match_note: prefsBD.salary_match_note || null,
-              language_match: prefsBD.language_match || 0,
-              language_match_details: prefsBD.language_match_details || [],
-              language_match_note: prefsBD.language_match_note || null,
-              candidate_job_types: prefsBD.candidate_job_types || [],
-              candidate_locations: prefsBD.candidate_locations || [],
-              candidate_industries: prefsBD.candidate_industries || [],
-              candidate_languages: prefsBD.candidate_languages || [],
-              candidate_salary_min: prefsBD.candidate_salary_min || 0,
-              candidate_salary_max: prefsBD.candidate_salary_max || 0,
-              candidate_remote_preference: prefsBD.candidate_remote_preference || 'flexible'
-            },
+            qualificationsBreakdown: matcherBD?.qualifications_breakdown || null,
+            experienceBreakdown: matcherBD?.experience_breakdown || null,
+            preferencesBreakdown: matcherBD?.preferences_breakdown || null,
+
             rawJob: jobData,
             benefits: jobData.benefits || [],
             tags: jobData.tags || [],
@@ -449,7 +402,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             responsibilities: jobData.responsibilities || [],
             applications: jobData.application_count || 0,
             viewCount: jobData.view_count || 0,
-            companyLogo: companyData.logo_url || '',
+            companyLogo: jobData.company_logo || companyData.logo_url || '',
             companyVerified: companyData.verified || false,
             companyIndustry: companyData.industry || '',
             companySize: companyData.size || '',
@@ -458,7 +411,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           };
         });
 
-        console.log('✅ Transformed matches:', transformedMatches.length);
+        console.log('✅ Transformed matches:', transformedMatches.length, `(cold_start=${data.cold_start}, matcher_available=${data.matcher_available})`);
         setAiMatches(transformedMatches);
         setJobError(null);
       } else {
@@ -623,12 +576,14 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     try {
       if (isCurrentlySaved) {
         await unsaveJob(jobId);
+        trackUnsave(jobId);
         setSavedJobs(prev => { const newSet = new Set(prev); newSet.delete(jobId); return newSet; });
         alert('Job removed from saved!');
       } else {
         // Persist the AI match score this candidate saw for the job.
         const matchScore = aiMatches.find(m => m.id === jobId)?.matchScore ?? null;
         await saveJob(jobId, matchScore);
+        trackSave(jobId);
         setSavedJobs(prev => new Set([...prev, jobId]));
         alert('Job saved successfully!');
       }
@@ -644,6 +599,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
   };
 
   const handleViewDetails = (match: AIMatch) => {
+    trackView(match.id, 0);
     setSelectedMatch(match);
     setShowDetails(true);
   };
@@ -1053,6 +1009,10 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           }}
           matchScore={selectedMatchForApply.matchScore || 78.7}
           matchDetails={{
+            matcher_score: selectedMatchForApply.matcherScore,
+            hybrid_score: selectedMatchForApply.hybridScore,
+            score_source: selectedMatchForApply.scoreSource,
+            reasons: selectedMatchForApply.reasons,
             criteria_scores: selectedMatchForApply.criteriaScores,
             skills_breakdown: selectedMatchForApply.skillsBreakdown,
             qualifications_breakdown: selectedMatchForApply.qualificationsBreakdown,
@@ -1068,12 +1028,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           isOpen={showDetails}
           onClose={() => { setShowDetails(false); setSelectedMatch(null); }}
           matchScore={selectedMatch.matchScore}
-          criteria_scores={{
-            skillsScore: selectedMatch.criteriaScores?.skills_match,
-            qualificationsScore: selectedMatch.criteriaScores?.qualifications_match,
-            experienceScore: selectedMatch.criteriaScores?.experience_match,
-            preferencesScore: selectedMatch.criteriaScores?.preferences_match,
-          }}
           matchData={selectedMatch}
           candidateInfo={candidateInfo}
           job={{

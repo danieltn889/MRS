@@ -20,6 +20,15 @@ import threading
 from pathlib import Path
 from contextlib import asynccontextmanager
 
+# Windows' default console codepage (cp1252) can't encode the emoji used in
+# this file's own print()s below — gateway.py sets UTF-8 env vars for the
+# CHILD services it spawns, but that doesn't affect its own stdout. Without
+# this, the process crashes on the first emoji print before any service
+# even starts.
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+
 # ── AUTO-INSTALL ──────────────────────────────────────────────
 for pkg in ["fastapi", "uvicorn", "httpx"]:
     try:
@@ -36,6 +45,17 @@ from fastapi.responses import JSONResponse
 # ── SERVICE REGISTRY ─────────────────────────────────────────
 
 SERVICES = {
+    "feed": {
+        "name": "Job Feed Recommender",
+        "file": "feed_recommender.py",
+        "port": 8002,
+        "prefix": "/feed",
+        "description": "Personalized job feed scoring (Profile 40%, Search 20%, Views 15%, Recency 5%, Popularity 10%)",
+        "endpoints": [
+            "POST /feed/score   — Score and rank jobs for a candidate",
+            "GET  /feed/health  — Health check",
+        ],
+    },
     "matcher": {
         "name": "AI Job Matcher",
         "file": "ai_job_matcher_og.py",
@@ -88,6 +108,18 @@ SERVICES = {
             "POST   /vwes/analyze/chat     — Analyse a full chat conversation",
             "GET    /vwes/status           — Training status",
             "GET    /vwes/health           — Health check",
+        ],
+    },
+    "hybrid": {
+        "name": "Hybrid Job Recommender",
+        "file": "hybrid_job_recommender.py",
+        "port": 8003,
+        "prefix": "/hybrid",
+        "description": "Content + collaborative-filtering (PyTorch MF) + behavior hybrid job recommendations",
+        "endpoints": [
+            "POST /hybrid/score    — Ranked jobs for a candidate_id",
+            "POST /hybrid/refresh  — Retrain from current DB state",
+            "GET  /hybrid/health   — Health check",
         ],
     },
 }
@@ -406,6 +438,11 @@ async def proxy(request: Request, target_port: int, strip_prefix: str) -> Respon
 
 METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
+@app.api_route("/feed",               methods=METHODS)
+@app.api_route("/feed/{path:path}",   methods=METHODS)
+async def route_feed(request: Request, path: str = ""):
+    return await proxy(request, 8002, "/feed")
+
 @app.api_route("/matcher",             methods=METHODS)
 @app.api_route("/matcher/{path:path}", methods=METHODS)
 async def route_matcher(request: Request, path: str = ""):
@@ -425,6 +462,11 @@ async def route_search(request: Request, path: str = ""):
 @app.api_route("/vwes/{path:path}",    methods=METHODS)
 async def route_vwes(request: Request, path: str = ""):
     return await proxy(request, 8091, "/vwes")
+
+@app.api_route("/hybrid",              methods=METHODS)
+@app.api_route("/hybrid/{path:path}",  methods=METHODS)
+async def route_hybrid(request: Request, path: str = ""):
+    return await proxy(request, 8003, "/hybrid")
 
 # ── GATEWAY ENDPOINTS ────────────────────────────────────────
 

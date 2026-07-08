@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import BaseController from './base.controller.js';  // Use .js, not .ts
 import DatabaseService from '../services/database.service.js';  // Use .js
 import ResponseService from '../services/response.service.js';  // Use .js
+import RecommendationSyncService from '../services/recommendation-sync.service.js';
 import { logger } from '../utils/logger.js';  // Use .js
 import { AuthenticatedRequest, User as AuthUser } from '../types/auth.types.js';  // Use .js
 import PaginationService from '../services/pagination.service.js';
@@ -676,6 +677,20 @@ class JobController extends BaseController {
         await this.insertJobSkills(job.id, allSkills);
       }
 
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'jobs',
+        operation: 'insert',
+        entity_id: String(job.id),
+        job_id: String(job.id),
+        payload: {
+          status,
+          company_id: companyId,
+          title: job.title,
+        },
+        source: 'backend',
+      });
+
       logger.info('========== CREATE JOB SUCCESS ==========');
 
       this.sendSuccess(res, job, 'Job created successfully', 201);
@@ -852,6 +867,20 @@ class JobController extends BaseController {
         }
       }
 
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'jobs',
+        operation: 'update',
+        entity_id: String(id),
+        job_id: String(id),
+        payload: {
+          status: newStatus,
+          title: updatedJob.title,
+          company_id: updatedJob.company_id,
+        },
+        source: 'backend',
+      });
+
       this.sendSuccess(res, updatedJob, 'Job updated successfully');
     } catch (error) {
       logger.error('Error updating job:', error);
@@ -883,6 +912,20 @@ class JobController extends BaseController {
         'UPDATE jobs SET status = $1, updated_at = NOW() WHERE id = $2',
         ['archived', id]
       );
+
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'jobs',
+        operation: 'delete',
+        entity_id: String(id),
+        job_id: String(id),
+        payload: {
+          status: 'archived',
+          title: existingJob.title,
+          company_id: existingJob.company_id,
+        },
+        source: 'backend',
+      });
 
       this.sendSuccess(res, null, 'Job deleted successfully');
     } catch (error) {
@@ -1611,6 +1654,20 @@ class JobController extends BaseController {
       } catch (histErr) {
         logger.warn(`job_status_history insert failed (run 2026_job_status_history.sql?): ${(histErr as Error).message}`);
       }
+
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'jobs',
+        operation: 'update',
+        entity_id: String(id),
+        job_id: String(id),
+        payload: {
+          previous_status: previousStatus,
+          status,
+          reason: reason || null,
+        },
+        source: 'backend',
+      });
 
       this.sendSuccess(res, { id, previous_status: previousStatus, status }, 'Job status updated successfully');
     } catch (error) {
@@ -4268,6 +4325,16 @@ class JobController extends BaseController {
         [userId, jobId, savedMatchScore]
       );
 
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'saved_jobs',
+        operation: 'insert',
+        candidate_id: userId,
+        job_id: jobId,
+        payload: { match_score: savedMatchScore },
+        source: 'backend',
+      });
+
       this.sendSuccess(res, { jobId, saved: true }, 'Job saved successfully');
     } catch (error) {
       logger.error('Error saving job:', error);
@@ -4299,6 +4366,16 @@ class JobController extends BaseController {
         this.sendError(res, 'Job not found in saved list', 404);
         return;
       }
+
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'saved_jobs',
+        operation: 'delete',
+        candidate_id: userId,
+        job_id: jobId,
+        payload: {},
+        source: 'backend',
+      });
 
       this.sendSuccess(res, { jobId, saved: false }, 'Job removed from saved');
     } catch (error) {

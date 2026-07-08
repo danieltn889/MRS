@@ -38,6 +38,7 @@ import appliedJobsManager from './src/utils/AppliedJobsManager';
 import SessionReportComponent from './components/SessionReport';
 import CandidateDetailView from './components/CandidateDetailView';
 import CandidatePerformance from './components/CandidatePerformance';
+import PersonalizedFeed from './components/jobs/PersonalizedFeed';
 
 // Define the props for DashboardHome if needed, but it should accept these
 interface DashboardProps {
@@ -205,6 +206,15 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
             user={user}
             onApplyJob={handleApplyJob}
             onViewChange={setCurrentView}
+          />
+        );
+      case 'for-you':
+        return (
+          <PersonalizedFeed
+            onApplyToJob={(jobId) => {
+              handleApplyJob(jobId);
+              setCurrentView('applications');
+            }}
           />
         );
       case 'saved-jobs':

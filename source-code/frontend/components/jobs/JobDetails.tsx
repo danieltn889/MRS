@@ -13,7 +13,7 @@ import { getJob } from '../../services/jobAPI';
 import { saveJob, unsaveJob, isJobSaved } from '../../services/jobStorageService';
 import appliedJobsManager from '../../src/utils/AppliedJobsManager';
 import JobApplicationModal from './JobApplicationModal';
-import { getJobMatchForCandidate } from '../../services/aiJobMatchingService';
+import { getCombinedJobMatch } from '../../services/aiJobMatchingService';
 
 interface JobDetails {
   id: string;
@@ -131,6 +131,17 @@ interface MatchDetails {
   };
   explanation?: string;
   improvement_suggestions?: string[];
+  // Combined feed fields (matcher 70% + hybrid 30%, see
+  // hybrid_job_recommender.py::combined_score_candidate) — match_score above
+  // is now this blended total, not the matcher's raw score. The 4-factor
+  // criteria_scores/skills_breakdown/etc. above are only real when
+  // hasBreakdown is true (score_source is "matcher+hybrid" or "matcher-only");
+  // for "hybrid-only" jobs they're zeroed placeholders and should be hidden.
+  matcher_score?: number | null;
+  hybrid_score?: number | null;
+  score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+  reasons?: string[];
+  hasBreakdown?: boolean;
 }
 
 const JobDetails: React.FC = () => {
@@ -146,6 +157,7 @@ const JobDetails: React.FC = () => {
   const [fullCandidateProfile, setFullCandidateProfile] = useState<any>(null);
   const [matchScore, setMatchScore] = useState<number | null>(null);
   const [matchDetails, setMatchDetails] = useState<MatchDetails | null>(null);
+  const [matchError, setMatchError] = useState<string | null>(null);
   // Employer's minimum AI match score to be allowed to apply (reuses the existing
   // jobs.ai_match_required_score field — no new schema).
   const [requiredScore, setRequiredScore] = useState<number | null>(null);
@@ -225,9 +237,10 @@ const JobDetails: React.FC = () => {
     }
 
     setIsLoadingMatch(true);
+    setMatchError(null);
 
     try {
-      const result = await getJobMatchForCandidate(candidateId, id);
+      const result = await getCombinedJobMatch(candidateId, id);
 
       if (result.success && result.match) {
         setMatchScore(result.match.match_score);
@@ -290,15 +303,22 @@ const JobDetails: React.FC = () => {
             location_match_details: result.match.preferences_breakdown?.location_match_details
           },
           explanation: (result.match as any).explanation || '',
-          improvement_suggestions: (result.match as any).improvement_suggestions || []
+          improvement_suggestions: (result.match as any).improvement_suggestions || [],
+          matcher_score: result.match.matcher_score,
+          hybrid_score: result.match.hybrid_score,
+          score_source: result.match.score_source,
+          reasons: result.match.reasons || [],
+          hasBreakdown: result.match.criteria_scores?.skills_match != null || result.match.criteria_scores?.qualifications_match != null
         });
 
         console.log('✅ AI Match score loaded:', result.match.match_score);
       } else {
         console.log('No match score available:', result.error);
+        setMatchError(result.error || 'AI match score unavailable for this job right now.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading match score:', error);
+      setMatchError(error?.message || 'AI match score unavailable for this job right now.');
     } finally {
       setIsLoadingMatch(false);
     }
@@ -529,7 +549,7 @@ const JobDetails: React.FC = () => {
                 </div>
 
                 {/* AI Match Score Badge */}
-                {matchScore && matchDetails && (
+                {matchScore != null && matchDetails && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
                     <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg ${getMatchLevelColor()}`}>
                       <Brain className="w-4 h-4" />
@@ -537,6 +557,20 @@ const JobDetails: React.FC = () => {
                         AI Match Score: {matchScore}% - {matchDetails.match_level}
                       </span>
                     </div>
+                  </div>
+                )}
+
+                {/* Was previously silent on failure — surface it so "no score shown"
+                    is never unexplained (e.g. candidate profile not yet trained by
+                    the hybrid recommender, or the ML services being unreachable) */}
+                {isLoadingMatch && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-sm text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Loading AI match score...
+                  </div>
+                )}
+                {!isLoadingMatch && matchScore == null && matchError && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-sm text-amber-600">
+                    <AlertCircle className="w-4 h-4" /> {matchError}
                   </div>
                 )}
 
@@ -639,24 +673,28 @@ const JobDetails: React.FC = () => {
                         })}
                       </div>
 
-                      {/* Skills Match Score */}
-                      <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm font-medium text-gray-700">Skills Match Score</span>
-                          <span className={`text-sm font-bold ${getFactorColor(matchDetails.criteria_scores.skills_match)}`}>
-                            {matchDetails.criteria_scores.skills_match}%
-                          </span>
+                      {/* Skills Match Score — only real when the profile matcher scored this job */}
+                      {matchDetails.hasBreakdown ? (
+                        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium text-gray-700">Skills Match Score</span>
+                            <span className={`text-sm font-bold ${getFactorColor(matchDetails.criteria_scores.skills_match)}`}>
+                              {matchDetails.criteria_scores.skills_match}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-green-500 h-2 rounded-full transition-all duration-500"
+                              style={{ width: `${matchDetails.criteria_scores.skills_match}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500 mt-2">
+                            {matchDetails.skills_breakdown.total_matched} of {matchDetails.skills_breakdown.total_required} skills matched
+                          </p>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-green-500 h-2 rounded-full transition-all duration-500"
-                            style={{ width: `${matchDetails.criteria_scores.skills_match}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-500 mt-2">
-                          {matchDetails.skills_breakdown.total_matched} of {matchDetails.skills_breakdown.total_required} skills matched
-                        </p>
-                      </div>
+                      ) : (
+                        <p className="mt-4 text-xs text-gray-500">Scored by the AI hybrid recommender only — the profile matcher hasn't evaluated this job yet.</p>
+                      )}
 
                       {/* Missing Skills Warning */}
                       {matchDetails.skills_breakdown.missing_skills.length > 0 && (
@@ -746,21 +784,23 @@ const JobDetails: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Qualifications Score */}
-                      <div className="p-3 bg-gray-50 rounded-lg">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="text-sm font-medium text-gray-700">Qualifications Match</span>
-                          <span className={`text-sm font-bold ${getFactorColor(matchDetails.criteria_scores.qualifications_match)}`}>
-                            {matchDetails.criteria_scores.qualifications_match}%
-                          </span>
+                      {/* Qualifications Score — only real when the profile matcher scored this job */}
+                      {matchDetails.hasBreakdown && (
+                        <div className="p-3 bg-gray-50 rounded-lg">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium text-gray-700">Qualifications Match</span>
+                            <span className={`text-sm font-bold ${getFactorColor(matchDetails.criteria_scores.qualifications_match)}`}>
+                              {matchDetails.criteria_scores.qualifications_match}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-purple-500 h-2 rounded-full transition-all duration-500"
+                              style={{ width: `${matchDetails.criteria_scores.qualifications_match}%` }}
+                            />
+                          </div>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-purple-500 h-2 rounded-full transition-all duration-500"
-                            style={{ width: `${matchDetails.criteria_scores.qualifications_match}%` }}
-                          />
-                        </div>
-                      </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -785,7 +825,7 @@ const JobDetails: React.FC = () => {
             {/* Right Column - Sidebar with FULL Match Analysis */}
             <div className="space-y-6">
               {/* Match Score Card */}
-              {matchScore && matchDetails && (
+              {matchScore != null && matchDetails && (
                 <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
                   <div className="text-center">
                     <div className="relative inline-flex items-center justify-center mb-4">
@@ -816,50 +856,74 @@ const JobDetails: React.FC = () => {
                           : 'Consider updating your profile to better match this role.'}
                     </p>
 
-                    {/* Factor Breakdown */}
-                    <div className="space-y-3 text-left mb-4">
-                      <p className="text-xs font-semibold text-white/80">Match Breakdown:</p>
+                    {/* Matcher (70%) + Hybrid (30%) split — same blend shown in the job feed */}
+                    {(matchDetails.matcher_score != null || matchDetails.hybrid_score != null) && (
+                      <div className="flex justify-center gap-4 mb-3 text-xs text-white/80">
+                        {matchDetails.matcher_score != null && <span>🎯 Profile Match: {Math.round(matchDetails.matcher_score)}%</span>}
+                        {matchDetails.hybrid_score != null && <span>🧠 Hybrid Recommender: {Math.round(matchDetails.hybrid_score)}%</span>}
+                      </div>
+                    )}
 
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> Skills</span>
-                          <span>{matchDetails.criteria_scores.skills_match}%</span>
+                    {/* Factor Breakdown — only real when the profile matcher scored this job */}
+                    {matchDetails.hasBreakdown ? (
+                      <div className="space-y-3 text-left mb-4">
+                        <p className="text-xs font-semibold text-white/80">Match Breakdown:</p>
+
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> Skills</span>
+                            <span>{matchDetails.criteria_scores.skills_match}%</span>
+                          </div>
+                          <div className="w-full bg-white/20 rounded-full h-1.5">
+                            <div className="bg-green-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.skills_match}%` }} />
+                          </div>
                         </div>
-                        <div className="w-full bg-white/20 rounded-full h-1.5">
-                          <div className="bg-green-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.skills_match}%` }} />
+
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3" /> Qualifications</span>
+                            <span>{matchDetails.criteria_scores.qualifications_match}%</span>
+                          </div>
+                          <div className="w-full bg-white/20 rounded-full h-1.5">
+                            <div className="bg-blue-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.qualifications_match}%` }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> Experience</span>
+                            <span>{matchDetails.criteria_scores.experience_match}%</span>
+                          </div>
+                          <div className="w-full bg-white/20 rounded-full h-1.5">
+                            <div className="bg-yellow-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.experience_match}%` }} />
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="flex items-center gap-1"><Target className="w-3 h-3" /> Preferences</span>
+                            <span>{matchDetails.criteria_scores.preferences_match}%</span>
+                          </div>
+                          <div className="w-full bg-white/20 rounded-full h-1.5">
+                            <div className="bg-purple-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.preferences_match}%` }} />
+                          </div>
                         </div>
                       </div>
+                    ) : (
+                      <p className="text-xs text-white/70 mb-4">Scored by the AI hybrid recommender only — the profile matcher hasn't evaluated this job yet.</p>
+                    )}
 
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3" /> Qualifications</span>
-                          <span>{matchDetails.criteria_scores.qualifications_match}%</span>
-                        </div>
-                        <div className="w-full bg-white/20 rounded-full h-1.5">
-                          <div className="bg-blue-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.qualifications_match}%` }} />
-                        </div>
+                    {/* Why this job matched (explainable AI) */}
+                    {(matchDetails.reasons?.length ?? 0) > 0 && (
+                      <div className="text-left mb-4 space-y-1">
+                        <p className="text-xs font-semibold text-white/80">Why we recommended this:</p>
+                        {matchDetails.reasons!.map((r, i) => (
+                          <p key={i} className="text-xs text-white/90 flex items-start gap-1">
+                            <CheckCircle className="w-3 h-3 mt-0.5 shrink-0" /> {r}
+                          </p>
+                        ))}
                       </div>
-
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="flex items-center gap-1"><Briefcase className="w-3 h-3" /> Experience</span>
-                          <span>{matchDetails.criteria_scores.experience_match}%</span>
-                        </div>
-                        <div className="w-full bg-white/20 rounded-full h-1.5">
-                          <div className="bg-yellow-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.experience_match}%` }} />
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="flex items-center gap-1"><Target className="w-3 h-3" /> Preferences</span>
-                          <span>{matchDetails.criteria_scores.preferences_match}%</span>
-                        </div>
-                        <div className="w-full bg-white/20 rounded-full h-1.5">
-                          <div className="bg-purple-400 h-1.5 rounded-full" style={{ width: `${matchDetails.criteria_scores.preferences_match}%` }} />
-                        </div>
-                      </div>
-                    </div>
+                    )}
 
                     <button
                       onClick={() => navigate('/dashboard?view=profile')}
@@ -900,8 +964,10 @@ const JobDetails: React.FC = () => {
                 </div>
               )}
 
-              {/* Experience Match Details Card */}
-              {matchDetails && (
+              {/* Experience Match Details Card — hidden when the profile matcher
+                  never scored this job, since every field below would just be
+                  a zeroed placeholder rather than a real "0" */}
+              {matchDetails && matchDetails.hasBreakdown && (
                 <div className="bg-white rounded-2xl shadow-sm p-6">
                   <button
                     onClick={() => toggleSection('experience')}
@@ -977,8 +1043,8 @@ const JobDetails: React.FC = () => {
                 </div>
               )}
 
-              {/* Preferences Match Details */}
-              {matchDetails && (
+              {/* Preferences Match Details — same reasoning as Experience above */}
+              {matchDetails && matchDetails.hasBreakdown && (
                 <div className="bg-white rounded-2xl shadow-sm p-6">
                   <button
                     onClick={() => toggleSection('preferences')}

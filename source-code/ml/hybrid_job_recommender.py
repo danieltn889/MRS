@@ -1,0 +1,2466 @@
+#!/usr/bin/env python3
+"""
+SimuHire Rwanda — Hybrid Job Recommender  (DB-backed live microservice)
+========================================================================
+Live counterpart of Job_Feed/hybrid_job_recommender.py (the CSV/offline
+prototype). Same three-signal design, wired directly to Postgres instead
+of synthetic CSVs:
+
+    1. ContentBasedModel   - candidate/job similarity (shared TF-IDF space)
+    2. CollaborativeModel  - implicit-feedback matrix factorization (PyTorch)
+    3. BehaviorModel       - recency-weighted preference over job attributes
+
+    Final Score = w_content * Content + w_collab * Collaborative + w_behavior * Behavior
+
+Runs as its own FastAPI service (default port 8003), proxied through
+gateway.py at /hybrid, the same way feed_recommender.py (/feed) and
+ai_job_matcher_og.py (/matcher) are.
+
+Endpoints
+---------
+    POST /score     {candidate_id, top_n?}  -> ranked jobs + score breakdown
+    POST /refresh    retrain from current DB state (call after bulk data changes)
+    GET  /health     model status: candidates/jobs/interactions loaded, last trained
+
+Why direct DB access (unlike ai_job_matcher_og.py, which calls the backend
+REST API): the collaborative model needs the FULL cross-candidate
+interaction matrix (every view/save/application across every candidate) to
+train, and no bulk endpoint like that exists in the backend today. Reusing
+the same read-only Postgres credentials as the backend (source-code/backend/.env)
+avoids standing up new bulk API surface just for this.
+"""
+
+import os
+import sys
+import time
+import math
+import threading
+import argparse
+import json
+import queue
+from dataclasses import dataclass, field
+from datetime import datetime, date
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+# NOTE: deliberately NOT forcing TRANSFORMERS_OFFLINE here. Tried it first
+# (same as ai_job_matcher_og.py) expecting it to avoid a slow/hung HuggingFace
+# Hub version-check on startup — instead it made model loading fail
+# deterministically ("does not appear to have a file named pytorch_model.bin
+# or model.safetensors") against this exact cache + transformers version,
+# confirmed by isolated testing: offline=fails every time, online=loads in
+# under a second since the model IS cached. SemanticEncoder's own retry loop
+# (below) is the actual defense against a slow/flaky connection.
+
+import subprocess
+for pkg in ["fastapi", "uvicorn", "numpy", "pandas", "scipy", "scikit-learn", "torch", "psycopg2-binary", "python-dotenv", "requests"]:
+    mod = {"scikit-learn": "sklearn", "psycopg2-binary": "psycopg2", "python-dotenv": "dotenv"}.get(pkg, pkg.replace("-", "_"))
+    try:
+        __import__(mod)
+    except ImportError:
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg, "--quiet"])
+
+import logging
+import requests
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+import psycopg2
+import psycopg2.extras
+from dotenv import load_dotenv
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import normalize as sk_normalize
+
+import torch
+import torch.nn as nn
+from torch.utils.data import Dataset, DataLoader as TorchDataLoader
+
+from fastapi import FastAPI, HTTPException, Header
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+import uvicorn
+
+# ==========================================================================
+# 1. CONFIGURATION
+# ==========================================================================
+
+# Reuse the backend's DB credentials rather than duplicating a secret file.
+load_dotenv(Path(__file__).resolve().parent.parent / "backend" / ".env")
+
+
+@dataclass
+class DBConfig:
+    host: str = os.getenv("DB_HOST", "localhost")
+    port: int = int(os.getenv("DB_PORT", "8090"))
+    name: str = os.getenv("DB_NAME", "SVWR-CFE_DB")
+    user: str = os.getenv("DB_USER", "postgres")
+    password: str = os.getenv("DB_PASSWORD", "TN12")
+
+
+@dataclass
+class HybridWeights:
+    """Content 35% + Behavior 30% + Collaborative 20% + Freshness 10% +
+    Popularity 5% = 100%. Business-rule (salary fit, verified employer, etc.)
+    is deliberately NOT a 6th weighted component here — it's a policy
+    adjustment (does this job clear a minimum bar?), not a continuous
+    similarity signal, so it's applied as a bonus/gate multiplier on top of
+    the weighted sum instead of diluting the other five weights."""
+    content: float = 0.35
+    behavior: float = 0.30
+    collaborative: float = 0.20
+    freshness: float = 0.10
+    popularity: float = 0.05
+
+    def normalized(self, has_collab: bool, has_behavior: bool) -> "HybridWeights":
+        """Cold-start-safe renormalization: a fresh/dev DB may have zero
+        interaction history, so collaborative/behavior signals may be
+        untrained. Redistribute their weight onto whatever signals exist
+        rather than silently scoring everyone 0 on a missing component.
+        Freshness/popularity are always computable (pure job attributes,
+        no candidate history needed), so they're never zeroed out here."""
+        c = self.content
+        b = self.behavior if has_behavior else 0.0
+        k = self.collaborative if has_collab else 0.0
+        f, p = self.freshness, self.popularity
+        total = c + b + k + f + p
+        if total <= 0:
+            return HybridWeights(content=1.0, behavior=0.0, collaborative=0.0, freshness=0.0, popularity=0.0)
+        return HybridWeights(content=c / total, behavior=b / total, collaborative=k / total,
+                              freshness=f / total, popularity=p / total)
+
+
+@dataclass
+class MFConfig:
+    embedding_dim: int = 32
+    epochs: int = 8
+    batch_size: int = 2048
+    learning_rate: float = 5e-3
+    weight_decay: float = 1e-6
+    negative_sampling_ratio: int = 4
+    device: str = "auto"
+    random_state: int = 42
+    val_fraction: float = 0.1
+    early_stopping_patience: int = 3
+    min_interactions_to_train: int = 20  # below this, collaborative signal is unreliable noise
+
+
+@dataclass
+class ContentConfig:
+    text_max_features: int = 2000
+    ngram_range: Tuple[int, int] = (1, 1)
+    min_df: int = 1
+
+
+@dataclass
+class BehaviorConfig:
+    recency_half_life_days: int = 60
+    max_events_per_candidate: int = 300
+
+
+@dataclass
+class InteractionWeights:
+    view: float = 1.0
+    save: float = 3.0
+    application_status: Dict[str, float] = field(default_factory=lambda: {
+        "submitted": 5.0, "under_review": 5.0, "shortlisted": 7.0,
+        "interview": 8.0, "assessment": 8.0, "reference_check": 8.5,
+        "offer": 9.5, "hired": 10.0, "rejected": 2.0,
+        "withdrawn": 2.0, "on_hold": 6.0,
+    })
+
+    @property
+    def max_weight(self) -> float:
+        return max([self.view, self.save] + list(self.application_status.values()))
+
+
+@dataclass
+class RecommenderConfig:
+    db: DBConfig = field(default_factory=DBConfig)
+    hybrid_weights: HybridWeights = field(default_factory=HybridWeights)
+    mf: MFConfig = field(default_factory=MFConfig)
+    content: ContentConfig = field(default_factory=ContentConfig)
+    behavior: BehaviorConfig = field(default_factory=BehaviorConfig)
+    interaction_weights: InteractionWeights = field(default_factory=InteractionWeights)
+    top_k_default: int = 20
+    log_dir: Path = Path(__file__).parent / "logs"
+    port: int = 8003
+    realtime_batch_size: int = 100
+    realtime_flush_seconds: float = 1.5
+    realtime_collaborative_retrain_delay_seconds: float = 8.0
+    realtime_notification_channel: str = "recommender_events"
+    webhook_secret: str = os.getenv("RECOMMENDER_WEBHOOK_SECRET", "")
+
+
+@dataclass
+class RealtimeEvent:
+    event_type: str
+    entity_type: str
+    operation: str
+    entity_id: Optional[str] = None
+    candidate_id: Optional[str] = None
+    job_id: Optional[str] = None
+    payload: Dict[str, Any] = field(default_factory=dict)
+    source: str = "webhook"
+    created_at: Optional[str] = None
+
+
+def get_logger(name: str, log_dir: Path) -> logging.Logger:
+    logger = logging.getLogger(name)
+    if logger.handlers:
+        return logger
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s")
+
+    console = logging.StreamHandler()
+    console.setFormatter(fmt)
+    logger.addHandler(console)
+
+    log_dir.mkdir(parents=True, exist_ok=True)
+    fh = RotatingFileHandler(log_dir / "hybrid_recommender.log", maxBytes=10_000_000, backupCount=3)
+    fh.setFormatter(fmt)
+    logger.addHandler(fh)
+
+    logger.propagate = False
+    return logger
+
+
+CFG = RecommenderConfig()
+log = get_logger("hybrid_recommender", CFG.log_dir)
+
+
+# ==========================================================================
+# 2. DATABASE ACCESS
+# ==========================================================================
+
+class Database:
+    """Read-only access to the real schema. Every query below matches the
+    actual column names in db/migrations — not the CSV headers from the
+    offline prototype."""
+
+    def __init__(self, cfg: DBConfig):
+        self.cfg = cfg
+
+    def _connect(self):
+        return psycopg2.connect(
+            host=self.cfg.host, port=self.cfg.port, dbname=self.cfg.name,
+            user=self.cfg.user, password=self.cfg.password,
+        )
+
+    def _query_df(self, sql: str) -> pd.DataFrame:
+        with self._connect() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(sql)
+                rows = cur.fetchall()
+        return pd.DataFrame([dict(r) for r in rows])
+
+    def fetch_active_jobs(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT j.id, j.title, j.slug, j.department, j.job_type, j.work_arrangement,
+                   j.locations, j.skills_required, j.skills_preferred,
+                   j.experience_level, j.experience_min, j.experience_max,
+                   j.education_required, j.qualifications, j.description,
+                   j.language_requirements, j.salary_min, j.salary_max,
+                   j.salary_currency, j.salary_period, j.screening_questions,
+                   j.ai_match_required_score, j.published_at, j.expires_at,
+                   j.created_at, j.view_count, j.application_count,
+                   c.id AS company_id, c.name AS company_name, c.verification_badge, c.logo_url
+            FROM jobs j
+            JOIN companies c ON c.id = j.company_id
+            WHERE j.status = 'active'
+              AND (j.expires_at IS NULL OR j.expires_at > now())
+              AND (j.published_at IS NULL OR j.published_at <= now())
+              AND j.deleted_at IS NULL
+        """)
+
+    def fetch_job_by_id(self, job_id: str) -> Optional[dict]:
+        df = self._query_df(f"""
+            SELECT j.id, j.title, j.slug, j.department, j.job_type, j.work_arrangement,
+                   j.locations, j.skills_required, j.skills_preferred,
+                   j.experience_level, j.experience_min, j.experience_max,
+                   j.education_required, j.qualifications, j.description,
+                   j.language_requirements, j.salary_min, j.salary_max,
+                   j.salary_currency, j.salary_period, j.screening_questions,
+                   j.ai_match_required_score, j.published_at, j.expires_at,
+                   j.created_at, j.view_count, j.application_count,
+                   c.id AS company_id, c.name AS company_name, c.verification_badge, c.logo_url
+            FROM jobs j
+            JOIN companies c ON c.id = j.company_id
+            WHERE j.id = '{job_id}'::uuid
+        """)
+        return df.iloc[0].to_dict() if not df.empty else None
+
+    def fetch_candidates(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT u.id AS user_id, cp.city, cp.country, cp.headline,
+                   cp.summary, cp.job_preferences, cp.languages, cp.expected_salary
+            FROM users u
+            JOIN candidate_profiles cp ON cp.user_id = u.id
+            WHERE u.user_type = 'candidate' AND u.deleted_at IS NULL
+        """)
+
+    def fetch_candidate_by_id(self, user_id: str) -> Optional[dict]:
+        df = self._query_df(f"""
+            SELECT u.id AS user_id, cp.city, cp.country, cp.headline,
+                   cp.summary, cp.job_preferences, cp.languages, cp.expected_salary
+            FROM users u
+            JOIN candidate_profiles cp ON cp.user_id = u.id
+            WHERE u.id = '{user_id}'::uuid AND u.deleted_at IS NULL
+        """)
+        return df.iloc[0].to_dict() if not df.empty else None
+
+    def fetch_candidate_skills(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT us.user_id, s.name AS skill_name, us.years_experience
+            FROM user_skills us
+            JOIN skills s ON s.id = us.skill_id
+        """)
+
+    def fetch_candidate_education(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT user_id, degree, field_of_study FROM education
+        """)
+
+    def fetch_candidate_certifications(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT user_id, name AS certification_name FROM certifications
+        """)
+
+    def fetch_candidate_work_experience(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT user_id, title, skills, industry, start_date, end_date, is_current
+            FROM work_experience
+        """)
+
+    def fetch_view_events(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT user_id, job_id, viewed_at AS event_date FROM job_views
+        """)
+
+    def fetch_application_events(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT user_id, job_id, applied_at AS event_date, status
+            FROM applications WHERE deleted_at IS NULL
+        """)
+
+    def fetch_save_events(self) -> pd.DataFrame:
+        return self._query_df("""
+            SELECT user_id, job_id, saved_at AS event_date FROM saved_jobs
+        """)
+
+    def fetch_ignored_pairs(self) -> pd.DataFrame:
+        return self._query_df("SELECT user_id, job_id FROM ignored_jobs")
+
+    def fetch_search_events(self) -> pd.DataFrame:
+        return self._query_df("SELECT user_id, query, searched_at FROM job_searches")
+
+    def upsert_feed_scores(self, rows: List[Tuple[str, str, float]]) -> None:
+        if not rows:
+            return
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                psycopg2.extras.execute_values(cur, """
+                    INSERT INTO feed_scores (candidate_id, job_id, score, computed_at)
+                    VALUES %s
+                    ON CONFLICT (candidate_id, job_id)
+                    DO UPDATE SET score = EXCLUDED.score, computed_at = EXCLUDED.computed_at
+                """, [(cid, jid, score, datetime.now()) for cid, jid, score in rows],
+                    template="(%s, %s, %s, %s)")
+            conn.commit()
+
+
+# ==========================================================================
+# 3. TEXT EXTRACTION HELPERS (real jsonb/array shapes, not CSV columns)
+# ==========================================================================
+
+def _s(x) -> str:
+    """Safe string coercion for nullable DB text fields. A DataFrame column
+    that is NULL for every row (common on a small dev dataset) gets coerced
+    by pandas to float64 NaN rather than None/"" — and `nan or ""` still
+    evaluates to `nan` (NaN is truthy), which breaks `" ".join(...)` with a
+    'expected str instance, float found' error. Route every nullable field
+    through this instead of `x or ""`."""
+    if x is None:
+        return ""
+    if isinstance(x, float) and math.isnan(x):
+        return ""
+    return str(x)
+
+
+def _skill_list_text(raw) -> str:
+    if not raw:
+        return ""
+    items = raw if isinstance(raw, list) else []
+    names = [x.get("name", "") if isinstance(x, dict) else str(x) for x in items]
+    return " ".join(n for n in names if n)
+
+
+def job_skills_text(row) -> str:
+    return " ".join(filter(None, [_skill_list_text(row.get("skills_required")),
+                                   _skill_list_text(row.get("skills_preferred"))]))
+
+
+def job_fields_text(row) -> str:
+    edu = row.get("education_required") or {}
+    if not isinstance(edu, dict):
+        edu = {}
+    parts = [_s(edu.get("minimum_degree"))]
+    parts += [str(f) for f in (edu.get("allowed_fields") or [])]
+    if not any(parts):
+        parts = [_s(row.get("qualifications"))]
+    return " ".join(p for p in parts if p)
+
+
+def job_location_text(row) -> str:
+    locs = row.get("locations") or []
+    parts = [_s(row.get("work_arrangement"))]
+    if isinstance(locs, list):
+        for loc in locs:
+            if isinstance(loc, dict):
+                parts.append(_s(loc.get("city")))
+                parts.append(_s(loc.get("country")))
+    return " ".join(p for p in parts if p)
+
+
+def job_title_text(row) -> str:
+    return " ".join(p for p in [_s(row.get("title")), _s(row.get("department"))] if p)
+
+
+def _jsonable(value):
+    """psycopg2 already parses jsonb columns into Python list/dict, but NaN
+    (from a column that's NULL for a row with mixed non-null siblings) isn't
+    valid JSON — normalize to None/[] so FastAPI's response encoder doesn't choke."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return None
+    return value
+
+
+def job_details_dict(job_row: pd.Series) -> dict:
+    """Full job payload for the frontend — one call gets both the ranking
+    score AND everything needed to render the job card, instead of a second
+    round-trip per job. Field names mirror what ai_job_matcher_og.py already
+    returned (job.locations, job.skills_required, etc.) so existing frontend
+    parsing logic for those needs minimal changes."""
+    return {
+        "id": str(job_row.get("id", "")),
+        "title": _s(job_row.get("title")),
+        "slug": _s(job_row.get("slug")) or None,
+        "company_name": _s(job_row.get("company_name")),
+        "company_logo": _s(job_row.get("logo_url")) or None,
+        "department": _s(job_row.get("department")) or None,
+        "job_type": _s(job_row.get("job_type")) or None,
+        "work_arrangement": _s(job_row.get("work_arrangement")) or None,
+        "experience_level": _s(job_row.get("experience_level")) or None,
+        "experience_min": None if pd.isna(job_row.get("experience_min")) else int(job_row.get("experience_min")),
+        "experience_max": None if pd.isna(job_row.get("experience_max")) else int(job_row.get("experience_max")),
+        "locations": _jsonable(job_row.get("locations")) or [],
+        "skills_required": _jsonable(job_row.get("skills_required")) or [],
+        "skills_preferred": _jsonable(job_row.get("skills_preferred")) or [],
+        "education_required": _jsonable(job_row.get("education_required")) or {},
+        "qualifications": _s(job_row.get("qualifications")) or None,
+        "description": _s(job_row.get("description")),
+        "language_requirements": _jsonable(job_row.get("language_requirements")) or [],
+        "screening_questions": _jsonable(job_row.get("screening_questions")) or [],
+        "salary_min": None if pd.isna(job_row.get("salary_min")) else float(job_row.get("salary_min")),
+        "salary_max": None if pd.isna(job_row.get("salary_max")) else float(job_row.get("salary_max")),
+        "salary_currency": _s(job_row.get("salary_currency")) or None,
+        "salary_period": _s(job_row.get("salary_period")) or None,
+        "published_at": _s(job_row.get("published_at")) or None,
+        "expires_at": _s(job_row.get("expires_at")) or None,
+    }
+
+
+def job_experience_years(row) -> float:
+    lo, hi = row.get("experience_min"), row.get("experience_max")
+    lo = None if pd.isna(lo) else lo
+    hi = None if pd.isna(hi) else hi
+    if lo is not None and hi is not None:
+        return (float(lo) + float(hi)) / 2
+    return float(lo or hi or 0)
+
+
+def _years_between(start, end, is_current: bool) -> float:
+    if start is None or pd.isna(start):
+        return 0.0
+    end_is_missing = end is None or pd.isna(end)
+    end_d = date.today() if is_current or end_is_missing else end
+    if isinstance(start, str):
+        start = datetime.fromisoformat(start).date()
+    if isinstance(end_d, str):
+        end_d = datetime.fromisoformat(end_d).date()
+    if isinstance(start, datetime):
+        start = start.date()
+    if isinstance(end_d, datetime):
+        end_d = end_d.date()
+    days = (end_d - start).days
+    return max(0.0, days / 365.25)
+
+
+def _parse_language_list(raw) -> List[str]:
+    """candidate_profiles.languages / jobs.language_requirements are both
+    jsonb lists of {"name": ...} objects (see candidates.py/jobs.py in the
+    Job_Feed generator) — normalize both shapes (also tolerate a plain list
+    of strings) to a flat list of language names."""
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for item in raw:
+        if isinstance(item, dict):
+            name = item.get("name")
+            if name:
+                out.append(str(name))
+        elif isinstance(item, str):
+            out.append(item)
+    return out
+
+
+# ==========================================================================
+# 3.5 SEMANTIC ENCODER — Model 1's "understand relationships, not just exact
+# keyword overlap" requirement (e.g. candidate skill "Python" should pull in
+# "Backend Developer" / "Machine Learning Engineer", not just literal
+# "Python Developer" postings). Pure TF-IDF only overlaps on shared tokens;
+# sentence embeddings place semantically related phrases near each other in
+# vector space even with zero shared words. Falls back to TF-IDF-only
+# similarity (still functional, just less semantic) if the model can't load
+# — this service must keep working on a machine with no internet access to
+# download the model.
+# ==========================================================================
+
+class SemanticEncoder:
+    MODEL_NAME = "all-MiniLM-L6-v2"
+
+    def __init__(self, retries: int = 3, retry_delay: float = 3.0):
+        self.model = None
+        self._cache: Dict[str, np.ndarray] = {}
+        # gateway.py starts every microservice in parallel — ai_job_matcher_og.py
+        # loads this SAME cached model at roughly the same moment, and on Windows
+        # that concurrent access to the HuggingFace cache can transiently fail
+        # ("does not appear to have a file named ...") even though the files are
+        # genuinely present; a short retry rides out that race instead of
+        # permanently degrading to TF-IDF-only for the rest of the process.
+        last_error = None
+        for attempt in range(1, retries + 1):
+            try:
+                from sentence_transformers import SentenceTransformer
+                self.model = SentenceTransformer(self.MODEL_NAME)
+                log.info("Semantic encoder loaded (%s) on attempt %d", self.MODEL_NAME, attempt)
+                break
+            except Exception as e:
+                last_error = e
+                if attempt < retries:
+                    log.warning("Semantic encoder load attempt %d/%d failed (%s) — retrying in %.0fs",
+                                attempt, retries, e, retry_delay)
+                    time.sleep(retry_delay)
+        if self.model is None:
+            log.warning("Semantic encoder unavailable after %d attempts (%s) — falling back to "
+                        "TF-IDF-only content matching.", retries, last_error)
+
+    @property
+    def available(self) -> bool:
+        return self.model is not None
+
+    def encode(self, text: str) -> Optional[np.ndarray]:
+        if not self.model or not text or not text.strip():
+            return None
+        if text in self._cache:
+            return self._cache[text]
+        vec = self.model.encode([text], show_progress_bar=False)[0]
+        self._cache[text] = vec
+        return vec
+
+    def encode_batch(self, texts: List[str]) -> Optional[np.ndarray]:
+        """Returns an (n, dim) matrix, or None if the model isn't available.
+        Uncached texts are embedded in one batch call (much faster than
+        encoding one at a time for bulk fit-time use)."""
+        if not self.model:
+            return None
+        missing = [t for t in texts if t and t.strip() and t not in self._cache]
+        if missing:
+            vecs = self.model.encode(missing, show_progress_bar=False, batch_size=64)
+            for t, v in zip(missing, vecs):
+                self._cache[t] = v
+        dim = self.model.get_sentence_embedding_dimension()
+        return np.array([self._cache.get(t, np.zeros(dim)) for t in texts])
+
+    def similarity(self, text_a: str, text_b: str) -> float:
+        va, vb = self.encode(text_a), self.encode(text_b)
+        if va is None or vb is None:
+            return 0.0
+        na, nb = np.linalg.norm(va), np.linalg.norm(vb)
+        if na == 0 or nb == 0:
+            return 0.0
+        return float(np.dot(va, vb) / (na * nb))
+
+
+# ==========================================================================
+# 4. PREPROCESSING — id maps + weighted interaction matrix
+# ==========================================================================
+
+class Preprocessor:
+    def __init__(self, cfg: RecommenderConfig):
+        self.cfg = cfg
+        self.candidate_id_to_idx: Dict[str, int] = {}
+        self.job_id_to_idx: Dict[str, int] = {}
+        self.idx_to_candidate_id: List[str] = []
+        self.idx_to_job_id: List[str] = []
+
+    def fit_id_maps(self, candidates: pd.DataFrame, jobs: pd.DataFrame) -> None:
+        self.idx_to_candidate_id = candidates["user_id"].astype(str).tolist()
+        self.candidate_id_to_idx = {cid: i for i, cid in enumerate(self.idx_to_candidate_id)}
+        self.idx_to_job_id = jobs["id"].astype(str).tolist()
+        self.job_id_to_idx = {jid: i for i, jid in enumerate(self.idx_to_job_id)}
+
+    def build_events(self, views: pd.DataFrame, applications: pd.DataFrame,
+                      saves: pd.DataFrame) -> pd.DataFrame:
+        iw = self.cfg.interaction_weights
+        parts = []
+
+        for df, weight_col in ((views, None), (saves, None)):
+            if df.empty:
+                continue
+            d = df.copy()
+            d = d[d["user_id"].astype(str).isin(self.candidate_id_to_idx) &
+                  d["job_id"].astype(str).isin(self.job_id_to_idx)]
+            d["candidate_idx"] = d["user_id"].astype(str).map(self.candidate_id_to_idx)
+            d["job_idx"] = d["job_id"].astype(str).map(self.job_id_to_idx)
+            d["weight"] = iw.view if df is views else iw.save
+            parts.append(d[["candidate_idx", "job_idx", "event_date", "weight"]])
+
+        if not applications.empty:
+            d = applications.copy()
+            d = d[d["user_id"].astype(str).isin(self.candidate_id_to_idx) &
+                  d["job_id"].astype(str).isin(self.job_id_to_idx)]
+            d["candidate_idx"] = d["user_id"].astype(str).map(self.candidate_id_to_idx)
+            d["job_idx"] = d["job_id"].astype(str).map(self.job_id_to_idx)
+            d["weight"] = d["status"].map(iw.application_status).fillna(iw.application_status["submitted"])
+            parts.append(d[["candidate_idx", "job_idx", "event_date", "weight"]])
+
+        if not parts:
+            return pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
+
+        events = pd.concat(parts, ignore_index=True).dropna(subset=["candidate_idx", "job_idx"])
+        events["candidate_idx"] = events["candidate_idx"].astype(np.int32)
+        events["job_idx"] = events["job_idx"].astype(np.int32)
+        events["event_date"] = pd.to_datetime(events["event_date"], utc=True)
+        return events
+
+    def build_interaction_matrix(self, events: pd.DataFrame, n_candidates: int, n_jobs: int) -> sp.csr_matrix:
+        if events.empty:
+            return sp.csr_matrix((n_candidates, n_jobs), dtype=np.float32)
+        agg = events.groupby(["candidate_idx", "job_idx"], as_index=False)["weight"].max()
+        return sp.csr_matrix(
+            (agg["weight"].values.astype(np.float32),
+             (agg["candidate_idx"].values, agg["job_idx"].values)),
+            shape=(n_candidates, n_jobs),
+        )
+
+
+# ==========================================================================
+# 5. CONTENT-BASED MODEL
+# ==========================================================================
+
+class ContentBasedModel:
+    """MODEL 1 — content-based recommendation.
+
+    Two similarity signals, blended:
+      1. TF-IDF cosine over shared vocabularies (skills/fields/location/title/
+         languages/certifications) — exact-ish lexical overlap.
+      2. Sentence embeddings over "skills + title" text (SemanticEncoder) —
+         captures relationships TF-IDF can't: a candidate skilled in "Python"
+         should surface "Backend Developer" / "Machine Learning Engineer"
+         even though neither shares a token with "Python", because those
+         phrases sit near each other in embedding space.
+
+    Fitting one TF-IDF vectorizer per pair on BOTH sides' text combined is
+    what makes a candidate's skills and a job's requirements comparable via
+    cosine similarity at all — separate vocabularies would put them in
+    different coordinate spaces."""
+
+    PAIRS = ["skills", "fields", "location", "title", "languages", "certifications"]
+    SEMANTIC_WEIGHT = 0.5  # blend ratio: semantic vs TF-IDF, when semantic is available
+
+    def __init__(self, cfg: ContentConfig, encoder: Optional[SemanticEncoder] = None):
+        self.cfg = cfg
+        self.encoder = encoder
+        self._tfidf: Dict[str, TfidfVectorizer] = {}
+        self._exp_scaler: Optional[MinMaxScaler] = None
+        self.job_matrix: Optional[sp.csr_matrix] = None
+        self.job_semantic_matrix: Optional[np.ndarray] = None
+        self.candidate_semantic_matrix: Optional[np.ndarray] = None
+        self._cand_text: Optional[pd.DataFrame] = None
+        self._job_text: Optional[pd.DataFrame] = None
+        self.candidate_ids: List[str] = []
+        self.job_ids: List[str] = []
+        self.candidate_id_to_idx: Dict[str, int] = {}
+        self.job_id_to_idx: Dict[str, int] = {}
+
+    def _candidate_text_frame(self, candidates: pd.DataFrame, skills_df: pd.DataFrame,
+                               education_df: pd.DataFrame, work_df: pd.DataFrame,
+                               certifications_df: pd.DataFrame = None) -> pd.DataFrame:
+        skills_by_user = skills_df.groupby("user_id")["skill_name"].apply(list).to_dict() if not skills_df.empty else {}
+        fields_by_user = education_df.groupby("user_id")["field_of_study"].apply(list).to_dict() if not education_df.empty else {}
+        certs_by_user = (certifications_df.groupby("user_id")["certification_name"].apply(list).to_dict()
+                          if certifications_df is not None and not certifications_df.empty else {})
+        work_by_user = work_df.groupby("user_id") if not work_df.empty else None
+
+        rows = []
+        for _, cand in candidates.iterrows():
+            uid = str(cand["user_id"])
+            prefs = cand.get("job_preferences") or {}
+            if not isinstance(prefs, dict):
+                prefs = {}
+            skills_list = skills_by_user.get(uid, [])
+            skills_text = " ".join(skills_list)
+            fields_text = " ".join(fields_by_user.get(uid, []))
+            certifications_text = " ".join(certs_by_user.get(uid, []))
+            languages_text = " ".join(_parse_language_list(cand.get("languages")))
+            location_text = " ".join(p for p in [_s(cand.get("city")), _s(cand.get("country")),
+                                                  _s(prefs.get("remote_preference"))] if p)
+            title_text = " ".join(p for p in [_s(cand.get("headline"))] +
+                                   list(prefs.get("job_types") or []) +
+                                   list(prefs.get("industries") or []) if p)
+            years = 0.0
+            if work_by_user is not None and uid in work_by_user.groups:
+                for _, w in work_by_user.get_group(uid).iterrows():
+                    years += _years_between(w.get("start_date"), w.get("end_date"), bool(w.get("is_current")))
+            rows.append({"user_id": uid, "skills": skills_text, "fields": fields_text,
+                         "location": location_text, "title": title_text,
+                         "languages": languages_text, "certifications": certifications_text,
+                         "experience_years": years,
+                         "semantic_text": f"{skills_text} {title_text}".strip()})
+        return pd.DataFrame(rows)
+
+    def _candidate_text_row(self, cand_row: dict, skills_df: pd.DataFrame,
+                            education_df: pd.DataFrame, work_df: pd.DataFrame,
+                            certifications_df: pd.DataFrame = None) -> pd.DataFrame:
+        return self._candidate_text_frame(pd.DataFrame([cand_row]), skills_df, education_df, work_df, certifications_df)
+
+    def _job_text_frame(self, jobs: pd.DataFrame) -> pd.DataFrame:
+        rows = []
+        for _, job in jobs.iterrows():
+            skills_t = job_skills_text(job)
+            title_t = job_title_text(job)
+            rows.append({
+                "id": str(job["id"]),
+                "skills": skills_t,
+                "fields": job_fields_text(job),
+                "location": job_location_text(job),
+                "title": title_t,
+                "languages": " ".join(_parse_language_list(job.get("language_requirements"))),
+                "certifications": " ".join(job.get("education_required", {}).get("certifications", [])
+                                            if isinstance(job.get("education_required"), dict) else []),
+                "experience_years": job_experience_years(job),
+                "semantic_text": f"{skills_t} {title_t}".strip(),
+            })
+        return pd.DataFrame(rows)
+
+    def _job_text_row(self, job_row: dict) -> pd.DataFrame:
+        return self._job_text_frame(pd.DataFrame([job_row]))
+
+    def fit(self, candidates: pd.DataFrame, jobs: pd.DataFrame, skills_df: pd.DataFrame,
+            education_df: pd.DataFrame, work_df: pd.DataFrame,
+            certifications_df: pd.DataFrame = None) -> None:
+        cand_text = self._candidate_text_frame(candidates, skills_df, education_df, work_df, certifications_df)
+        job_text = self._job_text_frame(jobs)
+        self._cand_text, self._job_text = cand_text, job_text
+        self.candidate_ids = cand_text["user_id"].astype(str).tolist()
+        self.job_ids = job_text["id"].astype(str).tolist()
+        self.candidate_id_to_idx = {cid: i for i, cid in enumerate(self.candidate_ids)}
+        self.job_id_to_idx = {jid: i for i, jid in enumerate(self.job_ids)}
+
+        cand_blocks, job_blocks = [], []
+        for pair in self.PAIRS:
+            cvals = cand_text[pair].fillna("")
+            jvals = job_text[pair].fillna("")
+            vec = TfidfVectorizer(max_features=self.cfg.text_max_features,
+                                   ngram_range=self.cfg.ngram_range, min_df=self.cfg.min_df,
+                                   token_pattern=r"[A-Za-z0-9]+")
+            combined = pd.concat([cvals, jvals])
+            if combined.str.strip().eq("").all():
+                # Nothing to vectorize for this pair yet (e.g. no jobs have skills set) —
+                # use a 1-dim zero block so matrix shapes still line up.
+                cand_blocks.append(sp.csr_matrix((len(cvals), 1)))
+                job_blocks.append(sp.csr_matrix((len(jvals), 1)))
+                continue
+            vec.fit(combined)
+            self._tfidf[pair] = vec
+            cand_blocks.append(vec.transform(cvals))
+            job_blocks.append(vec.transform(jvals))
+
+        cand_exp = cand_text["experience_years"].values.reshape(-1, 1)
+        job_exp = job_text["experience_years"].values.reshape(-1, 1)
+        self._exp_scaler = MinMaxScaler()
+        self._exp_scaler.fit(np.vstack([cand_exp, job_exp]))
+        cand_blocks.append(sp.csr_matrix(self._exp_scaler.transform(cand_exp)))
+        job_blocks.append(sp.csr_matrix(self._exp_scaler.transform(job_exp)))
+
+        self.candidate_matrix = sk_normalize(sp.hstack(cand_blocks).tocsr())
+        self.job_matrix = sk_normalize(sp.hstack(job_blocks).tocsr())
+
+        # Semantic embeddings computed once here (fit time), reused for every
+        # score_batch call — encoding is the expensive part, cosine similarity
+        # on the resulting dense vectors is cheap.
+        if self.encoder and self.encoder.available:
+            job_vecs = self.encoder.encode_batch(job_text["semantic_text"].tolist())
+            cand_vecs = self.encoder.encode_batch(cand_text["semantic_text"].tolist())
+            self.job_semantic_matrix = self._l2_normalize(job_vecs)
+            self.candidate_semantic_matrix = self._l2_normalize(cand_vecs)
+        else:
+            self.job_semantic_matrix = None
+            self.candidate_semantic_matrix = None
+
+    def _replace_sparse_row(self, matrix: Optional[sp.csr_matrix], row_idx: int, new_row: sp.csr_matrix) -> sp.csr_matrix:
+        if matrix is None:
+            return new_row.tocsr()
+        if matrix.shape[0] != row_idx + 1 and row_idx < matrix.shape[0]:
+            updated = matrix.tolil(copy=True)
+            updated[row_idx] = new_row
+            return updated.tocsr()
+        if row_idx == matrix.shape[0]:
+            return sp.vstack([matrix, new_row]).tocsr()
+        updated = matrix.tolil(copy=True)
+        updated[row_idx] = new_row
+        return updated.tocsr()
+
+    def _delete_sparse_row(self, matrix: Optional[sp.csr_matrix], row_idx: int) -> Optional[sp.csr_matrix]:
+        if matrix is None:
+            return None
+        if row_idx < 0 or row_idx >= matrix.shape[0]:
+            return matrix
+        keep = [i for i in range(matrix.shape[0]) if i != row_idx]
+        if not keep:
+            return sp.csr_matrix((0, matrix.shape[1]), dtype=matrix.dtype)
+        return matrix[keep]
+
+    def _replace_dense_row(self, matrix: Optional[np.ndarray], row_idx: int, new_row: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        if new_row is None:
+            return matrix
+        if matrix is None:
+            return np.asarray([new_row], dtype=np.float32)
+        if row_idx < 0 or row_idx >= matrix.shape[0]:
+            return matrix
+        updated = matrix.copy()
+        updated[row_idx] = new_row
+        return updated
+
+    def upsert_candidate(self, cand_row: dict, skills_df: pd.DataFrame,
+                         education_df: pd.DataFrame, work_df: pd.DataFrame,
+                         certifications_df: pd.DataFrame = None) -> None:
+        cand_id = str(cand_row.get("user_id", ""))
+        if not cand_id:
+            return
+        text = self._candidate_text_row(cand_row, skills_df, education_df, work_df, certifications_df)
+        tfidf_blocks = []
+        for pair in self.PAIRS:
+            vec = self._tfidf.get(pair)
+            if vec is None:
+                tfidf_blocks.append(sp.csr_matrix((1, 1)))
+            else:
+                tfidf_blocks.append(vec.transform(text[pair].fillna("")))
+        exp = text["experience_years"].values.reshape(-1, 1)
+        tfidf_blocks.append(sp.csr_matrix(self._exp_scaler.transform(exp)))
+        tfidf_row = sk_normalize(sp.hstack(tfidf_blocks).tocsr())
+
+        if cand_id in self.candidate_id_to_idx:
+            row_idx = self.candidate_id_to_idx[cand_id]
+        else:
+            row_idx = len(self.candidate_ids)
+            self.candidate_ids.append(cand_id)
+            self.candidate_id_to_idx[cand_id] = row_idx
+            self._cand_text = pd.concat([self._cand_text, text], ignore_index=True) if self._cand_text is not None else text
+
+        self.candidate_matrix = self._replace_sparse_row(self.candidate_matrix, row_idx, tfidf_row)
+        if self.encoder and self.encoder.available:
+            semantic_vec = self.encoder.encode(text["semantic_text"].iloc[0])
+            if semantic_vec is not None:
+                semantic_vec = semantic_vec / np.linalg.norm(semantic_vec) if np.linalg.norm(semantic_vec) > 0 else semantic_vec
+            self.candidate_semantic_matrix = self._replace_dense_row(self.candidate_semantic_matrix, row_idx, semantic_vec)
+
+    def upsert_job(self, job_row: dict) -> None:
+        job_id = str(job_row.get("id", ""))
+        if not job_id:
+            return
+        text = self._job_text_row(job_row)
+        tfidf_blocks = []
+        for pair in self.PAIRS:
+            vec = self._tfidf.get(pair)
+            if vec is None:
+                tfidf_blocks.append(sp.csr_matrix((1, 1)))
+            else:
+                tfidf_blocks.append(vec.transform(text[pair].fillna("")))
+        exp = text["experience_years"].values.reshape(-1, 1)
+        tfidf_blocks.append(sp.csr_matrix(self._exp_scaler.transform(exp)))
+        tfidf_row = sk_normalize(sp.hstack(tfidf_blocks).tocsr())
+
+        if job_id in self.job_id_to_idx:
+            row_idx = self.job_id_to_idx[job_id]
+        else:
+            row_idx = len(self.job_ids)
+            self.job_ids.append(job_id)
+            self.job_id_to_idx[job_id] = row_idx
+            self._job_text = pd.concat([self._job_text, text], ignore_index=True) if self._job_text is not None else text
+
+        self.job_matrix = self._replace_sparse_row(self.job_matrix, row_idx, tfidf_row)
+        if self.encoder and self.encoder.available:
+            semantic_vec = self.encoder.encode(text["semantic_text"].iloc[0])
+            if semantic_vec is not None:
+                semantic_vec = semantic_vec / np.linalg.norm(semantic_vec) if np.linalg.norm(semantic_vec) > 0 else semantic_vec
+            self.job_semantic_matrix = self._replace_dense_row(self.job_semantic_matrix, row_idx, semantic_vec)
+
+    def delete_candidate(self, candidate_id: str) -> None:
+        cand_id = str(candidate_id)
+        row_idx = self.candidate_id_to_idx.pop(cand_id, None)
+        if row_idx is None:
+            return
+        self.candidate_ids.pop(row_idx)
+        self.candidate_id_to_idx = {cid: i for i, cid in enumerate(self.candidate_ids)}
+        self.candidate_matrix = self._delete_sparse_row(self.candidate_matrix, row_idx)
+        self.candidate_semantic_matrix = None if self.candidate_semantic_matrix is None else np.delete(self.candidate_semantic_matrix, row_idx, axis=0)
+        if self._cand_text is not None and not self._cand_text.empty:
+            self._cand_text = self._cand_text[self._cand_text["user_id"].astype(str) != cand_id].reset_index(drop=True)
+
+    def delete_job(self, job_id: str) -> None:
+        jid = str(job_id)
+        row_idx = self.job_id_to_idx.pop(jid, None)
+        if row_idx is None:
+            return
+        self.job_ids.pop(row_idx)
+        self.job_id_to_idx = {j: i for i, j in enumerate(self.job_ids)}
+        self.job_matrix = self._delete_sparse_row(self.job_matrix, row_idx)
+        self.job_semantic_matrix = None if self.job_semantic_matrix is None else np.delete(self.job_semantic_matrix, row_idx, axis=0)
+        if self._job_text is not None and not self._job_text.empty:
+            self._job_text = self._job_text[self._job_text["id"].astype(str) != jid].reset_index(drop=True)
+
+    @staticmethod
+    def _l2_normalize(mat: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        if mat is None:
+            return None
+        norms = np.linalg.norm(mat, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return mat / norms
+
+    def transform_candidate_row(self, cand_row: dict, skills_df: pd.DataFrame,
+                                 education_df: pd.DataFrame, work_df: pd.DataFrame,
+                                 certifications_df: pd.DataFrame = None) -> Tuple[sp.csr_matrix, Optional[np.ndarray]]:
+        """Encode a single candidate (e.g. cold-start, not present at last
+        training run) through the already-fitted vectorizers/scaler. Returns
+        (tfidf_row, semantic_vec)."""
+        one = pd.DataFrame([cand_row])
+        text = self._candidate_text_frame(one, skills_df, education_df, work_df, certifications_df)
+        blocks = []
+        for pair in self.PAIRS:
+            vec = self._tfidf.get(pair)
+            val = text[pair].fillna("")
+            blocks.append(vec.transform(val) if vec is not None else sp.csr_matrix((1, 1)))
+        exp = text["experience_years"].values.reshape(-1, 1)
+        blocks.append(sp.csr_matrix(self._exp_scaler.transform(exp)))
+        tfidf_row = sk_normalize(sp.hstack(blocks).tocsr())
+
+        semantic_vec = None
+        if self.encoder and self.encoder.available:
+            semantic_vec = self.encoder.encode(text["semantic_text"].iloc[0])
+            if semantic_vec is not None:
+                n = np.linalg.norm(semantic_vec)
+                semantic_vec = semantic_vec / n if n > 0 else semantic_vec
+        return tfidf_row, semantic_vec
+
+    def _blend(self, tfidf_scores: np.ndarray, semantic_scores: Optional[np.ndarray]) -> np.ndarray:
+        if semantic_scores is None:
+            return tfidf_scores
+        return (1 - self.SEMANTIC_WEIGHT) * tfidf_scores + self.SEMANTIC_WEIGHT * np.clip(semantic_scores, 0.0, 1.0)
+
+    def score_batch(self, candidate_indices: np.ndarray) -> np.ndarray:
+        batch = self.candidate_matrix[candidate_indices]
+        tfidf_scores = np.clip(batch.dot(self.job_matrix.T).toarray(), 0.0, 1.0).astype(np.float32)
+
+        semantic_scores = None
+        if self.candidate_semantic_matrix is not None and self.job_semantic_matrix is not None:
+            semantic_scores = self.candidate_semantic_matrix[candidate_indices].dot(self.job_semantic_matrix.T)
+
+        return self._blend(tfidf_scores, semantic_scores).astype(np.float32)
+
+    def score_row(self, candidate_row_matrix: sp.csr_matrix, semantic_vec: Optional[np.ndarray] = None) -> np.ndarray:
+        tfidf_scores = np.clip(candidate_row_matrix.dot(self.job_matrix.T).toarray(), 0.0, 1.0).astype(np.float32)
+
+        semantic_scores = None
+        if semantic_vec is not None and self.job_semantic_matrix is not None:
+            semantic_scores = (self.job_semantic_matrix @ semantic_vec).reshape(1, -1)
+
+        return self._blend(tfidf_scores, semantic_scores).astype(np.float32)
+
+    def explain_match(self, candidate_idx: int, job_col: int) -> dict:
+        """Detailed, per-pair breakdown for ONE candidate/job pair — deliberately
+        NOT called during bulk score_batch (would be O(candidates x jobs) at
+        real per-skill granularity); only run for the top-N shortlist actually
+        shown to a user, where that cost is bounded and worth paying."""
+        if self._cand_text is None or self._job_text is None:
+            return {}
+        cand = self._cand_text.iloc[candidate_idx]
+        job = self._job_text.iloc[job_col]
+
+        def best_matches(cand_field: str, job_field: str, min_sim: float = 0.35) -> List[str]:
+            cand_items = [t for t in cand[cand_field].split() if t]
+            job_items = [t for t in job[job_field].split() if t]
+            if not cand_items or not job_items:
+                return []
+            matched = []
+            for ji in dict.fromkeys(job_items):
+                best = max((self.encoder.similarity(ci, ji) if self.encoder and self.encoder.available
+                            else 1.0 if ci == ji else 0.0) for ci in cand_items)
+                if best >= min_sim:
+                    matched.append(ji)
+            return matched
+
+        return {
+            "matched_skills": best_matches("skills", "skills"),
+            "matched_education": best_matches("fields", "fields"),
+            "matched_languages": best_matches("languages", "languages"),
+            "matched_experience_years": round(float(cand["experience_years"]), 1),
+            "required_experience_years": round(float(job["experience_years"]), 1),
+        }
+
+
+# ==========================================================================
+# 6. COLLABORATIVE FILTERING (PyTorch matrix factorization)
+# ==========================================================================
+
+class MatrixFactorizationNet(nn.Module):
+    def __init__(self, n_users: int, n_items: int, embedding_dim: int):
+        super().__init__()
+        self.user_emb = nn.Embedding(n_users, embedding_dim)
+        self.item_emb = nn.Embedding(n_items, embedding_dim)
+        self.user_bias = nn.Embedding(n_users, 1)
+        self.item_bias = nn.Embedding(n_items, 1)
+        self.global_bias = nn.Parameter(torch.zeros(1))
+        nn.init.normal_(self.user_emb.weight, std=0.05)
+        nn.init.normal_(self.item_emb.weight, std=0.05)
+        nn.init.zeros_(self.user_bias.weight)
+        nn.init.zeros_(self.item_bias.weight)
+
+    def forward(self, user_idx, item_idx):
+        dot = (self.user_emb(user_idx) * self.item_emb(item_idx)).sum(dim=1)
+        bias = self.user_bias(user_idx).squeeze(1) + self.item_bias(item_idx).squeeze(1)
+        return dot + bias + self.global_bias
+
+    @torch.no_grad()
+    def score_users_batch(self, user_idx):
+        u_vec = self.user_emb(user_idx)
+        u_bias = self.user_bias(user_idx)
+        logits = u_vec @ self.item_emb.weight.T
+        logits = logits + u_bias + self.item_bias.weight.T + self.global_bias
+        return torch.sigmoid(logits)
+
+
+class InteractionDataset(Dataset):
+    def __init__(self, interaction_matrix: sp.csr_matrix, neg_ratio: int, max_weight: float, seed: int = 42,
+                 hard_negatives: Dict[int, List[int]] = None):
+        coo = interaction_matrix.tocoo()
+        self.users = coo.row.astype(np.int64)
+        self.items = coo.col.astype(np.int64)
+        self.weights = coo.data.astype(np.float32) / max_weight
+        self.n_items = interaction_matrix.shape[1]
+        self.neg_ratio = neg_ratio
+        self.rng = np.random.default_rng(seed)
+        # A candidate explicitly ignoring a job is a much stronger "not interested"
+        # signal than an unseen job picked at random — without this, ignored_jobs
+        # was only ever used to filter results at SCORE time, never to actually
+        # train the model that this candidate/job pair is a negative example.
+        self.hard_negatives = hard_negatives or {}
+        self._interacted = {}
+        for u, i in zip(self.users, self.items):
+            self._interacted.setdefault(u, set()).add(i)
+
+    def __len__(self):
+        return len(self.users)
+
+    def __getitem__(self, idx):
+        u = self.users[idx]
+        pos_i = self.items[idx]
+        w = self.weights[idx]
+        seen = self._interacted.get(u, set())
+        neg_items = []
+        # Prioritize the candidate's own ignored jobs as negatives before falling
+        # back to random sampling, so every ignore actually gets trained on.
+        for cand in self.hard_negatives.get(int(u), []):
+            if len(neg_items) >= self.neg_ratio:
+                break
+            if cand not in seen and cand not in neg_items:
+                neg_items.append(cand)
+        while len(neg_items) < self.neg_ratio:
+            cand = int(self.rng.integers(0, self.n_items))
+            if cand not in seen and cand not in neg_items:
+                neg_items.append(cand)
+        return u, pos_i, w, np.array(neg_items, dtype=np.int64)
+
+    @staticmethod
+    def collate(batch):
+        users, pos_items, weights, neg_items = zip(*batch)
+        return (torch.as_tensor(users, dtype=torch.long),
+                torch.as_tensor(pos_items, dtype=torch.long),
+                torch.as_tensor(weights, dtype=torch.float32),
+                torch.as_tensor(np.stack(neg_items), dtype=torch.long))
+
+
+class CollaborativeModel:
+    def __init__(self, cfg: MFConfig):
+        self.cfg = cfg
+        self.model: Optional[MatrixFactorizationNet] = None
+        self.device = torch.device("cuda" if (cfg.device == "auto" and torch.cuda.is_available())
+                                    else ("cpu" if cfg.device == "auto" else cfg.device))
+        self.trained = False
+
+    def fit(self, interaction_matrix: sp.csr_matrix, n_users: int, n_items: int, max_weight: float,
+            hard_negatives: Dict[int, List[int]] = None) -> None:
+        if interaction_matrix.nnz < self.cfg.min_interactions_to_train:
+            log.info("Only %d interactions (< %d) — skipping collaborative training, "
+                      "weight will be redistributed to content/behavior.",
+                      interaction_matrix.nnz, self.cfg.min_interactions_to_train)
+            self.trained = False
+            return
+
+        torch.manual_seed(self.cfg.random_state)
+        dataset = InteractionDataset(interaction_matrix, self.cfg.negative_sampling_ratio, max_weight,
+                                      self.cfg.random_state, hard_negatives=hard_negatives)
+        n_val = max(1, int(len(dataset) * self.cfg.val_fraction))
+        n_train = len(dataset) - n_val
+        train_ds, val_ds = torch.utils.data.random_split(
+            dataset, [n_train, n_val], generator=torch.Generator().manual_seed(self.cfg.random_state))
+        train_loader = TorchDataLoader(train_ds, batch_size=self.cfg.batch_size, shuffle=True, collate_fn=InteractionDataset.collate)
+        val_loader = TorchDataLoader(val_ds, batch_size=self.cfg.batch_size, shuffle=False, collate_fn=InteractionDataset.collate)
+
+        self.model = MatrixFactorizationNet(n_users, n_items, self.cfg.embedding_dim).to(self.device)
+        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.cfg.learning_rate, weight_decay=self.cfg.weight_decay)
+        loss_fn = nn.BCEWithLogitsLoss(reduction="none")
+
+        best_val, no_improve = float("inf"), 0
+        for epoch in range(1, self.cfg.epochs + 1):
+            self.model.train()
+            for users, pos_items, weights, neg_items in train_loader:
+                users, pos_items, weights, neg_items = (t.to(self.device) for t in (users, pos_items, weights, neg_items))
+                b, k = neg_items.shape
+                pos_logits = self.model(users, pos_items)
+                pos_loss = (loss_fn(pos_logits, torch.ones_like(pos_logits)) * weights).mean()
+                users_rep = users.unsqueeze(1).expand(-1, k).reshape(-1)
+                neg_logits = self.model(users_rep, neg_items.reshape(-1))
+                neg_loss = loss_fn(neg_logits, torch.zeros_like(neg_logits)).mean()
+                loss = pos_loss + neg_loss
+                optimizer.zero_grad(); loss.backward(); optimizer.step()
+
+            val_loss = self._evaluate(val_loader, loss_fn)
+            log.info("Epoch %d/%d - val_loss=%.4f", epoch, self.cfg.epochs, val_loss)
+            if val_loss < best_val - 1e-5:
+                best_val, no_improve = val_loss, 0
+            else:
+                no_improve += 1
+                if no_improve >= self.cfg.early_stopping_patience:
+                    break
+
+        self.model.eval()
+        self.trained = True
+
+    def _evaluate(self, loader, loss_fn) -> float:
+        self.model.eval()
+        total, count = 0.0, 0
+        with torch.no_grad():
+            for users, pos_items, weights, neg_items in loader:
+                users, pos_items, weights, neg_items = (t.to(self.device) for t in (users, pos_items, weights, neg_items))
+                b, k = neg_items.shape
+                pos_loss = (loss_fn(self.model(users, pos_items), torch.ones(b, device=self.device)) * weights).mean()
+                users_rep = users.unsqueeze(1).expand(-1, k).reshape(-1)
+                neg_loss = loss_fn(self.model(users_rep, neg_items.reshape(-1)), torch.zeros(b * k, device=self.device)).mean()
+                total += (pos_loss + neg_loss).item() * b
+                count += b
+        return total / max(count, 1)
+
+    def score_batch(self, candidate_indices: np.ndarray) -> np.ndarray:
+        if not self.trained:
+            return np.zeros((len(candidate_indices), self.model.item_emb.weight.shape[0] if self.model else 0), dtype=np.float32)
+        idx = torch.as_tensor(candidate_indices, dtype=torch.long, device=self.device)
+        return self.model.score_users_batch(idx).detach().cpu().numpy().astype(np.float32)
+
+    @torch.no_grad()
+    def most_similar_candidates(self, candidate_idx: int, k: int = 5) -> List[Tuple[int, float]]:
+        """MODEL 3's explicit output: which OTHER candidates does the learned
+        embedding space consider closest to this one — cosine similarity of
+        their learned user-embedding vectors, which the model fit from
+        shared interaction PATTERNS across the whole candidate population
+        (not from any single candidate's profile text). Returns
+        [(candidate_idx, similarity), ...] excluding the candidate itself."""
+        if not self.trained:
+            return []
+        emb = self.model.user_emb.weight  # (n_users, dim)
+        target = emb[candidate_idx].unsqueeze(0)
+        sims = torch.nn.functional.cosine_similarity(target, emb)
+        sims[candidate_idx] = -1.0  # exclude self
+        top = torch.topk(sims, k=min(k, sims.shape[0] - 1))
+        return [(int(i), float(s)) for i, s in zip(top.indices.tolist(), top.values.tolist()) if s > -1.0]
+
+
+# ==========================================================================
+# 7. BEHAVIOR MODEL
+# ==========================================================================
+
+class BehaviorModel:
+    """MODEL 2 — behavior-based recommendation: an evolving interest profile
+    learned from search/view/save/apply/ignore history (recency-weighted, so
+    a candidate's CURRENT interests matter more than what they looked at six
+    months ago), scored against every active job's own attributes."""
+    ATTRS = ["department", "job_type", "work_arrangement", "experience_level", "company_name"]
+    ATTR_LABELS = {"department": "department", "job_type": "job type", "work_arrangement": "work arrangement",
+                   "experience_level": "seniority level", "company_name": "company"}
+
+    def __init__(self, cfg: BehaviorConfig):
+        self.cfg = cfg
+        self.candidate_preferences: Dict[int, Dict[str, Dict[str, float]]] = {}
+        self._search_vectorizer: Optional[TfidfVectorizer] = None
+        self._candidate_search_matrix: Optional[sp.csr_matrix] = None
+        self._job_search_matrix: Optional[sp.csr_matrix] = None
+        self._search_candidate_row: Dict[int, int] = {}  # candidate_idx -> row in _candidate_search_matrix
+        self._event_log: pd.DataFrame = pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
+        self._search_log: pd.DataFrame = pd.DataFrame(columns=["user_id", "query", "searched_at"])
+        self._jobs_ref: Optional[pd.DataFrame] = None
+
+    def fit(self, events: pd.DataFrame, jobs: pd.DataFrame, job_id_to_idx: Dict[str, int]) -> None:
+        self._event_log = events.copy() if events is not None else pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
+        self._jobs_ref = jobs.copy() if jobs is not None else None
+        if events.empty:
+            self.candidate_preferences = {}
+            return
+
+        jobs_indexed = jobs.copy()
+        jobs_indexed["job_idx"] = jobs_indexed["id"].astype(str).map(job_id_to_idx)
+        jobs_indexed = jobs_indexed.set_index("job_idx")
+
+        reference_date = events["event_date"].max()
+        half_life = self.cfg.recency_half_life_days
+        merged = events.merge(jobs_indexed[self.ATTRS], left_on="job_idx", right_index=True, how="left")
+        age_days = (reference_date - merged["event_date"]).dt.days.clip(lower=0).fillna(0)
+        merged["effective_weight"] = merged["weight"] * np.power(0.5, age_days / max(half_life, 1))
+
+        prefs: Dict[int, Dict[str, Dict[str, float]]] = {}
+        for attr in self.ATTRS:
+            if attr not in merged.columns:
+                continue
+            grp = merged.dropna(subset=[attr]).groupby(["candidate_idx", attr])["effective_weight"].sum().reset_index()
+            grp = grp.sort_values("effective_weight", ascending=False)
+            grp = grp.groupby("candidate_idx").head(self.cfg.max_events_per_candidate)
+            for cand_idx, sub in grp.groupby("candidate_idx"):
+                total = sub["effective_weight"].sum()
+                if total <= 0:
+                    continue
+                dist = dict(zip(sub[attr].astype(str), sub["effective_weight"] / total))
+                prefs.setdefault(int(cand_idx), {})[attr] = dist
+
+        self.candidate_preferences = prefs
+
+    def fit_search(self, search_events: pd.DataFrame, jobs: pd.DataFrame, candidate_id_to_idx: Dict[str, int]) -> None:
+        """Search queries are DECLARED intent — what the candidate is actively
+        looking for — matched via TF-IDF against each job's title/skills text,
+        the same shared-vocabulary technique ContentBasedModel uses. Kept as its
+        own small model (not folded into ContentBasedModel) because it's a
+        historical behavioral signal like views/saves, not a static profile
+        field, and candidates with no search history simply fall back to the
+        attribute-based score below."""
+        self._search_vectorizer = None
+        self._search_log = search_events.copy() if search_events is not None else pd.DataFrame(columns=["user_id", "query", "searched_at"])
+        if search_events.empty:
+            return
+
+        job_text = jobs.apply(lambda r: " ".join(filter(None, [job_title_text(r), job_skills_text(r)])), axis=1)
+
+        s = search_events.copy()
+        s["candidate_idx"] = s["user_id"].astype(str).map(candidate_id_to_idx)
+        s = s.dropna(subset=["candidate_idx"])
+        if s.empty:
+            return
+        s["candidate_idx"] = s["candidate_idx"].astype(int)
+        cand_text = s.groupby("candidate_idx")["query"].apply(lambda qs: " ".join(qs)).to_dict()
+        if not cand_text:
+            return
+
+        cand_idxs = list(cand_text.keys())
+        cand_texts = [cand_text[i] for i in cand_idxs]
+
+        vec = TfidfVectorizer(max_features=1000, token_pattern=r"[A-Za-z0-9]+")
+        vec.fit(list(cand_texts) + list(job_text))
+        self._search_vectorizer = vec
+        self._candidate_search_matrix = sk_normalize(vec.transform(cand_texts))
+        self._job_search_matrix = sk_normalize(vec.transform(job_text))
+        self._search_candidate_row = {cand_idx: row for row, cand_idx in enumerate(cand_idxs)}
+
+    def _rebuild_candidate_preferences(self, candidate_indices: Set[int]) -> None:
+        if self._event_log is None or self._event_log.empty or self._jobs_ref is None:
+            return
+        jobs_indexed = self._jobs_ref.copy()
+        jobs_indexed["job_idx"] = jobs_indexed["id"].astype(str).map({str(i): i for i in jobs_indexed.index})
+        jobs_indexed = jobs_indexed.set_index("job_idx", drop=False)
+        merged = self._event_log.merge(jobs_indexed.reset_index(drop=True)[self.ATTRS + ["id"]], left_on="job_idx", right_index=False, how="left")
+        for cand_idx in candidate_indices:
+            sub = merged[merged["candidate_idx"].astype(int) == int(cand_idx)]
+            if sub.empty:
+                self.candidate_preferences.pop(int(cand_idx), None)
+                continue
+            prefs: Dict[str, Dict[str, float]] = {}
+            for attr in self.ATTRS:
+                if attr not in sub.columns:
+                    continue
+                attr_grp = sub.dropna(subset=[attr]).groupby(attr)["effective_weight"].sum().sort_values(ascending=False)
+                total = float(attr_grp.sum())
+                if total <= 0:
+                    continue
+                prefs[attr] = {str(k): float(v / total) for k, v in attr_grp.items()}
+            if prefs:
+                self.candidate_preferences[int(cand_idx)] = prefs
+
+    def apply_incremental_updates(self, events: List[dict], jobs: pd.DataFrame,
+                                  job_id_to_idx: Dict[str, int], candidate_id_to_idx: Dict[str, int]) -> None:
+        if not events:
+            return
+
+        behavior_rows: List[dict] = []
+        search_rows: List[dict] = []
+        affected_candidates: Set[int] = set()
+
+        for event in events:
+            entity_type = str(event.get("entity_type", "")).lower()
+            operation = str(event.get("operation", "")).lower()
+            payload = event.get("payload") or {}
+            candidate_id = event.get("candidate_id") or payload.get("candidate_id") or payload.get("user_id")
+            job_id = event.get("job_id") or payload.get("job_id")
+            candidate_idx = candidate_id_to_idx.get(str(candidate_id)) if candidate_id is not None else None
+            job_idx = job_id_to_idx.get(str(job_id)) if job_id is not None else None
+
+            if entity_type == "search" and candidate_id is not None:
+                search_rows.append({
+                    "user_id": str(candidate_id),
+                    "query": str(payload.get("query", event.get("query", ""))),
+                    "searched_at": payload.get("searched_at") or event.get("created_at") or datetime.utcnow().isoformat(),
+                })
+                if candidate_idx is not None:
+                    affected_candidates.add(int(candidate_idx))
+                continue
+
+            if candidate_idx is None or job_idx is None:
+                continue
+
+            if operation in {"delete", "removed"}:
+                continue
+
+            behavior_rows.append({
+                "candidate_idx": int(candidate_idx),
+                "job_idx": int(job_idx),
+                "event_date": pd.to_datetime(payload.get("event_date") or event.get("created_at") or datetime.utcnow(), utc=True),
+                "weight": float(payload.get("weight") or payload.get("score") or 1.0),
+            })
+            affected_candidates.add(int(candidate_idx))
+
+        if behavior_rows:
+            incoming = pd.DataFrame(behavior_rows)
+            incoming["event_date"] = pd.to_datetime(incoming["event_date"], utc=True)
+            self._event_log = pd.concat([self._event_log, incoming], ignore_index=True) if not self._event_log.empty else incoming
+            self._event_log["event_date"] = pd.to_datetime(self._event_log["event_date"], utc=True)
+            self._event_log["effective_weight"] = self._event_log.get("effective_weight")
+            self._event_log["effective_weight"] = self._event_log.get("weight", 0)
+            if self._jobs_ref is not None and not self._jobs_ref.empty:
+                jobs_indexed = self._jobs_ref.copy()
+                jobs_indexed["job_idx"] = jobs_indexed["id"].astype(str).map(job_id_to_idx)
+                jobs_indexed = jobs_indexed.set_index("job_idx")
+                merged = self._event_log.merge(jobs_indexed[self.ATTRS], left_on="job_idx", right_index=True, how="left")
+                reference_date = merged["event_date"].max()
+                age_days = (reference_date - merged["event_date"]).dt.days.clip(lower=0).fillna(0)
+                merged["effective_weight"] = merged["weight"] * np.power(0.5, age_days / max(self.cfg.recency_half_life_days, 1))
+                self._event_log = merged[["candidate_idx", "job_idx", "event_date", "weight", "effective_weight"]]
+            self._rebuild_candidate_preferences(affected_candidates)
+
+        if search_rows:
+            search_df = pd.DataFrame(search_rows)
+            self._search_log = pd.concat([self._search_log, search_df], ignore_index=True) if not self._search_log.empty else search_df
+            self.fit_search(self._search_log, jobs, candidate_id_to_idx)
+
+    def score_batch(self, candidate_indices: np.ndarray, jobs: pd.DataFrame) -> np.ndarray:
+        n_jobs = len(jobs)
+        out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
+        job_attr_values = {attr: jobs[attr].astype(str).values if attr in jobs.columns else None for attr in self.ATTRS}
+
+        for row, cand_idx in enumerate(candidate_indices):
+            prefs = self.candidate_preferences.get(int(cand_idx))
+            if not prefs:
+                continue
+            attr_scores = []
+            for attr, dist in prefs.items():
+                values = job_attr_values.get(attr)
+                if values is None:
+                    continue
+                attr_scores.append(np.fromiter((dist.get(v, 0.0) for v in values), dtype=np.float32, count=n_jobs))
+            if attr_scores:
+                out[row, :] = np.mean(attr_scores, axis=0)
+
+        if self._search_vectorizer is not None:
+            for row, cand_idx in enumerate(candidate_indices):
+                srow = self._search_candidate_row.get(int(cand_idx))
+                if srow is None:
+                    continue
+                sims = np.clip(self._candidate_search_matrix[srow].dot(self._job_search_matrix.T).toarray()[0], 0.0, 1.0)
+                # Blend rather than overwrite: a candidate with both attribute
+                # history AND search history gets the combined picture; one with
+                # only search history (no views/saves/applies yet) gets pure
+                # search relevance instead of a false zero.
+                out[row] = 0.6 * out[row] + 0.4 * sims if out[row].max() > 0 else sims
+
+        max_val = out.max()
+        return out / max_val if max_val > 0 else out
+
+    def get_interest_profile(self, candidate_idx: int, top_k: int = 3) -> Dict[str, List[str]]:
+        """The evolving 'Interest Profile' the spec asks for — top-K values
+        per attribute, ranked by the same recency-weighted score used for
+        scoring, i.e. this reflects what fit() actually learned, not a
+        separate approximation of it."""
+        prefs = self.candidate_preferences.get(int(candidate_idx), {})
+        profile = {}
+        for attr, dist in prefs.items():
+            ranked = sorted(dist.items(), key=lambda kv: kv[1], reverse=True)[:top_k]
+            profile[attr] = [v for v, _ in ranked]
+        return profile
+
+    def explain(self, candidate_idx: int, job_row: pd.Series, has_search_history: bool = None) -> List[str]:
+        """Human-readable reasons this specific job matches this candidate's
+        learned behavior — used for the explainable-AI output, not the score
+        itself."""
+        reasons: List[str] = []
+        prefs = self.candidate_preferences.get(int(candidate_idx), {})
+        for attr, dist in prefs.items():
+            job_val = str(job_row.get(attr, ""))
+            if job_val and dist.get(job_val, 0.0) > 0.15:
+                label = self.ATTR_LABELS.get(attr, attr)
+                reasons.append(f"Matches your usual {label}: {job_val}.")
+        if has_search_history is None:
+            has_search_history = int(candidate_idx) in self._search_candidate_row
+        if has_search_history:
+            reasons.append("Matches terms you've searched for.")
+        return reasons
+
+
+def freshness_scores(jobs: pd.DataFrame) -> np.ndarray:
+    """Exponential recency decay: a job posted today scores 1.0, ~0.37 at 30
+    days old, ~0.05 at 90 days — freshly posted jobs get a real but modest
+    boost rather than dominating the ranking."""
+    now = pd.Timestamp.now(tz="UTC")
+    created = pd.to_datetime(jobs["created_at"], utc=True, errors="coerce")
+    days_old = (now - created).dt.total_seconds() / 86400
+    days_old = days_old.fillna(days_old.max() if days_old.notna().any() else 30.0)
+    return np.exp(-np.clip(days_old.values, 0, None) / 30.0).astype(np.float32)
+
+
+def popularity_scores(jobs: pd.DataFrame) -> np.ndarray:
+    """application_count normalized within the job's own department where
+    possible (a "popular" education job and a "popular" engineering job have
+    very different absolute application counts) falling back to a global
+    normalization when a department has too few postings to compare within."""
+    counts = pd.to_numeric(jobs.get("application_count", 0), errors="coerce").fillna(0).values.astype(np.float32)
+    out = np.zeros_like(counts)
+    departments = jobs.get("department")
+    if departments is not None:
+        dept_vals = departments.fillna("__none__").values
+        for dept in pd.unique(dept_vals):
+            mask = dept_vals == dept
+            if mask.sum() >= 3:
+                m = counts[mask].max()
+                out[mask] = counts[mask] / m if m > 0 else 0.0
+    unset = out == 0
+    if unset.any():
+        m = counts.max()
+        out[unset] = counts[unset] / m if m > 0 else 0.0
+    return out
+
+
+def business_rule_modifier(candidate_row: dict, job_row: pd.Series) -> Tuple[float, List[str]]:
+    """Policy adjustment applied AFTER the weighted sum, not a similarity
+    score: does this job clear concrete business bars for this candidate?
+    Currently checks salary fit (candidate's stated expected_salary vs the
+    job's posted range) and employer verification. Returns (multiplier,
+    reason_strings) — multiplier stays close to 1.0 (0.85-1.15) so it nudges
+    rather than overrides the other five signals."""
+    modifier = 1.0
+    reasons: List[str] = []
+
+    expected = candidate_row.get("expected_salary") if candidate_row else None
+    if isinstance(expected, dict) and expected.get("min") is not None:
+        job_min = job_row.get("salary_min")
+        job_max = job_row.get("salary_max")
+        try:
+            cand_min = float(expected["min"])
+            if job_max is not None and pd.notna(job_max) and float(job_max) >= cand_min:
+                modifier += 0.10
+                reasons.append("This job's salary range meets your expected salary.")
+            elif job_min is not None and pd.notna(job_min) and job_max is not None and pd.notna(job_max) \
+                    and float(job_max) < cand_min:
+                modifier -= 0.10
+        except (TypeError, ValueError):
+            pass
+
+    if bool(job_row.get("verification_badge")):
+        modifier += 0.03
+        reasons.append("Posted by a verified employer.")
+
+    return max(0.85, min(1.15, modifier)), reasons
+
+
+# ==========================================================================
+# 8. HYBRID RANKING
+# ==========================================================================
+
+class HybridRanker:
+    def __init__(self, weights: HybridWeights):
+        self.weights = weights
+
+    def combine(self, content: np.ndarray, behavior: np.ndarray, collaborative: np.ndarray,
+                freshness: np.ndarray, popularity: np.ndarray) -> np.ndarray:
+        w = self.weights
+        return (w.content * content + w.behavior * behavior + w.collaborative * collaborative
+                + w.freshness * freshness + w.popularity * popularity)
+
+    @staticmethod
+    def top_k_indices(scores: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
+        k = min(k, scores.shape[1]) if scores.shape[1] else 0
+        if k == 0:
+            return np.empty((scores.shape[0], 0), dtype=int), np.empty((scores.shape[0], 0))
+        part = np.argpartition(-scores, kth=k - 1, axis=1)[:, :k]
+        row_idx = np.arange(scores.shape[0])[:, None]
+        part_scores = scores[row_idx, part]
+        order = np.argsort(-part_scores, axis=1)
+        return part[row_idx, order], part_scores[row_idx, order]
+
+
+# ==========================================================================
+# 9. RECOMMENDATION ENGINE (orchestrator)
+# ==========================================================================
+
+class RecommendationEngine:
+    def __init__(self, cfg: RecommenderConfig):
+        self.cfg = cfg
+        self.db = Database(cfg.db)
+        self.preprocessor = Preprocessor(cfg)
+        # Loaded ONCE (model load is the expensive part) and shared by every
+        # ContentBasedModel refit — encoding itself still only happens per
+        # fit()/cold-start call, cached inside the encoder.
+        self.semantic_encoder = SemanticEncoder()
+        self.content_model = ContentBasedModel(cfg.content, encoder=self.semantic_encoder)
+        self.collaborative_model = CollaborativeModel(cfg.mf)
+        self.behavior_model = BehaviorModel(cfg.behavior)
+        self.ranker = HybridRanker(cfg.hybrid_weights)
+
+        self.candidates: Optional[pd.DataFrame] = None
+        self.jobs: Optional[pd.DataFrame] = None
+        self.skills_df: Optional[pd.DataFrame] = None
+        self.education_df: Optional[pd.DataFrame] = None
+        self.work_df: Optional[pd.DataFrame] = None
+        self.certifications_df: Optional[pd.DataFrame] = None
+        self.ignored: Optional[pd.DataFrame] = None
+        self.events: Optional[pd.DataFrame] = None  # candidate_idx/job_idx interaction log, for collaborative explanations
+        self.views: Optional[pd.DataFrame] = None
+        self.applications: Optional[pd.DataFrame] = None
+        self.saves: Optional[pd.DataFrame] = None
+        self.search_events: Optional[pd.DataFrame] = None
+        self._realtime_queue: "queue.Queue[dict]" = queue.Queue(maxsize=5000)
+        self._realtime_stop = threading.Event()
+        self._realtime_worker: Optional[threading.Thread] = None
+        self._realtime_listener: Optional[threading.Thread] = None
+        self._collab_retrain_pending = threading.Event()
+        self._collab_retrain_lock = threading.Lock()
+        self._collab_retrain_running = False
+        self._realtime_started = False
+        self.last_trained_at: Optional[datetime] = None
+        self._lock = threading.RLock()
+
+    def prepare(self) -> dict:
+        t0 = time.time()
+        candidates = self.db.fetch_candidates()
+        jobs = self.db.fetch_active_jobs()
+        skills_df = self.db.fetch_candidate_skills()
+        education_df = self.db.fetch_candidate_education()
+        work_df = self.db.fetch_candidate_work_experience()
+        certifications_df = self.db.fetch_candidate_certifications()
+        views = self.db.fetch_view_events()
+        applications = self.db.fetch_application_events()
+        saves = self.db.fetch_save_events()
+        ignored = self.db.fetch_ignored_pairs()
+        search_events = self.db.fetch_search_events()
+
+        if candidates.empty or jobs.empty:
+            log.warning("No candidates or no active jobs — engine left untrained.")
+            with self._lock:
+                self.candidates, self.jobs = candidates, jobs
+            return {"n_candidates": len(candidates), "n_jobs": len(jobs), "n_interactions": 0, "collaborative_trained": False}
+
+        preprocessor = Preprocessor(self.cfg)
+        preprocessor.fit_id_maps(candidates, jobs)
+        events = preprocessor.build_events(views, applications, saves)
+        matrix = preprocessor.build_interaction_matrix(events, len(candidates), len(jobs))
+
+        content_model = ContentBasedModel(self.cfg.content, encoder=self.semantic_encoder)
+        content_model.fit(candidates, jobs, skills_df, education_df, work_df, certifications_df)
+
+        hard_negatives: Dict[int, List[int]] = {}
+        if not ignored.empty:
+            ig = ignored.copy()
+            ig["candidate_idx"] = ig["user_id"].astype(str).map(preprocessor.candidate_id_to_idx)
+            ig["job_idx"] = ig["job_id"].astype(str).map(preprocessor.job_id_to_idx)
+            ig = ig.dropna(subset=["candidate_idx", "job_idx"])
+            for cand_idx, sub in ig.groupby(ig["candidate_idx"].astype(int)):
+                hard_negatives[int(cand_idx)] = sub["job_idx"].astype(int).tolist()
+
+        collaborative_model = CollaborativeModel(self.cfg.mf)
+        collaborative_model.fit(matrix, len(candidates), len(jobs), self.cfg.interaction_weights.max_weight,
+                                 hard_negatives=hard_negatives)
+
+        behavior_model = BehaviorModel(self.cfg.behavior)
+        behavior_model.fit(events, jobs, preprocessor.job_id_to_idx)
+        behavior_model.fit_search(search_events, jobs, preprocessor.candidate_id_to_idx)
+
+        with self._lock:
+            self.candidates, self.jobs = candidates, jobs
+            self.skills_df, self.education_df, self.work_df = skills_df, education_df, work_df
+            self.certifications_df = certifications_df
+            self.ignored = ignored
+            self.views, self.applications, self.saves = views, applications, saves
+            self.search_events = search_events
+            self.events = events
+            self.preprocessor = preprocessor
+            self.content_model = content_model
+            self.collaborative_model = collaborative_model
+            self.behavior_model = behavior_model
+            self.last_trained_at = datetime.now()
+
+        stats = {
+            "n_candidates": len(candidates), "n_jobs": len(jobs),
+            "n_interactions": int(matrix.nnz), "collaborative_trained": collaborative_model.trained,
+            "seconds": round(time.time() - t0, 1),
+        }
+        log.info("Training complete: %s", stats)
+        return stats
+
+    def start_realtime_updates(self) -> None:
+        if self._realtime_started:
+            return
+        self._realtime_started = True
+        self._realtime_stop.clear()
+        self._realtime_worker = threading.Thread(target=self._realtime_worker_loop, daemon=True)
+        self._realtime_listener = threading.Thread(target=self._pg_listener_loop, daemon=True)
+        self._realtime_worker.start()
+        self._realtime_listener.start()
+        log.info("Realtime update subsystem started on channel %s", self.cfg.realtime_notification_channel)
+
+    def stop_realtime_updates(self) -> None:
+        self._realtime_stop.set()
+
+    def _normalize_event(self, event: Any) -> Optional[dict]:
+        if event is None:
+            return None
+        if isinstance(event, RealtimeEvent):
+            event = event.__dict__
+        if not isinstance(event, dict):
+            return None
+        payload = event.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {"value": payload}
+        normalized = {
+            "event_type": str(event.get("event_type") or payload.get("event_type") or "recommendation_update"),
+            "entity_type": str(event.get("entity_type") or payload.get("entity_type") or payload.get("table") or "unknown"),
+            "operation": str(event.get("operation") or payload.get("operation") or "upsert").lower(),
+            "entity_id": event.get("entity_id") or payload.get("entity_id"),
+            "candidate_id": event.get("candidate_id") or payload.get("candidate_id") or payload.get("user_id"),
+            "job_id": event.get("job_id") or payload.get("job_id"),
+            "payload": payload,
+            "source": event.get("source") or "webhook",
+            "created_at": event.get("created_at") or payload.get("created_at") or datetime.utcnow().isoformat(),
+        }
+        return normalized
+
+    def enqueue_realtime_events(self, events: Any) -> int:
+        if events is None:
+            return 0
+        if isinstance(events, dict):
+            events = [events]
+        accepted = 0
+        for raw in events:
+            event = self._normalize_event(raw)
+            if event is None:
+                continue
+            try:
+                self._realtime_queue.put_nowait(event)
+                accepted += 1
+            except queue.Full:
+                try:
+                    _ = self._realtime_queue.get_nowait()
+                    self._realtime_queue.put_nowait(event)
+                    accepted += 1
+                    log.warning("Realtime queue full; dropped oldest event to keep processing fresh updates.")
+                except Exception:
+                    log.exception("Failed to enqueue realtime event: %s", event.get("event_type"))
+        return accepted
+
+    def _realtime_worker_loop(self) -> None:
+        batch: List[dict] = []
+        last_flush = time.monotonic()
+        while not self._realtime_stop.is_set():
+            timeout = max(0.1, self.cfg.realtime_flush_seconds)
+            try:
+                event = self._realtime_queue.get(timeout=timeout)
+                batch.append(event)
+            except queue.Empty:
+                pass
+
+            should_flush = bool(batch) and (
+                len(batch) >= self.cfg.realtime_batch_size or
+                (time.monotonic() - last_flush) >= self.cfg.realtime_flush_seconds
+            )
+            if should_flush:
+                self._apply_realtime_batch(batch)
+                batch = []
+                last_flush = time.monotonic()
+
+        if batch:
+            self._apply_realtime_batch(batch)
+
+    def _pg_listener_loop(self) -> None:
+        channel = self.cfg.realtime_notification_channel
+        while not self._realtime_stop.is_set():
+            conn = None
+            try:
+                conn = self.db._connect()
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    cur.execute(f'LISTEN {channel};')
+                log.info("Listening for Postgres recommendation notifications on %s", channel)
+
+                while not self._realtime_stop.is_set():
+                    conn.poll()
+                    while conn.notifies:
+                        notify = conn.notifies.pop(0)
+                        try:
+                            payload = json.loads(notify.payload)
+                        except Exception:
+                            payload = {"raw": notify.payload}
+                        self.enqueue_realtime_events([payload])
+                    time.sleep(0.5)
+            except Exception as exc:
+                log.warning("Realtime listener reconnecting after error: %s", exc)
+                time.sleep(2.0)
+            finally:
+                try:
+                    if conn is not None:
+                        conn.close()
+                except Exception:
+                    pass
+
+    def _append_frame_row(self, frame: Optional[pd.DataFrame], row: dict) -> pd.DataFrame:
+        row_df = pd.DataFrame([row])
+        if frame is None or frame.empty:
+            return row_df
+        return pd.concat([frame, row_df], ignore_index=True)
+
+    def _upsert_frame_row(self, frame: Optional[pd.DataFrame], column: str, value: str, row: dict) -> pd.DataFrame:
+        row_df = pd.DataFrame([row])
+        if frame is None or frame.empty or column not in frame.columns:
+            return row_df
+        mask = frame[column].astype(str) == str(value)
+        if mask.any():
+            updated = frame.copy()
+            row_index = updated.index[mask][0]
+            for key, val in row.items():
+                if key not in updated.columns:
+                    updated[key] = None
+                updated.at[row_index, key] = val
+            return updated
+        return pd.concat([frame, row_df], ignore_index=True)
+
+    def _remove_frame_row(self, frame: Optional[pd.DataFrame], column: str, value: str) -> Optional[pd.DataFrame]:
+        if frame is None or frame.empty or column not in frame.columns:
+            return frame
+        return frame[frame[column].astype(str) != str(value)].reset_index(drop=True)
+
+    def _refresh_candidate_related_data(self, candidate_id: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        cid = str(candidate_id)
+        skills = self.skills_df[self.skills_df["user_id"].astype(str) == cid].copy() if self.skills_df is not None and not self.skills_df.empty else pd.DataFrame(columns=["user_id", "skill_name", "years_experience"])
+        education = self.education_df[self.education_df["user_id"].astype(str) == cid].copy() if self.education_df is not None and not self.education_df.empty else pd.DataFrame(columns=["user_id", "degree", "field_of_study"])
+        work = self.work_df[self.work_df["user_id"].astype(str) == cid].copy() if self.work_df is not None and not self.work_df.empty else pd.DataFrame(columns=["user_id", "title", "skills", "industry", "start_date", "end_date", "is_current"])
+        certs = self.certifications_df[self.certifications_df["user_id"].astype(str) == cid].copy() if self.certifications_df is not None and not self.certifications_df.empty else pd.DataFrame(columns=["user_id", "certification_name"])
+        return skills, education, work, certs
+
+    def _upsert_candidate_snapshot(self, candidate_id: str) -> bool:
+        cand_row = self.db.fetch_candidate_by_id(candidate_id)
+        if cand_row is None:
+            return False
+        skills, education, work, certs = self._refresh_candidate_related_data(candidate_id)
+        self.content_model.upsert_candidate(cand_row, skills, education, work, certs)
+        self.candidates = self._upsert_frame_row(self.candidates, "user_id", candidate_id, cand_row)
+        return True
+
+    def _upsert_job_snapshot(self, job_id: str) -> bool:
+        job_row = self.db.fetch_job_by_id(job_id)
+        if job_row is None:
+            return False
+        self.content_model.upsert_job(job_row)
+        self.jobs = self._upsert_frame_row(self.jobs, "id", job_id, job_row)
+        return True
+
+    def _remove_candidate_snapshot(self, candidate_id: str) -> None:
+        self.content_model.delete_candidate(candidate_id)
+        self.candidates = self._remove_frame_row(self.candidates, "user_id", candidate_id)
+        self.skills_df = self._remove_frame_row(self.skills_df, "user_id", candidate_id)
+        self.education_df = self._remove_frame_row(self.education_df, "user_id", candidate_id)
+        self.work_df = self._remove_frame_row(self.work_df, "user_id", candidate_id)
+        self.certifications_df = self._remove_frame_row(self.certifications_df, "user_id", candidate_id)
+
+    def _remove_job_snapshot(self, job_id: str) -> None:
+        self.content_model.delete_job(job_id)
+        self.jobs = self._remove_frame_row(self.jobs, "id", job_id)
+        if self.events is not None and not self.events.empty:
+            self.events = self.events[self.events["job_idx"].astype(str) != str(self.preprocessor.job_id_to_idx.get(str(job_id), job_id))].reset_index(drop=True)
+
+    def _rebuild_cached_interactions(self) -> None:
+        if self.preprocessor is None:
+            self.preprocessor = Preprocessor(self.cfg)
+        if self.candidates is None or self.jobs is None:
+            self.events = pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
+            return
+        self.preprocessor.fit_id_maps(self.candidates, self.jobs)
+        views = self.views if self.views is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date"])
+        applications = self.applications if self.applications is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date", "status"])
+        saves = self.saves if self.saves is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date"])
+        self.events = self.preprocessor.build_events(views, applications, saves)
+
+    def _refresh_behavior_from_cache(self) -> None:
+        if self.jobs is None:
+            return
+        self.behavior_model.fit(self.events if self.events is not None else pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"]),
+                                self.jobs,
+                                self.preprocessor.job_id_to_idx)
+        self.behavior_model.fit_search(self.search_events if self.search_events is not None else pd.DataFrame(columns=["user_id", "query", "searched_at"]),
+                                       self.jobs,
+                                       self.preprocessor.candidate_id_to_idx)
+
+    def _schedule_collaborative_refresh(self) -> None:
+        if not self._collab_retrain_lock.acquire(blocking=False):
+            self._collab_retrain_pending.set()
+            return
+
+        def _runner() -> None:
+            try:
+                time.sleep(self.cfg.realtime_collaborative_retrain_delay_seconds)
+                while True:
+                    self._retrain_collaborative_from_cache()
+                    if not self._collab_retrain_pending.is_set():
+                        break
+                    self._collab_retrain_pending.clear()
+                    time.sleep(self.cfg.realtime_collaborative_retrain_delay_seconds)
+            finally:
+                self._collab_retrain_running = False
+                self._collab_retrain_lock.release()
+
+        self._collab_retrain_running = True
+        self._collab_retrain_pending.clear()
+        threading.Thread(target=_runner, daemon=True).start()
+
+    def _retrain_collaborative_from_cache(self) -> None:
+        if self.candidates is None or self.jobs is None:
+            return
+        try:
+            preprocessor = Preprocessor(self.cfg)
+            preprocessor.fit_id_maps(self.candidates, self.jobs)
+            events = preprocessor.build_events(
+                self.views if self.views is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date"]),
+                self.applications if self.applications is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date", "status"]),
+                self.saves if self.saves is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date"]),
+            )
+            matrix = preprocessor.build_interaction_matrix(events, len(self.candidates), len(self.jobs))
+
+            hard_negatives: Dict[int, List[int]] = {}
+            if self.ignored is not None and not self.ignored.empty:
+                ig = self.ignored.copy()
+                ig["candidate_idx"] = ig["user_id"].astype(str).map(preprocessor.candidate_id_to_idx)
+                ig["job_idx"] = ig["job_id"].astype(str).map(preprocessor.job_id_to_idx)
+                ig = ig.dropna(subset=["candidate_idx", "job_idx"])
+                for cand_idx, sub in ig.groupby(ig["candidate_idx"].astype(int)):
+                    hard_negatives[int(cand_idx)] = sub["job_idx"].astype(int).tolist()
+
+            collaborative_model = CollaborativeModel(self.cfg.mf)
+            collaborative_model.fit(matrix, len(self.candidates), len(self.jobs), self.cfg.interaction_weights.max_weight,
+                                     hard_negatives=hard_negatives)
+            with self._lock:
+                self.preprocessor = preprocessor
+                self.events = events
+                self.collaborative_model = collaborative_model
+                self.last_trained_at = datetime.now()
+            log.info("Collaborative model refreshed from cached realtime updates (%d interactions).", int(matrix.nnz))
+        except Exception as exc:
+            log.exception("Incremental collaborative refresh failed: %s", exc)
+
+    def _apply_realtime_batch(self, events: List[dict]) -> dict:
+        if not events:
+            return {"accepted": 0, "applied": 0}
+
+        applied = 0
+        structural_change = False
+        behavior_change = False
+        search_change = False
+        with self._lock:
+            for raw in events:
+                event = self._normalize_event(raw)
+                if event is None:
+                    continue
+                entity_type = event["entity_type"].lower()
+                operation = event["operation"].lower()
+                payload = event["payload"]
+                candidate_id = str(event.get("candidate_id") or payload.get("candidate_id") or payload.get("user_id") or "")
+                job_id = str(event.get("job_id") or payload.get("job_id") or "")
+
+                if entity_type in {"candidate", "candidate_profile", "candidate_profiles", "profile"}:
+                    structural_change = True
+                    if operation in {"delete", "removed"}:
+                        self._remove_candidate_snapshot(candidate_id)
+                    else:
+                        if self._upsert_candidate_snapshot(candidate_id):
+                            applied += 1
+                    continue
+
+                if entity_type in {"job", "jobs"}:
+                    structural_change = True
+                    if operation in {"delete", "removed"}:
+                        self._remove_job_snapshot(job_id)
+                    else:
+                        if self._upsert_job_snapshot(job_id):
+                            applied += 1
+                    continue
+
+                if entity_type in {"view", "job_views", "saved_job", "saved_jobs", "save", "application", "applications", "ignored_job", "ignored_jobs", "ignore", "search", "job_searches"}:
+                    behavior_change = True
+                    if entity_type in {"search", "job_searches"}:
+                        search_change = True
+                        self.search_events = self._append_frame_row(self.search_events, {
+                            "user_id": candidate_id,
+                            "query": str(payload.get("query") or event.get("query") or ""),
+                            "searched_at": payload.get("searched_at") or event.get("created_at") or datetime.utcnow().isoformat(),
+                        })
+                    elif entity_type in {"view", "job_views"}:
+                        self.views = self._append_frame_row(self.views, {
+                            "user_id": candidate_id,
+                            "job_id": job_id,
+                            "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
+                        })
+                    elif entity_type in {"saved_job", "saved_jobs", "save"}:
+                        self.saves = self._append_frame_row(self.saves, {
+                            "user_id": candidate_id,
+                            "job_id": job_id,
+                            "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
+                        })
+                    elif entity_type in {"application", "applications"}:
+                        self.applications = self._append_frame_row(self.applications, {
+                            "user_id": candidate_id,
+                            "job_id": job_id,
+                            "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
+                            "status": payload.get("status") or operation or "submitted",
+                        })
+                    elif entity_type in {"ignored_job", "ignored_jobs", "ignore"}:
+                        self.ignored = self._append_frame_row(self.ignored, {
+                            "user_id": candidate_id,
+                            "job_id": job_id,
+                        })
+                    applied += 1
+                    continue
+
+            if structural_change:
+                self._rebuild_cached_interactions()
+                self._refresh_behavior_from_cache()
+                self._schedule_collaborative_refresh()
+            elif behavior_change:
+                self._rebuild_cached_interactions()
+                self._refresh_behavior_from_cache()
+                self._schedule_collaborative_refresh()
+
+            if applied:
+                self.last_trained_at = datetime.now()
+
+        return {"accepted": len(events), "applied": applied, "structural_change": structural_change, "behavior_change": behavior_change, "search_change": search_change}
+
+    def _active_weights(self, has_collab: bool = None, has_behavior: bool = None) -> HybridWeights:
+        if has_collab is None:
+            has_collab = self.collaborative_model.trained
+        if has_behavior is None:
+            has_behavior = bool(self.behavior_model.candidate_preferences)
+        return self.cfg.hybrid_weights.normalized(has_collab, has_behavior)
+
+    def _similar_candidates_reason(self, candidate_idx: int, job_idx: int) -> Optional[str]:
+        """MODEL 3's explainability: did any of this candidate's most-similar
+        peers (by learned embedding, i.e. by interaction PATTERN, not
+        profile text) actually engage with this specific job?"""
+        if self.events is None or self.events.empty:
+            return None
+        similar = self.collaborative_model.most_similar_candidates(candidate_idx, k=5)
+        if not similar:
+            return None
+        similar_idxs = {i for i, _ in similar}
+        hit = self.events[(self.events["candidate_idx"].isin(similar_idxs)) & (self.events["job_idx"] == job_idx)]
+        if hit.empty:
+            return None
+        return "Candidates with similar interests and activity engaged with this job."
+
+    def _explain(self, candidate_idx: Optional[int], job_col: int, job_row: pd.Series,
+                 fresh: float, pop: float, biz_reasons: List[str]) -> List[str]:
+        reasons: List[str] = list(biz_reasons)
+        if candidate_idx is not None:
+            reasons.extend(self.behavior_model.explain(candidate_idx, job_row))
+            match = self.content_model.explain_match(candidate_idx, job_col)
+            if match.get("matched_skills"):
+                reasons.append(f"Matches your skills: {', '.join(match['matched_skills'][:5])}.")
+            if match.get("matched_education"):
+                reasons.append(f"Matches your field of study: {', '.join(match['matched_education'][:3])}.")
+            if match.get("matched_languages"):
+                reasons.append(f"Matches your languages: {', '.join(match['matched_languages'])}.")
+            similar_reason = self._similar_candidates_reason(candidate_idx, job_col)
+            if similar_reason:
+                reasons.append(similar_reason)
+        if fresh > 0.7:
+            reasons.append("Newly posted job.")
+        if pop > 0.6:
+            reasons.append("Popular with other candidates.")
+        if not reasons:
+            reasons.append("Matches your overall profile.")
+        return reasons
+
+    def score_candidate(self, candidate_id: str, top_n: int) -> dict:
+        with self._lock:
+            if self.jobs is None or self.jobs.empty:
+                return {"scored_jobs": [], "cold_start": True, "total_jobs": 0}
+
+            ignored_ids = set()
+            if self.ignored is not None and not self.ignored.empty:
+                ignored_ids = set(self.ignored[self.ignored["user_id"].astype(str) == candidate_id]["job_id"].astype(str))
+
+            fresh = freshness_scores(self.jobs)
+            pop = popularity_scores(self.jobs)
+            candidate_idx: Optional[int] = None
+            cand_row: Optional[dict] = None
+
+            if candidate_id in self.preprocessor.candidate_id_to_idx:
+                candidate_idx = self.preprocessor.candidate_id_to_idx[candidate_id]
+                idx = np.array([candidate_idx])
+                content = self.content_model.score_batch(idx)
+                collab = self.collaborative_model.score_batch(idx) if self.collaborative_model.trained else np.zeros_like(content)
+                behavior = self.behavior_model.score_batch(idx, self.jobs)
+                weights = self._active_weights()
+                cand_row = self.candidates.iloc[candidate_idx].to_dict()
+                cold_start = False
+            else:
+                cand_row = self.db.fetch_candidate_by_id(candidate_id)
+                if cand_row is None:
+                    raise KeyError(f"Unknown candidate_id: {candidate_id}")
+                row_matrix, semantic_vec = self.content_model.transform_candidate_row(
+                    cand_row, self.skills_df, self.education_df, self.work_df, self.certifications_df)
+                content = self.content_model.score_row(row_matrix, semantic_vec)
+                collab = np.zeros_like(content)
+                behavior = np.zeros_like(content)
+                weights = self._active_weights(has_collab=False, has_behavior=False)
+                cold_start = True
+
+            ranker = HybridRanker(weights)
+            final = ranker.combine(content, behavior, collab, fresh.reshape(1, -1), pop.reshape(1, -1))
+
+            job_ids = self.jobs["id"].astype(str).values
+            keep_mask = ~np.isin(job_ids, list(ignored_ids))
+            final_masked = np.where(keep_mask, final[0], -1.0)
+
+            k = min(top_n, keep_mask.sum())
+            top_idx, top_scores = ranker.top_k_indices(final_masked.reshape(1, -1), k)
+
+            scored = []
+            for job_col, score in zip(top_idx[0], top_scores[0]):
+                if score < 0:
+                    continue
+                job_col = int(job_col)
+                job_row = self.jobs.iloc[job_col]
+                biz_modifier, biz_reasons = business_rule_modifier(cand_row, job_row)
+                final_score = float(score) * biz_modifier
+                scored.append({
+                    "job_id": str(job_row["id"]),
+                    "title": job_row.get("title", ""),
+                    "company": job_row.get("company_name", ""),
+                    "total_score": round(final_score * 100, 2),
+                    "breakdown": {
+                        "content": round(float(content[0, job_col]) * weights.content * 100, 2),
+                        "behavior": round(float(behavior[0, job_col]) * weights.behavior * 100, 2),
+                        "collaborative": round(float(collab[0, job_col]) * weights.collaborative * 100, 2),
+                        "freshness": round(float(fresh[job_col]) * weights.freshness * 100, 2),
+                        "popularity": round(float(pop[job_col]) * weights.popularity * 100, 2),
+                        "business_rule_modifier": round(biz_modifier, 3),
+                    },
+                    "reasons": self._explain(candidate_idx, job_col, job_row,
+                                              float(fresh[job_col]), float(pop[job_col]), biz_reasons),
+                    "job": job_details_dict(job_row),
+                })
+
+            scored.sort(key=lambda s: s["total_score"], reverse=True)
+
+            return {
+                "scored_jobs": scored,
+                "total_jobs": int(keep_mask.sum()),
+                "cold_start": cold_start,
+                "interest_profile": (self.behavior_model.get_interest_profile(candidate_idx)
+                                      if candidate_idx is not None else {}),
+                "weights_used": {"content": weights.content, "behavior": weights.behavior,
+                                  "collaborative": weights.collaborative, "freshness": weights.freshness,
+                                  "popularity": weights.popularity},
+            }
+
+
+engine = RecommendationEngine(CFG)
+
+
+# ==========================================================================
+# 9.5 COMBINED FEED — ai_job_matcher_og.py (4-factor profile match: skills/
+# qualifications/experience/preferences) blended with THIS service's own
+# hybrid score (content+behavior+collaborative+freshness+popularity).
+#
+# Default split: matcher 70% / hybrid 30% (configurable per-request — see
+# ScoreRequest below). Graceful by design: if the matcher service can't
+# return a score for a job (service down, candidate has no jobs matched,
+# etc.), that job falls back to 100% hybrid — never a fabricated 0 for the
+# missing signal, and vice versa.
+# ==========================================================================
+
+MATCHER_URL = os.getenv("MATCHER_URL", "http://localhost:8000")
+DEFAULT_MATCHER_WEIGHT = 0.70
+DEFAULT_HYBRID_WEIGHT = 0.30
+
+
+def fetch_matcher_scores(candidate_id: str, timeout: float = 60.0) -> Optional[Dict[str, dict]]:
+    """Calls ai_job_matcher_og.py's own /match endpoint directly (same-machine
+    microservice call, same pattern the gateway itself proxies) and returns
+    {job_id: full_match_object} — the *entire* per-job result (match_score,
+    criteria_scores, skills_breakdown, qualifications_breakdown,
+    experience_breakdown, preferences_breakdown, match_level, explanation),
+    not just the final percentage, so the frontend's 4-factor breakdown UI
+    has real data instead of the total score sitting next to all-zero factors.
+    Returns None (not {}) on any failure — callers must be able to tell
+    "matcher unavailable" apart from "matcher ran and found zero jobs," since
+    only the former should fall back to 100% hybrid weight."""
+    try:
+        resp = requests.post(f"{MATCHER_URL}/match", json={"candidate_id": candidate_id}, timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("success"):
+            log.warning("Matcher returned success=false for %s: %s", candidate_id, data.get("error"))
+            return None
+        return {m["job"]["id"]: m for m in data.get("matches", []) if m.get("job", {}).get("id")}
+    except Exception as e:
+        log.warning("Matcher unavailable (%s) — combined feed falls back to 100%% hybrid.", e)
+        return None
+
+
+def combined_score_candidate(candidate_id: str, top_n: int,
+                              matcher_weight: float = DEFAULT_MATCHER_WEIGHT,
+                              hybrid_weight: float = DEFAULT_HYBRID_WEIGHT) -> dict:
+    total_w = matcher_weight + hybrid_weight
+    if total_w <= 0:
+        matcher_weight, hybrid_weight = DEFAULT_MATCHER_WEIGHT, DEFAULT_HYBRID_WEIGHT
+        total_w = 1.0
+    matcher_weight, hybrid_weight = matcher_weight / total_w, hybrid_weight / total_w
+
+    # Pull the FULL ranked hybrid list (every active job), not just a shortlist,
+    # so every job has a hybrid score to blend against a matcher score.
+    n_jobs = len(engine.jobs) if engine.jobs is not None else top_n
+    hybrid_result = engine.score_candidate(candidate_id, top_n=max(n_jobs, top_n))
+    hybrid_by_job = {j["job_id"]: j for j in hybrid_result["scored_jobs"]}
+
+    matcher_matches = fetch_matcher_scores(candidate_id)  # None => matcher unavailable
+    matcher_used = matcher_matches is not None
+
+    all_job_ids = set(hybrid_by_job) | set(matcher_matches or {})
+    combined = []
+    for job_id in all_job_ids:
+        hybrid_entry = hybrid_by_job.get(job_id)
+        hybrid_pct = hybrid_entry["total_score"] if hybrid_entry else 0.0
+        matcher_entry = matcher_matches.get(job_id) if matcher_matches else None
+        matcher_pct = float(matcher_entry["match_score"]) if matcher_entry else None
+
+        if matcher_pct is not None and hybrid_entry is not None:
+            final = matcher_weight * matcher_pct + hybrid_weight * hybrid_pct
+            source = "matcher+hybrid"
+        elif matcher_pct is not None:
+            final = matcher_pct  # hybrid had nothing for this job — don't invent a 0
+            source = "matcher-only"
+        elif hybrid_entry is not None:
+            final = hybrid_pct  # matcher unavailable/had nothing — use hybrid alone
+            source = "hybrid-only"
+        else:
+            continue
+
+        job_details = hybrid_entry["job"] if hybrid_entry else None
+        if job_details is None and engine.jobs is not None:
+            match_rows = engine.jobs[engine.jobs["id"].astype(str) == job_id]
+            if not match_rows.empty:
+                job_details = job_details_dict(match_rows.iloc[0])
+
+        combined.append({
+            "job_id": job_id,
+            "title": hybrid_entry["title"] if hybrid_entry else (job_details or {}).get("title"),
+            "company": hybrid_entry["company"] if hybrid_entry else (job_details or {}).get("company_name"),
+            "job": job_details,
+            "total_score": round(final, 2),
+            "matcher_score": round(matcher_pct, 2) if matcher_pct is not None else None,
+            "hybrid_score": round(hybrid_pct, 2) if hybrid_entry else None,
+            "score_source": source,
+            "reasons": hybrid_entry["reasons"] if hybrid_entry else [],
+            # Full 4-factor breakdown from the matcher — None when the matcher
+            # had no data for this job (hybrid-only), so the UI can tell
+            # "no data" apart from "scored 0".
+            "matcher_breakdown": {
+                "match_level": matcher_entry.get("match_level"),
+                "criteria_scores": matcher_entry.get("criteria_scores"),
+                "skills_breakdown": matcher_entry.get("skills_breakdown"),
+                "qualifications_breakdown": matcher_entry.get("qualifications_breakdown"),
+                "experience_breakdown": matcher_entry.get("experience_breakdown"),
+                "preferences_breakdown": matcher_entry.get("preferences_breakdown"),
+                "explanation": matcher_entry.get("explanation"),
+                "improvement_suggestions": matcher_entry.get("improvement_suggestions"),
+            } if matcher_entry else None,
+        })
+
+    combined.sort(key=lambda c: c["total_score"], reverse=True)
+    return {
+        "scored_jobs": combined[:top_n],
+        "total_jobs": len(combined),
+        "cold_start": hybrid_result.get("cold_start", False),
+        "matcher_available": matcher_used,
+        "weights_used": {"matcher": round(matcher_weight, 3), "hybrid": round(hybrid_weight, 3)},
+        "interest_profile": hybrid_result.get("interest_profile", {}),
+    }
+
+
+# ==========================================================================
+# 10. FASTAPI APP
+# ==========================================================================
+
+app = FastAPI(title="SimuHire Hybrid Job Recommender", version="1.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+class ScoreRequest(BaseModel):
+    candidate_id: str
+    top_n: int = CFG.top_k_default
+    cache_result: bool = True
+
+
+@app.post("/score")
+async def score(req: ScoreRequest):
+    try:
+        result = engine.score_candidate(req.candidate_id, req.top_n)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        log.error("Scoring failed for %s: %s", req.candidate_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if req.cache_result and result["scored_jobs"]:
+        rows = [(req.candidate_id, j["job_id"], j["total_score"]) for j in result["scored_jobs"]]
+        try:
+            engine.db.upsert_feed_scores(rows)
+        except Exception as e:
+            log.warning("feed_scores cache write failed: %s", e)
+
+    return {**result, "computed_at": datetime.now().isoformat(),
+            "engine": "hybrid-content(semantic+tfidf)+behavior(interests+search)+collaborative(similar-candidates)"
+                      "+freshness+popularity+business-rule"}
+
+
+class CombinedScoreRequest(BaseModel):
+    candidate_id: str
+    top_n: int = CFG.top_k_default
+    cache_result: bool = True
+    matcher_weight: float = DEFAULT_MATCHER_WEIGHT
+    hybrid_weight: float = DEFAULT_HYBRID_WEIGHT
+
+
+@app.post("/score/combined")
+async def score_combined(req: CombinedScoreRequest):
+    """The actual job feed: ai_job_matcher_og.py's profile-fit score (default
+    70%) blended with this service's own hybrid score (default 30%).
+    matcher_weight/hybrid_weight are per-request so the split is tunable
+    without a redeploy."""
+    try:
+        result = combined_score_candidate(req.candidate_id, req.top_n, req.matcher_weight, req.hybrid_weight)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        log.error("Combined scoring failed for %s: %s", req.candidate_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    if req.cache_result and result["scored_jobs"]:
+        rows = [(req.candidate_id, j["job_id"], j["total_score"]) for j in result["scored_jobs"]]
+        try:
+            engine.db.upsert_feed_scores(rows)
+        except Exception as e:
+            log.warning("feed_scores cache write failed: %s", e)
+
+    return {**result, "computed_at": datetime.now().isoformat(), "engine": "matcher+hybrid-combined-feed"}
+
+
+class CombinedJobScoreRequest(BaseModel):
+    candidate_id: str
+    matcher_weight: float = DEFAULT_MATCHER_WEIGHT
+    hybrid_weight: float = DEFAULT_HYBRID_WEIGHT
+
+
+class RealtimeEventRequest(BaseModel):
+    event_type: str = "recommendation_update"
+    entity_type: str
+    operation: str = "upsert"
+    entity_id: Optional[str] = None
+    candidate_id: Optional[str] = None
+    job_id: Optional[str] = None
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    source: str = "webhook"
+
+
+class RealtimeBatchRequest(BaseModel):
+    events: List[RealtimeEventRequest]
+
+
+def _validate_realtime_webhook_secret(x_recommendation_secret: Optional[str]) -> None:
+    if CFG.webhook_secret and x_recommendation_secret != CFG.webhook_secret:
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
+
+
+@app.post("/webhooks/recommendation-events")
+async def webhook_recommendation_event(
+    req: RealtimeEventRequest,
+    x_recommendation_secret: Optional[str] = Header(default=None, alias="X-Recommendation-Secret"),
+):
+    _validate_realtime_webhook_secret(x_recommendation_secret)
+    accepted = engine.enqueue_realtime_events([req.dict()])
+    return {"accepted": accepted, "queue_size": engine._realtime_queue.qsize(), "received_at": datetime.now().isoformat()}
+
+
+@app.post("/webhooks/recommendation-events/batch")
+async def webhook_recommendation_events_batch(
+    req: RealtimeBatchRequest,
+    x_recommendation_secret: Optional[str] = Header(default=None, alias="X-Recommendation-Secret"),
+):
+    _validate_realtime_webhook_secret(x_recommendation_secret)
+    accepted = engine.enqueue_realtime_events([event.dict() for event in req.events])
+    return {"accepted": accepted, "queue_size": engine._realtime_queue.qsize(), "received_at": datetime.now().isoformat()}
+
+
+@app.get("/realtime/status")
+async def realtime_status():
+    return {
+        "queue_size": engine._realtime_queue.qsize(),
+        "listener_started": engine._realtime_started,
+        "collaborative_refresh_pending": engine._collab_retrain_pending.is_set(),
+        "collaborative_refresh_running": engine._collab_retrain_running,
+        "last_trained_at": engine.last_trained_at.isoformat() if engine.last_trained_at else None,
+    }
+
+
+@app.post("/score/combined/job/{job_id}")
+async def score_combined_job(job_id: str, req: CombinedJobScoreRequest):
+    """Single-job variant of /score/combined, for job-detail pages (View
+    Details) — same 70% matcher + 30% hybrid blend as the feed, so a
+    candidate sees one consistent score everywhere instead of the feed
+    showing the blended score while the detail page shows matcher-only."""
+    try:
+        result = combined_score_candidate(req.candidate_id, top_n=len(engine.jobs) + 1,
+                                           matcher_weight=req.matcher_weight, hybrid_weight=req.hybrid_weight)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        log.error("Combined single-job scoring failed for %s/%s: %s", req.candidate_id, job_id, e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+    match = next((j for j in result["scored_jobs"] if j["job_id"] == job_id), None)
+    if match is None:
+        raise HTTPException(status_code=404, detail=f"No score available for job {job_id} (not active/published, or excluded from both scorers)")
+
+    return {
+        "job_match": match,
+        "matcher_available": result["matcher_available"],
+        "weights_used": result["weights_used"],
+        "computed_at": datetime.now().isoformat(),
+    }
+
+
+@app.post("/refresh")
+async def refresh():
+    try:
+        stats = engine.prepare()
+        engine.start_realtime_updates()
+        return {"status": "trained", **stats}
+    except Exception as e:
+        log.error("Refresh failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "up" if engine.last_trained_at else "untrained",
+        "last_trained_at": engine.last_trained_at.isoformat() if engine.last_trained_at else None,
+        "n_candidates": len(engine.candidates) if engine.candidates is not None else 0,
+        "n_jobs": len(engine.jobs) if engine.jobs is not None else 0,
+        "collaborative_trained": engine.collaborative_model.trained,
+        "semantic_encoder_available": engine.semantic_encoder.available,
+        "device": str(engine.collaborative_model.device),
+    }
+
+
+def _background_refresh_loop(interval_minutes: int):
+    while True:
+        time.sleep(interval_minutes * 60)
+        try:
+            engine.prepare()
+        except Exception as e:
+            log.error("Background refresh failed: %s", e)
+
+
+@app.on_event("startup")
+async def on_startup():
+    try:
+        engine.prepare()
+    except Exception as e:
+        log.error("Initial training failed (service will still serve cold-start content scoring once DB is reachable): %s", e)
+    finally:
+        engine.start_realtime_updates()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    engine.stop_realtime_updates()
+
+
+# ==========================================================================
+# 11. ENTRY POINT
+# ==========================================================================
+
+def main():
+    parser = argparse.ArgumentParser(description="Hybrid Job Recommender (live DB-backed service)")
+    parser.add_argument("--check-db", action="store_true", help="Verify DB connectivity and print row counts, then exit.")
+    parser.add_argument("--port", type=int, default=CFG.port)
+    args = parser.parse_args()
+
+    if args.check_db:
+        db = Database(CFG.db)
+        print("Candidates:", len(db.fetch_candidates()))
+        print("Active jobs:", len(db.fetch_active_jobs()))
+        print("Job views:", len(db.fetch_view_events()))
+        print("Applications:", len(db.fetch_application_events()))
+        print("Saved jobs:", len(db.fetch_save_events()))
+        print("Ignored jobs:", len(db.fetch_ignored_pairs()))
+        print("Search events:", len(db.fetch_search_events()))
+        return
+
+    uvicorn.run(app, host="0.0.0.0", port=args.port)
+
+
+if __name__ == "__main__":
+    main()

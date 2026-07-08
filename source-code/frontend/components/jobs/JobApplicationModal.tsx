@@ -61,10 +61,10 @@ interface ProfileType {
 
 interface MatchDetailsType {
   criteria_scores?: {
-    skills_match?: number;
-    qualifications_match?: number;
-    experience_match?: number;
-    preferences_match?: number;
+    skills_match?: number | null;
+    qualifications_match?: number | null;
+    experience_match?: number | null;
+    preferences_match?: number | null;
   };
   skills_breakdown?: {
     matched_skills?: string[];
@@ -109,6 +109,11 @@ interface MatchDetailsType {
     unmatched_requirements?: string[];
   };
   preferences_breakdown?: any;
+  // Combined feed (matcher 70% + hybrid 30%, see hybrid_job_recommender.py::combined_score_candidate)
+  matcher_score?: number | null;
+  hybrid_score?: number | null;
+  score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+  reasons?: string[];
 }
 
 interface JobApplicationModalProps {
@@ -631,6 +636,11 @@ const JobApplicationModal = ({
     const qualsMatchScore = criteria.qualifications_match ?? 0;
     const expMatchScore = criteria.experience_match ?? 0;
     const prefsMatchScore = criteria.preferences_match ?? 0;
+    // Only real when the profile matcher actually scored this job
+    // (score_source "matcher+hybrid"/"matcher-only") — for "hybrid-only"
+    // jobs criteria_scores is null, so 0% here would misleadingly sit next
+    // to a real, non-zero total score from the hybrid recommender alone.
+    const hasBreakdown = criteria.skills_match != null || criteria.qualifications_match != null;
 
     const gapYears = expBD.gap_years ?? 0;
     const candidateYears = expBD.candidate_years ?? expBD.total_years ?? 0;
@@ -694,8 +704,8 @@ const JobApplicationModal = ({
           </div>
         )}
 
-        {/* 4-Factor Breakdown */}
-        {matchScore > 0 && (
+        {/* 4-Factor Breakdown — only when the profile matcher actually scored this job */}
+        {matchScore > 0 && hasBreakdown && (
           <div className="bg-gray-50 rounded-xl p-4">
             <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
               <Target className="w-4 h-4 text-purple-500" />

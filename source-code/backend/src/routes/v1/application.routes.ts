@@ -10,6 +10,7 @@ import DatabaseService from '../../services/database.service.js';
 import ResponseService from '../../services/response.service.js';
 import emailService from '../../services/email.service.js';
 import NotificationService from '../../services/notification.service.js';
+import RecommendationSyncService from '../../services/recommendation-sync.service.js';
 
 const router: Router = express.Router();
 
@@ -1616,6 +1617,20 @@ router.post(
       await client.query('COMMIT');
       console.log('💾 Database transaction committed successfully');
 
+      // Tell the hybrid recommender an application happened — a strong positive
+      // signal for both the behavior model (recency-weighted interest profile)
+      // and collaborative filtering (this candidate x job interaction).
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'applications',
+        operation: isNewApplication ? 'insert' : 'update',
+        candidate_id: authReq.user!.id,
+        job_id: jobId,
+        entity_id: applicationId,
+        payload: {},
+        source: 'backend',
+      });
+
       // Best-effort side effects for a NEW application: a submission timeline entry,
       // an in-app notification, and a confirmation email. None of these may break the
       // application response if they fail.
@@ -1864,6 +1879,17 @@ router.post('/apply-with-profile/:jobId', [protect, authorize('candidate'), para
 
         await client.query('COMMIT');
 
+        RecommendationSyncService.queueEvent({
+          event_type: 'recommendation_update',
+          entity_type: 'applications',
+          operation: 'update',
+          candidate_id: authReq.user.id,
+          job_id: jobId!,
+          entity_id: updateResult.rows[0].id,
+          payload: {},
+          source: 'backend',
+        });
+
         return res.status(200).json({
           success: true,
           message: 'Application submitted successfully',
@@ -1884,6 +1910,17 @@ router.post('/apply-with-profile/:jobId', [protect, authorize('candidate'), para
     );
 
     await client.query('COMMIT');
+
+    RecommendationSyncService.queueEvent({
+      event_type: 'recommendation_update',
+      entity_type: 'applications',
+      operation: 'insert',
+      candidate_id: authReq.user.id,
+      job_id: jobId!,
+      entity_id: applicationResult.rows[0].id,
+      payload: {},
+      source: 'backend',
+    });
 
     return res.status(201).json({
       success: true,

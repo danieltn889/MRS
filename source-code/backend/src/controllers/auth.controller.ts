@@ -6,6 +6,7 @@ import { Request, Response } from 'express';
 import { query, getClient } from '../config/database.js';
 import { logger } from '../utils/logger.js';
 import { sendEmail } from '../services/email.service.js';
+import RecommendationSyncService from '../services/recommendation-sync.service.js';
 import { User, AuthenticatedRequest } from '../types/auth.types.js';
 import { User as BaseUser } from '../models/index.js';
 
@@ -279,6 +280,23 @@ const register = async (req: RegisterRequest, res: Response): Promise<void> => {
     }
 
     await client.query('COMMIT');
+
+    if (userType === 'candidate') {
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'candidate_profiles',
+        operation: 'insert',
+        candidate_id: user.id,
+        entity_id: user.id,
+        payload: {
+          user_type: userType,
+          first_name: firstName,
+          last_name: lastName,
+          profile_completion: 10,
+        },
+        source: 'backend',
+      });
+    }
 
     // Send verification email (async, don't wait)
     try {
@@ -2654,6 +2672,21 @@ const acceptTeamInvitation = async (req: Request, res: Response): Promise<void> 
     );
 
     await client.query('COMMIT');
+
+    RecommendationSyncService.queueEvent({
+      event_type: 'recommendation_update',
+      entity_type: 'candidate_profiles',
+      operation: 'insert',
+      candidate_id: userId,
+      entity_id: userId,
+      payload: {
+        user_type: 'recruiter',
+        first_name: firstName || invitation.first_name,
+        last_name: lastName || invitation.last_name,
+        profile_completion: 10,
+      },
+      source: 'backend',
+    });
 
     // Generate JWT token for the new user - use a different variable name
     const authToken = generateToken({ id: userId, email: invitation.email, user_type: 'recruiter' });

@@ -251,14 +251,19 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   const matchStars = matchData?.matchStars || '';
   const matchRec = matchData?.matchRecommendation || matchData?.recommendation || '';
   const criteria = matchData?.criteriaScores || {};
+  // The 4-factor breakdown only exists when the profile matcher actually
+  // scored this job (score_source "matcher+hybrid" or "matcher-only") — for
+  // "hybrid-only" jobs criteria_scores is null, and showing 0% next to a
+  // real total score would be misleading, so we hide the section instead.
+  const hasBreakdown = criteria.skills_match != null || criteria.qualifications_match != null;
   const skillsScore = criteria.skills_match ?? safe(criteria_scores?.skillsScore, 0);
   const qualsScore = criteria.qualifications_match ?? safe(criteria_scores?.qualificationsScore, 0);
   const expScore = criteria.experience_match ?? safe(criteria_scores?.experienceScore, 0);
   const prefsScore = criteria.preferences_match ?? safe(criteria_scores?.preferencesScore, 0);
 
-  const matchedSkills: string[] = toStrArr(matchData?.matchedSkills);
-  const missingSkills: string[] = toStrArr(matchData?.missingSkills);
-  const reasons = matchData?.matchReasons || [];
+  const matchedSkills: string[] = toStrArr(matchData?.matchedSkills || matchData?.skillsBreakdown?.matched_skills);
+  const missingSkills: string[] = toStrArr(matchData?.missingSkills || matchData?.skillsBreakdown?.missing_skills);
+  const reasons = matchData?.matchReasons || matchData?.reasons || [];
 
   const ringColor = matchScore >= 80 ? '#22c55e' : matchScore >= 60 ? '#3b82f6' : matchScore >= 40 ? '#f59e0b' : '#ef4444';
 
@@ -721,40 +726,46 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                     <p className="text-xl font-extrabold text-gray-900">{matchLevel || 'AI Match Analysis'}</p>
                     {matchStars && <p className="text-base mt-0.5">{matchStars}</p>}
                     {matchRec   && <p className="text-sm font-medium mt-1">{matchRec}</p>}
-                    <div className="flex gap-3 mt-2 text-xs text-gray-500">
-                      <span className="flex items-center gap-1"><Sparkles size={10} /> Skills: {skillsScore.toFixed(0)}%</span>
-                      <span className="flex items-center gap-1"><GraduationCap size={10} /> Education: {qualsScore.toFixed(0)}%</span>
-                      <span className="flex items-center gap-1"><WorkIcon size={10} /> Experience: {expScore.toFixed(0)}%</span>
-                    </div>
+                    {hasBreakdown ? (
+                      <div className="flex gap-3 mt-2 text-xs text-gray-500">
+                        <span className="flex items-center gap-1"><Sparkles size={10} /> Skills: {skillsScore.toFixed(0)}%</span>
+                        <span className="flex items-center gap-1"><GraduationCap size={10} /> Education: {qualsScore.toFixed(0)}%</span>
+                        <span className="flex items-center gap-1"><WorkIcon size={10} /> Experience: {expScore.toFixed(0)}%</span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-2">Score from the AI hybrid recommender (content, behavior, collaborative, freshness, popularity) — the profile matcher hasn't scored this specific job yet.</p>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* 4-Factor breakdown */}
-              <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5">
-                <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <Target size={15} className="text-blue-600" /> 4-Factor Score Breakdown
-                </h3>
-                <FactorRow label="🔧 Skills"          score={skillsScore} weight="40%" pts={skillsScore * 0.40} colour="bg-green-500" />
-                <FactorRow label="🎓 Qualifications"  score={qualsScore}  weight="25%" pts={qualsScore  * 0.25} colour="bg-blue-500" />
-                <FactorRow label="📅 Experience"      score={expScore}    weight="20%" pts={expScore    * 0.20} colour="bg-purple-500" />
-                <FactorRow label="⚙️ Preferences"     score={prefsScore}  weight="15%" pts={prefsScore  * 0.15} colour="bg-yellow-500" />
-                <div className="mt-4 pt-3 border-t border-gray-200">
-                  <div className="flex justify-between text-sm font-bold text-gray-900 mb-1">
-                    <span>Total Score</span>
-                    <span style={{ color: ringColor }}>{matchScore.toFixed(1)} / 100 pts</span>
+              {/* 4-Factor breakdown — only when the profile matcher actually scored this job */}
+              {hasBreakdown && (
+                <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5">
+                  <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Target size={15} className="text-blue-600" /> 4-Factor Score Breakdown
+                  </h3>
+                  <FactorRow label="🔧 Skills"          score={skillsScore} weight="40%" pts={skillsScore * 0.40} colour="bg-green-500" />
+                  <FactorRow label="🎓 Qualifications"  score={qualsScore}  weight="25%" pts={qualsScore  * 0.25} colour="bg-blue-500" />
+                  <FactorRow label="📅 Experience"      score={expScore}    weight="20%" pts={expScore    * 0.20} colour="bg-purple-500" />
+                  <FactorRow label="⚙️ Preferences"     score={prefsScore}  weight="15%" pts={prefsScore  * 0.15} colour="bg-yellow-500" />
+                  <div className="mt-4 pt-3 border-t border-gray-200">
+                    <div className="flex justify-between text-sm font-bold text-gray-900 mb-1">
+                      <span>Total Score</span>
+                      <span style={{ color: ringColor }}>{matchScore.toFixed(1)} / 100 pts</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                      <div className="h-2.5 rounded-full" style={{ width: `${matchScore}%`, background: ringColor }} />
+                    </div>
+                    <p className="text-center text-xs text-gray-500 mt-3">
+                      {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.' :
+                       matchScore >= 65 ? '👍 Good match! Consider applying.' :
+                       matchScore >= 50 ? '⚠️ Partial match. Update your profile to improve.' :
+                                          '📝 Low match. Focus on skill development.'}
+                    </p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2.5">
-                    <div className="h-2.5 rounded-full" style={{ width: `${matchScore}%`, background: ringColor }} />
-                  </div>
-                  <p className="text-center text-xs text-gray-500 mt-3">
-                    {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.' :
-                     matchScore >= 65 ? '👍 Good match! Consider applying.' :
-                     matchScore >= 50 ? '⚠️ Partial match. Update your profile to improve.' :
-                                        '📝 Low match. Focus on skill development.'}
-                  </p>
                 </div>
-              </div>
+              )}
 
               {/* Education Qualification Match Section */}
               {(candidateDegrees.length > 0 || jobDegreeRequired) && (
@@ -958,22 +969,29 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                 </div>
               )}
 
-              {/* Match reasons */}
+              {/* Match reasons — hybrid_job_recommender.py's `reasons` is a list of
+                  plain explanation strings (see RECOMMENDATION_ENGINE.md), not
+                  {type, text} objects, so normalize both shapes here. */}
               {reasons.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold text-gray-700">Match Insights</h4>
-                  {reasons.map((r: any, idx: number) => (
-                    <div key={idx} className={`flex items-start gap-2 px-3 py-2 rounded-xl text-sm ${
-                      r.type === 'positive' ? 'bg-green-50 text-green-800' :
-                      r.type === 'warning'  ? 'bg-amber-50 text-amber-800' :
-                                              'bg-blue-50 text-blue-800'
-                    }`}>
-                      {r.type === 'positive' ? <ThumbsUp   size={13} className="mt-0.5 shrink-0" /> :
-                       r.type === 'warning'  ? <AlertCircle size={13} className="mt-0.5 shrink-0" /> :
-                                               <Info        size={13} className="mt-0.5 shrink-0" />}
-                      <span>{r.text}</span>
-                    </div>
-                  ))}
+                  {reasons.map((r: any, idx: number) => {
+                    const text = typeof r === 'string' ? r : r.text;
+                    const type = typeof r === 'string' ? undefined : r.type;
+                    if (!text) return null;
+                    return (
+                      <div key={idx} className={`flex items-start gap-2 px-3 py-2 rounded-xl text-sm ${
+                        type === 'positive' ? 'bg-green-50 text-green-800' :
+                        type === 'warning'  ? 'bg-amber-50 text-amber-800' :
+                                                'bg-blue-50 text-blue-800'
+                      }`}>
+                        {type === 'positive' ? <ThumbsUp   size={13} className="mt-0.5 shrink-0" /> :
+                         type === 'warning'  ? <AlertCircle size={13} className="mt-0.5 shrink-0" /> :
+                                                 <Info        size={13} className="mt-0.5 shrink-0" />}
+                        <span>{text}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

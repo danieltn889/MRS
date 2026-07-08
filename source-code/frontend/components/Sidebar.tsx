@@ -19,7 +19,8 @@ import {
   Activity,
   Settings,
   Play,
-  List
+  List,
+  Sparkles
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
@@ -82,6 +83,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
       default: // candidate
         return [
           { id: 'dashboard', label: 'Applicant Dashboard', icon: BarChart3 },
+          { id: 'for-you', label: 'For You', icon: Sparkles },
           { id: 'saved-jobs', label: 'Saved Jobs', icon: Bookmark },
           { id: 'simulation', label: 'Job Practical Assessment', icon: FileText },
           { id: 'my-simulations', label: 'My Practical Assessments', icon: Play },

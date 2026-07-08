@@ -3,6 +3,7 @@ import { AuthenticatedRequest } from '../types/auth.types.js';
 import { logger } from '../utils/logger.js';
 import { query, getClient } from '../config/database.js';
 import { getFullFileUrl } from '../utils/fileUrl.js';
+import RecommendationSyncService from '../services/recommendation-sync.service.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -32,6 +33,18 @@ const fieldMapping: { [key: string]: string } = {
   verificationMethod: 'verification_method',
   skillId: 'skill_id',
   skillName: 'name'
+};
+
+const queueCandidateProfileUpdate = (candidateId: string, operation: 'insert' | 'update' | 'delete', payload: Record<string, any> = {}): void => {
+  RecommendationSyncService.queueEvent({
+    event_type: 'recommendation_update',
+    entity_type: 'candidate_profiles',
+    operation,
+    candidate_id: candidateId,
+    entity_id: candidateId,
+    payload,
+    source: 'backend',
+  });
 };
 
 // =====================================================
@@ -256,6 +269,8 @@ export const addEducation = async (req: AuthenticatedRequest, res: Response): Pr
 
     await client.query('COMMIT');
 
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'education' });
+
     res.status(201).json({
       success: true,
       message: 'Education added successfully',
@@ -428,6 +443,8 @@ export const updateEducation = async (req: AuthenticatedRequest, res: Response):
 
     await client.query('COMMIT');
 
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'education' });
+
     res.json({
       success: true,
       message: 'Education updated successfully',
@@ -461,6 +478,8 @@ export const deleteEducation = async (req: AuthenticatedRequest, res: Response):
       });
       return;
     }
+
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'education' });
 
     res.json({
       success: true,
@@ -585,6 +604,8 @@ export const addWorkExperience = async (req: AuthenticatedRequest, res: Response
 
     await client.query('COMMIT');
 
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'work_experience' });
+
     res.status(201).json({
       success: true,
       message: 'Work experience added successfully',
@@ -698,6 +719,8 @@ export const updateWorkExperience = async (req: AuthenticatedRequest, res: Respo
     );
 
     await client.query('COMMIT');
+
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'work_experience' });
 
     res.json({
       success: true,
@@ -969,6 +992,8 @@ export const deleteWorkExperience = async (req: AuthenticatedRequest, res: Respo
       return;
     }
 
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'work_experience' });
+
     res.json({
       success: true,
       message: 'Work experience deleted successfully'
@@ -1113,6 +1138,8 @@ export const addSkill = async (req: AuthenticatedRequest, res: Response): Promis
     `, [req.user!.id, finalSkillId]);
 
     await client.query('COMMIT');
+
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'skills' });
 
     res.status(201).json({
       success: true,
@@ -1314,6 +1341,8 @@ export const updateSkill = async (req: AuthenticatedRequest, res: Response): Pro
 
     await client.query('COMMIT');
 
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'skills' });
+
     res.json({
       success: true,
       message: 'Skill updated successfully',
@@ -1348,6 +1377,8 @@ export const deleteSkill = async (req: AuthenticatedRequest, res: Response): Pro
       });
       return;
     }
+
+    queueCandidateProfileUpdate(req.user!.id, 'update', { field: 'skills' });
 
     res.json({
       success: true,
@@ -1970,6 +2001,11 @@ export const updatePreferences = async (req: AuthenticatedRequest, res: Response
       return;
     }
 
+    queueCandidateProfileUpdate(req.user!.id, 'update', {
+      field: 'job_preferences',
+      profile_completion: result.rows[0].profile_completion ?? null,
+    });
+
     res.json({
       success: true,
       message: 'Preferences updated successfully',
@@ -2023,6 +2059,11 @@ export const updateAvailability = async (req: AuthenticatedRequest, res: Respons
       return;
     }
 
+    queueCandidateProfileUpdate(req.user!.id, 'update', {
+      field: 'availability',
+      profile_completion: result.rows[0].profile_completion ?? null,
+    });
+
     res.json({
       success: true,
       message: 'Availability updated successfully',
@@ -2071,6 +2112,11 @@ export const updatePrivacySettings = async (req: AuthenticatedRequest, res: Resp
       });
       return;
     }
+
+    queueCandidateProfileUpdate(req.user!.id, 'update', {
+      field: 'privacy_settings',
+      profile_completion: result.rows[0].profile_completion ?? null,
+    });
 
     res.json({
       success: true,
@@ -2192,6 +2238,11 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     }
 
     console.log('✅ Profile updated successfully:', result.rows[0]);
+
+    queueCandidateProfileUpdate(req.user!.id, 'update', {
+      fields: updateFields.map(f => f.split(' = ')[0]),
+      profile_completion: result.rows[0].profile_completion ?? null,
+    });
 
     res.json({
       success: true,
@@ -2330,6 +2381,12 @@ export const completeProfile = async (req: AuthenticatedRequest, res: Response):
       });
       return;
     }
+
+    queueCandidateProfileUpdate(userId, 'update', {
+      field: 'profile_completion',
+      completion_percentage: completionPercentage,
+      is_complete: isComplete,
+    });
 
     res.json({
       success: true,
@@ -2484,6 +2541,12 @@ export const getProfileCompletionStatus = async (req: AuthenticatedRequest, res:
       SET profile_completion = $1, updated_at = NOW() 
       WHERE user_id = $2
     `, [completionPercentage, userId]);
+
+    queueCandidateProfileUpdate(userId, 'update', {
+      field: 'profile_completion',
+      completion_percentage: completionPercentage,
+      is_complete: completionPercentage === 100,
+    });
 
     res.json({
       success: true,

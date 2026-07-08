@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PRIORITY-BASED JOB SEARCH API - COMPLETE 5 LEVELS WITH FULL LOGGING
-NO HARDCODED TERMS - PURE NLP
+PRIORITY-BASED JOB SEARCH API - 5 LEXICAL LEVELS + SEMANTIC FALLBACK
+NO HARDCODED TERMS - PURE NLP, WITH TYPO CORRECTION
 """
 
 from fastapi import FastAPI, Query
@@ -13,6 +13,7 @@ import uvicorn
 from datetime import datetime
 from pathlib import Path
 import re
+import difflib
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -23,6 +24,14 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
+
+# Semantic embeddings (same model as ai_job_matcher_og.py / hybrid_job_recommender.py)
+# — optional: search still works with pure TF-IDF if this package is unavailable.
+try:
+    from sentence_transformers import SentenceTransformer
+    USE_SEMANTIC = True
+except ImportError:
+    USE_SEMANTIC = False
 
 # =====================================================
 # COMPLETE LOGGING SYSTEM
@@ -114,36 +123,72 @@ download_nltk_data()
 STOP_WORDS = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-def preprocess_text(text: str, context: str = "general") -> str:
-    """Pure NLP preprocessing - NO hardcoded terms"""
+def correct_typos(tokens: List[str], vocab: set) -> List[str]:
+    """Fuzzy-correct each token against a vocabulary built from the real job
+    postings (see PrioritySearchEngine.add_to_vocab) — same difflib approach
+    ai_job_matcher_og.py uses for skill matching. Only touches tokens longer
+    than 3 chars and not already a known word, so short/valid words are never
+    altered. A no-op when no vocabulary has been built yet."""
+    if not tokens or not vocab:
+        return tokens
+    corrected = []
+    for tok in tokens:
+        if len(tok) <= 3 or tok in vocab:
+            corrected.append(tok)
+            continue
+        match = difflib.get_close_matches(tok, vocab, n=1, cutoff=0.86)
+        if match and match[0] != tok:
+            log_nlp(f"  [typo-correction] '{tok}' -> '{match[0]}'")
+        corrected.append(match[0] if match else tok)
+    return corrected
+
+def display_corrected_query(query: str, vocab: set) -> str:
+    """A readable 'did you mean' string — typo-corrected only, keeping
+    stopwords and word forms intact (unlike preprocess_text's TF-IDF-ready
+    output) so it's fit to show back to a user."""
+    if not query or not vocab:
+        return query
+    tokens = re.sub(r'[^a-z0-9\s]', ' ', query.lower()).split()
+    corrected = correct_typos(tokens, vocab)
+    return ' '.join(corrected)
+
+def preprocess_text(text: str, context: str = "general", vocab: set = None) -> str:
+    """Pure NLP preprocessing - NO hardcoded terms.
+    `vocab`, when given (only for the incoming search query, not job text),
+    fuzzy-corrects typos against real terms seen in the job postings."""
     if not text:
         return ""
-    
+
     original = text
     log_nlp(f"  [{context}] Original: '{original[:100]}'")
-    
+
     # Convert to lowercase
     text = text.lower()
-    
+
     # Keep alphanumeric and spaces only (remove special chars but keep word boundaries)
     text = re.sub(r'[^a-z0-9\s]', ' ', text)
-    
+
     # Tokenize
     tokens = word_tokenize(text)
     log_nlp(f"  [{context}] Tokens: {tokens[:10]}")
-    
+
     # Remove stopwords and short tokens (keep 2+ char tokens)
     tokens_before = len(tokens)
     tokens = [token for token in tokens if token not in STOP_WORDS and len(token) > 1]
     log_nlp(f"  [{context}] After stopword removal: {len(tokens)} tokens (removed {tokens_before - len(tokens)})")
-    
+
+    # Typo correction (query only) — before lemmatization, so correction
+    # compares real surface forms against the vocabulary.
+    if vocab:
+        tokens = correct_typos(tokens, vocab)
+
     # Lemmatize
     tokens = [lemmatizer.lemmatize(token) for token in tokens]
     log_nlp(f"  [{context}] After lemmatization: {tokens[:10]}")
-    
+
     result = ' '.join(tokens)
     log_nlp(f"  [{context}] Final: '{result}'")
-    
+
     return result
 
 # =====================================================
@@ -217,6 +262,11 @@ def extract_responsibilities_text(job: dict) -> str:
         except:
             responsibilities = []
     
+    if isinstance(responsibilities, dict):
+        responsibilities = list(responsibilities.values())
+    elif not isinstance(responsibilities, list):
+        responsibilities = []
+
     log_debug(f"    Found {len(responsibilities)} responsibilities")
     for i, resp in enumerate(responsibilities[:5]):  # Limit to first 5
         if isinstance(resp, str):
@@ -243,6 +293,11 @@ def extract_requirements_text(job: dict) -> str:
         except:
             requirements = []
     
+    if isinstance(requirements, dict):
+        requirements = list(requirements.values())
+    elif not isinstance(requirements, list):
+        requirements = []
+
     log_debug(f"    Found {len(requirements)} requirements")
     for i, req in enumerate(requirements[:5]):  # Limit to first 5
         if isinstance(req, str):
@@ -353,6 +408,8 @@ app.add_middleware(
 # =====================================================
 
 class PrioritySearchEngine:
+    SEMANTIC_THRESHOLD = 0.35
+
     def __init__(self):
         self.models = {
             'title': {'vectorizer': None, 'vectors': None, 'name': 'JOB TITLE', 'icon': '🎯', 'threshold': 0.20},
@@ -363,7 +420,53 @@ class PrioritySearchEngine:
         }
         self.jobs = []
         self.is_fitted = False
-    
+
+        # Typo-correction vocabulary — built from the real job postings at fit()
+        # time (titles, skills, qualifications, etc.), not a static word list.
+        self.dynamic_vocab: set = set()
+
+        # Semantic fallback — catches conceptually related jobs with no lexical
+        # overlap at all (e.g. query "backend developer" vs. a posting titled
+        # "Node.js Engineer"). Same model as ai_job_matcher_og.py /
+        # hybrid_job_recommender.py, loaded once and reused.
+        self.semantic_model = None
+        if USE_SEMANTIC:
+            try:
+                self.semantic_model = SentenceTransformer('all-MiniLM-L6-v2')
+                log_success("Semantic model (all-MiniLM-L6-v2) loaded for search fallback")
+            except Exception as e:
+                log_error(f"Semantic model failed to load, continuing with TF-IDF only: {e}")
+                self.semantic_model = None
+        self.semantic_matrix = None  # (n_jobs, 384) embeddings, one per job
+
+    def add_to_vocab(self, terms: List[str]):
+        """Populate the fuzzy-correction vocabulary from real job text."""
+        for term in terms:
+            if not term or not isinstance(term, str):
+                continue
+            cleaned = re.sub(r'[^\w\s]', ' ', term.lower())
+            for tok in cleaned.split():
+                if len(tok) > 3:
+                    self.dynamic_vocab.add(tok)
+
+    def _job_semantic_text(self, job: dict) -> str:
+        """A compact 'concept' string per job (title + skills) for the
+        semantic embedding — short and focused, unlike the full TF-IDF texts,
+        since sentence-transformers work best on phrase-length input."""
+        parts = [job.get('title', '') or '']
+        for key in ('skills_required', 'skills_preferred'):
+            skills = job.get(key, [])
+            if isinstance(skills, str):
+                try:
+                    skills = json.loads(skills)
+                except Exception:
+                    skills = []
+            for skill in skills or []:
+                name = skill.get('name') if isinstance(skill, dict) else skill
+                if name:
+                    parts.append(str(name))
+        return ' '.join(parts)
+
     def fit(self, jobs: List[dict]):
         """Train all 5 models with complete logging"""
         if not jobs:
@@ -427,7 +530,33 @@ class PrioritySearchEngine:
         self.models['skill']['vectors'] = vectorizer.fit_transform(skill_texts)
         self.models['skill']['vectorizer'] = vectorizer
         log_success(f"   SKILLS model ready. Vocabulary: {len(vectorizer.vocabulary_)}")
-        
+
+        # Typo-correction vocabulary — built from every level's real text, so a
+        # misspelled query word can be fuzzy-matched against actual terms used
+        # in the postings (skills, titles, qualifications, etc.).
+        self.dynamic_vocab = set()
+        self.add_to_vocab(title_texts)
+        self.add_to_vocab(qual_texts)
+        self.add_to_vocab(resp_texts)
+        self.add_to_vocab(req_texts)
+        self.add_to_vocab(skill_texts)
+        log_success(f"   Typo-correction vocabulary ready: {len(self.dynamic_vocab)} terms")
+
+        # Semantic fallback embeddings — one compact (title + skills) vector per job
+        if self.semantic_model:
+            log_info("🧠 Training Level: SEMANTIC (fallback)...")
+            semantic_texts = [self._job_semantic_text(job) for job in jobs]
+            try:
+                self.semantic_matrix = self.semantic_model.encode(
+                    semantic_texts, batch_size=32, show_progress_bar=False
+                )
+                log_success(f"   SEMANTIC fallback ready. Embedded {len(jobs)} jobs.")
+            except Exception as e:
+                log_error(f"Semantic embedding failed, disabling semantic fallback: {e}")
+                self.semantic_matrix = None
+        else:
+            self.semantic_matrix = None
+
         self.is_fitted = True
         log_success("✅ All 5 models trained successfully!")
         write_log(TRAINING_LOG, "Training completed successfully", "SUCCESS")
@@ -448,17 +577,20 @@ class PrioritySearchEngine:
             return self._empty_results()
         
         log_query(f"Original query: '{query}'")
-        processed_query = preprocess_text(query, "query")
+        # Typo-correct against real terms from the postings BEFORE lemmatizing,
+        # so e.g. "pyhton devloper" -> "python developer" still hits Level 1/5.
+        processed_query = preprocess_text(query, "query", vocab=self.dynamic_vocab)
         log_query(f"Processed query: '{processed_query}'")
         log_info(f"📊 Thresholds: Title={thresholds['title']}, Qual={thresholds['qualification']}, Resp={thresholds['responsibility']}, Req={thresholds['requirement']}, Skills={thresholds['skill']}")
-        
+
         matched_indices = set()
         results = {
             'title_matches': [],
             'qualification_matches': [],
             'responsibility_matches': [],
             'requirement_matches': [],
-            'skill_matches': []
+            'skill_matches': [],
+            'semantic_matches': []
         }
         
         # Process each priority level in order
@@ -507,7 +639,40 @@ class PrioritySearchEngine:
             
             log_success(f"   {data['name']} matches: {len(results[f'{level}_matches'])}")
             write_log(SEARCH_LOG, f"{data['name']} matches: {len(results[f'{level}_matches'])}", "INFO")
-        
+
+        # LEVEL 6 (fallback): SEMANTIC — catches jobs with no lexical overlap at
+        # all against the ORIGINAL (uncorrected) query, e.g. "backend developer"
+        # matching a posting titled "Node.js Engineer". Only fills in jobs the
+        # 5 lexical levels above didn't already match.
+        if self.semantic_model is not None and self.semantic_matrix is not None:
+            log_info("=" * 50)
+            log_info("🧠 LEVEL: Checking SEMANTIC matches...")
+            try:
+                query_embedding = self.semantic_model.encode([query])[0]
+                norms = np.linalg.norm(self.semantic_matrix, axis=1) * np.linalg.norm(query_embedding)
+                norms[norms == 0] = 1e-9
+                sem_similarities = (self.semantic_matrix @ query_embedding) / norms
+
+                for idx, score in enumerate(sem_similarities):
+                    if idx in matched_indices:
+                        continue
+                    job = self.jobs[idx]
+                    job_title = job.get('title', 'Unknown')
+                    log_vector(f"   Job {idx}: '{job_title}' - SEMANTIC score: {score:.4f}")
+                    if score >= self.SEMANTIC_THRESHOLD:
+                        log_match(f"   ✅ '{job_title}' - Semantic score: {score:.4f}")
+                        results['semantic_matches'].append({
+                            'job': job,
+                            'score': float(score),
+                            'priority': len(results['semantic_matches']) + 1,
+                            'priority_name': 'SEMANTIC (related)',
+                            'icon': '🧠'
+                        })
+                        matched_indices.add(idx)
+                log_success(f"   SEMANTIC matches: {len(results['semantic_matches'])}")
+            except Exception as e:
+                log_error(f"Semantic search failed: {e}")
+
         # Summary
         total = sum(len(v) for v in results.values())
         log_info("=" * 50)
@@ -517,19 +682,21 @@ class PrioritySearchEngine:
         log_success(f"   📋 Responsibilities: {len(results['responsibility_matches'])}")
         log_success(f"   ✅ Requirements: {len(results['requirement_matches'])}")
         log_success(f"   💪 Skills: {len(results['skill_matches'])}")
+        log_success(f"   🧠 Semantic: {len(results['semantic_matches'])}")
         log_info("=" * 50)
-        
+
         write_log(SEARCH_LOG, f"SEARCH COMPLETE: {total} matches found", "SUCCESS")
-        
+
         return results
-    
+
     def _empty_results(self):
         return {
             'title_matches': [],
             'qualification_matches': [],
             'responsibility_matches': [],
             'requirement_matches': [],
-            'skill_matches': []
+            'skill_matches': [],
+            'semantic_matches': []
         }
 
 # =====================================================
@@ -564,62 +731,82 @@ class BackendClient:
             log_error(f"Login error: {e}")
             return False
     
+    def _fetch_all_job_summaries(self):
+        """/jobs/candidate/list paginates (default limit=20, max=100) since it's
+        built for candidates browsing the UI — search needs the full active set,
+        not just the most recent 20 (same fix as ai_job_matcher_og.py's
+        BackendClient.get_jobs())."""
+        all_jobs = []
+        page = 1
+        page_size = 100
+        while True:
+            resp = requests.get(
+                f"{self.base_url}/jobs/candidate/list",
+                params={"page": page, "limit": page_size},
+                headers=self.headers,
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                break
+            data = resp.json()
+            if not (data.get("success") and data.get("data")):
+                break
+            jobs_data = data["data"]
+            page_jobs = jobs_data.get("data") if isinstance(jobs_data, dict) else jobs_data
+            if not page_jobs:
+                break
+            all_jobs.extend(page_jobs)
+            pagination = jobs_data.get("pagination") if isinstance(jobs_data, dict) else None
+            if not pagination or not pagination.get("has_next_page"):
+                break
+            page += 1
+        return all_jobs
+
     def fetch_jobs(self):
         if not self.token and not self.login():
             return []
-        
+
         try:
             log_info("Fetching jobs from backend...")
-            resp = requests.get(f"{self.base_url}/jobs/candidate/list", 
-                               headers=self.headers, timeout=30)
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("success") and data.get("data"):
-                    jobs_data = data["data"]
-                    if isinstance(jobs_data, dict) and jobs_data.get("data"):
-                        jobs = jobs_data["data"]
-                    elif isinstance(jobs_data, list):
-                        jobs = jobs_data
-                    else:
-                        jobs = []
-                    
-                    log_success(f"Found {len(jobs)} jobs")
-                    write_log(DATA_LOG, f"Found {len(jobs)} jobs in list response", "INFO")
-                    
-                    # Fetch full details
-                    enriched_jobs = []
-                    for job in jobs:
-                        job_id = job.get('id')
-                        job_title = job.get('title', 'Unknown')
-                        if job_id:
-                            detail_resp = requests.get(
-                                f"{self.base_url}/jobs/candidate/{job_id}",
-                                headers=self.headers,
-                                timeout=30
-                            )
-                            if detail_resp.status_code == 200:
-                                detail_data = detail_resp.json()
-                                if detail_data.get("success"):
-                                    full_job = detail_data.get("data", job)
-                                    enriched_jobs.append(full_job)
-                                    log_success(f"  Fetched details for: {job_title}")
-                                    write_log(DATA_LOG, f"Fetched details for job {job_id}: {job_title}", "SUCCESS")
-                                else:
-                                    enriched_jobs.append(job)
-                            else:
-                                enriched_jobs.append(job)
+            jobs = self._fetch_all_job_summaries()
+            if not jobs:
+                return self.jobs_cache
+
+            log_success(f"Found {len(jobs)} jobs")
+            write_log(DATA_LOG, f"Found {len(jobs)} jobs in list response", "INFO")
+
+            # Fetch full details
+            enriched_jobs = []
+            for job in jobs:
+                job_id = job.get('id')
+                job_title = job.get('title', 'Unknown')
+                if job_id:
+                    detail_resp = requests.get(
+                        f"{self.base_url}/jobs/candidate/{job_id}",
+                        headers=self.headers,
+                        timeout=30
+                    )
+                    if detail_resp.status_code == 200:
+                        detail_data = detail_resp.json()
+                        if detail_data.get("success"):
+                            full_job = detail_data.get("data", job)
+                            enriched_jobs.append(full_job)
+                            log_success(f"  Fetched details for: {job_title}")
+                            write_log(DATA_LOG, f"Fetched details for job {job_id}: {job_title}", "SUCCESS")
                         else:
                             enriched_jobs.append(job)
-                    
-                    self.jobs_cache = enriched_jobs
-                    active_jobs = [j for j in enriched_jobs if j.get('status') == 'active']
-                    log_info(f"Active jobs: {len(active_jobs)}")
-                    
-                    # Train search engine
-                    self.search_engine.fit(active_jobs)
-                    return enriched_jobs
-            return self.jobs_cache
+                    else:
+                        enriched_jobs.append(job)
+                else:
+                    enriched_jobs.append(job)
+
+            self.jobs_cache = enriched_jobs
+            active_jobs = [j for j in enriched_jobs if j.get('status') == 'active']
+            log_info(f"Active jobs: {len(active_jobs)}")
+
+            # Train search engine
+            self.search_engine.fit(active_jobs)
+            return enriched_jobs
         except Exception as e:
             log_error(f"Fetch error: {e}")
             traceback.print_exc()
@@ -702,13 +889,15 @@ async def search_jobs(
     # Perform priority search
     results = backend.search_engine.search(q)
     
-    # Combine results in priority order
+    # Combine results in priority order (semantic is the lowest-priority
+    # fallback — it only ever contains jobs the 5 lexical levels above missed)
     all_matches = []
     all_matches.extend(results['title_matches'])
     all_matches.extend(results['qualification_matches'])
     all_matches.extend(results['responsibility_matches'])
     all_matches.extend(results['requirement_matches'])
     all_matches.extend(results['skill_matches'])
+    all_matches.extend(results['semantic_matches'])
     
     # Format results
     formatted_results = []
@@ -732,8 +921,10 @@ async def search_jobs(
             "qualification_matches": len(results['qualification_matches']),
             "responsibility_matches": len(results['responsibility_matches']),
             "requirement_matches": len(results['requirement_matches']),
-            "skill_matches": len(results['skill_matches'])
-        }
+            "skill_matches": len(results['skill_matches']),
+            "semantic_matches": len(results['semantic_matches'])
+        },
+        "corrected_query": display_corrected_query(q, backend.search_engine.dynamic_vocab)
     }
     
     write_log(SEARCH_LOG, f"SEARCH RESULT: {len(formatted_results)} matches in {elapsed:.2f}s", "SUCCESS")
@@ -787,16 +978,19 @@ async def get_log(log_type: str):
 async def health():
     return {
         "status": "healthy",
-        "service": "5-Level Priority Job Search API - Pure NLP",
+        "service": "6-Level Priority Job Search API - Pure NLP + Semantic + Typo Correction",
         "priority_levels": [
             {"level": 1, "name": "JOB TITLE", "icon": "🎯", "threshold": 0.20},
             {"level": 2, "name": "QUALIFICATIONS & EDUCATION", "icon": "📚", "threshold": 0.15},
             {"level": 3, "name": "RESPONSIBILITIES", "icon": "📋", "threshold": 0.12},
             {"level": 4, "name": "REQUIREMENTS", "icon": "✅", "threshold": 0.10},
-            {"level": 5, "name": "SKILLS", "icon": "💪", "threshold": 0.05}
+            {"level": 5, "name": "SKILLS", "icon": "💪", "threshold": 0.05},
+            {"level": 6, "name": "SEMANTIC (fallback, related jobs with no keyword overlap)", "icon": "🧠", "threshold": PrioritySearchEngine.SEMANTIC_THRESHOLD}
         ],
         "cached_jobs": len(backend.jobs_cache),
         "model_ready": backend.search_engine.is_fitted,
+        "semantic_search_available": backend.search_engine.semantic_model is not None,
+        "typo_correction_vocabulary_size": len(backend.search_engine.dynamic_vocab),
         "log_directory": str(LOG_DIR.absolute()),
         "log_files": [f.name for f in LOG_DIR.glob("*.log")]
     }

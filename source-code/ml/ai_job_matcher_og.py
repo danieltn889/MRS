@@ -2677,20 +2677,40 @@ class BackendClient:
             return None
     
     def get_jobs(self):
+        """Fetches every active job, not just the endpoint's default first page.
+        /jobs/candidate/list paginates (default limit=20, max=100) since it's built
+        for candidates browsing the UI — the matcher needs the full set so it scores
+        every job the hybrid recommender sees, not just the 20 most recent."""
+        all_jobs = []
+        page = 1
+        page_size = 100
         try:
-            resp = requests.get(f"{self.base_url}/jobs/candidate/list", headers=self.headers, timeout=BACKEND_REQUEST_TIMEOUT)
-            if resp.status_code == 200:
+            while True:
+                resp = requests.get(
+                    f"{self.base_url}/jobs/candidate/list",
+                    params={"page": page, "limit": page_size},
+                    headers=self.headers,
+                    timeout=BACKEND_REQUEST_TIMEOUT,
+                )
+                if resp.status_code != 200:
+                    break
                 data = resp.json()
-                if data.get("success") and data.get("data"):
-                    jobs_data = data["data"]
-                    if isinstance(jobs_data, dict) and jobs_data.get("data"):
-                        return jobs_data["data"]
-                    elif isinstance(jobs_data, list):
-                        return jobs_data
-            return []
+                if not (data.get("success") and data.get("data")):
+                    break
+                jobs_data = data["data"]
+                page_jobs = jobs_data.get("data") if isinstance(jobs_data, dict) else jobs_data
+                if not page_jobs:
+                    break
+                all_jobs.extend(page_jobs)
+
+                pagination = jobs_data.get("pagination") if isinstance(jobs_data, dict) else None
+                if not pagination or not pagination.get("has_next_page"):
+                    break
+                page += 1
+            return all_jobs
         except Exception as e:
             log_error(f"Jobs error: {e}")
-            return []
+            return all_jobs
     
     def get_job_by_id(self, job_id: str):
         """Get a single job by ID from the database"""

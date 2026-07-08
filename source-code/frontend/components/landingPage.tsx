@@ -49,7 +49,11 @@ interface SearchResponse {
     responsibility_matches: number;
     requirement_matches: number;
     skill_matches: number;
+    semantic_matches: number;
   };
+  // Typo-corrected version of the query (see ml_search.py's display_corrected_query) —
+  // only meaningfully different from search_term when a typo was actually fixed.
+  corrected_query?: string;
 }
 
 interface LandingPageProps {
@@ -113,6 +117,15 @@ const PRIORITY_CONFIG: Record<string, {
     label: "Skill Match",
     labelShort: "Skills",
     order: 5
+  },
+  "SEMANTIC (related)": {
+    bgColor: "bg-indigo-50",
+    textColor: "text-indigo-700",
+    borderColor: "border-indigo-200",
+    icon: "🧠",
+    label: "Related Match (AI similarity, no exact keyword)",
+    labelShort: "Related",
+    order: 6
   }
 };
 
@@ -334,6 +347,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
   const [isLoadingRecent, setIsLoadingRecent] = useState(true);
   const [searchBreakdown, setSearchBreakdown] = useState<SearchResponse['breakdown'] | null>(null);
   const [processingTime, setProcessingTime] = useState<number | null>(null);
+  const [correctedQuery, setCorrectedQuery] = useState<string | null>(null);
   const [activePriorityFilter, setActivePriorityFilter] = useState<string | null>(null);
   const [showAllResults, setShowAllResults] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
@@ -433,9 +447,13 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
         setSearchResults(data.results);
         setSearchBreakdown(data.breakdown || null);
         setProcessingTime(data.processing_time_ms || null);
+        // Only show the "did you mean" hint when correction actually changed something
+        const corrected = data.corrected_query;
+        setCorrectedQuery(corrected && corrected.toLowerCase() !== q.toLowerCase() ? corrected : null);
       } else {
         setSearchResults([]);
         setSearchBreakdown(null);
+        setCorrectedQuery(null);
       }
     } catch {
       // Fallback: use backend API search (expanded fields via our improved controller)
@@ -748,6 +766,13 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                     </button>
                   </div>
 
+                  {/* "Did you mean" — only shown when typo correction actually changed the query */}
+                  {correctedQuery && (
+                    <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-800">
+                      Showing results for <button className="underline font-semibold" onClick={() => handleSearch(correctedQuery)}>{correctedQuery}</button> instead of "{searchQuery}"
+                    </div>
+                  )}
+
                   {/* Match Breakdown Bar */}
                   {searchBreakdown && (
                     <div className="flex-shrink-0 px-4 py-2.5 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-100">
@@ -759,6 +784,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                           {searchBreakdown.responsibility_matches > 0 && <span className="text-blue-600">📋 Resp: {searchBreakdown.responsibility_matches}</span>}
                           {searchBreakdown.requirement_matches > 0 && <span className="text-green-600">✅ Req: {searchBreakdown.requirement_matches}</span>}
                           {searchBreakdown.skill_matches > 0 && <span className="text-gray-600">💪 Skills: {searchBreakdown.skill_matches}</span>}
+                          {searchBreakdown.semantic_matches > 0 && <span className="text-indigo-600">🧠 Related: {searchBreakdown.semantic_matches}</span>}
                         </div>
                       </div>
                     </div>

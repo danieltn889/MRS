@@ -252,6 +252,36 @@ const runMigrations = async (): Promise<void> => {
 
     logger.info('Schema migration completed');
 
+    // schema.sql's CHECK constraint on jobs.status only takes effect via a
+    // fresh CREATE TABLE — on a database where `jobs` already existed (any
+    // install predating this constraint's expansion), the CREATE TABLE
+    // statement above just hits "already exists" and is skipped, silently
+    // leaving the OLD constraint in place. Re-discovering and replacing it
+    // by name every run makes this self-healing regardless of whether the
+    // database is fresh or pre-existing, so it doesn't rely on anyone
+    // remembering to run a separate one-off migration file.
+    console.log('🔴 [runMigrations] Ensuring jobs.status constraint is up to date...');
+    await client.query(`
+      DO $$
+      DECLARE c text;
+      BEGIN
+        SELECT conname INTO c
+          FROM pg_constraint
+         WHERE conrelid = 'jobs'::regclass
+           AND contype = 'c'
+           AND pg_get_constraintdef(oid) ILIKE '%status%';
+        IF c IS NOT NULL THEN
+          EXECUTE format('ALTER TABLE jobs DROP CONSTRAINT %I', c);
+        END IF;
+        ALTER TABLE jobs ADD CONSTRAINT jobs_status_check
+          CHECK (status IN (
+            'draft', 'pending', 'active', 'open', 'inactive',
+            'paused', 'closed', 'filled', 'archived', 'expired'
+          ));
+      END $$;
+    `);
+    logger.info('jobs.status constraint verified');
+
     const tablesResult = await client.query(`
       SELECT table_name
       FROM information_schema.tables

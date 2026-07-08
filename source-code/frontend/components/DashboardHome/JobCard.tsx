@@ -1,5 +1,6 @@
 // components/DashboardHome/JobCard.tsx
 import React, { useState } from 'react';
+import { useFeedTracker } from '../../hooks/useFeedTracker';
 import {
   MapPin, DollarSign, Clock, Briefcase, Building2, Shield, Star,
   ExternalLink, Bookmark, CheckCircle, Users, Timer,
@@ -26,14 +27,6 @@ interface JobCardProps {
   getDaysRemaining?: (expiresAt: string) => string | null;
 }
 
-const matchLevelStyle = (level: string) => {
-  if (level?.includes('Excellent')) return 'bg-green-100 text-green-800 border-green-200';
-  if (level?.includes('Strong'))    return 'bg-blue-100 text-blue-800 border-blue-200';
-  if (level?.includes('Good'))      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-  if (level?.includes('Partial'))   return 'bg-orange-100 text-orange-800 border-orange-200';
-  return 'bg-gray-100 text-gray-700 border-gray-200';
-};
-
 const FactorBar = ({ label, score, colour, weight }: { label: string; score: number; colour: string; weight: string }) => (
   <div className="mb-1.5">
     <div className="flex justify-between text-[11px] mb-0.5">
@@ -45,6 +38,12 @@ const FactorBar = ({ label, score, colour, weight }: { label: string; score: num
     </div>
   </div>
 );
+
+const scoreSourceLabel = (source?: string) => {
+  if (source === 'matcher-only') return 'Profile match only — hybrid signal unavailable for this job';
+  if (source === 'hybrid-only') return 'Hybrid recommender only — profile matcher unavailable';
+  return 'Profile matcher (70%) + hybrid recommender (30%)';
+};
 
 const JobCard: React.FC<JobCardProps> = ({
   job,
@@ -73,16 +72,13 @@ const JobCard: React.FC<JobCardProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showAllSkills, setShowAllSkills] = useState(false);
+  const { trackView, trackSave, trackUnsave, onHoverStart, onHoverEnd } = useFeedTracker();
 
   const matchScore   = job.matchScore    || 0;
-  const matchLevel   = job.matchLevel    || '';
-  const matchStars   = job.matchStars    || '';
-  const criteria     = job.criteriaScores || {};
-
-  const skillsScore  = criteria.skills_match        ?? 0;
-  const qualsScore   = criteria.qualifications_match ?? 0;
-  const expScore     = criteria.experience_match     ?? 0;
-  const prefsScore   = criteria.preferences_match    ?? 0;
+  const matcherScore = job.matcherScore;   // null when matcher had no data for this job
+  const hybridScore  = job.hybridScore;    // null when hybrid had no data for this job
+  const scoreSource  = job.scoreSource;    // 'matcher+hybrid' | 'matcher-only' | 'hybrid-only'
+  const reasons: string[] = job.reasons || [];
 
   // Extract ALL job details from the response
   const rawJob = job.rawJob || job.job || job;
@@ -155,17 +151,13 @@ const JobCard: React.FC<JobCardProps> = ({
   const daysRemaining = job.daysRemaining || getDaysRemainingProp(expiresAt);
   const isExpired = daysRemaining === 'Expired' || (expiresAt ? new Date(expiresAt) < now : false);
   
-  // Matched/Missing skills - DECLARE BEFORE USING
-  const skillsBD = job.skillsBreakdown;
-  const expBD = job.experienceBreakdown;
-  const qualsBD = job.qualificationsBreakdown;
-  const prefsBD = job.preferencesBreakdown;
-  
-  const matchedSkills = job.matchedSkills || skillsBD?.matched_skills || [];
-  const missingSkills = job.missingSkills || skillsBD?.missing_skills || [];
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-100">
+    <div
+      className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 overflow-hidden border border-gray-100"
+      onMouseEnter={() => onHoverStart(job.id)}
+      onMouseLeave={() => onHoverEnd(job.id)}
+    >
       {isAiMatch && <div className={`h-1.5 ${getScoreColor(matchScore)}`} />}
 
       <div className="p-5">
@@ -194,9 +186,9 @@ const JobCard: React.FC<JobCardProps> = ({
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${getMatchColor(matchScore)}`}>
                     <Star size={13} fill="currentColor" />{matchScore.toFixed(1)}% Match
                   </span>
-                  {matchLevel && (
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${matchLevelStyle(matchLevel)}`}>
-                      {matchLevel}
+                  {scoreSource && scoreSource !== 'matcher+hybrid' && (
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700 border-gray-200">
+                      {scoreSource === 'matcher-only' ? 'Profile match only' : 'Hybrid recommender only'}
                     </span>
                   )}
                 </div>
@@ -245,7 +237,7 @@ const JobCard: React.FC<JobCardProps> = ({
               </div>
             )}
 
-            {/* ── 4-Factor ML breakdown ── */}
+            {/* ── AI Match Analysis: profile matcher + hybrid recommender, explained ── */}
             {isAiMatch && (
               <div className="mb-3">
                 <button
@@ -254,18 +246,19 @@ const JobCard: React.FC<JobCardProps> = ({
                   className="w-full flex items-center justify-between px-3 py-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl text-xs font-semibold text-blue-800 hover:bg-blue-100 transition-colors"
                 >
                   <span className="flex items-center gap-1.5">
-                    <CheckCircle size={13} /> 4-Factor AI Match Analysis
-                    {matchStars && <span className="ml-1">{matchStars}</span>}
+                    <CheckCircle size={13} /> AI Match Analysis
                   </span>
                   {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
 
                 {expanded && (
                   <div className="mt-2 px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl space-y-1">
-                    <FactorBar label="🔧 Skills"         score={skillsScore} colour="bg-green-500"  weight="40%" />
-                    <FactorBar label="🎓 Qualifications" score={qualsScore}  colour="bg-blue-500"   weight="25%" />
-                    <FactorBar label="📅 Experience"     score={expScore}    colour="bg-purple-500" weight="20%" />
-                    <FactorBar label="⚙️ Preferences"    score={prefsScore}  colour="bg-yellow-500" weight="15%" />
+                    {matcherScore !== null && matcherScore !== undefined && (
+                      <FactorBar label="🎯 Profile Match"    score={matcherScore} colour="bg-blue-500"   weight="70%" />
+                    )}
+                    {hybridScore !== null && hybridScore !== undefined && (
+                      <FactorBar label="🧠 Hybrid Recommender" score={hybridScore} colour="bg-purple-500" weight="30%" />
+                    )}
 
                     <div className="pt-2 mt-2 border-t border-blue-200">
                       <div className="flex justify-between text-xs font-bold text-blue-900 mb-1">
@@ -275,100 +268,21 @@ const JobCard: React.FC<JobCardProps> = ({
                       <div className="w-full bg-blue-200 rounded-full h-2">
                         <div className={`h-2 rounded-full ${getScoreColor(matchScore)}`} style={{ width: `${matchScore}%` }} />
                       </div>
+                      <p className="text-[10px] text-gray-500 mt-1">{scoreSourceLabel(scoreSource)}</p>
                     </div>
 
-                    {job.matchRecommendation && (
-                      <p className="text-[11px] text-center text-blue-700 font-medium pt-1">{job.matchRecommendation}</p>
-                    )}
-
-                    {/* Skills detail */}
-                    {(matchedSkills.length > 0 || missingSkills.length > 0) && (
-                      <div className="pt-2 mt-2 border-t border-blue-200 space-y-1.5">
-                        {skillsBD && (
-                          <p className="text-[11px] text-gray-500">
-                            Skills: {skillsBD.total_matched}/{skillsBD.total_required} required matched
-                          </p>
-                        )}
-                        {matchedSkills.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {matchedSkills.slice(0, 8).map((s: string) => (
-                              <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-green-100 text-green-800 text-[10px] font-medium rounded-full">
-                                <CheckCircle size={9} />{s}
-                              </span>
-                            ))}
-                            {matchedSkills.length > 8 && (
-                              <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full">
-                                +{matchedSkills.length - 8}
-                              </span>
-                            )}
-                          </div>
-                        )}
-                        {missingSkills.length > 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {missingSkills.slice(0, 5).map((s: string) => (
-                              <span key={s} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-red-50 text-red-700 text-[10px] font-medium rounded-full border border-red-100">
-                                <X size={9} />{s}
-                              </span>
-                            ))}
-                            {missingSkills.length > 5 && (
-                              <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 text-[10px] rounded-full">
-                                +{missingSkills.length - 5} more gaps
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Experience breakdown */}
-                    {expBD && (
-                      <div className="pt-2 mt-1.5 border-t border-blue-200 text-[11px] text-gray-600 space-y-1">
-                        <div className="flex justify-between">
-                          <span>Total experience: <strong>{Number(expBD.total_years ?? 0).toFixed(1)} yrs</strong></span>
-                          {expBD.relevant_years != null && (
-                            <span>Relevant: <strong className="text-purple-700">{Number(expBD.relevant_years).toFixed(1)} yrs</strong></span>
-                          )}
-                        </div>
-                        {(expBD.required_years || expBD.job_min_years) > 0 && (
-                          <div className="flex justify-between">
-                            <span>Required: <strong>{expBD.required_years || expBD.job_min_years || 0}+ yrs</strong></span>
-                          </div>
-                        )}
-                        {expBD.gap_years > 0 && (
-                          <span className="text-orange-600 font-semibold block">⚠️ Experience gap: {expBD.gap_years.toFixed(1)} years</span>
-                        )}
-                        {expBD.specific_matches?.length > 0 && (
-                          <div className="mt-1">
-                            <p className="font-semibold text-gray-700">Matched requirements:</p>
-                            {expBD.specific_matches.slice(0, 2).map((m: any, i: number) => (
-                              <div key={i} className="text-[10px] text-gray-500">• {m.requirement_title} ({m.candidate_years} yrs)</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Qualifications breakdown */}
-                    {qualsBD && (qualsBD.candidate_degrees?.length > 0 || qualsBD.job_degree_required) && (
-                      <div className="pt-1.5 text-[11px] text-gray-600 space-y-1">
-                        <span className="flex items-center gap-1"><GraduationCap size={11} />
-                          Your degrees: {qualsBD.candidate_degrees?.join(', ') || 'None'}
-                        </span>
-                        {qualsBD.job_degree_required && (
-                          <span className="flex items-center gap-1 text-amber-700">
-                            <AlertCircle size={11} /> Required: {qualsBD.job_degree_required}
-                          </span>
-                        )}
-                        {qualsBD.best_matched_field && (
-                          <span className="text-green-700 text-[10px]">✓ Best match: {qualsBD.best_matched_field}</span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Preferences breakdown */}
-                    {prefsBD && prefsBD.missing_job_data?.length > 0 && (
-                      <div className="pt-1.5 text-[10px] text-gray-400">
-                        ℹ️ Missing job data: {prefsBD.missing_job_data.join(', ')}
+                    {/* Why this job was recommended (explainable AI) */}
+                    {reasons.length > 0 && (
+                      <div className="pt-2 mt-2 border-t border-blue-200 space-y-1">
+                        <p className="text-[11px] font-semibold text-gray-700">Why we recommended this:</p>
+                        <ul className="space-y-0.5">
+                          {reasons.map((r, i) => (
+                            <li key={i} className="text-[11px] text-gray-600 flex items-start gap-1">
+                              <CheckCircle size={10} className="text-green-600 mt-0.5 shrink-0" />
+                              <span>{r}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                   </div>
@@ -542,12 +456,12 @@ const JobCard: React.FC<JobCardProps> = ({
 
           {/* ── Right: action buttons ── */}
           <div className="flex flex-col gap-2 lg:w-44 shrink-0">
-            <button type="button" onClick={() => onViewDetails(job)}
+            <button type="button" onClick={() => { trackView(job.id, 0); onViewDetails(job); }}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
               <ExternalLink size={15} /> View Details
             </button>
 
-            <button type="button" onClick={() => onSaveJob(job.id, isSaved)}
+            <button type="button" onClick={() => { isSaved ? trackUnsave(job.id) : trackSave(job.id); onSaveJob(job.id, isSaved); }}
               className="w-full px-4 py-2 border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
               <Bookmark size={15} fill={isSaved ? 'currentColor' : 'none'} />
               {isSaved ? 'Saved' : 'Save Job'}

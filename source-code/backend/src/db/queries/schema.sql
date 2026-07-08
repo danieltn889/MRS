@@ -702,7 +702,7 @@ CREATE TABLE jobs (
     }'::JSONB,
     skill_experience_requirements JSONB DEFAULT '{}'::JSONB,
     ai_match_required_score       INTEGER DEFAULT 70 CHECK (ai_match_required_score BETWEEN 0 AND 100),
-    status                        VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'pending', 'active', 'paused', 'closed', 'archived', 'expired')),
+    status                        VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'pending', 'active', 'open', 'inactive', 'paused', 'closed', 'filled', 'archived', 'expired')),
     visibility                    VARCHAR(50) DEFAULT 'public' CHECK (visibility IN ('public', 'internal', 'confidential', 'unlisted')),
     published_at                  TIMESTAMP WITH TIME ZONE,
     expires_at                    TIMESTAMP WITH TIME ZONE,
@@ -762,6 +762,58 @@ CREATE TABLE saved_jobs (
 
 CREATE INDEX idx_saved_jobs_user     ON saved_jobs(user_id);
 CREATE INDEX idx_saved_jobs_saved_at ON saved_jobs(saved_at);
+
+-- Personalized job feed — activity tracking (previously only applied ad hoc via
+-- migrations/feed_tables.sql; folded in here so `npm run migrate` alone is complete).
+CREATE TABLE job_views (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id        UUID NOT NULL REFERENCES jobs(id)  ON DELETE CASCADE,
+    seconds_spent INTEGER NOT NULL DEFAULT 0,
+    viewed_at     TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, job_id)
+);
+CREATE INDEX idx_job_views_user ON job_views(user_id);
+
+CREATE TABLE ignored_jobs (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id     UUID NOT NULL REFERENCES jobs(id)  ON DELETE CASCADE,
+    ignored_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    UNIQUE (user_id, job_id)
+);
+CREATE INDEX idx_ignored_jobs_user ON ignored_jobs(user_id);
+
+CREATE TABLE job_searches (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    query       TEXT NOT NULL,
+    searched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_job_searches_user ON job_searches(user_id, searched_at DESC);
+
+CREATE TABLE feed_scores (
+    candidate_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id       UUID NOT NULL REFERENCES jobs(id)  ON DELETE CASCADE,
+    score        NUMERIC(6,2) NOT NULL DEFAULT 0,
+    computed_at  TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (candidate_id, job_id)
+);
+CREATE INDEX idx_feed_scores_candidate ON feed_scores(candidate_id, score DESC);
+
+-- Job status audit trail — previously only applied ad hoc via
+-- queries/2026_job_status_history.sql; folded in here for the same reason.
+CREATE TABLE job_status_history (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id          UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    previous_status VARCHAR(50),
+    new_status      VARCHAR(50) NOT NULL,
+    changed_by      UUID REFERENCES users(id),
+    reason          TEXT,
+    created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX idx_job_status_history_job     ON job_status_history(job_id);
+CREATE INDEX idx_job_status_history_created ON job_status_history(created_at DESC);
 
 CREATE TABLE job_applications_tracking (
     job_id                  UUID PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
@@ -2811,6 +2863,86 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+-- =====================================================
+-- RECOMMENDER REALTIME NOTIFICATIONS
+-- =====================================================
+
+CREATE OR REPLACE FUNCTION notify_recommender_realtime_update()
+RETURNS TRIGGER AS $$
+DECLARE
+    payload JSONB;
+    row_data JSONB;
+    entity_id TEXT;
+    candidate_id TEXT;
+    job_id TEXT;
+BEGIN
+    row_data := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+    entity_id := COALESCE(
+        row_data->>'id',
+        row_data->>'user_id',
+        row_data->>'job_id'
+    );
+    candidate_id := COALESCE(
+        row_data->>'candidate_id',
+        row_data->>'user_id'
+    );
+    job_id := COALESCE(
+        row_data->>'job_id',
+        row_data->>'id'
+    );
+
+    payload := jsonb_build_object(
+        'event_type', 'recommendation_update',
+        'entity_type', TG_TABLE_NAME,
+        'operation', lower(TG_OP),
+        'entity_id', entity_id,
+        'candidate_id', candidate_id,
+        'job_id', job_id,
+        'payload', row_data,
+        'source', 'database_trigger',
+        'created_at', NOW()
+    );
+
+    PERFORM pg_notify('recommender_events', payload::text);
+    RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS notify_recommender_candidate_profiles ON candidate_profiles;
+CREATE TRIGGER notify_recommender_candidate_profiles
+    AFTER INSERT OR UPDATE OR DELETE ON candidate_profiles
+    FOR EACH ROW EXECUTE FUNCTION notify_recommender_realtime_update();
+
+DROP TRIGGER IF EXISTS notify_recommender_jobs ON jobs;
+CREATE TRIGGER notify_recommender_jobs
+    AFTER INSERT OR UPDATE OR DELETE ON jobs
+    FOR EACH ROW EXECUTE FUNCTION notify_recommender_realtime_update();
+
+DROP TRIGGER IF EXISTS notify_recommender_applications ON applications;
+CREATE TRIGGER notify_recommender_applications
+    AFTER INSERT OR UPDATE OR DELETE ON applications
+    FOR EACH ROW EXECUTE FUNCTION notify_recommender_realtime_update();
+
+DROP TRIGGER IF EXISTS notify_recommender_job_views ON job_views;
+CREATE TRIGGER notify_recommender_job_views
+    AFTER INSERT OR UPDATE OR DELETE ON job_views
+    FOR EACH ROW EXECUTE FUNCTION notify_recommender_realtime_update();
+
+DROP TRIGGER IF EXISTS notify_recommender_saved_jobs ON saved_jobs;
+CREATE TRIGGER notify_recommender_saved_jobs
+    AFTER INSERT OR UPDATE OR DELETE ON saved_jobs
+    FOR EACH ROW EXECUTE FUNCTION notify_recommender_realtime_update();
+
+DROP TRIGGER IF EXISTS notify_recommender_ignored_jobs ON ignored_jobs;
+CREATE TRIGGER notify_recommender_ignored_jobs
+    AFTER INSERT OR UPDATE OR DELETE ON ignored_jobs
+    FOR EACH ROW EXECUTE FUNCTION notify_recommender_realtime_update();
+
+DROP TRIGGER IF EXISTS notify_recommender_job_searches ON job_searches;
+CREATE TRIGGER notify_recommender_job_searches
+    AFTER INSERT OR UPDATE OR DELETE ON job_searches
+    FOR EACH ROW EXECUTE FUNCTION notify_recommender_realtime_update();
 
 
 -- =====================================================
