@@ -14,6 +14,7 @@
     "seed": "tsx src/db/seed.ts",
     "db:reset": "tsx src/db/reset.ts",
     "db:setup": "npm run migrate && npm run seed",
+    "db:restore-backup": "tsx src/db/restore-backup.ts",
     "type-check": "tsc --noEmit",
     "clean": "rimraf dist"
   },

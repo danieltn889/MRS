@@ -9,7 +9,7 @@ CSV_OUT_DIR = OUTPUT_DIR / "csv"
 SQL_OUT_DIR = OUTPUT_DIR / "sql"
 REPORT_OUT_DIR = OUTPUT_DIR / "reports"
 
-SQL_SCHEMA_PATH = PROJECT_ROOT.parent / "db_backups" / "db_backup_20260705_205132.sql"
+SQL_SCHEMA_PATH = PROJECT_ROOT.parent / "db_backups" / "db_backup_20260709.sql"
 
 CANDIDATE_PROFILE_CSV = DATA_DIR / "Complete_Candidate_Profile.csv"
 JOB_PROFILE_CSV = DATA_DIR / "Complete_Job_Profile.csv"
