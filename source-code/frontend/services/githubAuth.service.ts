@@ -1,7 +1,8 @@
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const GITHUB_CLIENT_ID = isProduction
-  ? import.meta.env.VITE_PRODUCTION_CLIENT_ID
-  : import.meta.env.VITE_GITHUB_CLIENT_ID;
+// Always use the same GitHub OAuth App the backend holds the client secret for
+// (a second "production" client ID previously used here had no matching backend
+// secret, so the token exchange always failed with a redirect_uri mismatch).
+const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
 const REDIRECT_URI = `${window.location.origin}/auth/github/callback`;
 const API_BASE_URL = isProduction
   ? `${window.location.origin}/api/v1`
