@@ -271,7 +271,8 @@ class Database:
             SELECT j.id, j.title, j.slug, j.department, j.job_type, j.work_arrangement,
                    j.locations, j.skills_required, j.skills_preferred,
                    j.experience_level, j.experience_min, j.experience_max,
-                   j.education_required, j.qualifications, j.description,
+                   j.education_required, j.qualifications, j.preferred_qualifications,
+                   j.responsibilities, j.requirements, j.benefits, j.description,
                    j.language_requirements, j.salary_min, j.salary_max,
                    j.salary_currency, j.salary_period, j.screening_questions,
                    j.ai_match_required_score, j.published_at, j.expires_at,
@@ -291,7 +292,8 @@ class Database:
             SELECT j.id, j.title, j.slug, j.department, j.job_type, j.work_arrangement,
                    j.locations, j.skills_required, j.skills_preferred,
                    j.experience_level, j.experience_min, j.experience_max,
-                   j.education_required, j.qualifications, j.description,
+                   j.education_required, j.qualifications, j.preferred_qualifications,
+                   j.responsibilities, j.requirements, j.benefits, j.description,
                    j.language_requirements, j.salary_min, j.salary_max,
                    j.salary_currency, j.salary_period, j.screening_questions,
                    j.ai_match_required_score, j.published_at, j.expires_at,
@@ -524,6 +526,78 @@ def _years_between(start, end, is_current: bool) -> float:
         end_d = end_d.date()
     days = (end_d - start).days
     return max(0.0, days / 365.25)
+
+
+def _str_list_text(raw) -> str:
+    """responsibilities/requirements/benefits are jsonb arrays of plain
+    strings (unlike skills, which are {"name": ...} objects) — tolerate a
+    JSON-string-encoded list too, same defensive pattern ai_job_matcher_og.py
+    uses for these same three columns."""
+    if not raw:
+        return ""
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:
+            return raw
+    if not isinstance(raw, list):
+        return ""
+    return " ".join(str(x) for x in raw if x)
+
+
+# Single-purpose job-field extractors for BehaviorModel's 17-pair system.
+# Deliberately NOT reusing job_title_text()/job_fields_text() above — those
+# intentionally blend several raw fields together for Content's 7-pair space,
+# which would double-count the same information once it's also broken out
+# into its own independent pair here.
+def job_title_only_text(row) -> str:
+    return _s(row.get("title"))
+
+
+def job_department_text(row) -> str:
+    return _s(row.get("department"))
+
+
+def job_industry_text(row) -> str:
+    return _s(row.get("company_industry"))
+
+
+def job_employment_type_text(row) -> str:
+    return _s(row.get("job_type"))
+
+
+def job_work_arrangement_text(row) -> str:
+    return _s(row.get("work_arrangement"))
+
+
+def job_company_name_text(row) -> str:
+    return _s(row.get("company_name"))
+
+
+def job_education_text(row) -> str:
+    edu = row.get("education_required") or {}
+    if not isinstance(edu, dict):
+        edu = {}
+    parts = [_s(edu.get("minimum_degree"))]
+    parts += [str(f) for f in (edu.get("allowed_degrees") or [])]
+    parts += [str(f) for f in (edu.get("allowed_fields") or [])]
+    return " ".join(p for p in parts if p)
+
+
+def job_responsibilities_text(row) -> str:
+    return _str_list_text(row.get("responsibilities"))
+
+
+def job_requirements_text(row) -> str:
+    return _str_list_text(row.get("requirements"))
+
+
+def job_benefits_text(row) -> str:
+    return _str_list_text(row.get("benefits"))
+
+
+def job_qualifications_text(row) -> str:
+    return " ".join(p for p in [_s(row.get("qualifications")), _s(row.get("preferred_qualifications"))] if p)
 
 
 def _parse_language_list(raw) -> List[str]:
@@ -1308,135 +1382,202 @@ class CollaborativeModel:
 
 class BehaviorModel:
     """MODEL 2 — behavior-based recommendation: an evolving interest profile
-    learned from search/view/save/apply/ignore history (recency-weighted, so
-    a candidate's CURRENT interests matter more than what they looked at six
-    months ago), scored two ways and blended:
-      1. Coarse job attributes (department/job_type/work_arrangement/
-         experience_level/company_name) the candidate has gravitated towards.
-      2. Content-similarity to the jobs interacted with — reuses
-         ContentBasedModel's OWN skills/fields/location/title/languages/
-         certifications/experience feature space (job_matrix +
-         job_semantic_matrix) so Behavior recommends jobs with similar
-         skills/education/experience to what the candidate already
-         engaged with, not just similar coarse category labels."""
-    ATTRS = ["department", "job_type", "work_arrangement", "experience_level", "company_name"]
-    ATTR_LABELS = {"department": "department", "job_type": "job type", "work_arrangement": "work arrangement",
-                   "experience_level": "seniority level", "company_name": "company"}
+    learned from the COMPLETE textual content of every job a candidate has
+    interacted with (viewed/searched/saved/applied/interviewed/offered/
+    hired), not just a handful of categorical attributes.
 
-    def __init__(self, cfg: BehaviorConfig):
+    Architecture mirrors ContentBasedModel — one TfidfVectorizer fitted per
+    pair on the job corpus, all pairs horizontally stacked into one
+    normalized job_matrix, plus a semantic embedding matrix, blended 50/50 —
+    but over a much richer 17-pair space (skills/fields/title/location/
+    languages/certifications/experience_text/education/responsibilities/
+    requirements/qualifications/benefits/employment_type/work_arrangement/
+    department/industry/company_name) with two deliberate differences:
+      - "skills" uses character 3-4-gram TF-IDF instead of whole-word
+        tokens, so "Phyton"/"Reatc"/"Djanggo" still overlap "Python"/
+        "React"/"Django" on shared character shingles without needing
+        exact spelling — semantic embeddings add a second, independent
+        layer of typo/synonym tolerance on top.
+      - "company_name" is scaled down before the final normalize so it
+        contributes a small share of the match instead of an equal ~1/17
+        share — candidates search skills/title/location, not a specific
+        employer, though repeatedly interacting with the same company's
+        jobs still nudges this pair's own similarity up naturally.
+
+    A candidate's behavior profile is a weighted average of the job_matrix
+    rows (and semantic vectors) of every job they interacted with, weighted
+    by interaction type (TYPE_WEIGHTS) and a 60-day recency half-life. This
+    is the ONLY sub-signal now — no separate categorical-attribute or
+    parallel search-TF-IDF systems to blend against, since department/
+    job_type/work_arrangement/company_name are themselves pairs in the same
+    17-field space, and search queries feed the same weighted profile
+    (job_searches has no clicked-job column, so query text is approximated
+    as a job-shaped row with content only in the skills/title slices)."""
+
+    PAIRS = [
+        "skills", "fields", "title", "location", "languages", "certifications",
+        "experience_text", "education", "responsibilities", "requirements",
+        "qualifications", "benefits", "employment_type", "work_arrangement",
+        "department", "industry", "company_name",
+    ]
+    CHAR_NGRAM_PAIRS = {"skills"}
+    COMPANY_NAME_SCALE = 0.5  # keeps company_name's share of the blended vector small (~1-2%) instead of an equal ~1/17 (~6%) share
+    SEMANTIC_WEIGHT = 0.5     # matches ContentBasedModel's TF-IDF/semantic blend ratio
+    WORD_MAX_FEATURES = 2000
+    CHAR_MAX_FEATURES = 3000
+
+    # Single-argument job-text extractors — "languages"/"certifications" need
+    # extra lookups (language_requirements / education_required.certifications)
+    # and are built directly in _job_text_frame instead of living here.
+    _EXTRACTORS = {
+        "skills": job_skills_text,
+        "fields": job_fields_text,
+        "title": job_title_only_text,
+        "location": job_location_text,
+        "experience_text": job_experience_text,
+        "education": job_education_text,
+        "responsibilities": job_responsibilities_text,
+        "requirements": job_requirements_text,
+        "qualifications": job_qualifications_text,
+        "benefits": job_benefits_text,
+        "employment_type": job_employment_type_text,
+        "work_arrangement": job_work_arrangement_text,
+        "department": job_department_text,
+        "industry": job_industry_text,
+        "company_name": job_company_name_text,
+    }
+
+    # Interaction weights specific to Behavior — deliberately kept separate
+    # from the shared InteractionWeights dataclass (which collaborative
+    # filtering also reads) so this refactor doesn't change Collaborative's
+    # training signal. Rejected/withdrawn contribute nothing: they are not a
+    # positive interest signal.
+    TYPE_WEIGHTS = {
+        "view": 1.0, "search_click": 2.0, "save": 3.0,
+        "submitted": 5.0, "under_review": 5.0, "apply": 5.0,
+        "shortlisted": 6.0, "on_hold": 4.0,
+        "interview": 7.0, "assessment": 7.0, "reference_check": 7.5,
+        "offer": 9.0, "hired": 10.0, "accepted": 10.0,
+        "rejected": 0.0, "withdrawn": 0.0,
+    }
+
+    def __init__(self, cfg: BehaviorConfig, encoder: Optional[SemanticEncoder] = None):
         self.cfg = cfg
-        self.candidate_preferences: Dict[int, Dict[str, Dict[str, float]]] = {}
-        self._search_vectorizer: Optional[TfidfVectorizer] = None
-        self._candidate_search_matrix: Optional[sp.csr_matrix] = None
-        self._job_search_matrix: Optional[sp.csr_matrix] = None
-        self._search_candidate_row: Dict[int, int] = {}  # candidate_idx -> row in _candidate_search_matrix
+        self.encoder = encoder
+        self._tfidf: Dict[str, TfidfVectorizer] = {}
+        self._pair_col_ranges: Dict[str, Tuple[int, int]] = {}
+        self.job_matrix: Optional[sp.csr_matrix] = None
+        self.job_semantic_matrix: Optional[np.ndarray] = None
+        self._job_text: Optional[pd.DataFrame] = None
+        self._job_ids: List[str] = []
+        self._job_id_to_row: Dict[str, int] = {}
+        self.behavior_profile: Dict[int, dict] = {}                # candidate_idx -> {"tfidf": csr row, "semantic": vec|None}
+        self.behavior_profile_sources: Dict[int, List[dict]] = {}  # candidate_idx -> top interacted jobs that built the profile
         self._event_log: pd.DataFrame = pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
-        self._search_log: pd.DataFrame = pd.DataFrame(columns=["user_id", "query", "searched_at"])
         self._jobs_ref: Optional[pd.DataFrame] = None
-        # Content-similarity-to-interacted-jobs state (see class docstring point 2).
-        self.content_profile: Dict[int, dict] = {}          # candidate_idx -> {"tfidf": csr row, "semantic": np.ndarray|None}
-        self.content_profile_sources: Dict[int, List[dict]] = {}  # candidate_idx -> top interacted jobs that built the profile
-        self._content_model_ref = None
         self._idx_to_job_id_ref: List[str] = []
+        # Informational only ("has_search_history" in explainability output) —
+        # searches feed the SAME weighted profile as any other interaction
+        # (see _search_query_row), they don't score as a separate sub-signal.
+        self._search_candidate_indices: Set[int] = set()
+        self._search_text_by_candidate: Dict[int, List[Tuple[str, float]]] = {}
 
-    def fit(self, events: pd.DataFrame, jobs: pd.DataFrame, job_id_to_idx: Dict[str, int]) -> None:
-        self._event_log = events.copy() if events is not None else pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
-        self._jobs_ref = jobs.copy() if jobs is not None else None
-        if events.empty:
-            self.candidate_preferences = {}
-            return
+    # ---- Job corpus -------------------------------------------------------
 
-        jobs_indexed = jobs.copy()
-        jobs_indexed["job_idx"] = jobs_indexed["id"].astype(str).map(job_id_to_idx)
-        jobs_indexed = jobs_indexed.set_index("job_idx")
+    def _job_text_frame(self, jobs: pd.DataFrame) -> pd.DataFrame:
+        if jobs is None or jobs.empty:
+            return pd.DataFrame(columns=["id"] + self.PAIRS)
+        rows = []
+        for _, job in jobs.iterrows():
+            row = {"id": str(job["id"])}
+            for pair, fn in self._EXTRACTORS.items():
+                row[pair] = fn(job)
+            row["languages"] = " ".join(_parse_language_list(job.get("language_requirements")))
+            edu = job.get("education_required") or {}
+            certs = edu.get("certifications", []) if isinstance(edu, dict) else []
+            row["certifications"] = " ".join(str(c) for c in certs) if isinstance(certs, list) else ""
+            rows.append(row)
+        return pd.DataFrame(rows)
 
-        reference_date = events["event_date"].max()
-        half_life = self.cfg.recency_half_life_days
-        merged = events.merge(jobs_indexed[self.ATTRS], left_on="job_idx", right_index=True, how="left")
-        age_days = (reference_date - merged["event_date"]).dt.days.clip(lower=0).fillna(0)
-        merged["effective_weight"] = merged["weight"] * np.power(0.5, age_days / max(half_life, 1))
+    def fit_job_corpus(self, jobs: pd.DataFrame) -> None:
+        """Fit the 17-pair TF-IDF space + semantic embeddings over the active
+        job corpus. Call whenever the job set changes (same cadence as
+        ContentBasedModel.fit) — fit_profiles() below builds every
+        candidate's profile as a weighted average of THESE job vectors, so
+        this must run first."""
+        job_text = self._job_text_frame(jobs)
+        self._job_text = job_text
+        self._job_ids = job_text["id"].astype(str).tolist()
+        self._job_id_to_row = {jid: i for i, jid in enumerate(self._job_ids)}
 
-        prefs: Dict[int, Dict[str, Dict[str, float]]] = {}
-        for attr in self.ATTRS:
-            if attr not in merged.columns:
+        self._tfidf = {}
+        self._pair_col_ranges = {}
+        blocks = []
+        col = 0
+        for pair in self.PAIRS:
+            vals = job_text[pair].fillna("") if pair in job_text.columns else pd.Series([""] * len(job_text))
+            if vals.empty or vals.str.strip().eq("").all():
+                # Nothing to vectorize for this pair in this job corpus (e.g.
+                # no job has benefits filled in yet) — a 1-dim zero block
+                # keeps matrix shapes aligned without hardcoding that the
+                # field must exist, per "if some fields do not exist,
+                # automatically ignore them without breaking the code."
+                blocks.append(sp.csr_matrix((len(vals), 1)))
+                self._pair_col_ranges[pair] = (col, col + 1)
+                col += 1
                 continue
-            grp = merged.dropna(subset=[attr]).groupby(["candidate_idx", attr])["effective_weight"].sum().reset_index()
-            grp = grp.sort_values("effective_weight", ascending=False)
-            grp = grp.groupby("candidate_idx").head(self.cfg.max_events_per_candidate)
-            for cand_idx, sub in grp.groupby("candidate_idx"):
-                total = sub["effective_weight"].sum()
-                if total <= 0:
-                    continue
-                dist = dict(zip(sub[attr].astype(str), sub["effective_weight"] / total))
-                prefs.setdefault(int(cand_idx), {})[attr] = dist
+            if pair in self.CHAR_NGRAM_PAIRS:
+                vec = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 4),
+                                       lowercase=True, max_features=self.CHAR_MAX_FEATURES)
+            else:
+                vec = TfidfVectorizer(max_features=self.WORD_MAX_FEATURES, token_pattern=r"[A-Za-z0-9]+")
+            vec.fit(vals)
+            self._tfidf[pair] = vec
+            block = vec.transform(vals)
+            if pair == "company_name":
+                block = block * self.COMPANY_NAME_SCALE
+            blocks.append(block)
+            self._pair_col_ranges[pair] = (col, col + block.shape[1])
+            col += block.shape[1]
 
-        self.candidate_preferences = prefs
+        self.job_matrix = sk_normalize(sp.hstack(blocks).tocsr()) if blocks else None
 
-    def fit_search(self, search_events: pd.DataFrame, jobs: pd.DataFrame, candidate_id_to_idx: Dict[str, int]) -> None:
-        """Search queries are DECLARED intent — what the candidate is actively
-        looking for — matched via TF-IDF against each job's title/skills text,
-        the same shared-vocabulary technique ContentBasedModel uses. Kept as its
-        own small model (not folded into ContentBasedModel) because it's a
-        historical behavioral signal like views/saves, not a static profile
-        field, and candidates with no search history simply fall back to the
-        attribute-based score below."""
-        self._search_vectorizer = None
-        self._search_log = search_events.copy() if search_events is not None else pd.DataFrame(columns=["user_id", "query", "searched_at"])
-        if search_events.empty:
-            return
+        if self.encoder and self.encoder.available and not job_text.empty:
+            semantic_text = job_text[self.PAIRS].fillna("").agg(" ".join, axis=1)
+            vecs = self.encoder.encode_batch(semantic_text.tolist())
+            self.job_semantic_matrix = self._l2_normalize(vecs)
+        else:
+            self.job_semantic_matrix = None
 
-        job_text = jobs.apply(lambda r: " ".join(filter(None, [job_title_text(r), job_skills_text(r)])), axis=1)
+    @staticmethod
+    def _l2_normalize(mat: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        if mat is None:
+            return None
+        norms = np.linalg.norm(mat, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        return mat / norms
 
-        s = search_events.copy()
-        s["candidate_idx"] = s["user_id"].astype(str).map(candidate_id_to_idx)
-        s = s.dropna(subset=["candidate_idx"])
-        if s.empty:
-            return
-        s["candidate_idx"] = s["candidate_idx"].astype(int)
-        cand_text = s.groupby("candidate_idx")["query"].apply(lambda qs: " ".join(qs)).to_dict()
-        if not cand_text:
-            return
+    def _search_query_row(self, text: str) -> Optional[sp.csr_matrix]:
+        """A search query has no associated job (job_searches has no
+        clicked-job column) — approximate it as a job-shaped row with
+        content only in the skills/title column slices, zero elsewhere, so
+        it can still be folded into the same weighted-average accumulation
+        as real interacted jobs."""
+        if not text or self.job_matrix is None:
+            return None
+        blocks = []
+        for pair in self.PAIRS:
+            start, end = self._pair_col_ranges.get(pair, (0, 0))
+            width = end - start
+            if pair in ("skills", "title") and pair in self._tfidf:
+                blocks.append(self._tfidf[pair].transform([text]))
+            else:
+                blocks.append(sp.csr_matrix((1, width)))
+        return sp.hstack(blocks).tocsr()
 
-        cand_idxs = list(cand_text.keys())
-        cand_texts = [cand_text[i] for i in cand_idxs]
-
-        vec = TfidfVectorizer(max_features=1000, token_pattern=r"[A-Za-z0-9]+")
-        vec.fit(list(cand_texts) + list(job_text))
-        self._search_vectorizer = vec
-        self._candidate_search_matrix = sk_normalize(vec.transform(cand_texts))
-        self._job_search_matrix = sk_normalize(vec.transform(job_text))
-        self._search_candidate_row = {cand_idx: row for row, cand_idx in enumerate(cand_idxs)}
-
-    def _rebuild_candidate_preferences(self, candidate_indices: Set[int]) -> None:
-        if self._event_log is None or self._event_log.empty or self._jobs_ref is None:
-            return
-        jobs_indexed = self._jobs_ref.copy()
-        jobs_indexed["job_idx"] = jobs_indexed["id"].astype(str).map({str(i): i for i in jobs_indexed.index})
-        jobs_indexed = jobs_indexed.set_index("job_idx", drop=False)
-        merged = self._event_log.merge(jobs_indexed.reset_index(drop=True)[self.ATTRS + ["id"]], left_on="job_idx", right_index=False, how="left")
-        for cand_idx in candidate_indices:
-            sub = merged[merged["candidate_idx"].astype(int) == int(cand_idx)]
-            if sub.empty:
-                self.candidate_preferences.pop(int(cand_idx), None)
-                continue
-            prefs: Dict[str, Dict[str, float]] = {}
-            for attr in self.ATTRS:
-                if attr not in sub.columns:
-                    continue
-                attr_grp = sub.dropna(subset=[attr]).groupby(attr)["effective_weight"].sum().sort_values(ascending=False)
-                total = float(attr_grp.sum())
-                if total <= 0:
-                    continue
-                prefs[attr] = {str(k): float(v / total) for k, v in attr_grp.items()}
-            if prefs:
-                self.candidate_preferences[int(cand_idx)] = prefs
-        self._rebuild_content_profile_for(candidate_indices)
+    # ---- Candidate behavior profiles --------------------------------------
 
     def _with_effective_weight(self, events: pd.DataFrame) -> pd.DataFrame:
-        """Recency-decayed interaction weight, independent of any job-attribute
-        merge — shared by the categorical attribute fit above and the
-        content-similarity profile below so both read "how strongly and how
-        recently" the same way."""
         if events is None or events.empty:
             return pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight", "effective_weight"])
         reference_date = events["event_date"].max()
@@ -1445,44 +1586,52 @@ class BehaviorModel:
         out["effective_weight"] = out["weight"] * np.power(0.5, age_days / max(self.cfg.recency_half_life_days, 1))
         return out
 
-    def _build_profile_for_group(self, cand_idx: int, grp: pd.DataFrame, content_model,
-                                  idx_to_job_id: List[str], jobs_by_id: Optional[pd.DataFrame]) -> None:
-        """Weighted average of the CONTENT vectors (job_matrix + semantic) of
-        the jobs in `grp`, weighted by each event's effective_weight — i.e.
-        the candidate's implicit profile lives in the exact same feature
-        space as ContentBasedModel, so it can be compared to every job's
-        content vector via the same cosine similarity."""
-        total_w = float(grp["effective_weight"].sum())
+    def _build_profile_for_group(self, cand_idx: int, grp: pd.DataFrame, jobs_by_id: Optional[pd.DataFrame]) -> None:
+        """Weighted average of the 17-pair job_matrix rows (+ semantic
+        vectors) of every job in `grp`, plus any search-query rows for this
+        candidate, weighted by effective_weight — the candidate's implicit
+        profile lives in the exact same feature space as job_matrix, so it
+        can be compared to every job via the same cosine similarity."""
+        search_rows = self._search_text_by_candidate.get(int(cand_idx), [])
+        total_w = float(grp["effective_weight"].sum() if not grp.empty else 0.0) + sum(w for _, w in search_rows)
         if total_w <= 0:
-            self.content_profile.pop(int(cand_idx), None)
-            self.content_profile_sources.pop(int(cand_idx), None)
+            self.behavior_profile.pop(int(cand_idx), None)
+            self.behavior_profile_sources.pop(int(cand_idx), None)
             return
         tfidf_accum = None
         semantic_accum = None
         sources: List[dict] = []
         for _, ev in grp.iterrows():
             job_pos = int(ev["job_idx"])
-            if job_pos < 0 or job_pos >= len(idx_to_job_id):
+            if job_pos < 0 or job_pos >= len(self._idx_to_job_id_ref):
                 continue
-            job_id = idx_to_job_id[job_pos]
-            row_pos = content_model.job_id_to_idx.get(job_id)
+            job_id = self._idx_to_job_id_ref[job_pos]
+            row_pos = self._job_id_to_row.get(job_id)
             if row_pos is None:
                 continue
             w = float(ev["effective_weight"]) / total_w
-            job_row_vec = content_model.job_matrix[row_pos] * w
+            job_row_vec = self.job_matrix[row_pos] * w
             tfidf_accum = job_row_vec if tfidf_accum is None else tfidf_accum + job_row_vec
-            if content_model.job_semantic_matrix is not None:
-                sem_row = content_model.job_semantic_matrix[row_pos] * w
+            if self.job_semantic_matrix is not None:
+                sem_row = self.job_semantic_matrix[row_pos] * w
                 semantic_accum = sem_row if semantic_accum is None else semantic_accum + sem_row
             if jobs_by_id is not None and job_id in jobs_by_id.index:
                 jr = jobs_by_id.loc[job_id]
                 if isinstance(jr, pd.DataFrame):
                     jr = jr.iloc[0]
-                sources.append({"title": jr.get("title", ""),
-                                 "weight": round(w, 4), "job_row_pos": row_pos})
+                sources.append({"title": jr.get("title", ""), "weight": round(w, 4), "job_row_pos": row_pos})
+
+        for query_text, sw in search_rows:
+            w = sw / total_w
+            row = self._search_query_row(query_text)
+            if row is None:
+                continue
+            row = row * w
+            tfidf_accum = row if tfidf_accum is None else tfidf_accum + row
+
         if tfidf_accum is None:
-            self.content_profile.pop(int(cand_idx), None)
-            self.content_profile_sources.pop(int(cand_idx), None)
+            self.behavior_profile.pop(int(cand_idx), None)
+            self.behavior_profile_sources.pop(int(cand_idx), None)
             return
         norm = float(np.sqrt(tfidf_accum.multiply(tfidf_accum).sum()))
         tfidf_vec = (tfidf_accum / norm).tocsr() if norm > 0 else tfidf_accum.tocsr()
@@ -1490,102 +1639,212 @@ class BehaviorModel:
         if semantic_accum is not None:
             sn = float(np.linalg.norm(semantic_accum))
             semantic_vec = semantic_accum / sn if sn > 0 else None
-        self.content_profile[int(cand_idx)] = {"tfidf": tfidf_vec, "semantic": semantic_vec}
+        self.behavior_profile[int(cand_idx)] = {"tfidf": tfidf_vec, "semantic": semantic_vec}
         sources.sort(key=lambda s: s["weight"], reverse=True)
-        self.content_profile_sources[int(cand_idx)] = sources[:5]
+        self.behavior_profile_sources[int(cand_idx)] = sources[:5]
 
-    def fit_content_profile(self, events: pd.DataFrame, content_model, jobs: pd.DataFrame,
-                             idx_to_job_id: List[str]) -> None:
-        """Full (re)fit of every candidate's content-similarity profile from
-        their complete interaction history. Call after content_model.fit()
-        since it reads content_model.job_matrix/job_semantic_matrix directly."""
-        self._content_model_ref = content_model
-        self._idx_to_job_id_ref = idx_to_job_id
-        self.content_profile = {}
-        self.content_profile_sources = {}
-        if events is None or events.empty or content_model.job_matrix is None or not idx_to_job_id:
+    def _collect_search_text(self, events: pd.DataFrame) -> None:
+        """Search rows arrive in the SAME `events` frame as job interactions
+        (entity_type == 'search'), tagged with candidate_idx + query text but
+        no job_idx — pull them into their own weighted map instead of trying
+        to merge them against a job that doesn't exist in the data model."""
+        self._search_text_by_candidate = {}
+        self._search_candidate_indices = set()
+        if events is None or events.empty or "entity_type" not in events.columns:
             return
-        weighted = self._with_effective_weight(events)
-        weighted = weighted.sort_values("effective_weight", ascending=False)
-        weighted = weighted.groupby("candidate_idx").head(self.cfg.max_events_per_candidate)
-        jobs_by_id = jobs.set_index(jobs["id"].astype(str)) if jobs is not None and not jobs.empty else None
+        search = events[events["entity_type"].astype(str).str.lower() == "search"]
+        if search.empty:
+            return
+        weighted = self._with_effective_weight(search)
         for cand_idx, grp in weighted.groupby("candidate_idx"):
-            self._build_profile_for_group(int(cand_idx), grp, content_model, idx_to_job_id, jobs_by_id)
+            texts = [(str(q), float(w)) for q, w in zip(grp.get("query", ""), grp["effective_weight"]) if q]
+            if texts:
+                self._search_text_by_candidate[int(cand_idx)] = texts
+                self._search_candidate_indices.add(int(cand_idx))
 
-    def _rebuild_content_profile_for(self, candidate_indices: Set[int]) -> None:
-        """Incremental counterpart to fit_content_profile, used after a
-        realtime view/save/apply event so a single interaction doesn't
-        require refitting every candidate's profile."""
-        if self._content_model_ref is None or self._event_log is None or self._event_log.empty or not self._idx_to_job_id_ref:
+    def _collect_search_text_from_queries(self, search_events: pd.DataFrame, candidate_id_to_idx: Dict[str, int]) -> None:
+        """Populates the same _search_text_by_candidate map as
+        _collect_search_text, but from the raw job_searches query
+        (user_id/query/searched_at) used at full-fit time — job_searches has
+        no job_idx, so this can't be merged into the main `events` frame the
+        way view/save/apply events are; it's fetched and passed separately,
+        same as the old fit_search()."""
+        if search_events is None or search_events.empty:
             return
-        weighted = self._with_effective_weight(self._event_log)
+        s = search_events.copy()
+        s["candidate_idx"] = s["user_id"].astype(str).map(candidate_id_to_idx)
+        s = s.dropna(subset=["candidate_idx"])
+        if s.empty:
+            return
+        s["candidate_idx"] = s["candidate_idx"].astype(int)
+        s["event_date"] = pd.to_datetime(s["searched_at"], utc=True, errors="coerce")
+        s["weight"] = self.TYPE_WEIGHTS.get("search_click", 2.0)
+        weighted = self._with_effective_weight(s)
+        for cand_idx, grp in weighted.groupby("candidate_idx"):
+            texts = [(str(q), float(w)) for q, w in zip(grp["query"], grp["effective_weight"]) if q]
+            if texts:
+                self._search_text_by_candidate.setdefault(int(cand_idx), []).extend(texts)
+                self._search_candidate_indices.add(int(cand_idx))
+
+    def fit_profiles(self, events: pd.DataFrame, jobs: pd.DataFrame, idx_to_job_id: List[str],
+                      search_events: Optional[pd.DataFrame] = None,
+                      candidate_id_to_idx: Optional[Dict[str, int]] = None) -> None:
+        """Full (re)fit of every candidate's behavior profile from their
+        complete interaction history — job views/saves/applications (via
+        `events`) plus search queries (via `search_events`, fetched
+        separately since job_searches has no job_idx to merge on). Call
+        fit_job_corpus(jobs) first."""
+        self._idx_to_job_id_ref = list(idx_to_job_id) if idx_to_job_id else []
+        self._jobs_ref = jobs.copy() if jobs is not None else None
+        self.behavior_profile = {}
+        self.behavior_profile_sources = {}
+        self._search_text_by_candidate = {}
+        self._search_candidate_indices = set()
+
+        if search_events is not None and candidate_id_to_idx is not None:
+            self._collect_search_text_from_queries(search_events, candidate_id_to_idx)
+
+        if events is None or events.empty or self.job_matrix is None or not self._idx_to_job_id_ref:
+            self._event_log = pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
+            if not self._search_text_by_candidate:
+                return
+            weighted = pd.DataFrame(columns=["candidate_idx", "effective_weight"])
+        else:
+            self._event_log = events.copy()
+            self._collect_search_text(events)
+            job_events = (events[events["entity_type"].astype(str).str.lower() != "search"]
+                          if "entity_type" in events.columns else events)
+            weighted = self._with_effective_weight(job_events)
+            weighted = weighted.sort_values("effective_weight", ascending=False)
+            weighted = weighted.groupby("candidate_idx").head(self.cfg.max_events_per_candidate)
+
+        jobs_by_id = jobs.set_index(jobs["id"].astype(str)) if jobs is not None and not jobs.empty else None
+        all_candidates = (set(int(c) for c in weighted["candidate_idx"].unique()) if not weighted.empty else set()) \
+            | set(self._search_text_by_candidate.keys())
+        for cand_idx in all_candidates:
+            grp = weighted[weighted["candidate_idx"].astype(int) == cand_idx] if not weighted.empty else weighted
+            self._build_profile_for_group(cand_idx, grp, jobs_by_id)
+
+    def _rebuild_profiles_for(self, candidate_indices: Set[int]) -> None:
+        """Incremental counterpart to fit_profiles, used after a realtime
+        view/save/apply/search event so a single interaction doesn't require
+        refitting every candidate's profile."""
+        if self._event_log is None:
+            return
+        job_events = (self._event_log[self._event_log["entity_type"].astype(str).str.lower() != "search"]
+                      if "entity_type" in self._event_log.columns else self._event_log)
+        weighted = self._with_effective_weight(job_events) if job_events is not None and not job_events.empty else pd.DataFrame(columns=["candidate_idx"])
         jobs_by_id = (self._jobs_ref.set_index(self._jobs_ref["id"].astype(str))
                       if self._jobs_ref is not None and not self._jobs_ref.empty else None)
         for cand_idx in candidate_indices:
-            grp = weighted[weighted["candidate_idx"].astype(int) == int(cand_idx)]
-            if grp.empty:
-                self.content_profile.pop(int(cand_idx), None)
-                self.content_profile_sources.pop(int(cand_idx), None)
+            grp = weighted[weighted["candidate_idx"].astype(int) == int(cand_idx)] if not weighted.empty else weighted
+            has_search = int(cand_idx) in self._search_text_by_candidate
+            if grp.empty and not has_search:
+                self.behavior_profile.pop(int(cand_idx), None)
+                self.behavior_profile_sources.pop(int(cand_idx), None)
                 continue
-            grp = grp.sort_values("effective_weight", ascending=False).head(self.cfg.max_events_per_candidate)
-            self._build_profile_for_group(int(cand_idx), grp, self._content_model_ref, self._idx_to_job_id_ref, jobs_by_id)
+            if not grp.empty:
+                grp = grp.sort_values("effective_weight", ascending=False).head(self.cfg.max_events_per_candidate)
+            self._build_profile_for_group(int(cand_idx), grp, jobs_by_id)
 
-    def score_content_batch(self, candidate_indices: np.ndarray, content_model) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Cosine similarity between each candidate's interaction-derived
-        content profile and every job's own content vector — 'jobs like the
-        ones you already engaged with', in the same feature space Content
-        uses for the declared-profile score. Returns (blended, tfidf_only,
-        semantic_only) — all three, not just the blend, so the TF-IDF vs
-        semantic contribution to Behavior's content-similarity is as
-        inspectable as Content's own breakdown."""
-        n_jobs = content_model.job_matrix.shape[0] if content_model.job_matrix is not None else 0
+    # ---- Scoring -----------------------------------------------------------
+
+    def score_batch(self, candidate_indices: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Cosine similarity between each candidate's behavior profile and
+        every job's own 17-pair vector, blended 50% TF-IDF / 50% semantic.
+        Returns (blended, tfidf_only, semantic_only)."""
+        n_jobs = self.job_matrix.shape[0] if self.job_matrix is not None else 0
         out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
         tfidf_out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
         semantic_out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
         if n_jobs == 0:
             return out, tfidf_out, semantic_out
         for row, cand_idx in enumerate(candidate_indices):
-            profile = self.content_profile.get(int(cand_idx))
+            profile = self.behavior_profile.get(int(cand_idx))
             if not profile:
                 continue
-            tfidf_sim = np.clip(profile["tfidf"].dot(content_model.job_matrix.T).toarray()[0], 0.0, 1.0)
+            tfidf_sim = np.clip(profile["tfidf"].dot(self.job_matrix.T).toarray()[0], 0.0, 1.0)
             tfidf_out[row] = tfidf_sim
-            if profile.get("semantic") is not None and content_model.job_semantic_matrix is not None:
-                sem_sim = np.clip(content_model.job_semantic_matrix @ profile["semantic"], 0.0, 1.0)
+            if profile.get("semantic") is not None and self.job_semantic_matrix is not None:
+                sem_sim = np.clip(self.job_semantic_matrix @ profile["semantic"], 0.0, 1.0)
                 semantic_out[row] = sem_sim
-                out[row] = content_model._blend(tfidf_sim.reshape(1, -1), sem_sim.reshape(1, -1))[0]
+                out[row] = (1 - self.SEMANTIC_WEIGHT) * tfidf_sim + self.SEMANTIC_WEIGHT * sem_sim
             else:
                 out[row] = tfidf_sim
         return out, tfidf_out, semantic_out
 
-    def get_content_profile_sources(self, candidate_idx: Optional[int]) -> List[dict]:
+    def get_profile_sources(self, candidate_idx: Optional[int]) -> List[dict]:
         if candidate_idx is None:
             return []
-        return self.content_profile_sources.get(int(candidate_idx), [])
+        return self.behavior_profile_sources.get(int(candidate_idx), [])
 
-    def explain_content_similarity(self, candidate_idx: Optional[int], job_col: int, content_model) -> dict:
-        """Per-pair breakdown of the content-similarity sub-score (50% of
-        Behavior) — mirrors ContentBasedModel.explain_match()'s
-        matched_terms_by_pair/tfidf_score_by_pair, so skills/fields/location/
-        title/languages/certifications/experience_text are individually
-        inspectable for Behavior too, not just one blended number. The
-        'candidate side' here is the weighted aggregate of the top jobs this
-        candidate interacted with (content_profile_sources), not a single
-        declared-profile row — recomputed on demand like explain_match, only
-        for the top-N shortlist actually shown to a user."""
-        empty = {"matched_terms_by_pair": {}, "tfidf_score_by_pair": {}}
-        if candidate_idx is None or content_model._job_text is None:
+    def get_interest_profile(self, candidate_idx: int, top_k: int = 3) -> Dict[str, List[str]]:
+        """The evolving 'Interest Profile' — top skill/title terms drawn from
+        the jobs that most strongly built this candidate's profile (weighted
+        aggregate, not a single job); replaces the old categorical-attribute
+        top-K (department/job_type/...) now that the profile is text-based."""
+        sources = self.behavior_profile_sources.get(int(candidate_idx), [])
+        if not sources or self._job_text is None:
+            return {}
+        titles, skills = [], []
+        for src in sources[:top_k]:
+            row_pos = src.get("job_row_pos")
+            if row_pos is None:
+                continue
+            jr = self._job_text.iloc[row_pos]
+            if jr.get("title"):
+                titles.append(jr["title"])
+            if jr.get("skills"):
+                skills.extend(jr["skills"].split()[:5])
+        profile: Dict[str, List[str]] = {}
+        if titles:
+            profile["title"] = titles[:top_k]
+        if skills:
+            profile["skills"] = list(dict.fromkeys(skills))[:top_k * 3]
+        return profile
+
+    @staticmethod
+    def _correct_typo(term: str, vocabulary: Set[str], min_score: int = 82) -> Optional[str]:
+        """Optional RapidFuzz-based typo correction for the explainability
+        output's corrected_terms — silently a no-op if rapidfuzz isn't
+        installed. Scoring itself is already typo-tolerant via character
+        n-grams + semantic embeddings; this is purely cosmetic/explanatory."""
+        try:
+            from rapidfuzz import process, fuzz
+        except ImportError:
+            return None
+        if not vocabulary:
+            return None
+        match = process.extractOne(term, list(vocabulary), scorer=fuzz.ratio, score_cutoff=min_score)
+        return match[0] if match and match[0].lower() != term.lower() else None
+
+    def explain_detail(self, candidate_idx: Optional[int], job_col: int) -> dict:
+        """Full per-pair breakdown of the behavior score for ONE candidate/
+        job pair — matched terms + a genuine standalone TF-IDF cosine per
+        pair, the standalone semantic score, and the final blended
+        behavior_score. Deliberately not called during bulk score_batch
+        (would be O(candidates x jobs) at per-term granularity) — only for
+        the top-N shortlist actually shown to a user."""
+        empty = {
+            "matched_terms_by_pair": {}, "tfidf_score_by_pair": {},
+            "matched_skills": [], "matched_languages": [], "matched_location": [],
+            "matched_title": [], "corrected_terms": {}, "semantic_score": None,
+            "behavior_score": 0.0,
+        }
+        if candidate_idx is None or self._job_text is None or job_col >= len(self._job_text):
             return empty
-        sources = self.content_profile_sources.get(int(candidate_idx))
-        if not sources:
+        sources = self.behavior_profile_sources.get(int(candidate_idx))
+        profile = self.behavior_profile.get(int(candidate_idx))
+        if not sources or not profile:
             return empty
 
-        job_row = content_model._job_text.iloc[job_col]
+        job_row = self._job_text.iloc[job_col]
         matched_terms: Dict[str, List[str]] = {}
         tfidf_score_by_pair: Dict[str, float] = {}
+        corrected_terms: Dict[str, str] = {}
 
-        for pair in content_model.PAIRS:
-            vec = content_model._tfidf.get(pair)
+        for pair in self.PAIRS:
+            vec = self._tfidf.get(pair)
             job_val = job_row.get(pair, "")
             if vec is None or not job_val:
                 matched_terms[pair] = []
@@ -1600,7 +1859,7 @@ class BehaviorModel:
                 row_pos = src.get("job_row_pos")
                 if row_pos is None:
                     continue
-                src_val = content_model._job_text.iloc[row_pos].get(pair, "")
+                src_val = self._job_text.iloc[row_pos].get(pair, "")
                 if not src_val:
                     continue
                 w = float(src.get("weight", 0.0))
@@ -1617,9 +1876,52 @@ class BehaviorModel:
             cand_vec = sk_normalize(accum)
             tfidf_score_by_pair[pair] = round(float(cand_vec.dot(job_vec.T)[0, 0]), 4)
             job_items = [t for t in job_val.split() if t]
-            matched_terms[pair] = [t for t in dict.fromkeys(job_items) if t in source_terms]
+            direct_matches = [t for t in dict.fromkeys(job_items) if t in source_terms]
+            matched_terms[pair] = direct_matches
 
-        return {"matched_terms_by_pair": matched_terms, "tfidf_score_by_pair": tfidf_score_by_pair}
+            if pair in self.CHAR_NGRAM_PAIRS and source_terms:
+                for t in job_items:
+                    if t in source_terms or t in direct_matches:
+                        continue
+                    fix = self._correct_typo(t, source_terms)
+                    if fix:
+                        corrected_terms[t] = fix
+
+        semantic_score = None
+        if profile.get("semantic") is not None and self.job_semantic_matrix is not None:
+            semantic_score = round(float(self.job_semantic_matrix[job_col] @ profile["semantic"]), 4)
+
+        tfidf_full = float(profile["tfidf"].dot(self.job_matrix[job_col].T).toarray()[0, 0]) if self.job_matrix is not None else 0.0
+        behavior_score = ((1 - self.SEMANTIC_WEIGHT) * tfidf_full + self.SEMANTIC_WEIGHT * semantic_score) \
+            if semantic_score is not None else tfidf_full
+
+        return {
+            "matched_terms_by_pair": matched_terms,
+            "tfidf_score_by_pair": tfidf_score_by_pair,
+            "matched_skills": matched_terms.get("skills", []),
+            "matched_languages": matched_terms.get("languages", []),
+            "matched_location": matched_terms.get("location", []),
+            "matched_title": matched_terms.get("title", []),
+            "corrected_terms": corrected_terms,
+            "semantic_score": semantic_score,
+            "behavior_score": round(float(np.clip(behavior_score, 0.0, 1.0)), 4),
+        }
+
+    def explain(self, candidate_idx: int, job_row: pd.Series, has_search_history: bool = None) -> List[str]:
+        """Human-readable one-line reasons this job matches this candidate's
+        learned behavior — a short summary, not the full per-pair breakdown
+        (see explain_detail for that)."""
+        reasons: List[str] = []
+        sources = self.behavior_profile_sources.get(int(candidate_idx), [])
+        if sources:
+            top_titles = ", ".join(s["title"] for s in sources[:2] if s.get("title"))
+            if top_titles:
+                reasons.append(f"Similar to jobs you engaged with (e.g. {top_titles}) — skills, title, location, and more.")
+        if has_search_history is None:
+            has_search_history = int(candidate_idx) in self._search_candidate_indices
+        if has_search_history:
+            reasons.append("Matches terms you've searched for.")
+        return reasons
 
     def apply_incremental_updates(self, events: List[dict], jobs: pd.DataFrame,
                                   job_id_to_idx: Dict[str, int], candidate_id_to_idx: Dict[str, int]) -> None:
@@ -1640,12 +1942,12 @@ class BehaviorModel:
             job_idx = job_id_to_idx.get(str(job_id)) if job_id is not None else None
 
             if entity_type == "search" and candidate_id is not None:
-                search_rows.append({
-                    "user_id": str(candidate_id),
-                    "query": str(payload.get("query", event.get("query", ""))),
-                    "searched_at": payload.get("searched_at") or event.get("created_at") or datetime.utcnow().isoformat(),
-                })
                 if candidate_idx is not None:
+                    search_rows.append({
+                        "candidate_idx": int(candidate_idx),
+                        "query": str(payload.get("query", event.get("query", ""))),
+                        "weight": self.TYPE_WEIGHTS.get("search_click", 2.0),
+                    })
                     affected_candidates.add(int(candidate_idx))
                 continue
 
@@ -1658,8 +1960,9 @@ class BehaviorModel:
             behavior_rows.append({
                 "candidate_idx": int(candidate_idx),
                 "job_idx": int(job_idx),
+                "entity_type": entity_type,
                 "event_date": pd.to_datetime(payload.get("event_date") or event.get("created_at") or datetime.utcnow(), utc=True),
-                "weight": float(payload.get("weight") or payload.get("score") or 1.0),
+                "weight": float(payload.get("weight") or payload.get("score") or self.TYPE_WEIGHTS.get(entity_type, 1.0)),
             })
             affected_candidates.add(int(candidate_idx))
 
@@ -1668,112 +1971,16 @@ class BehaviorModel:
             incoming["event_date"] = pd.to_datetime(incoming["event_date"], utc=True)
             self._event_log = pd.concat([self._event_log, incoming], ignore_index=True) if not self._event_log.empty else incoming
             self._event_log["event_date"] = pd.to_datetime(self._event_log["event_date"], utc=True)
-            self._event_log["effective_weight"] = self._event_log.get("effective_weight")
-            self._event_log["effective_weight"] = self._event_log.get("weight", 0)
-            if self._jobs_ref is not None and not self._jobs_ref.empty:
-                jobs_indexed = self._jobs_ref.copy()
-                jobs_indexed["job_idx"] = jobs_indexed["id"].astype(str).map(job_id_to_idx)
-                jobs_indexed = jobs_indexed.set_index("job_idx")
-                merged = self._event_log.merge(jobs_indexed[self.ATTRS], left_on="job_idx", right_index=True, how="left")
-                reference_date = merged["event_date"].max()
-                age_days = (reference_date - merged["event_date"]).dt.days.clip(lower=0).fillna(0)
-                merged["effective_weight"] = merged["weight"] * np.power(0.5, age_days / max(self.cfg.recency_half_life_days, 1))
-                self._event_log = merged[["candidate_idx", "job_idx", "event_date", "weight", "effective_weight"]]
-            self._rebuild_candidate_preferences(affected_candidates)
 
         if search_rows:
-            search_df = pd.DataFrame(search_rows)
-            self._search_log = pd.concat([self._search_log, search_df], ignore_index=True) if not self._search_log.empty else search_df
-            self.fit_search(self._search_log, jobs, candidate_id_to_idx)
+            for row in search_rows:
+                cand_idx = row["candidate_idx"]
+                existing = self._search_text_by_candidate.setdefault(cand_idx, [])
+                existing.append((row["query"], float(row["weight"])))
+                self._search_candidate_indices.add(cand_idx)
 
-    # Sub-weights within the overall Behavior signal, applied per-candidate-row
-    # and renormalized over whichever sub-signals are actually present for that
-    # candidate (a candidate with only search history gets pure search
-    # relevance rather than a diluted score) — content-similarity is weighted
-    # highest since it draws on the richest feature space (skills/education/
-    # experience/preferences of jobs actually interacted with).
-    SUBWEIGHT_ATTRIBUTE = 0.30
-    SUBWEIGHT_CONTENT = 0.50
-    SUBWEIGHT_SEARCH = 0.20
-
-    def score_batch(self, candidate_indices: np.ndarray, jobs: pd.DataFrame,
-                     content_scores: Optional[np.ndarray] = None) -> np.ndarray:
-        n_jobs = len(jobs)
-        job_attr_values = {attr: jobs[attr].astype(str).values if attr in jobs.columns else None for attr in self.ATTRS}
-
-        attr_out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
-        for row, cand_idx in enumerate(candidate_indices):
-            prefs = self.candidate_preferences.get(int(cand_idx))
-            if not prefs:
-                continue
-            attr_scores = []
-            for attr, dist in prefs.items():
-                values = job_attr_values.get(attr)
-                if values is None:
-                    continue
-                attr_scores.append(np.fromiter((dist.get(v, 0.0) for v in values), dtype=np.float32, count=n_jobs))
-            if attr_scores:
-                attr_out[row, :] = np.mean(attr_scores, axis=0)
-
-        search_out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
-        if self._search_vectorizer is not None:
-            for row, cand_idx in enumerate(candidate_indices):
-                srow = self._search_candidate_row.get(int(cand_idx))
-                if srow is None:
-                    continue
-                search_out[row] = np.clip(self._candidate_search_matrix[srow].dot(self._job_search_matrix.T).toarray()[0], 0.0, 1.0)
-
-        content_out = content_scores if content_scores is not None else np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
-
-        out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
-        for row in range(len(candidate_indices)):
-            parts = []
-            if attr_out[row].max() > 0:
-                parts.append((attr_out[row], self.SUBWEIGHT_ATTRIBUTE))
-            if content_out[row].max() > 0:
-                parts.append((content_out[row], self.SUBWEIGHT_CONTENT))
-            if search_out[row].max() > 0:
-                parts.append((search_out[row], self.SUBWEIGHT_SEARCH))
-            if parts:
-                wsum = sum(w for _, w in parts)
-                out[row] = sum(v * w for v, w in parts) / wsum
-
-        max_val = out.max()
-        return out / max_val if max_val > 0 else out
-
-    def get_interest_profile(self, candidate_idx: int, top_k: int = 3) -> Dict[str, List[str]]:
-        """The evolving 'Interest Profile' the spec asks for — top-K values
-        per attribute, ranked by the same recency-weighted score used for
-        scoring, i.e. this reflects what fit() actually learned, not a
-        separate approximation of it."""
-        prefs = self.candidate_preferences.get(int(candidate_idx), {})
-        profile = {}
-        for attr, dist in prefs.items():
-            ranked = sorted(dist.items(), key=lambda kv: kv[1], reverse=True)[:top_k]
-            profile[attr] = [v for v, _ in ranked]
-        return profile
-
-    def explain(self, candidate_idx: int, job_row: pd.Series, has_search_history: bool = None) -> List[str]:
-        """Human-readable reasons this specific job matches this candidate's
-        learned behavior — used for the explainable-AI output, not the score
-        itself."""
-        reasons: List[str] = []
-        prefs = self.candidate_preferences.get(int(candidate_idx), {})
-        for attr, dist in prefs.items():
-            job_val = str(job_row.get(attr, ""))
-            if job_val and dist.get(job_val, 0.0) > 0.15:
-                label = self.ATTR_LABELS.get(attr, attr)
-                reasons.append(f"Matches your usual {label}: {job_val}.")
-        sources = self.content_profile_sources.get(int(candidate_idx), [])
-        if sources:
-            top_titles = ", ".join(s["title"] for s in sources[:2] if s.get("title"))
-            if top_titles:
-                reasons.append(f"Similar skills/education/experience to jobs you engaged with (e.g. {top_titles}).")
-        if has_search_history is None:
-            has_search_history = int(candidate_idx) in self._search_candidate_row
-        if has_search_history:
-            reasons.append("Matches terms you've searched for.")
-        return reasons
+        if affected_candidates:
+            self._rebuild_profiles_for(affected_candidates)
 
 
 def freshness_scores(jobs: pd.DataFrame) -> np.ndarray:
@@ -1938,7 +2145,7 @@ class RecommendationEngine:
         self.semantic_encoder = SemanticEncoder()
         self.content_model = ContentBasedModel(cfg.content, encoder=self.semantic_encoder)
         self.collaborative_model = CollaborativeModel(cfg.mf)
-        self.behavior_model = BehaviorModel(cfg.behavior)
+        self.behavior_model = BehaviorModel(cfg.behavior, encoder=self.semantic_encoder)
         self.ranker = HybridRanker(cfg.hybrid_weights)
 
         self.candidates: Optional[pd.DataFrame] = None
@@ -2005,10 +2212,10 @@ class RecommendationEngine:
         collaborative_model.fit(matrix, len(candidates), len(jobs), self.cfg.interaction_weights.max_weight,
                                  hard_negatives=hard_negatives)
 
-        behavior_model = BehaviorModel(self.cfg.behavior)
-        behavior_model.fit(events, jobs, preprocessor.job_id_to_idx)
-        behavior_model.fit_search(search_events, jobs, preprocessor.candidate_id_to_idx)
-        behavior_model.fit_content_profile(events, content_model, jobs, preprocessor.idx_to_job_id)
+        behavior_model = BehaviorModel(self.cfg.behavior, encoder=self.semantic_encoder)
+        behavior_model.fit_job_corpus(jobs)
+        behavior_model.fit_profiles(events, jobs, preprocessor.idx_to_job_id,
+                                     search_events=search_events, candidate_id_to_idx=preprocessor.candidate_id_to_idx)
 
         with self._lock:
             self.candidates, self.jobs = candidates, jobs
@@ -2226,16 +2433,14 @@ class RecommendationEngine:
     def _refresh_behavior_from_cache(self) -> None:
         if self.jobs is None:
             return
-        self.behavior_model.fit(self.events if self.events is not None else pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"]),
-                                self.jobs,
-                                self.preprocessor.job_id_to_idx)
-        self.behavior_model.fit_search(self.search_events if self.search_events is not None else pd.DataFrame(columns=["user_id", "query", "searched_at"]),
-                                       self.jobs,
-                                       self.preprocessor.candidate_id_to_idx)
-        self.behavior_model.fit_content_profile(self.events if self.events is not None else pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"]),
-                                                 self.content_model,
-                                                 self.jobs,
-                                                 self.preprocessor.idx_to_job_id)
+        self.behavior_model.fit_job_corpus(self.jobs)
+        self.behavior_model.fit_profiles(
+            self.events if self.events is not None else pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"]),
+            self.jobs,
+            self.preprocessor.idx_to_job_id,
+            search_events=self.search_events if self.search_events is not None else pd.DataFrame(columns=["user_id", "query", "searched_at"]),
+            candidate_id_to_idx=self.preprocessor.candidate_id_to_idx,
+        )
 
     def _schedule_collaborative_refresh(self) -> None:
         if not self._collab_retrain_lock.acquire(blocking=False):
@@ -2385,7 +2590,7 @@ class RecommendationEngine:
         if has_collab is None:
             has_collab = self.collaborative_model.trained
         if has_behavior is None:
-            has_behavior = bool(self.behavior_model.candidate_preferences) or bool(self.behavior_model.content_profile)
+            has_behavior = bool(self.behavior_model.behavior_profile)
         return self.cfg.hybrid_weights.normalized(has_collab, has_behavior, exclude_content=exclude_content)
 
     def _similar_candidates_reason(self, candidate_idx: int, job_idx: int) -> Optional[str]:
@@ -2460,18 +2665,15 @@ class RecommendationEngine:
                 if self.collaborative_model.trained and self.events is not None and not self.events.empty:
                     has_collab_for_candidate = not self.events[self.events["candidate_idx"] == candidate_idx].empty
                 collab = self.collaborative_model.score_batch(idx) if has_collab_for_candidate else np.zeros_like(content)
-                behavior_content, behavior_content_tfidf, behavior_content_semantic = \
-                    self.behavior_model.score_content_batch(idx, self.content_model)
-                behavior = self.behavior_model.score_batch(idx, self.jobs, content_scores=behavior_content)
+                behavior, behavior_tfidf, behavior_semantic = self.behavior_model.score_batch(idx)
                 # PER-CANDIDATE check — not "does ANY candidate in the system have
                 # behavior data" (that's what _active_weights()'s own default did,
-                # since it only tested the dicts for global non-emptiness). A
-                # candidate with zero personal views/saves/applies must have their
-                # 30% Behavior weight redistributed to Content/Collaborative/
-                # Freshness/Popularity, not silently deflate their score because
-                # SOME OTHER candidate elsewhere has interaction history.
-                has_behavior_for_candidate = (candidate_idx in self.behavior_model.candidate_preferences or
-                                               candidate_idx in self.behavior_model.content_profile)
+                # since it only tested the dict for global non-emptiness). A
+                # candidate with zero personal views/saves/applies/searches must
+                # have their Behavior weight redistributed to Content/
+                # Collaborative/Freshness/Popularity, not silently deflate their
+                # score because SOME OTHER candidate elsewhere has history.
+                has_behavior_for_candidate = candidate_idx in self.behavior_model.behavior_profile
                 weights = self._active_weights(has_collab=has_collab_for_candidate, has_behavior=has_behavior_for_candidate,
                                                 exclude_content=exclude_content)
                 cand_row = self.candidates.iloc[candidate_idx].to_dict()
@@ -2501,9 +2703,8 @@ class RecommendationEngine:
                 content = self.content_model.score_row(row_matrix, semantic_vec)
                 collab = np.zeros_like(content)
                 behavior = np.zeros_like(content)
-                behavior_content = np.zeros_like(content)
-                behavior_content_tfidf = np.zeros_like(content)
-                behavior_content_semantic = np.zeros_like(content)
+                behavior_tfidf = np.zeros_like(content)
+                behavior_semantic = np.zeros_like(content)
                 similar_candidates_detail = []
                 similar_idxs = set()
                 has_collab_for_candidate = False
@@ -2533,16 +2734,7 @@ class RecommendationEngine:
                 final_score = float(score) * biz_modifier * age_modifier
 
                 content_match = self.content_model.explain_match(candidate_idx, job_col) if candidate_idx is not None else {}
-                behavior_content_match = self.behavior_model.explain_content_similarity(candidate_idx, job_col, self.content_model)
-
-                matched_attrs = []
-                if candidate_idx is not None:
-                    for attr, dist in self.behavior_model.candidate_preferences.get(candidate_idx, {}).items():
-                        val = str(job_row.get(attr, ""))
-                        weight_val = dist.get(val, 0.0)
-                        if val and weight_val > 0:
-                            matched_attrs.append({"attribute": attr, "value": val, "weight": round(float(weight_val), 4)})
-                    matched_attrs.sort(key=lambda a: a["weight"], reverse=True)
+                behavior_detail = self.behavior_model.explain_detail(candidate_idx, job_col) if candidate_idx is not None else {}
 
                 created_at = pd.to_datetime(job_row.get("created_at"), utc=True, errors="coerce")
                 days_old = round((pd.Timestamp.now(tz="UTC") - created_at).total_seconds() / 86400, 1) if pd.notna(created_at) else None
@@ -2571,18 +2763,23 @@ class RecommendationEngine:
                         "final_score": round(float(content[0, job_col]), 4),
                     },
                     "behavior": {
-                        "matched_attributes": matched_attrs,
-                        "content_similarity_score": round(float(behavior_content[0, job_col]), 4) if candidate_idx is not None else None,
-                        "content_similarity_tfidf": round(float(behavior_content_tfidf[0, job_col]), 4) if candidate_idx is not None else None,
-                        "content_similarity_semantic": round(float(behavior_content_semantic[0, job_col]), 4) if candidate_idx is not None else None,
-                        # Per-pair breakdown of the line above — same shape as
-                        # content.matched_terms_by_pair/tfidf_score_by_pair, so
-                        # skills/fields/location/title/languages/certifications/
-                        # experience_text are individually visible for Behavior too.
-                        "matched_terms_by_pair": behavior_content_match.get("matched_terms_by_pair", {}),
-                        "tfidf_score_by_pair": behavior_content_match.get("tfidf_score_by_pair", {}),
-                        "top_interacted_jobs": self.behavior_model.get_content_profile_sources(candidate_idx),
-                        "has_search_history": bool(candidate_idx is not None and candidate_idx in self.behavior_model._search_candidate_row),
+                        # TF-IDF/semantic split of the SAME unified 17-pair signal
+                        # (skills/fields/title/location/languages/certifications/
+                        # experience_text/education/responsibilities/requirements/
+                        # qualifications/benefits/employment_type/work_arrangement/
+                        # department/industry/company_name) — see BehaviorModel.
+                        "content_similarity_score": round(float(behavior[0, job_col]), 4) if candidate_idx is not None else None,
+                        "content_similarity_tfidf": round(float(behavior_tfidf[0, job_col]), 4) if candidate_idx is not None else None,
+                        "content_similarity_semantic": round(float(behavior_semantic[0, job_col]), 4) if candidate_idx is not None else None,
+                        "matched_terms_by_pair": behavior_detail.get("matched_terms_by_pair", {}),
+                        "tfidf_score_by_pair": behavior_detail.get("tfidf_score_by_pair", {}),
+                        "matched_skills": behavior_detail.get("matched_skills", []),
+                        "matched_languages": behavior_detail.get("matched_languages", []),
+                        "matched_location": behavior_detail.get("matched_location", []),
+                        "matched_title": behavior_detail.get("matched_title", []),
+                        "corrected_terms": behavior_detail.get("corrected_terms", {}),
+                        "top_interacted_jobs": self.behavior_model.get_profile_sources(candidate_idx),
+                        "has_search_history": bool(candidate_idx is not None and candidate_idx in self.behavior_model._search_candidate_indices),
                         "final_score": round(float(behavior[0, job_col]), 4),
                     },
                     "collaborative": {
