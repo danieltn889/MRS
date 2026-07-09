@@ -26,13 +26,13 @@ import { useTheme } from '../context/ThemeContext';
 
 const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout }) => {
   const { theme, currentTheme } = useTheme();
-  const activeBg = {
+  const activeBg = ({
     blue: 'bg-blue-600',
     purple: 'bg-purple-600',
     indigo: 'bg-indigo-600',
     slate: 'bg-slate-600',
     green: 'bg-green-600',
-  }[currentTheme] || 'bg-blue-600';
+  } as Record<string, string>)[currentTheme] || 'bg-blue-600';
 
   // Navigation items based on user type
   const getNavItems = () => {
