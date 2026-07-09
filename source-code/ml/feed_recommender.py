@@ -61,7 +61,7 @@ print("spaCy ready.", flush=True)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple, Set
 import numpy as np
 import uvicorn
 import math
@@ -217,6 +217,10 @@ class ViewedJob(BaseModel):
     title: str
     skills: List[str] = []
     category: Optional[str] = ""
+    # Additive/optional — enables BehaviorModel's 60-day recency decay for
+    # this interaction; absent (None) is treated as "no decay" rather than
+    # raising, since older callers won't send this.
+    interacted_at: Optional[str] = None
 
 # SavedJob carries the same fields — saved = stronger signal than viewed
 SavedJob = ViewedJob
@@ -228,6 +232,15 @@ class CandidateActivity(BaseModel):
     saved_job_ids: List[str] = []        # IDs only — for save_bonus
     applied_job_ids: List[str] = []
     ignored_job_ids: List[str] = []
+    # Additive/optional — full job snapshots (same shape as viewed_jobs/
+    # saved_jobs) for interaction types the previous 3-function design had
+    # no way to represent at all. Default empty so existing callers that
+    # only send applied_job_ids (bare IDs, used for the same-job penalty
+    # below) are completely unaffected.
+    applied_jobs: List[ViewedJob] = []
+    interviewed_jobs: List[ViewedJob] = []
+    offered_jobs: List[ViewedJob] = []
+    hired_jobs: List[ViewedJob] = []
 
 class JobListing(BaseModel):
     id: str
@@ -240,6 +253,22 @@ class JobListing(BaseModel):
     category: Optional[str] = ""
     posted_at: Optional[str] = None
     application_count: Optional[int] = 0
+    # Additive/optional fields — used by BehaviorModel's 17-pair content
+    # learning (build_job_document) whenever the caller provides them;
+    # automatically skipped otherwise, never raise. Defaults keep every
+    # existing caller sending today's payload shape unaffected.
+    description: Optional[str] = ""
+    skills_preferred: List[str] = []
+    languages: List[str] = []
+    certifications: List[str] = []
+    responsibilities: List[str] = []
+    requirements: List[str] = []
+    qualifications: Optional[str] = ""
+    benefits: List[str] = []
+    work_arrangement: Optional[str] = ""
+    department: Optional[str] = ""
+    industry: Optional[str] = ""
+    company_name: Optional[str] = ""
 
 class FeedRequest(BaseModel):
     candidate: CandidateProfile
@@ -251,6 +280,11 @@ class ScoredJob(BaseModel):
     job_id: str
     total_score: float
     breakdown: Dict[str, float]
+    # Additive/optional — BehaviorModel's explainability output (matched
+    # terms per pair + corrected_terms). None for the ignored-job short
+    # circuit in score_job(); existing consumers that only read total_score/
+    # breakdown are unaffected.
+    explanation: Optional[Dict] = None
 
 class FeedResponse(BaseModel):
     scored_jobs: List[ScoredJob]
@@ -280,6 +314,20 @@ def _tfidf_sim(a: str, b: str) -> float:
         return 0.0
     try:
         v = TfidfVectorizer(ngram_range=(1, 2), min_df=1)
+        m = v.fit_transform([a, b])
+        return float(sk_cosine(m[0:1], m[1:2])[0][0])
+    except Exception:
+        return 0.0
+
+def _tfidf_sim_char(a: str, b: str) -> float:
+    """Character 3-4-gram TF-IDF — used for BehaviorModel's 'skills' pair so
+    'Phyton'/'Reatc'/'Djanggo' still overlap 'Python'/'React'/'Django' on
+    shared character shingles, on top of the existing fuzzy-correction/
+    semantic typo tolerance."""
+    if not a.strip() or not b.strip():
+        return 0.0
+    try:
+        v = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 4), lowercase=True, max_features=3000)
         m = v.fit_transform([a, b])
         return float(sk_cosine(m[0:1], m[1:2])[0][0])
     except Exception:
@@ -415,45 +463,207 @@ def profile_match(candidate: CandidateProfile, job: JobListing) -> float:
     return skills + exp_score + loc_score + title_score
 
 
-def search_history_match(activity: CandidateActivity, job: JobListing) -> float:
-    """20% of total."""
-    if not activity.search_queries:
-        return 0.0
-    combined = " ".join(activity.search_queries)
-    job_text = f"{job.title} {' '.join(job.skills_required)} {job.category or ''}"
-    return _hybrid_text_sim(combined, job_text)
+# ── UNIFIED BEHAVIOR MODEL ────────────────────────────────────
+# Replaces search_history_match()/view_history_match()/save_history_match()
+# with ONE model learned from the candidate's COMPLETE interaction history
+# (search/view/save/apply/interview/offer/hire), weighted by interaction
+# type and 60-day recency decay, comparing the FULL textual content of every
+# job (17 fields) instead of just title/skills/category. Reuses the
+# existing DynamicTextProcessor/TF-IDF/spaCy pipeline — no new NLP system.
+# profile_match() is untouched: it keeps matching the candidate's explicit
+# declared profile; this only learns from historical interactions.
+
+PAIRS = [
+    "skills", "fields", "title", "location", "languages", "certifications",
+    "experience_text", "education", "responsibilities", "requirements",
+    "qualifications", "benefits", "employment_type", "work_arrangement",
+    "department", "industry", "company_name",
+]
+CHAR_NGRAM_PAIRS = {"skills"}
+# Company name is a weak signal (~2-5% influence) — candidates care about
+# skills/technologies/location/responsibilities/experience/title far more
+# than a specific employer, though repeated interactions with the same
+# company still nudge this pair's own similarity up naturally.
+COMPANY_NAME_WEIGHT = 0.03
+HALF_LIFE_DAYS = 60.0
+INTERACTION_WEIGHTS = {
+    "view": 1.0, "search": 2.0, "save": 3.0, "apply": 5.0,
+    "interview": 7.0, "offer": 9.0, "hire": 10.0,
+    "rejected": 0.0, "withdrawn": 0.0,
+}
 
 
-def view_history_match(activity: CandidateActivity, job: JobListing) -> float:
-    """10% of total."""
-    if not activity.viewed_jobs:
-        return 0.0
-    scores = []
-    for v in activity.viewed_jobs:
-        cat  = 1.0 if (v.category or "").lower() == (job.category or "").lower() and v.category else 0.0
-        skil = _smart_skill_match(v.skills, job.skills_required)
-        titl = _hybrid_text_sim(v.title, job.title)
-        scores.append(cat * 0.40 + skil * 0.40 + titl * 0.20)
-    return float(np.mean(scores)) if scores else 0.0
+def build_job_document(job) -> Dict[str, str]:
+    """Joins every available field into one per-pair text document — works
+    for both full JobListing instances and the lighter ViewedJob snapshots
+    recorded on CandidateActivity (viewed/saved/applied/interviewed/offered/
+    hired). Fields absent from whichever model `job` actually is are skipped
+    automatically via getattr's default (never raises), so this is database/
+    model independent, per spec."""
+    def g(name, default=""):
+        val = getattr(job, name, default)
+        return val if val is not None else default
+
+    def as_list(val) -> List[str]:
+        if isinstance(val, list):
+            return [str(v) for v in val if v]
+        if isinstance(val, str) and val:
+            return [val]
+        return []
+
+    doc = {
+        "skills": " ".join(as_list(g("skills_required")) + as_list(g("skills_preferred")) or as_list(g("skills"))),
+        "fields": g("education_required"),
+        "title": g("title"),
+        "location": g("location"),
+        "languages": " ".join(as_list(g("languages"))),
+        "certifications": " ".join(as_list(g("certifications"))),
+        "experience_text": " ".join(p for p in [g("title"), g("experience_level"), g("description")] if p),
+        "education": g("education_required"),
+        "responsibilities": " ".join(as_list(g("responsibilities"))),
+        "requirements": " ".join(as_list(g("requirements"))),
+        "qualifications": g("qualifications"),
+        "benefits": " ".join(as_list(g("benefits"))),
+        "employment_type": g("job_type"),
+        "work_arrangement": g("work_arrangement"),
+        "department": g("department") or g("category"),
+        "industry": g("industry") or g("category"),
+        "company_name": g("company_name"),
+    }
+    return {k: v for k, v in doc.items() if v}
 
 
-def save_history_match(activity: CandidateActivity, job: JobListing) -> float:
-    """
-    10% of total.
-    A save is a stronger intent signal than a view — you actively chose to keep it.
-    Semantically compare each saved job to the current job being scored.
-    If you saved 10 Frontend React jobs, new Frontend React jobs rank much higher.
-    """
-    if not activity.saved_jobs:
-        return 0.0
-    scores = []
-    for s in activity.saved_jobs:
-        cat  = 1.0 if (s.category or "").lower() == (job.category or "").lower() and s.category else 0.0
-        skil = _smart_skill_match(s.skills, job.skills_required)
-        titl = _hybrid_text_sim(s.title, job.title)
-        # Saves get more weight on skill overlap than views do
-        scores.append(cat * 0.35 + skil * 0.50 + titl * 0.15)
-    return float(np.mean(scores)) if scores else 0.0
+def _decay_weight(base_weight: float, interacted_at: Optional[str]) -> float:
+    """60-day half-life recency decay. No timestamp available (older callers,
+    or search queries which have none at all) — treat as full weight rather
+    than penalizing for missing data."""
+    if not interacted_at:
+        return base_weight
+    try:
+        dt = datetime.fromisoformat(interacted_at.replace("Z", "+00:00"))
+        days = max(0.0, (datetime.now(timezone.utc) - dt).total_seconds() / 86400)
+    except Exception:
+        return base_weight
+    return base_weight * (0.5 ** (days / HALF_LIFE_DAYS))
+
+
+class BehaviorModel:
+    """Unified behavior-learning component. See module docstring above for
+    the full rationale; in short — one weighted average over every
+    interaction, each compared against the target job using the SAME
+    TF-IDF/spaCy pipeline the rest of this file already uses."""
+
+    def __init__(self, processor: DynamicTextProcessor):
+        self.processor = processor
+
+    def _pair_similarity(self, a: str, b: str, pair: str) -> float:
+        if not a or not b:
+            return 0.0
+        tfidf_fn = _tfidf_sim_char if pair in CHAR_NGRAM_PAIRS else _tfidf_sim
+        t = tfidf_fn(self.processor.process(a), self.processor.process(b))
+        s = _semantic_sim(self.processor.process_semantic(a), self.processor.process_semantic(b))
+        return t * 0.50 + s * 0.50
+
+    def _job_similarity(self, interacted_doc: Dict[str, str], job_doc: Dict[str, str]) -> Tuple[float, Dict[str, float]]:
+        """Combines every pair present on BOTH sides, with company_name
+        capped at COMPANY_NAME_WEIGHT instead of getting an equal share."""
+        pair_scores: Dict[str, float] = {}
+        for pair in PAIRS:
+            if pair == "company_name":
+                continue
+            if interacted_doc.get(pair) and job_doc.get(pair):
+                pair_scores[pair] = self._pair_similarity(interacted_doc[pair], job_doc[pair], pair)
+
+        company_sim = self._pair_similarity(interacted_doc.get("company_name", ""), job_doc.get("company_name", ""), "company_name")
+        pair_scores["company_name"] = company_sim
+
+        core_scores = [v for k, v in pair_scores.items() if k != "company_name"]
+        if core_scores:
+            base = sum(core_scores) / len(core_scores)
+            combined = base * (1 - COMPANY_NAME_WEIGHT) + company_sim * COMPANY_NAME_WEIGHT
+        else:
+            combined = company_sim
+        return combined, pair_scores
+
+    def _detect_corrections(self, docs: List[Dict[str, str]]) -> Dict[str, str]:
+        """Optional explainability extra: which raw candidate-side tokens
+        (search queries, etc.) got fuzzy-corrected toward the canonical job
+        vocabulary. Scoring itself is already typo-tolerant via character
+        n-grams + semantic similarity + this same fuzzy correction inside
+        process()/process_semantic() — this is purely for the output."""
+        corrected: Dict[str, str] = {}
+        for doc in docs:
+            for text in doc.values():
+                for raw_tok in self.processor._tokenize_raw(text):
+                    fixed = self.processor._fuzzy_correct(raw_tok)
+                    if fixed != raw_tok:
+                        corrected[raw_tok] = fixed
+        return corrected
+
+    def score(self, activity: CandidateActivity, job: JobListing) -> Tuple[float, dict]:
+        """Returns (behavior_score in [0,1], explanation dict). Replaces
+        search_history_match + view_history_match + save_history_match."""
+        job_doc = build_job_document(job)
+
+        # (document, weight, source_title) for every interaction type.
+        interactions: List[Tuple[Dict[str, str], float, str]] = []
+
+        for q in (activity.search_queries or []):
+            if not q or not q.strip():
+                continue
+            # job_searches-style queries have no associated job to pull rich
+            # content from — approximate as a title+skills-only pseudo
+            # document (same technique used for search in the ML hybrid
+            # recommender), no time decay (no per-query timestamp exists).
+            interactions.append(({"title": q, "skills": q}, INTERACTION_WEIGHTS["search"], q))
+
+        def add_job_interactions(jobs: List, kind: str) -> None:
+            base_w = INTERACTION_WEIGHTS[kind]
+            for j in (jobs or []):
+                w = _decay_weight(base_w, getattr(j, "interacted_at", None))
+                if w > 0:
+                    interactions.append((build_job_document(j), w, getattr(j, "title", "")))
+
+        add_job_interactions(activity.viewed_jobs, "view")
+        add_job_interactions(activity.saved_jobs, "save")
+        add_job_interactions(activity.applied_jobs, "apply")
+        add_job_interactions(activity.interviewed_jobs, "interview")
+        add_job_interactions(activity.offered_jobs, "offer")
+        add_job_interactions(activity.hired_jobs, "hire")
+
+        empty = {"behavior_score": 0.0, "matched_skills": [], "matched_title": [],
+                 "matched_location": [], "matched_languages": [], "corrected_terms": {}}
+        if not interactions:
+            return 0.0, empty
+
+        total_w = sum(w for _, w, _ in interactions)
+        if total_w <= 0:
+            return 0.0, empty
+
+        weighted_sum = 0.0
+        matched_terms: Dict[str, Set[str]] = defaultdict(set)
+        for doc, w, _title in interactions:
+            sim, pair_scores = self._job_similarity(doc, job_doc)
+            weighted_sum += sim * w
+            for pair, s in pair_scores.items():
+                if s > 0.5 and job_doc.get(pair):
+                    matched_terms[pair].update(job_doc[pair].split()[:8])
+
+        behavior_score = max(0.0, min(1.0, weighted_sum / total_w))
+        corrected_terms = self._detect_corrections([doc for doc, _, _ in interactions])
+
+        explanation = {
+            "behavior_score": round(behavior_score, 4),
+            "matched_skills": sorted(matched_terms.get("skills", [])),
+            "matched_title": sorted(matched_terms.get("title", [])),
+            "matched_location": sorted(matched_terms.get("location", [])),
+            "matched_languages": sorted(matched_terms.get("languages", [])),
+            "corrected_terms": corrected_terms,
+        }
+        return behavior_score, explanation
+
+
+_behavior_model = BehaviorModel(_processor)
 
 
 def recency_score(job: JobListing) -> float:
@@ -476,17 +686,27 @@ def score_job(job, candidate, activity, all_jobs) -> ScoredJob:
     if job.id in activity.ignored_job_ids:
         return ScoredJob(job_id=job.id, total_score=0.0, breakdown={"ignored": -100.0})
 
-    pm    = profile_match(candidate, job)
-    sh    = search_history_match(activity, job)
-    vh    = view_history_match(activity, job)
-    saveh = save_history_match(activity, job)
+    pm = profile_match(candidate, job)
+    behavior_score, explanation = _behavior_model.score(activity, job)
     saveb = 1.0 if job.id in activity.saved_job_ids else 0.0  # saved THIS exact job
     rec   = recency_score(job)
     pop   = popularity_score(job, all_jobs)
     pen   = -0.10 if job.id in activity.applied_job_ids else 0.0
 
+    # search_history/view_history/save_history are kept as separate reported
+    # breakdown components for backward compatibility with existing
+    # consumers, but all three are now derived from the SAME unified
+    # BehaviorModel score (learned from complete job content across every
+    # interaction type — search/view/save/apply/interview/offer/hire)
+    # instead of 3 independently-computed functions. Splitting it 20/10/10
+    # (their original weight allocation) is mathematically identical to a
+    # single 40%-weighted behavior term.
+    sh    = behavior_score * 0.20
+    vh    = behavior_score * 0.10
+    saveh = behavior_score * 0.10
+
     # Weights: pm(35) + sh(20) + vh(10) + saveh(10) + saveb(10) + rec(5) + pop(10) = 100%
-    raw   = pm*0.35 + sh*0.20 + vh*0.10 + saveh*0.10 + saveb*0.10 + rec*0.05 + pop*0.10 + pen
+    raw   = pm*0.35 + sh + vh + saveh + saveb*0.10 + rec*0.05 + pop*0.10 + pen
     total = round(max(0.0, min(1.0, raw)) * 100, 2)
 
     return ScoredJob(
@@ -494,14 +714,15 @@ def score_job(job, candidate, activity, all_jobs) -> ScoredJob:
         total_score=total,
         breakdown={
             "profile_match":   round(pm    * 35,  2),
-            "search_history":  round(sh    * 20,  2),
-            "view_history":    round(vh    * 10,  2),
-            "save_history":    round(saveh * 10,  2),
+            "search_history":  round(sh    * 100, 2),
+            "view_history":    round(vh    * 100, 2),
+            "save_history":    round(saveh * 100, 2),
             "save_bonus":      round(saveb * 10,  2),
             "recency":         round(rec   * 5,   2),
             "popularity":      round(pop   * 10,  2),
             "applied_penalty": round(pen   * 100, 2),
         },
+        explanation=explanation,
     )
 
 # ── ENDPOINTS ────────────────────────────────────────────────
