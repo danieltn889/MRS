@@ -1034,11 +1034,19 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                           <div className="bg-indigo-500 h-2 rounded-full transition-all duration-500" style={{ width: `${hybridDetail.behavior.content_similarity_score * 100}%` }} />
                         </div>
                       )}
-                      {hybridDetail.behavior?.matched_attributes?.length > 0 && (
-                        <p className="text-xs text-indigo-700">
-                          ✓ Matches your usual {hybridDetail.behavior.matched_attributes.slice(0, 3).map((a: any) => a.value).join(', ')}
-                        </p>
-                      )}
+                      {(() => {
+                        const matched = [
+                          ...(hybridDetail.behavior?.matched_skills || []),
+                          ...(hybridDetail.behavior?.matched_title || []),
+                          ...(hybridDetail.behavior?.matched_location || []),
+                          ...(hybridDetail.behavior?.matched_languages || []),
+                        ];
+                        return matched.length > 0 && (
+                          <p className="text-xs text-indigo-700">
+                            ✓ Matches your usual {matched.slice(0, 3).join(', ')}
+                          </p>
+                        );
+                      })()}
                       {hybridDetail.behavior?.top_interacted_jobs?.length > 0 && (
                         <p className="text-xs text-gray-500 mt-0.5">
                           Similar to jobs you engaged with: {hybridDetail.behavior.top_interacted_jobs.slice(0, 2).map((j: any) => j.title).join(', ')}

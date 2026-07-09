@@ -161,7 +161,10 @@ interface MatchDetails {
       final_score: number;
     };
     behavior: {
-      matched_attributes: Array<{ attribute: string; value: string; weight: number }>;
+      matched_skills?: string[];
+      matched_languages?: string[];
+      matched_location?: string[];
+      matched_title?: string[];
       content_similarity_score: number | null;
       content_similarity_tfidf: number | null;
       content_similarity_semantic: number | null;
