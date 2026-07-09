@@ -91,7 +91,7 @@ class EmailService {
       console.log(`✅ [EmailService] Sent OK: ${info.messageId} → ${to}`);
       logger.info(`Email sent successfully: ${info.messageId}`);
     } catch (error) {
-      console.error(`❌ [EmailService] FAILED sending to ${to}:`, (error as Error).message);
+      console.error(`❌ [EmailService] FAILED sending to ${options.to}:`, (error as Error).message);
       logger.error('Error sending email:', error);
       throw error;
     }

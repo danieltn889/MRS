@@ -1021,7 +1021,7 @@ const verifyEmail = async (req: VerifyEmailRequest, res: Response): Promise<void
     const { token } = req.body;
 
     const result = await query(
-      'UPDATE users SET status = $1, verification_token = NULL, email_verified_at = NOW(), updated_at = NOW() WHERE verification_token = $2 RETURNING id',
+      'UPDATE users SET status = $1, verification_token = NULL, updated_at = NOW() WHERE verification_token = $2 RETURNING id',
       ['active', token]
     );
 
