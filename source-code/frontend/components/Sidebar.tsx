@@ -24,7 +24,16 @@ import {
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
-const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout }) => {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+  activeView: string;
+  onViewChange: (view: string) => void;
+  userType?: string;
+  onLogout: () => void;
+}
+
+const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout }: SidebarProps) => {
   const { theme, currentTheme } = useTheme();
   const activeBg = ({
     blue: 'bg-blue-600',
