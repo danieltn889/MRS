@@ -77,7 +77,7 @@ function ScoreBar({ score, breakdown }: { score: number; breakdown?: Record<stri
 }
 
 function JobCard({
-  job, saved, onSave, onIgnore, onView, onApply,
+  job, saved, onSave, onIgnore, onView, onApply, onViewDetails,
 }: {
   job: FeedJob;
   saved: boolean;
@@ -85,6 +85,7 @@ function JobCard({
   onIgnore: () => void;
   onView: () => void;
   onApply: () => void;
+  onViewDetails: () => void;
 }) {
   const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -174,6 +175,10 @@ function JobCard({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        <button onClick={onViewDetails}
+          style={{ padding: '8px 14px', background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          View Details
+        </button>
         <button onClick={onApply}
           style={{ flex: 1, padding: '8px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           Apply Now
@@ -190,9 +195,13 @@ function JobCard({
 
 interface Props {
   onApplyToJob?: (jobId: string) => void;
+  // Same destination Header.tsx's search "View job details" and Saved
+  // Jobs' "View Details" navigate to (/jobs/:id) — defaults to that route
+  // directly so the feed works even if a parent doesn't pass this.
+  onViewJob?: (jobId: string) => void;
 }
 
-const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob }) => {
+const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob, onViewJob }) => {
   const { token } = useAuth();
   const [jobs, setJobs]           = useState<FeedJob[]>([]);
   const [loading, setLoading]     = useState(true);
@@ -236,6 +245,15 @@ const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob }) => {
 
   const handleView = (jobId: string) => {
     fetch(`${API}/feed/view/${jobId}`, { method: 'POST', headers, body: JSON.stringify({ seconds_spent: 5 }) }).catch(() => {});
+  };
+
+  // Explicit click is a stronger, immediate signal than the passive 5s-dwell
+  // timer above — job_views upserts on (user_id, job_id) so firing both is
+  // safe, it just refreshes the same row's timestamp. Navigates to the same
+  // /jobs/:id destination Header.tsx's search "View job details" uses.
+  const handleViewDetails = (jobId: string) => {
+    handleView(jobId);
+    onViewJob ? onViewJob(jobId) : (window.location.href = `/jobs/${jobId}`);
   };
 
   const handleIgnore = (jobId: string) => {
@@ -320,6 +338,7 @@ const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob }) => {
               onIgnore={() => handleIgnore(job.id)}
               onSave={() => handleSave(job.id)}
               onApply={() => onApplyToJob?.(job.id)}
+              onViewDetails={() => handleViewDetails(job.id)}
             />
           ))}
         </div>

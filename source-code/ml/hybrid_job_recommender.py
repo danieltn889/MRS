@@ -3151,8 +3151,20 @@ class RecommendationEngine:
                 # trained` alone only tells us the MODEL trained on SOMEONE's data,
                 # not that THIS candidate's embedding is meaningful — same class of
                 # bug as the Behavior fix above.
+                # A job add/remove via realtime updates content_model/behavior_model
+                # SYNCHRONOUSLY (see _upsert_job_snapshot), but collaborative_model
+                # only catches up via a DELAYED retrain (realtime_collaborative_
+                # retrain_delay_seconds, debounced) — so there's a real window where
+                # its fixed-size item embedding table (still the OLD job count) would
+                # broadcast-crash against content/behavior/freshness/popularity's
+                # already-updated (NEW job count) arrays. Treat it the same as
+                # "not trained yet" until the scheduled retrain resizes it.
+                collab_stale = (
+                    self.collaborative_model.trained and self.collaborative_model.model is not None and
+                    self.collaborative_model.model.item_emb.weight.shape[0] != len(self.jobs)
+                )
                 has_collab_for_candidate = False
-                if self.collaborative_model.trained and self.events is not None and not self.events.empty:
+                if self.collaborative_model.trained and not collab_stale and self.events is not None and not self.events.empty:
                     has_collab_for_candidate = not self.events[self.events["candidate_idx"] == candidate_idx].empty
                 collab = self.collaborative_model.score_batch(idx) if has_collab_for_candidate else np.zeros_like(content)
                 behavior, behavior_tfidf, behavior_semantic = self.behavior_model.score_batch(idx)
