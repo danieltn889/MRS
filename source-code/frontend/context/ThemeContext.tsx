@@ -1,6 +1,12 @@
 import React, { createContext, useState, useEffect } from 'react';
 
-export const ThemeContext = createContext();
+interface ThemeContextType {
+  currentTheme: string;
+  switchTheme: (themeName: string) => void;
+  theme: typeof themes[keyof typeof themes];
+}
+
+export const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const themes = {
   blue: {
@@ -65,13 +71,14 @@ export const themes = {
   },
 };
 
-export const ThemeProvider = ({ children }) => {
-  const [currentTheme, setCurrentTheme] = useState('slate');
+export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+  const [currentTheme, setCurrentTheme] = useState<string>('slate');
+  const themeMap = themes as Record<string, typeof themes[keyof typeof themes]>;
 
   // Load theme from localStorage on mount
   useEffect(() => {
     const savedTheme = localStorage.getItem('v-rec-theme');
-    if (savedTheme && themes[savedTheme]) {
+    if (savedTheme && themeMap[savedTheme]) {
       setCurrentTheme(savedTheme);
     }
   }, []);
@@ -81,14 +88,14 @@ export const ThemeProvider = ({ children }) => {
     localStorage.setItem('v-rec-theme', currentTheme);
   }, [currentTheme]);
 
-  const switchTheme = (themeName) => {
-    if (themes[themeName]) {
+  const switchTheme = (themeName: string) => {
+    if (themeMap[themeName]) {
       setCurrentTheme(themeName);
     }
   };
 
   return (
-    <ThemeContext.Provider value={{ currentTheme, switchTheme, theme: themes[currentTheme] }}>
+    <ThemeContext.Provider value={{ currentTheme, switchTheme, theme: themeMap[currentTheme] }}>
       {children}
     </ThemeContext.Provider>
   );

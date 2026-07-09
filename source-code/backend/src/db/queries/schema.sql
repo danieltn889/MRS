@@ -2872,24 +2872,42 @@ CREATE OR REPLACE FUNCTION notify_recommender_realtime_update()
 RETURNS TRIGGER AS $$
 DECLARE
     payload JSONB;
+    full_row JSONB;
     row_data JSONB;
     entity_id TEXT;
     candidate_id TEXT;
     job_id TEXT;
 BEGIN
-    row_data := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+    full_row := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
     entity_id := COALESCE(
-        row_data->>'id',
-        row_data->>'user_id',
-        row_data->>'job_id'
+        full_row->>'id',
+        full_row->>'user_id',
+        full_row->>'job_id'
     );
     candidate_id := COALESCE(
-        row_data->>'candidate_id',
-        row_data->>'user_id'
+        full_row->>'candidate_id',
+        full_row->>'user_id'
     );
     job_id := COALESCE(
-        row_data->>'job_id',
-        row_data->>'id'
+        full_row->>'job_id',
+        full_row->>'id'
+    );
+
+    -- pg_notify() hard-caps payloads at 8000 bytes — embedding the FULL row
+    -- (to_jsonb(NEW)) blew past that for jobs/applications with long text
+    -- fields (description, notes, feedback...), hard-failing the triggering
+    -- UPDATE with "payload string too long". The realtime listener
+    -- (hybrid_job_recommender.py) only ever reads a handful of scalar
+    -- fields from this nested payload — never the full row — so only those
+    -- are kept; anything else it needs, it re-fetches by id.
+    row_data := jsonb_build_object(
+        'candidate_id', full_row->>'candidate_id',
+        'user_id', full_row->>'user_id',
+        'job_id', full_row->>'job_id',
+        'query', full_row->>'query',
+        'searched_at', full_row->>'searched_at',
+        'event_date', full_row->>'created_at',
+        'weight', COALESCE(full_row->>'weight', full_row->>'score')
     );
 
     payload := jsonb_build_object(
