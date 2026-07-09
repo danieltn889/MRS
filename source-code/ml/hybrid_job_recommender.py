@@ -3168,6 +3168,24 @@ class RecommendationEngine:
                     has_collab_for_candidate = not self.events[self.events["candidate_idx"] == candidate_idx].empty
                 collab = self.collaborative_model.score_batch(idx) if has_collab_for_candidate else np.zeros_like(content)
                 behavior, behavior_tfidf, behavior_semantic = self.behavior_model.score_batch(idx)
+                # Same staleness class as collaborative above, but for
+                # BehaviorModel.job_matrix specifically — normally kept in
+                # lockstep with content_model/self.jobs by _upsert_job_snapshot
+                # calling behavior_model.upsert_job() synchronously, but a full
+                # fit_job_corpus() refit (_refresh_behavior_from_cache, run once
+                # per realtime batch rather than per event) can still leave a
+                # brief window where it hasn't caught up to the very latest
+                # self.jobs size. Never let a stale array reach ranker.combine()
+                # uncaught — fall back to zeros (same as "no behavior profile
+                # yet") rather than crashing the whole request.
+                behavior_stale = behavior.shape[1] != len(self.jobs)
+                if behavior_stale:
+                    log.warning("BehaviorModel.job_matrix shape (%d) != current job count (%d) — "
+                                "treating behavior as unavailable for this request.",
+                                behavior.shape[1], len(self.jobs))
+                    behavior = np.zeros_like(content)
+                    behavior_tfidf = np.zeros_like(content)
+                    behavior_semantic = np.zeros_like(content)
                 # PER-CANDIDATE check — not "does ANY candidate in the system have
                 # behavior data" (that's what _active_weights()'s own default did,
                 # since it only tested the dict for global non-emptiness). A
@@ -3175,7 +3193,7 @@ class RecommendationEngine:
                 # have their Behavior weight redistributed to Content/
                 # Collaborative/Freshness/Popularity, not silently deflate their
                 # score because SOME OTHER candidate elsewhere has history.
-                has_behavior_for_candidate = candidate_idx in self.behavior_model.behavior_profile
+                has_behavior_for_candidate = not behavior_stale and candidate_idx in self.behavior_model.behavior_profile
                 weights = self._active_weights(has_collab=has_collab_for_candidate, has_behavior=has_behavior_for_candidate,
                                                 exclude_content=exclude_content)
                 cand_row = self.candidates.iloc[candidate_idx].to_dict()
@@ -3213,6 +3231,17 @@ class RecommendationEngine:
                 has_behavior_for_candidate = False
                 weights = self._active_weights(has_collab=False, has_behavior=False, exclude_content=exclude_content)
                 cold_start = True
+
+            # Last-resort net: content_model.upsert_job() and self.jobs are always
+            # updated together in the SAME call (_upsert_job_snapshot), so content
+            # should never itself drift from len(self.jobs) — but every array here
+            # gets checked against it regardless, so any future staleness in any
+            # sub-model degrades to "signal unavailable" instead of a 500.
+            n_jobs = len(self.jobs)
+            content, behavior, collab = (
+                arr if arr.shape[1] == n_jobs else np.zeros((arr.shape[0], n_jobs), dtype=np.float32)
+                for arr in (content, behavior, collab)
+            )
 
             ranker = HybridRanker(weights)
             final = ranker.combine(content, behavior, collab, fresh.reshape(1, -1), pop.reshape(1, -1))
