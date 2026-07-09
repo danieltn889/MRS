@@ -1478,7 +1478,8 @@ class BehaviorModel:
                 jr = jobs_by_id.loc[job_id]
                 if isinstance(jr, pd.DataFrame):
                     jr = jr.iloc[0]
-                sources.append({"title": jr.get("title", ""), "company": jr.get("company_name", ""), "weight": round(w, 4)})
+                sources.append({"title": jr.get("title", ""),
+                                 "weight": round(w, 4), "job_row_pos": row_pos})
         if tfidf_accum is None:
             self.content_profile.pop(int(cand_idx), None)
             self.content_profile_sources.pop(int(cand_idx), None)
@@ -1561,6 +1562,64 @@ class BehaviorModel:
         if candidate_idx is None:
             return []
         return self.content_profile_sources.get(int(candidate_idx), [])
+
+    def explain_content_similarity(self, candidate_idx: Optional[int], job_col: int, content_model) -> dict:
+        """Per-pair breakdown of the content-similarity sub-score (50% of
+        Behavior) — mirrors ContentBasedModel.explain_match()'s
+        matched_terms_by_pair/tfidf_score_by_pair, so skills/fields/location/
+        title/languages/certifications/experience_text are individually
+        inspectable for Behavior too, not just one blended number. The
+        'candidate side' here is the weighted aggregate of the top jobs this
+        candidate interacted with (content_profile_sources), not a single
+        declared-profile row — recomputed on demand like explain_match, only
+        for the top-N shortlist actually shown to a user."""
+        empty = {"matched_terms_by_pair": {}, "tfidf_score_by_pair": {}}
+        if candidate_idx is None or content_model._job_text is None:
+            return empty
+        sources = self.content_profile_sources.get(int(candidate_idx))
+        if not sources:
+            return empty
+
+        job_row = content_model._job_text.iloc[job_col]
+        matched_terms: Dict[str, List[str]] = {}
+        tfidf_score_by_pair: Dict[str, float] = {}
+
+        for pair in content_model.PAIRS:
+            vec = content_model._tfidf.get(pair)
+            job_val = job_row.get(pair, "")
+            if vec is None or not job_val:
+                matched_terms[pair] = []
+                tfidf_score_by_pair[pair] = 0.0
+                continue
+
+            job_vec = sk_normalize(vec.transform([job_val]))
+            accum = None
+            total_w = 0.0
+            source_terms: Set[str] = set()
+            for src in sources:
+                row_pos = src.get("job_row_pos")
+                if row_pos is None:
+                    continue
+                src_val = content_model._job_text.iloc[row_pos].get(pair, "")
+                if not src_val:
+                    continue
+                w = float(src.get("weight", 0.0))
+                src_vec = sk_normalize(vec.transform([src_val])) * w
+                accum = src_vec if accum is None else accum + src_vec
+                total_w += w
+                source_terms.update(src_val.split())
+
+            if accum is None or total_w <= 0:
+                matched_terms[pair] = []
+                tfidf_score_by_pair[pair] = 0.0
+                continue
+
+            cand_vec = sk_normalize(accum)
+            tfidf_score_by_pair[pair] = round(float(cand_vec.dot(job_vec.T)[0, 0]), 4)
+            job_items = [t for t in job_val.split() if t]
+            matched_terms[pair] = [t for t in dict.fromkeys(job_items) if t in source_terms]
+
+        return {"matched_terms_by_pair": matched_terms, "tfidf_score_by_pair": tfidf_score_by_pair}
 
     def apply_incremental_updates(self, events: List[dict], jobs: pd.DataFrame,
                                   job_id_to_idx: Dict[str, int], candidate_id_to_idx: Dict[str, int]) -> None:
@@ -2474,6 +2533,7 @@ class RecommendationEngine:
                 final_score = float(score) * biz_modifier * age_modifier
 
                 content_match = self.content_model.explain_match(candidate_idx, job_col) if candidate_idx is not None else {}
+                behavior_content_match = self.behavior_model.explain_content_similarity(candidate_idx, job_col, self.content_model)
 
                 matched_attrs = []
                 if candidate_idx is not None:
@@ -2515,6 +2575,12 @@ class RecommendationEngine:
                         "content_similarity_score": round(float(behavior_content[0, job_col]), 4) if candidate_idx is not None else None,
                         "content_similarity_tfidf": round(float(behavior_content_tfidf[0, job_col]), 4) if candidate_idx is not None else None,
                         "content_similarity_semantic": round(float(behavior_content_semantic[0, job_col]), 4) if candidate_idx is not None else None,
+                        # Per-pair breakdown of the line above — same shape as
+                        # content.matched_terms_by_pair/tfidf_score_by_pair, so
+                        # skills/fields/location/title/languages/certifications/
+                        # experience_text are individually visible for Behavior too.
+                        "matched_terms_by_pair": behavior_content_match.get("matched_terms_by_pair", {}),
+                        "tfidf_score_by_pair": behavior_content_match.get("tfidf_score_by_pair", {}),
                         "top_interacted_jobs": self.behavior_model.get_content_profile_sources(candidate_idx),
                         "has_search_history": bool(candidate_idx is not None and candidate_idx in self.behavior_model._search_candidate_row),
                         "final_score": round(float(behavior[0, job_col]), 4),
