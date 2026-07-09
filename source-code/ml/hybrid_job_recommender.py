@@ -2504,6 +2504,9 @@ class RecommendationEngine:
         skills, education, work, certs = self._refresh_candidate_related_data(candidate_id)
         self.content_model.upsert_candidate(cand_row, skills, education, work, certs)
         self.candidates = self._upsert_frame_row(self.candidates, "user_id", candidate_id, cand_row)
+        # The Matcher's cached result is now stale — it's a profile-vs-job
+        # fit, so a profile change invalidates only THIS candidate's entry.
+        _invalidate_matcher_cache(candidate_id)
         return True
 
     def _upsert_job_snapshot(self, job_id: str) -> bool:
@@ -2518,6 +2521,10 @@ class RecommendationEngine:
         # popularity_scores all size their output off len(self.jobs)).
         self.behavior_model.upsert_job(job_row)
         self.jobs = self._upsert_frame_row(self.jobs, "id", job_id, job_row)
+        # A job changing affects EVERY candidate's matcher results (it scores
+        # the whole job set per call), so the whole cache is invalidated
+        # rather than trying to track which candidates might be affected.
+        _invalidate_matcher_cache()
         return True
 
     def _remove_candidate_snapshot(self, candidate_id: str) -> None:
@@ -2527,6 +2534,7 @@ class RecommendationEngine:
         self.education_df = self._remove_frame_row(self.education_df, "user_id", candidate_id)
         self.work_df = self._remove_frame_row(self.work_df, "user_id", candidate_id)
         self.certifications_df = self._remove_frame_row(self.certifications_df, "user_id", candidate_id)
+        _invalidate_matcher_cache(candidate_id)
 
     def _remove_job_snapshot(self, job_id: str) -> None:
         self.content_model.delete_job(job_id)
@@ -2534,6 +2542,7 @@ class RecommendationEngine:
         self.jobs = self._remove_frame_row(self.jobs, "id", job_id)
         if self.events is not None and not self.events.empty:
             self.events = self.events[self.events["job_idx"].astype(str) != str(self.preprocessor.job_id_to_idx.get(str(job_id), job_id))].reset_index(drop=True)
+        _invalidate_matcher_cache()
 
     def _rebuild_cached_interactions(self) -> None:
         if self.preprocessor is None:
@@ -2975,6 +2984,29 @@ DEFAULT_MATCHER_WEIGHT = 0.70
 DEFAULT_HYBRID_WEIGHT = 0.30
 
 
+# ai_job_matcher_og.py is a per-job rule-based scorer with no caching of its
+# own (see RECOMMENDATION_ENGINE.md §1) — it re-scores every active job from
+# scratch on every /match call, ~40-45s for a full job set. Since its
+# inputs (candidate profile, job list) rarely change between two requests a
+# few seconds/minutes apart — e.g. a user changing top_n and resubmitting,
+# or reloading the page — a short-lived cache here avoids paying that cost
+# again for the SAME candidate against the SAME job set, without touching
+# the matcher's own scoring logic at all ("don't rewrite the recommender").
+# Invalidated explicitly (not just left to expire) whenever this candidate's
+# profile changes or ANY job changes, via the realtime handlers below.
+_MATCHER_CACHE_TTL_SECONDS = 180.0
+_matcher_cache: Dict[str, Tuple[float, Optional[Dict[str, dict]]]] = {}
+_matcher_cache_lock = threading.Lock()
+
+
+def _invalidate_matcher_cache(candidate_id: Optional[str] = None) -> None:
+    with _matcher_cache_lock:
+        if candidate_id is None:
+            _matcher_cache.clear()
+        else:
+            _matcher_cache.pop(str(candidate_id), None)
+
+
 def fetch_matcher_scores(candidate_id: str, timeout: float = 60.0) -> Optional[Dict[str, dict]]:
     """Calls ai_job_matcher_og.py's own /match endpoint directly (same-machine
     microservice call, same pattern the gateway itself proxies) and returns
@@ -2985,18 +3017,35 @@ def fetch_matcher_scores(candidate_id: str, timeout: float = 60.0) -> Optional[D
     has real data instead of the total score sitting next to all-zero factors.
     Returns None (not {}) on any failure — callers must be able to tell
     "matcher unavailable" apart from "matcher ran and found zero jobs," since
-    only the former should fall back to 100% hybrid weight."""
+    only the former should fall back to 100% hybrid weight.
+
+    Cached for _MATCHER_CACHE_TTL_SECONDS per candidate (see module comment
+    above) — a cache hit returns in microseconds instead of ~40-45s."""
+    now = time.time()
+    with _matcher_cache_lock:
+        cached = _matcher_cache.get(candidate_id)
+        if cached is not None and (now - cached[0]) < _MATCHER_CACHE_TTL_SECONDS:
+            return cached[1]
+
     try:
         resp = requests.post(f"{MATCHER_URL}/match", json={"candidate_id": candidate_id}, timeout=timeout)
         resp.raise_for_status()
         data = resp.json()
         if not data.get("success"):
             log.warning("Matcher returned success=false for %s: %s", candidate_id, data.get("error"))
-            return None
-        return {m["job"]["id"]: m for m in data.get("matches", []) if m.get("job", {}).get("id")}
+            result = None
+        else:
+            result = {m["job"]["id"]: m for m in data.get("matches", []) if m.get("job", {}).get("id")}
     except Exception as e:
         log.warning("Matcher unavailable (%s) — combined feed falls back to 100%% hybrid.", e)
-        return None
+        result = None
+
+    # Never cache a failure — a transient matcher hiccup shouldn't force
+    # every candidate to fall back to 100% hybrid for the next 3 minutes.
+    if result is not None:
+        with _matcher_cache_lock:
+            _matcher_cache[candidate_id] = (now, result)
+    return result
 
 
 def combined_score_candidate(candidate_id: str, top_n: int,
