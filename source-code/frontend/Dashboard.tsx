@@ -224,11 +224,6 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
               // faked "applied" locally without ever submitting anything.
               window.location.href = `/jobs/${jobId}?apply=1`;
             }}
-            onViewJob={(jobId) => {
-              // Same /jobs/:id destination Header.tsx's search "View job
-              // details" and Saved Jobs' "View Details" button navigate to.
-              window.location.href = `/jobs/${jobId}`;
-            }}
           />
         );
       case 'saved-jobs':

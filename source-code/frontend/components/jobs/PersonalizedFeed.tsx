@@ -5,6 +5,8 @@ import {
   AlertCircle, Loader2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { getJob } from '../../services/jobAPI';
+import JobViewModal from './JobViewModal';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
@@ -77,7 +79,7 @@ function ScoreBar({ score, breakdown }: { score: number; breakdown?: Record<stri
 }
 
 function JobCard({
-  job, saved, onSave, onIgnore, onView, onApply, onViewDetails,
+  job, saved, onSave, onIgnore, onView, onApply, onViewDetails, viewLoading,
 }: {
   job: FeedJob;
   saved: boolean;
@@ -86,6 +88,7 @@ function JobCard({
   onView: () => void;
   onApply: () => void;
   onViewDetails: () => void;
+  viewLoading: boolean;
 }) {
   const viewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -175,9 +178,9 @@ function JobCard({
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-        <button onClick={onViewDetails}
-          style={{ padding: '8px 14px', background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-          View Details
+        <button onClick={onViewDetails} disabled={viewLoading}
+          style={{ padding: '8px 14px', background: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: viewLoading ? 'default' : 'pointer', opacity: viewLoading ? 0.6 : 1 }}>
+          {viewLoading ? 'Loading…' : 'View Details'}
         </button>
         <button onClick={onApply}
           style={{ flex: 1, padding: '8px 0', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
@@ -195,9 +198,9 @@ function JobCard({
 
 interface Props {
   onApplyToJob?: (jobId: string) => void;
-  // Same destination Header.tsx's search "View job details" and Saved
-  // Jobs' "View Details" navigate to (/jobs/:id) — defaults to that route
-  // directly so the feed works even if a parent doesn't pass this.
+  // Optional override — by default "View Details" opens the full job
+  // in-place via JobViewModal (fetching the complete record on click).
+  // Pass this only if a parent wants to navigate elsewhere instead.
   onViewJob?: (jobId: string) => void;
 }
 
@@ -212,6 +215,9 @@ const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob, onViewJob }) => {
   const [savedIds, setSavedIds]   = useState<Set<string>>(new Set());
   const [page, setPage]           = useState(1);
   const [hasMore, setHasMore]     = useState(false);
+  const [detailsJob, setDetailsJob] = useState<any>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState<string | null>(null);
 
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
@@ -249,11 +255,26 @@ const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob, onViewJob }) => {
 
   // Explicit click is a stronger, immediate signal than the passive 5s-dwell
   // timer above — job_views upserts on (user_id, job_id) so firing both is
-  // safe, it just refreshes the same row's timestamp. Navigates to the same
-  // /jobs/:id destination Header.tsx's search "View job details" uses.
-  const handleViewDetails = (jobId: string) => {
+  // safe, it just refreshes the same row's timestamp.
+  // Opens the full job in-place (JobViewModal), same as the main Job Feed
+  // tab, instead of navigating away — this feed's own FeedJob objects are
+  // too thin (no description/requirements/benefits) for the modal, so the
+  // complete job record is fetched fresh on click.
+  const handleViewDetails = async (jobId: string) => {
     handleView(jobId);
-    onViewJob ? onViewJob(jobId) : (window.location.href = `/jobs/${jobId}`);
+    if (onViewJob) { onViewJob(jobId); return; }
+    setDetailsLoading(jobId);
+    try {
+      const response = await getJob(jobId);
+      const jobData = (response as any)?.data?.data || (response as any)?.data || response;
+      setDetailsJob(jobData);
+      setDetailsOpen(true);
+    } catch {
+      // fall back to a full navigation if the fetch fails for any reason
+      window.location.href = `/jobs/${jobId}`;
+    } finally {
+      setDetailsLoading(null);
+    }
   };
 
   const handleIgnore = (jobId: string) => {
@@ -339,6 +360,7 @@ const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob, onViewJob }) => {
               onSave={() => handleSave(job.id)}
               onApply={() => onApplyToJob?.(job.id)}
               onViewDetails={() => handleViewDetails(job.id)}
+              viewLoading={detailsLoading === job.id}
             />
           ))}
         </div>
@@ -352,6 +374,13 @@ const PersonalizedFeed: React.FC<Props> = ({ onApplyToJob, onViewJob }) => {
           </button>
         </div>
       )}
+
+      <JobViewModal
+        isOpen={detailsOpen}
+        onClose={() => { setDetailsOpen(false); setDetailsJob(null); }}
+        job={detailsJob}
+        matchScore={detailsJob ? jobs.find(j => j.id === (detailsJob.id))?.score : undefined}
+      />
     </div>
   );
 };
