@@ -8,7 +8,7 @@ import {
   MessageSquare, HelpCircle, Building2, Info, AlertTriangle, Edit3,
   Check, ThumbsUp, ThumbsDown, Code, GraduationCap, Link, Globe,
   Linkedin, Github, ExternalLink, Heart, Target, Zap, Sparkles,
-  Play, Rocket, BarChart3
+  Play, Rocket, BarChart3, Users
 } from 'lucide-react';
 import { submitApplication } from '../../services/applicationAPI';
 
@@ -114,6 +114,43 @@ interface MatchDetailsType {
   hybrid_score?: number | null;
   score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
   reasons?: string[];
+  // Full behavior/collaborative/freshness/popularity/business-rule breakdown
+  // from hybrid_job_recommender.py's score_candidate() — null when
+  // score_source is "matcher-only" (hybrid had no data for this job).
+  hybrid_detail?: {
+    content: {
+      matched_skills: string[];
+      matched_education: string[];
+      matched_languages: string[];
+      semantic_encoder_available: boolean;
+      candidate_age: number | null;
+      job_age_requirement: string | null;
+      age_fit_score: number;
+      matched_terms_by_pair: Record<string, string[]>;
+      tfidf_score_by_pair: Record<string, number>;
+      semantic_score: number | null;
+      final_score: number;
+    };
+    behavior: {
+      matched_attributes: Array<{ attribute: string; value: string; weight: number }>;
+      content_similarity_score: number | null;
+      content_similarity_tfidf: number | null;
+      content_similarity_semantic: number | null;
+      top_interacted_jobs: Array<{ title: string; company: string; weight: number }>;
+      has_search_history: boolean;
+      final_score: number;
+    };
+    collaborative: {
+      trained: boolean;
+      has_learned_embedding: boolean;
+      raw_score: number;
+      similar_candidates: Array<{ candidate_id: string; similarity: number }>;
+      similar_candidates_engaged: boolean;
+    };
+    freshness: { score: number; days_old: number | null };
+    popularity: { score: number; application_count: number; view_count: number };
+    business_rules: { modifier: number; reasons: string[] };
+  } | null;
 }
 
 interface JobApplicationModalProps {
@@ -139,7 +176,10 @@ const JobApplicationModal = ({
   candidateProfile: candidateProfileProp,
   matchScore: matchScoreProp = 0,
   matchDetails: matchDetailsProp = null,
-  requiredDocuments = ['Resume', 'Cover Letter'],
+  // No job-level "required documents" field exists in the database — Resume
+  // is the only document every job genuinely needs; Cover Letter defaults to
+  // optional rather than being hardcoded as required for every job.
+  requiredDocuments = [{ name: 'Resume', is_required: true }, { name: 'Cover Letter', is_required: false }],
   onSuccess,
 }: JobApplicationModalProps) => {
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -366,7 +406,10 @@ const JobApplicationModal = ({
   // Normalize the job's configured documents (strings OR { name, is_required }).
   const documentTemplates = (requiredDocuments || []).map((doc: any) => {
     const name: string = typeof doc === 'string' ? doc : (doc?.name || 'Document');
-    const required: boolean = typeof doc === 'string' ? true : (doc?.is_required !== false);
+    // A plain string means the caller didn't specify — only Resume is
+    // genuinely universal; everything else (Cover Letter, etc.) defaults to
+    // optional rather than being silently marked required for every job.
+    const required: boolean = typeof doc === 'string' ? name === 'Resume' : (doc?.is_required !== false);
     return {
       name,
       required,
@@ -631,6 +674,9 @@ const JobApplicationModal = ({
     const skillsBD = matchDetails?.skills_breakdown || {};
     const qualsBD = matchDetails?.qualifications_breakdown || {};
     const expBD = matchDetails?.experience_breakdown || {};
+    // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown —
+    // null when score_source is "matcher-only" (hybrid had no data for this job).
+    const hybridDetail = matchDetails?.hybrid_detail || null;
 
     const skillsMatchScore = criteria.skills_match ?? 0;
     const qualsMatchScore = criteria.qualifications_match ?? 0;
@@ -772,6 +818,96 @@ const JobApplicationModal = ({
                   <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${prefsMatchScore}%` }} />
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Hybrid Recommendation Signals — Behavior/Collaborative/Freshness/
+            Popularity/Business rules from hybrid_job_recommender.py. Absent
+            (null) when score_source is "matcher-only", i.e. hybrid had no
+            data for this job. */}
+        {hybridDetail && (
+          <div className="bg-indigo-50 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-500" />
+              Hybrid Recommendation Signals
+            </h4>
+            <div className="space-y-3">
+              {/* Behavior */}
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1"><BarChart3 className="w-3 h-3 text-indigo-600" /> Behavior</span>
+                  <span className="font-semibold">
+                    {hybridDetail.behavior.content_similarity_score != null
+                      ? `${Math.round(hybridDetail.behavior.content_similarity_score * 100)}%`
+                      : 'No history yet'}
+                  </span>
+                </div>
+                {hybridDetail.behavior.content_similarity_score != null && (
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-indigo-500 h-2 rounded-full transition-all duration-500" style={{ width: `${hybridDetail.behavior.content_similarity_score * 100}%` }} />
+                  </div>
+                )}
+                {hybridDetail.behavior.matched_attributes.length > 0 && (
+                  <p className="text-xs text-indigo-600 mt-1">
+                    ✓ Matches your usual {hybridDetail.behavior.matched_attributes.slice(0, 3).map(a => a.value).join(', ')}
+                  </p>
+                )}
+                {hybridDetail.behavior.top_interacted_jobs.length > 0 && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Similar to jobs you engaged with: {hybridDetail.behavior.top_interacted_jobs.slice(0, 2).map(j => j.title).join(', ')}
+                  </p>
+                )}
+                {hybridDetail.behavior.has_search_history && (
+                  <p className="text-xs text-gray-500 mt-0.5">Matches terms you've searched for.</p>
+                )}
+              </div>
+
+              {/* Collaborative */}
+              <div>
+                <div className="flex justify-between text-xs mb-1">
+                  <span className="flex items-center gap-1"><Users className="w-3 h-3 text-pink-600" /> Collaborative</span>
+                  <span className="font-semibold">
+                    {hybridDetail.collaborative.has_learned_embedding
+                      ? `${Math.round(hybridDetail.collaborative.raw_score * 100)}%`
+                      : 'No history yet'}
+                  </span>
+                </div>
+                {hybridDetail.collaborative.has_learned_embedding && (
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-pink-500 h-2 rounded-full transition-all duration-500" style={{ width: `${hybridDetail.collaborative.raw_score * 100}%` }} />
+                  </div>
+                )}
+                {hybridDetail.collaborative.similar_candidates_engaged && (
+                  <p className="text-xs text-pink-600 mt-1">✓ Candidates with similar interests engaged with this job.</p>
+                )}
+              </div>
+
+              {/* Freshness & Popularity */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <span className="flex items-center gap-1 text-xs mb-1"><Clock className="w-3 h-3 text-teal-600" /> Freshness</span>
+                  <p className="text-xs text-gray-600">
+                    {hybridDetail.freshness.days_old != null ? `Posted ${hybridDetail.freshness.days_old.toFixed(0)} day(s) ago` : 'Unknown'}
+                  </p>
+                </div>
+                <div className="flex-1">
+                  <span className="flex items-center gap-1 text-xs mb-1"><TrendingUp className="w-3 h-3 text-orange-600" /> Popularity</span>
+                  <p className="text-xs text-gray-600">
+                    {hybridDetail.popularity.application_count} application(s), {hybridDetail.popularity.view_count} view(s)
+                  </p>
+                </div>
+              </div>
+
+              {/* Business rules */}
+              {hybridDetail.business_rules.reasons.length > 0 && (
+                <div>
+                  <span className="flex items-center gap-1 text-xs mb-1"><Shield className="w-3 h-3 text-green-700" /> Business rules</span>
+                  {hybridDetail.business_rules.reasons.map((r, idx) => (
+                    <p key={idx} className="text-xs text-green-700">✓ {r}</p>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

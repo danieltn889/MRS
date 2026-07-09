@@ -70,6 +70,9 @@ interface AIMatch {
   qualificationsBreakdown?: any;
   experienceBreakdown?: any;
   preferencesBreakdown?: any;
+  // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown from
+  // the hybrid recommender — null/absent when scoreSource is "matcher-only".
+  hybridDetail?: any;
   rawJob?: any;
   benefits?: string[];
   tags?: string[];
@@ -392,6 +395,10 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             qualificationsBreakdown: matcherBD?.qualifications_breakdown || null,
             experienceBreakdown: matcherBD?.experience_breakdown || null,
             preferencesBreakdown: matcherBD?.preferences_breakdown || null,
+            // Behavior/Collaborative/Freshness/Popularity/Business-rules
+            // breakdown from the hybrid recommender — null when score_source
+            // is "matcher-only" (hybrid had no data for this job).
+            hybridDetail: match.hybrid_detail || null,
 
             rawJob: jobData,
             benefits: jobData.benefits || [],
@@ -1017,9 +1024,10 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             skills_breakdown: selectedMatchForApply.skillsBreakdown,
             qualifications_breakdown: selectedMatchForApply.qualificationsBreakdown,
             experience_breakdown: selectedMatchForApply.experienceBreakdown,
-            preferences_breakdown: selectedMatchForApply.preferencesBreakdown
+            preferences_breakdown: selectedMatchForApply.preferencesBreakdown,
+            hybrid_detail: selectedMatchForApply.hybridDetail
           }}
-          requiredDocuments={['Resume', 'Cover Letter']}
+          requiredDocuments={[{ name: 'Resume', is_required: true }, { name: 'Cover Letter', is_required: false }]}
         />
       )}
 

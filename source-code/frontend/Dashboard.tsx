@@ -212,8 +212,13 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
         return (
           <PersonalizedFeed
             onApplyToJob={(jobId) => {
-              handleApplyJob(jobId);
-              setCurrentView('applications');
+              // Navigate to the real job details page and auto-open the
+              // actual application modal there (same ?apply=1 pattern
+              // SavedJobs.tsx uses) — this feed's own job objects are too
+              // thin (no description/salary/screening questions) to render
+              // a real application form inline, and handleApplyJob() only
+              // faked "applied" locally without ever submitting anything.
+              window.location.href = `/jobs/${jobId}?apply=1`;
             }}
           />
         );

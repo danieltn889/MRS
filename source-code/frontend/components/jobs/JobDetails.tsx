@@ -142,6 +142,43 @@ interface MatchDetails {
   score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
   reasons?: string[];
   hasBreakdown?: boolean;
+  // Full behavior/collaborative/freshness/popularity/business-rule breakdown
+  // from hybrid_job_recommender.py's score_candidate() — null when
+  // score_source is "matcher-only" (hybrid had no data for this job).
+  hybrid_detail?: {
+    content: {
+      matched_skills: string[];
+      matched_education: string[];
+      matched_languages: string[];
+      semantic_encoder_available: boolean;
+      candidate_age: number | null;
+      job_age_requirement: string | null;
+      age_fit_score: number;
+      matched_terms_by_pair: Record<string, string[]>;
+      tfidf_score_by_pair: Record<string, number>;
+      semantic_score: number | null;
+      final_score: number;
+    };
+    behavior: {
+      matched_attributes: Array<{ attribute: string; value: string; weight: number }>;
+      content_similarity_score: number | null;
+      content_similarity_tfidf: number | null;
+      content_similarity_semantic: number | null;
+      top_interacted_jobs: Array<{ title: string; company: string; weight: number }>;
+      has_search_history: boolean;
+      final_score: number;
+    };
+    collaborative: {
+      trained: boolean;
+      has_learned_embedding: boolean;
+      raw_score: number;
+      similar_candidates: Array<{ candidate_id: string; similarity: number }>;
+      similar_candidates_engaged: boolean;
+    };
+    freshness: { score: number; days_old: number | null };
+    popularity: { score: number; application_count: number; view_count: number };
+    business_rules: { modifier: number; reasons: string[] };
+  } | null;
 }
 
 const JobDetails: React.FC = () => {
@@ -308,7 +345,10 @@ const JobDetails: React.FC = () => {
           hybrid_score: result.match.hybrid_score,
           score_source: result.match.score_source,
           reasons: result.match.reasons || [],
-          hasBreakdown: result.match.criteria_scores?.skills_match != null || result.match.criteria_scores?.qualifications_match != null
+          hasBreakdown: result.match.criteria_scores?.skills_match != null || result.match.criteria_scores?.qualifications_match != null,
+          // Behavior/Collaborative/Freshness/Popularity/Business-rules
+          // breakdown — null when score_source is "matcher-only".
+          hybrid_detail: (result.match as any).hybrid_detail || null
         });
 
         console.log('✅ AI Match score loaded:', result.match.match_score);
@@ -1297,14 +1337,18 @@ const JobDetails: React.FC = () => {
       skills_breakdown: matchDetails?.skills_breakdown,
       qualifications_breakdown: matchDetails?.qualifications_breakdown,
       experience_breakdown: matchDetails?.experience_breakdown,
-      preferences_breakdown: matchDetails?.preferences_breakdown
+      preferences_breakdown: matchDetails?.preferences_breakdown,
+      hybrid_detail: matchDetails?.hybrid_detail
     }}
     requiredDocuments={
       Array.isArray((job as any)?.requiredDocuments) && (job as any).requiredDocuments.length > 0
         ? (job as any).requiredDocuments
         : Array.isArray((job as any)?.required_documents) && (job as any).required_documents.length > 0
           ? (job as any).required_documents
-          : ['Resume', 'Cover Letter']
+          // No job-level "required documents" field exists in the database —
+          // Resume is universal; Cover Letter defaults to optional rather
+          // than being hardcoded as required for every job.
+          : [{ name: 'Resume', is_required: true }, { name: 'Cover Letter', is_required: false }]
     }
   />
 )}

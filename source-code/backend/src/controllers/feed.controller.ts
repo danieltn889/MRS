@@ -18,22 +18,38 @@ class FeedController extends BaseController {
       const page   = Math.max(1, parseInt(req.query.page as string || '1'));
 
       // ── 1. Candidate profile ──────────────────────────────
+      // candidate_profiles has no skills/years_of_experience/education_level/
+      // preferred_job_titles/preferred_locations columns — skills live in the
+      // user_skills/skills join table, experience is derived from
+      // work_experience date ranges, education level from the education
+      // table, and job-title/location preferences inside job_preferences
+      // jsonb (see hybrid_job_recommender.py's equivalent queries).
       const profileResult = await DatabaseService.query(`
         SELECT
-          cp.skills, cp.years_of_experience, cp.education_level,
-          cp.preferred_job_titles, cp.preferred_locations
+          cp.job_preferences,
+          COALESCE(
+            (SELECT array_agg(s.name) FROM user_skills us JOIN skills s ON s.id = us.skill_id WHERE us.user_id = cp.user_id),
+            ARRAY[]::text[]
+          ) AS skills,
+          COALESCE(
+            (SELECT SUM(EXTRACT(EPOCH FROM (COALESCE(we.end_date, NOW()) - we.start_date)) / (365.25 * 86400))
+             FROM work_experience we WHERE we.user_id = cp.user_id),
+            0
+          ) AS years_of_experience,
+          (SELECT edu.degree FROM education edu WHERE edu.user_id = cp.user_id ORDER BY edu.end_date DESC NULLS FIRST LIMIT 1) AS education_level
         FROM candidate_profiles cp
         WHERE cp.user_id = $1
         LIMIT 1
       `, [userId]);
 
       const profile = profileResult.rows[0] || {};
+      const jobPrefs = profile.job_preferences || {};
 
       // ── 2. Activity history ───────────────────────────────
       const [viewsRes, appliedRes, savedRes, ignoredRes, searchRes] = await Promise.all([
         DatabaseService.query(`
           SELECT DISTINCT ON (jv.job_id)
-            jv.job_id, j.title, j.category,
+            jv.job_id, j.title, j.department AS category,
             COALESCE(j.skills_required::text, '[]') as skills_json
           FROM job_views jv
           JOIN jobs j ON j.id = jv.job_id
@@ -49,7 +65,7 @@ class FeedController extends BaseController {
 
         DatabaseService.query(`
           SELECT DISTINCT ON (sj.job_id)
-            sj.job_id, j.title, j.category,
+            sj.job_id, j.title, j.department AS category,
             COALESCE(j.skills_required::text, '[]') as skills_json
           FROM saved_jobs sj
           JOIN jobs j ON j.id = sj.job_id
@@ -92,7 +108,7 @@ class FeedController extends BaseController {
       // ── 3. Fetch all active jobs ──────────────────────────
       const jobsResult = await DatabaseService.query(`
         SELECT
-          j.id, j.title, j.category, j.job_type, j.experience_level,
+          j.id, j.title, j.department AS category, j.job_type, j.experience_level,
           j.education_required,
           COALESCE(
             (SELECT string_agg(elem->>'city', ', ')
@@ -133,10 +149,10 @@ class FeedController extends BaseController {
       const mlPayload = {
         candidate: {
           skills:               this._parseSkillArray(profile.skills),
-          years_experience:     profile.years_of_experience || 0,
+          years_experience:     Number(profile.years_of_experience) || 0,
           education_level:      profile.education_level || '',
-          preferred_job_titles: profile.preferred_job_titles || [],
-          preferred_locations:  profile.preferred_locations || [],
+          preferred_job_titles: jobPrefs.job_types || jobPrefs.preferred_job_types || [],
+          preferred_locations:  jobPrefs.locations || jobPrefs.preferred_locations || [],
         },
         activity,
         jobs,

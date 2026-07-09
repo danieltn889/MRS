@@ -616,7 +616,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
             resumes: fullCandidateProfile?.resumes || [],
           }}
           matchScore={selectedJobForApply.match_score || 78.7}
-          requiredDocuments={['Resume', 'Cover Letter']}
+          requiredDocuments={[{ name: 'Resume', is_required: true }, { name: 'Cover Letter', is_required: false }]}
           onSuccess={handleApplicationSubmit}
         />
       )}

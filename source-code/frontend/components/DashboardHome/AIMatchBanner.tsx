@@ -25,8 +25,8 @@ const AIMatchBanner: React.FC<AIMatchBannerProps> = ({
             <Zap className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="font-semibold text-lg">AI-Powered Job Matching</h3>
-            <p className="text-sm text-blue-100">Get personalized job recommendations based on your skills</p>
+            <h3 className="font-semibold text-lg">AI-Powered Job feed</h3>
+            <p className="text-sm text-blue-100">Get personalized job recommendations based on your skills and experience,job preferences,etc.</p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">

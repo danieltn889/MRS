@@ -72,7 +72,7 @@ const JobCard: React.FC<JobCardProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showAllSkills, setShowAllSkills] = useState(false);
-  const { trackView, trackSave, trackUnsave, onHoverStart, onHoverEnd } = useFeedTracker();
+  const { trackView, onHoverStart, onHoverEnd } = useFeedTracker();
 
   const matchScore   = job.matchScore    || 0;
   const matcherScore = job.matcherScore;   // null when matcher had no data for this job
@@ -461,7 +461,7 @@ const JobCard: React.FC<JobCardProps> = ({
               <ExternalLink size={15} /> View Details
             </button>
 
-            <button type="button" onClick={() => { isSaved ? trackUnsave(job.id) : trackSave(job.id); onSaveJob(job.id, isSaved); }}
+            <button type="button" onClick={() => onSaveJob(job.id, isSaved)}
               className="w-full px-4 py-2 border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
               <Bookmark size={15} fill={isSaved ? 'currentColor' : 'none'} />
               {isSaved ? 'Saved' : 'Save Job'}

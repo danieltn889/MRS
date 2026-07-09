@@ -82,6 +82,50 @@ interface ScoredJob {
   // Full matcher 4-factor breakdown (null when score_source is "hybrid-only" —
   // the matcher had no data for this job, not a real zero).
   matcher_breakdown: MatcherBreakdown | null;
+  // Full hybrid breakdown (null when score_source is "matcher-only" — hybrid
+  // had no data for this job).
+  hybrid_detail: HybridDetail | null;
+}
+
+// Full behavior/collaborative/freshness/popularity/business-rule breakdown
+// from hybrid_job_recommender.py's score_candidate() — see its "detail" dict.
+// null when the combined result came from the matcher alone (score_source
+// "matcher-only") since hybrid had no data for that job.
+interface HybridDetail {
+  content: {
+    matched_skills: string[];
+    matched_education: string[];
+    matched_languages: string[];
+    candidate_experience_years: number | null;
+    required_experience_years: number | null;
+    semantic_encoder_available: boolean;
+    candidate_age: number | null;
+    job_age_requirement: string | null;
+    age_fit_score: number;
+    matched_terms_by_pair: Record<string, string[]>;
+    tfidf_score_by_pair: Record<string, number>;
+    semantic_score: number | null;
+    final_score: number;
+  };
+  behavior: {
+    matched_attributes: Array<{ attribute: string; value: string; weight: number }>;
+    content_similarity_score: number | null;
+    content_similarity_tfidf: number | null;
+    content_similarity_semantic: number | null;
+    top_interacted_jobs: Array<{ title: string; company: string; weight: number }>;
+    has_search_history: boolean;
+    final_score: number;
+  };
+  collaborative: {
+    trained: boolean;
+    has_learned_embedding: boolean;
+    raw_score: number;
+    similar_candidates: Array<{ candidate_id: string; similarity: number }>;
+    similar_candidates_engaged: boolean;
+  };
+  freshness: { score: number; days_old: number | null };
+  popularity: { score: number; application_count: number; view_count: number };
+  business_rules: { modifier: number; reasons: string[] };
 }
 
 interface CandidateInfo {
@@ -220,6 +264,9 @@ interface SingleJobMatchResponse {
     hybrid_score?: number | null;
     score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
     reasons?: string[];
+    // Full behavior/collaborative/freshness/popularity/business-rule breakdown
+    // from the hybrid recommender — null when score_source is "matcher-only".
+    hybrid_detail?: HybridDetail | null;
   };
   timestamp?: string;
   performance?: {
@@ -411,6 +458,7 @@ export const getCombinedJobMatch = async (
         hybrid_score: jm.hybrid_score,
         score_source: jm.score_source,
         reasons: jm.reasons || [],
+        hybrid_detail: jm.hybrid_detail || null,
       },
     };
 

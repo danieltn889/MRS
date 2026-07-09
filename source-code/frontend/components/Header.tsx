@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Settings, LogOut, User, Menu, X, UserPlus, Building, ChevronDown, Briefcase, MessageCircle, Loader2, ExternalLink } from 'lucide-react';
+import { Search, Bell, Settings, LogOut, User, Menu, X, UserPlus, Building, ChevronDown, Briefcase, MessageCircle, Loader2, ExternalLink, Send } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ThemeSwitcher from './ThemeSwitcher';
 import { SOCKET_BASE_URL } from '../services/simulationAPI';
@@ -558,6 +558,14 @@ const Header: React.FC<HeaderProps> = ({
     navigate(`/jobs/${jobId}`);
   };
 
+  // Same ?apply=1 pattern used by the Job Feed and Saved Jobs "Apply Now"
+  // buttons — lands on the job details page with the real application modal
+  // already open, instead of just viewing the job first.
+  const handleApplyJob = (jobId: string): void => {
+    setShowSearchResults(false);
+    navigate(`/jobs/${jobId}?apply=1`);
+  };
+
   const handleProfileClick = (): void => {
     setShowProfileDropdown(!showProfileDropdown);
   };
@@ -636,17 +644,30 @@ const Header: React.FC<HeaderProps> = ({
                       {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
                     </div>
                     {searchResults.map((job) => (
-                      <button
+                      <div
                         key={job.id}
-                        onClick={() => handleViewJob(job.id)}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0"
+                        className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0"
                       >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 truncate">{job.title}</p>
-                          <p className="text-xs text-gray-400 truncate">{job.company || job.location?.[0] || ''}</p>
-                        </div>
-                        <ExternalLink className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
-                      </button>
+                        <button
+                          onClick={() => handleViewJob(job.id)}
+                          className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                          title="View job details"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-gray-900 truncate">{job.title}</p>
+                            <p className="text-xs text-gray-400 truncate">{job.company || job.location?.[0] || ''}</p>
+                          </div>
+                          <ExternalLink className="w-3.5 h-3.5 text-blue-600 flex-shrink-0" />
+                        </button>
+                        <button
+                          onClick={() => handleApplyJob(job.id)}
+                          className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-semibold"
+                          title="Apply to this job"
+                        >
+                          <Send className="w-3 h-3" />
+                          Apply
+                        </button>
+                      </div>
                     ))}
                   </div>
                 ) : (

@@ -272,6 +272,9 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   const expBD = matchData?.experienceBreakdown || {};
   const prefsBD = matchData?.preferencesBreakdown || {};
   const skillsBD = matchData?.skillsBreakdown || {};
+  // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown from
+  // the hybrid recommender — null when scoreSource is "matcher-only".
+  const hybridDetail = matchData?.hybridDetail || null;
 
   const candidateDegrees = qualsBD.candidate_degrees || [];
   const candidateFields = qualsBD.candidate_fields || [];
@@ -992,6 +995,92 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Hybrid Recommendation Signals — Behavior/Collaborative/
+                  Freshness/Popularity/Business rules from
+                  hybrid_job_recommender.py. Absent (null) when scoreSource is
+                  "matcher-only", i.e. hybrid had no data for this job. */}
+              {hybridDetail && (
+                <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+                  <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                    <Sparkles size={14} className="text-indigo-500" /> Hybrid Recommendation Signals
+                  </h4>
+                  <div className="space-y-3">
+                    {/* Behavior */}
+                    <div className="bg-white rounded-xl p-3">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="flex items-center gap-1 font-medium text-gray-700"><Users size={13} className="text-indigo-600" /> Behavior</span>
+                        <span className="font-semibold">
+                          {hybridDetail.behavior?.content_similarity_score != null
+                            ? `${Math.round(hybridDetail.behavior.content_similarity_score * 100)}%`
+                            : 'No history yet'}
+                        </span>
+                      </div>
+                      {hybridDetail.behavior?.content_similarity_score != null && (
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                          <div className="bg-indigo-500 h-2 rounded-full transition-all duration-500" style={{ width: `${hybridDetail.behavior.content_similarity_score * 100}%` }} />
+                        </div>
+                      )}
+                      {hybridDetail.behavior?.matched_attributes?.length > 0 && (
+                        <p className="text-xs text-indigo-700">
+                          ✓ Matches your usual {hybridDetail.behavior.matched_attributes.slice(0, 3).map((a: any) => a.value).join(', ')}
+                        </p>
+                      )}
+                      {hybridDetail.behavior?.top_interacted_jobs?.length > 0 && (
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Similar to jobs you engaged with: {hybridDetail.behavior.top_interacted_jobs.slice(0, 2).map((j: any) => j.title).join(', ')}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Collaborative */}
+                    <div className="bg-white rounded-xl p-3">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="flex items-center gap-1 font-medium text-gray-700"><Users size={13} className="text-pink-600" /> Collaborative</span>
+                        <span className="font-semibold">
+                          {hybridDetail.collaborative?.has_learned_embedding
+                            ? `${Math.round(hybridDetail.collaborative.raw_score * 100)}%`
+                            : 'No history yet'}
+                        </span>
+                      </div>
+                      {hybridDetail.collaborative?.has_learned_embedding && (
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                          <div className="bg-pink-500 h-2 rounded-full transition-all duration-500" style={{ width: `${hybridDetail.collaborative.raw_score * 100}%` }} />
+                        </div>
+                      )}
+                      {hybridDetail.collaborative?.similar_candidates_engaged && (
+                        <p className="text-xs text-pink-700">✓ Candidates with similar interests engaged with this job.</p>
+                      )}
+                    </div>
+
+                    {/* Freshness & Popularity */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white rounded-xl p-3">
+                        <span className="flex items-center gap-1 text-xs font-medium text-gray-700 mb-1"><Clock size={13} className="text-teal-600" /> Freshness</span>
+                        <p className="text-xs text-gray-600">
+                          {hybridDetail.freshness?.days_old != null ? `Posted ${Number(hybridDetail.freshness.days_old).toFixed(0)} day(s) ago` : 'Unknown'}
+                        </p>
+                      </div>
+                      <div className="bg-white rounded-xl p-3">
+                        <span className="flex items-center gap-1 text-xs font-medium text-gray-700 mb-1"><TrendingUp size={13} className="text-orange-600" /> Popularity</span>
+                        <p className="text-xs text-gray-600">
+                          {hybridDetail.popularity?.application_count ?? 0} application(s), {hybridDetail.popularity?.view_count ?? 0} view(s)
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Business rules */}
+                    {hybridDetail.business_rules?.reasons?.length > 0 && (
+                      <div className="bg-white rounded-xl p-3">
+                        <span className="flex items-center gap-1 text-xs font-medium text-gray-700 mb-1"><Shield size={13} className="text-green-700" /> Business rules</span>
+                        {hybridDetail.business_rules.reasons.map((r: string, idx: number) => (
+                          <p key={idx} className="text-xs text-green-700">✓ {r}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
