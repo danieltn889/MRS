@@ -140,7 +140,7 @@ const DEFAULT_ADDITIONAL_STATS: AdditionalStats = {
 };
 
 const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewChange }) => {
-  const { trackView, trackSave, trackUnsave } = useFeedTracker();
+  const { trackSave, trackUnsave } = useFeedTracker();
   const [allJobs, setAllJobs] = useState<any[]>([]);
   const [aiMatches, setAiMatches] = useState<AIMatch[]>([]);
 
@@ -630,7 +630,9 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
   };
 
   const handleViewDetails = (match: AIMatch) => {
-    trackView(match.id, 0);
+    // JobViewModal itself tracks the view now (on mount, keyed on job id) so
+    // every caller gets it for free — calling trackView here too would
+    // double-count this specific open.
     setSelectedMatch(match);
     setShowDetails(true);
   };

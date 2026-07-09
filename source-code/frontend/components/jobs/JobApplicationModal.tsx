@@ -7,7 +7,7 @@ import {
   Send, ChevronRight, ChevronLeft, Plus, Trash2, Eye, Download,
   MessageSquare, HelpCircle, Building2, Info, AlertTriangle, Edit3,
   Check, ThumbsUp, ThumbsDown, Code, GraduationCap, Link, Globe,
-  Linkedin, Github, ExternalLink, Heart, Target, Zap, Sparkles,
+  Linkedin, Github, ExternalLink, Target, Zap, Sparkles,
   Play, Rocket, BarChart3, Users
 } from 'lucide-react';
 import { submitApplication } from '../../services/applicationAPI';
@@ -164,6 +164,31 @@ interface JobApplicationModalProps {
   requiredDocuments?: Array<string | { name: string; is_required?: boolean }>;
   onSuccess?: (data?: any) => void;
 }
+
+// Mirrors JobViewModal.tsx's FactorRow exactly, so the 4-Factor Score
+// Breakdown looks identical whether a candidate is viewing or applying.
+const FactorRow = ({
+  label, score, weight, pts, colour
+}: {
+  label: string; score: number; weight: string; pts: number; colour: string
+}) => (
+  <div className="mb-4 border-b border-gray-100 pb-3 last:border-0">
+    <div className="flex items-center justify-between text-sm mb-1">
+      <span className="font-semibold text-gray-700">{label}</span>
+      <div className="flex items-center gap-3 text-xs">
+        <span className={`font-bold px-2 py-0.5 rounded-full ${
+          score >= 80 ? 'bg-green-100 text-green-800' :
+          score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+          'bg-red-100 text-red-800'
+        }`}>{score.toFixed(0)}%</span>
+        <span className="text-gray-400">× {weight} = <strong className="text-gray-700">{pts.toFixed(1)} pts</strong></span>
+      </div>
+    </div>
+    <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
+      <div className={`${colour} h-2 rounded-full transition-all`} style={{ width: `${Math.min(score, 100)}%` }} />
+    </div>
+  </div>
+);
 
 // ============================================
 // JOB APPLICATION MODAL COMPONENT
@@ -672,8 +697,6 @@ const JobApplicationModal = ({
 
     const criteria = matchDetails?.criteria_scores || {};
     const skillsBD = matchDetails?.skills_breakdown || {};
-    const qualsBD = matchDetails?.qualifications_breakdown || {};
-    const expBD = matchDetails?.experience_breakdown || {};
     // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown —
     // null when score_source is "matcher-only" (hybrid had no data for this job).
     const hybridDetail = matchDetails?.hybrid_detail || null;
@@ -687,15 +710,7 @@ const JobApplicationModal = ({
     // jobs criteria_scores is null, so 0% here would misleadingly sit next
     // to a real, non-zero total score from the hybrid recommender alone.
     const hasBreakdown = criteria.skills_match != null || criteria.qualifications_match != null;
-
-    const gapYears = expBD.gap_years ?? 0;
-    const candidateYears = expBD.candidate_years ?? expBD.total_years ?? 0;
-    const requiredYears = expBD.required_years ?? 0;
-    const totalYears = expBD.total_years ?? candidateYears;
-
-    const qualificationEntries = qualsBD.qualification_entries ?? [];
-    const hasQualificationEntries = qualificationEntries.length > 0;
-    const bestSimilarity = qualsBD.best_similarity ?? 0;
+    const ringColor = matchScore >= 80 ? '#22c55e' : matchScore >= 60 ? '#3b82f6' : matchScore >= 40 ? '#f59e0b' : '#ef4444';
 
     return (
       <div className="space-y-6">
@@ -750,74 +765,34 @@ const JobApplicationModal = ({
           </div>
         )}
 
-        {/* 4-Factor Breakdown — only when the profile matcher actually scored this job */}
+        {/* 4-Factor Score Breakdown — mirrors JobViewModal.tsx exactly (same
+            FactorRow weighted score × weight = pts math and total-score
+            line), so the numbers a candidate sees while viewing a job match
+            what they see while applying to it. Only shown when the profile
+            matcher actually scored this job. */}
         {matchScore > 0 && hasBreakdown && (
-          <div className="bg-gray-50 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-              <Target className="w-4 h-4 text-purple-500" />
-              Match Breakdown
-            </h4>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="flex items-center gap-1"><Code className="w-3 h-3 text-green-600" /> Skills</span>
-                  <span className="font-semibold">{skillsBD.total_matched || 0}/{skillsBD.total_required || 0} ({Math.round(skillsMatchScore)}%)</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-green-500 h-2 rounded-full transition-all duration-500" style={{ width: `${skillsMatchScore}%` }} />
-                </div>
-                {skillsBD.matched_skills && skillsBD.matched_skills.length > 0 && (
-                  <p className="text-xs text-green-600 mt-1">✓ Matched: {skillsBD.matched_skills.slice(0, 5).join(', ')}{skillsBD.matched_skills.length > 5 && ` +${skillsBD.matched_skills.length - 5} more`}</p>
-                )}
-                {skillsBD.missing_skills && skillsBD.missing_skills.length > 0 && (
-                  <p className="text-xs text-red-500 mt-0.5">✗ Missing: {skillsBD.missing_skills.slice(0, 3).join(', ')}{skillsBD.missing_skills.length > 3 && ` +${skillsBD.missing_skills.length - 3} more`}</p>
-                )}
+          <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5">
+            <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
+              <Target size={15} className="text-blue-600" /> 4-Factor Score Breakdown
+            </h3>
+            <FactorRow label="🔧 Skills"          score={skillsMatchScore} weight="40%" pts={skillsMatchScore * 0.40} colour="bg-green-500" />
+            <FactorRow label="🎓 Qualifications"  score={qualsMatchScore}  weight="25%" pts={qualsMatchScore  * 0.25} colour="bg-blue-500" />
+            <FactorRow label="📅 Experience"      score={expMatchScore}    weight="20%" pts={expMatchScore    * 0.20} colour="bg-purple-500" />
+            <FactorRow label="⚙️ Preferences"     score={prefsMatchScore}  weight="15%" pts={prefsMatchScore  * 0.15} colour="bg-yellow-500" />
+            <div className="mt-4 pt-3 border-t border-gray-200">
+              <div className="flex justify-between text-sm font-bold text-gray-900 mb-1">
+                <span>Total Score</span>
+                <span style={{ color: ringColor }}>{matchScore.toFixed(1)} / 100 pts</span>
               </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3 text-purple-600" /> Qualifications</span>
-                  <span className="font-semibold">{Math.round(qualsMatchScore)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-purple-500 h-2 rounded-full transition-all duration-500" style={{ width: `${qualsMatchScore}%` }} />
-                </div>
-                {qualsBD.candidate_degrees && qualsBD.candidate_degrees.length > 0 && (
-                  <p className="text-xs text-purple-600 mt-1">🎓 Your degree: {qualsBD.candidate_degrees[0]}</p>
-                )}
-                {qualsBD.job_degree_required && (
-                  <p className="text-xs text-gray-500 mt-0.5">Required: {qualsBD.job_degree_required}</p>
-                )}
-                {qualsBD.best_matched_field && (
-                  <p className="text-xs text-green-600 mt-0.5">✓ Best match: {qualsBD.best_matched_field}</p>
-                )}
+              <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className="h-2.5 rounded-full" style={{ width: `${matchScore}%`, background: ringColor }} />
               </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="flex items-center gap-1"><Briefcase className="w-3 h-3 text-yellow-600" /> Experience</span>
-                  <span className="font-semibold">{totalYears.toFixed(1)} / {requiredYears} yrs ({Math.round(expMatchScore)}%)</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-yellow-500 h-2 rounded-full transition-all duration-500" style={{ width: `${expMatchScore}%` }} />
-                </div>
-                {gapYears > 0 && (
-                  <p className="text-xs text-orange-600 mt-1">⚠️ Experience gap: {gapYears.toFixed(1)} years</p>
-                )}
-                {expBD.specific_matches && expBD.specific_matches.length > 0 && (
-                  <p className="text-xs text-green-600 mt-0.5">✓ Matched: {expBD.specific_matches[0]?.requirement_title} ({expBD.specific_matches[0]?.candidate_years?.toFixed(1)}/{expBD.specific_matches[0]?.requirement_years} yrs)</p>
-                )}
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs mb-1">
-                  <span className="flex items-center gap-1"><Heart className="w-3 h-3 text-blue-600" /> Preferences</span>
-                  <span className="font-semibold">{Math.round(prefsMatchScore)}%</span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${prefsMatchScore}%` }} />
-                </div>
-              </div>
+              <p className="text-center text-xs text-gray-500 mt-3">
+                {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.' :
+                 matchScore >= 65 ? '👍 Good match! Consider applying.' :
+                 matchScore >= 50 ? '⚠️ Partial match. Update your profile to improve.' :
+                                    '📝 Low match. Focus on skill development.'}
+              </p>
             </div>
           </div>
         )}

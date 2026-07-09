@@ -14,6 +14,7 @@ import { saveJob, unsaveJob, isJobSaved } from '../../services/jobStorageService
 import appliedJobsManager from '../../src/utils/AppliedJobsManager';
 import JobApplicationModal from './JobApplicationModal';
 import { getCombinedJobMatch } from '../../services/aiJobMatchingService';
+import { useFeedTracker } from '../../hooks/useFeedTracker';
 
 interface JobDetails {
   id: string;
@@ -184,6 +185,7 @@ interface MatchDetails {
 const JobDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { trackView } = useFeedTracker();
   const [job, setJob] = useState<JobDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +214,12 @@ const JobDetails: React.FC = () => {
       checkIfSaved();
       checkIfApplied();
       loadCandidateProfile();
+      // Landing here counts as viewing the job regardless of entry point
+      // (Job Feed, Header search, Saved Jobs "View Details") — the Job Feed
+      // card already tracks its own view on click (see DashboardHome.tsx's
+      // handleViewDetails), but those other entry points navigate straight
+      // here without ever recording one, so it's tracked once per job id here.
+      trackView(id, 0);
     }
   }, [id]);
 

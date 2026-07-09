@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X, MapPin, Clock, Users, Briefcase, Building2, Target,
   CheckCircle, DollarSign, Star, Globe, FileText, Languages,
@@ -7,6 +7,7 @@ import {
   Code, Award, MessageSquare, List, Shield, TrendingUp, Zap,
   BookOpen, Briefcase as WorkIcon, Home, Sparkles, AlertTriangle
 } from 'lucide-react';
+import { useFeedTracker } from '../../hooks/useFeedTracker';
 
 interface JobViewModalProps {
   isOpen: boolean;
@@ -166,6 +167,20 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   matchData, candidateInfo,
 }) => {
   const [currentTab, setCurrentTab] = useState<'match' | 'job'>('job');
+  const { trackView } = useFeedTracker();
+
+  // Tracked here (not by each caller) so every place that opens this modal
+  // records a view consistently. Keyed on the job id, not the isOpen
+  // boolean or the job object reference, so closing and reopening for the
+  // SAME job fires again (each open is a real, separately-weighted view —
+  // the backend upserts job_views on (user_id, job_id), refreshing
+  // viewed_at rather than stacking duplicate rows, so repeat views are
+  // safe to keep sending).
+  const viewedJobId: string | null = isOpen && job ? ((job.rawJob || job)?.id || null) : null;
+  useEffect(() => {
+    if (viewedJobId) trackView(viewedJobId, 0);
+  }, [viewedJobId]);
+
   if (!isOpen || !job) return null;
 
   const rawJob = job.rawJob || job;
@@ -248,8 +263,6 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   const hasMatch = matchData || userMatchScore !== undefined;
   const matchScore = matchData?.matchScore ?? safe(userMatchScore, -1);
   const matchLevel = matchData?.matchLevel || '';
-  const matchStars = matchData?.matchStars || '';
-  const matchRec = matchData?.matchRecommendation || matchData?.recommendation || '';
   const criteria = matchData?.criteriaScores || {};
   // The 4-factor breakdown only exists when the profile matcher actually
   // scored this job (score_source "matcher+hybrid" or "matcher-only") — for
@@ -727,8 +740,6 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                   </div>
                   <div className="flex-1">
                     <p className="text-xl font-extrabold text-gray-900">{matchLevel || 'AI Match Analysis'}</p>
-                    {matchStars && <p className="text-base mt-0.5">{matchStars}</p>}
-                    {matchRec   && <p className="text-sm font-medium mt-1">{matchRec}</p>}
                     {hasBreakdown ? (
                       <div className="flex gap-3 mt-2 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><Sparkles size={10} /> Skills: {skillsScore.toFixed(0)}%</span>

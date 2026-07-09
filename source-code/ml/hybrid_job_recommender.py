@@ -2807,6 +2807,29 @@ class RecommendationEngine:
         mask = (frame["user_id"].astype(str) == str(user_id)) & (frame["job_id"].astype(str) == str(job_id))
         return frame[~mask].reset_index(drop=True)
 
+    def _upsert_interaction_row(self, frame: Optional[pd.DataFrame], user_id: str, job_id: str, row: dict) -> pd.DataFrame:
+        """Views/saves/ignores are UNIQUE (user_id, job_id) relationships in
+        the DB — job_views/saved_jobs/ignored_jobs all upsert (ON CONFLICT DO
+        UPDATE/DO NOTHING) rather than accumulating a new row per repeat
+        view/save, since a candidate opening the same job's details five
+        times is one relationship with a refreshed timestamp, not five
+        separate interactions. Blindly appending here would make the
+        incrementally-updated cache accumulate duplicate rows a fresh full
+        fetch from the DB would never have, inflating that pair's
+        behavioral weight the more times it's re-viewed."""
+        if frame is None or frame.empty or "user_id" not in frame.columns or "job_id" not in frame.columns:
+            return self._append_frame_row(frame, row)
+        mask = (frame["user_id"].astype(str) == str(user_id)) & (frame["job_id"].astype(str) == str(job_id))
+        if mask.any():
+            updated = frame.copy()
+            row_index = updated.index[mask][0]
+            for key, val in row.items():
+                if key not in updated.columns:
+                    updated[key] = None
+                updated.at[row_index, key] = val
+            return updated
+        return self._append_frame_row(frame, row)
+
     def _refresh_candidate_related_data(self, candidate_id: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         cid = str(candidate_id)
         skills = self.skills_df[self.skills_df["user_id"].astype(str) == cid].copy() if self.skills_df is not None and not self.skills_df.empty else pd.DataFrame(columns=["user_id", "skill_name", "years_experience"])
@@ -2992,7 +3015,12 @@ class RecommendationEngine:
                         if operation in {"delete", "removed"}:
                             self.views = self._remove_interaction_row(self.views, candidate_id, job_id)
                         else:
-                            self.views = self._append_frame_row(self.views, {
+                            # job_views is UNIQUE(user_id, job_id) with an
+                            # ON CONFLICT DO UPDATE upsert — re-viewing the
+                            # same job refreshes one row's timestamp in the
+                            # DB, not a new row, so mirror that here instead
+                            # of appending a duplicate on every repeat view.
+                            self.views = self._upsert_interaction_row(self.views, candidate_id, job_id, {
                                 "user_id": candidate_id,
                                 "job_id": job_id,
                                 "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
@@ -3001,7 +3029,11 @@ class RecommendationEngine:
                         if operation in {"delete", "removed"}:
                             self.saves = self._remove_interaction_row(self.saves, candidate_id, job_id)
                         else:
-                            self.saves = self._append_frame_row(self.saves, {
+                            # saved_jobs is also UNIQUE(user_id, job_id)
+                            # (ON CONFLICT DO NOTHING) — upsert defensively
+                            # in case a duplicate insert notification ever
+                            # arrives for an already-saved pair.
+                            self.saves = self._upsert_interaction_row(self.saves, candidate_id, job_id, {
                                 "user_id": candidate_id,
                                 "job_id": job_id,
                                 "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
@@ -3020,7 +3052,9 @@ class RecommendationEngine:
                         if operation in {"delete", "removed"}:
                             self.ignored = self._remove_interaction_row(self.ignored, candidate_id, job_id)
                         else:
-                            self.ignored = self._append_frame_row(self.ignored, {
+                            # ignored_jobs is also UNIQUE(user_id, job_id)
+                            # (ON CONFLICT DO NOTHING) — same defensive upsert.
+                            self.ignored = self._upsert_interaction_row(self.ignored, candidate_id, job_id, {
                                 "user_id": candidate_id,
                                 "job_id": job_id,
                             })
