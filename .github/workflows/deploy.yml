@@ -70,8 +70,17 @@ jobs:
             set -e
             echo "⏳ giving services time to boot…"; sleep 20
             ok=true
+            # Retries (not just a longer sleep): pm2 restarting a process can
+            # briefly crash-then-recover on its own (e.g. a cleanup error during
+            # shutdown) — a single check right after a fixed sleep has been
+            # landing in that gap and failing the whole deploy even though the
+            # service is actually healthy a few seconds later.
             check () { # name url
-              if curl -fsS -m 15 "$2" >/dev/null 2>&1; then echo "✅ $1 healthy"; else echo "❌ $1 FAILED ($2)"; ok=false; fi
+              for attempt in 1 2 3 4 5; do
+                if curl -fsS -m 15 "$2" >/dev/null 2>&1; then echo "✅ $1 healthy"; return; fi
+                sleep 5
+              done
+              echo "❌ $1 FAILED ($2)"; ok=false
             }
             check "backend"  "http://127.0.0.1:3001/health"
             check "ml"       "http://127.0.0.1:8080/matcher/health"

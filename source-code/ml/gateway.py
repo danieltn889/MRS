@@ -361,7 +361,16 @@ async def lifespan(app: FastAPI):
     yield
 
     stop_all()
-    await http_client.aclose()
+    # A shutdown-time failure here (observed: anyio backend lookup breaking
+    # mid-interpreter-teardown) must not crash the whole shutdown sequence —
+    # that turns a normal pm2 restart into a crash-then-recover cycle, which
+    # is exactly what makes the CI health check flaky right after a deploy.
+    # The process is exiting either way, so the socket gets cleaned up
+    # regardless of whether this close call succeeds.
+    try:
+        await http_client.aclose()
+    except Exception as e:
+        print(f"  ⚠️  http_client.aclose() failed during shutdown (non-fatal): {e}")
 
 # ── APP ──────────────────────────────────────────────────────
 
