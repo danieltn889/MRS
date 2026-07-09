@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   User, Briefcase, Search, Users, AlertCircle, Building2, Filter, Calendar, BarChart3, Target,
-  CheckCircle, XCircle, Info, X as XIcon
+  CheckCircle, XCircle, Info, X as XIcon, Shield
 } from 'lucide-react';
+import { getPlatformStats, PlatformStats } from '../services/adminAPI';
 import ProfileProgressRing from './ProfileProgressRing';
 import SimulationScheduler from './Simulation/SimulationScheduler';
 import JobCard from './DashboardHome/JobCard';
@@ -182,6 +183,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     userTypeValue === 'company' ||
     userTypeValue === 'Company Admin' ||
     userTypeValue === 'Recruiter';
+  const isSystemAdmin = userTypeValue === 'system_admin';
+  const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
 
   // ✅ Derive completion percentage from state (used for display only)
   const completionPercentage = completionStatus?.completionPercentage ||
@@ -233,6 +236,20 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       }
     } catch (error) {
       console.error('❌ Error fetching company dashboard stats:', error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  // Fetch platform-wide statistics (System Admin dashboard)
+  const fetchPlatformStats = async () => {
+    if (!isSystemAdmin) return;
+    setStatsLoading(true);
+    try {
+      const res = await getPlatformStats();
+      if (res.success) setPlatformStats(res.data);
+    } catch (error) {
+      console.error('❌ Error fetching platform stats:', error);
     } finally {
       setStatsLoading(false);
     }
@@ -543,6 +560,13 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
         return;
       }
 
+      if (isSystemAdmin) {
+        await fetchPlatformStats();
+        setProfileLoading(false);
+        setPageLoading(false);
+        return;
+      }
+
       // ── CANDIDATE FLOW ──
       // Step 1: profile + completion (profileLoading stays true)
       setProfileLoading(true);
@@ -577,7 +601,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
 
     return () => appliedJobsManager.removeListener(handleAppliedJobsChange);
-  }, [user?.id, isCompanyUser]);
+  }, [user?.id, isCompanyUser, isSystemAdmin]);
 
   const handleSaveJob = async (jobId: string, isCurrentlySaved: boolean) => {
     try {
@@ -645,6 +669,97 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
   };
 
   // ── COMPANY VIEW ──────────────────────────────────────────────────────────
+  if (isSystemAdmin) {
+    const s = platformStats;
+    return (
+      <div className="space-y-6">
+        <div className="bg-gradient-to-r from-purple-700 to-indigo-700 rounded-2xl shadow-lg p-8 text-white">
+          <h1 className="text-3xl font-bold mb-2">System Dashboard</h1>
+          <p className="text-purple-100 mb-6">Platform-wide overview across every company</p>
+          <div className="flex flex-wrap gap-4">
+            <button onClick={() => onViewChange?.('companies')} className="px-6 py-2 bg-white text-purple-700 rounded-lg font-semibold hover:bg-gray-100 transition-colors">Manage Companies</button>
+            <button onClick={() => onViewChange?.('users')} className="px-6 py-2 bg-purple-500 text-white rounded-lg font-semibold hover:bg-purple-400 transition-colors">Manage Users</button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-purple-500 transition-all hover:shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm font-medium">Companies</p>
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(s?.companies.total || 0)}</p>}
+              </div>
+              <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center"><Building2 className="w-6 h-6 text-purple-600" /></div>
+            </div>
+            <button onClick={() => onViewChange?.('companies')} className="mt-4 text-xs text-purple-600 hover:text-purple-800 font-medium flex items-center gap-1">Manage companies →</button>
+          </div>
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-blue-500 transition-all hover:shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm font-medium">Users</p>
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(s?.users.total || 0)}</p>}
+              </div>
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center"><Users className="w-6 h-6 text-blue-600" /></div>
+            </div>
+            <button onClick={() => onViewChange?.('users')} className="mt-4 text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1">Manage users →</button>
+          </div>
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-green-500 transition-all hover:shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm font-medium">Active Jobs</p>
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(s?.jobs.active || 0)}</p>}
+              </div>
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center"><Briefcase className="w-6 h-6 text-green-600" /></div>
+            </div>
+            <p className="mt-4 text-xs text-gray-400">{formatStatNumber(s?.jobs.total || 0)} total jobs posted</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-md p-6 border-l-4 border-yellow-500 transition-all hover:shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-500 text-sm font-medium">Applications</p>
+                {statsLoading ? <div className="h-8 w-20 bg-gray-200 animate-pulse rounded mt-1"></div> : <p className="text-3xl font-bold text-gray-800">{formatStatNumber(s?.applications.total || 0)}</p>}
+              </div>
+              <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center"><Target className="w-6 h-6 text-yellow-600" /></div>
+            </div>
+            <p className="mt-4 text-xs text-gray-400">{formatStatNumber(s?.candidatesWhoApplied || 0)} candidates applied</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">In Review</p><p className="text-xl font-semibold text-gray-700">{s?.applications.in_review || 0}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Shortlisted</p><p className="text-xl font-semibold text-gray-700">{s?.applications.shortlisted || 0}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Interview</p><p className="text-xl font-semibold text-gray-700">{s?.applications.interview || 0}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Offer</p><p className="text-xl font-semibold text-gray-700">{s?.applications.offer || 0}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Hired</p><p className="text-xl font-semibold text-gray-700">{s?.applications.hired || 0}</p></div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center"><p className="text-xs text-gray-500">Rejected</p><p className="text-xl font-semibold text-gray-700">{s?.applications.rejected || 0}</p></div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <button onClick={() => onViewChange?.('companies')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-200 transition-colors"><Building2 className="w-6 h-6 text-purple-600" /></div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Company Management</h3>
+            <p className="text-gray-500 text-sm">Create, verify, and manage companies on the platform</p>
+          </button>
+          <button onClick={() => onViewChange?.('users')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-200 transition-colors"><Users className="w-6 h-6 text-blue-600" /></div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">User Management</h3>
+            <p className="text-gray-500 text-sm">Add, edit, or remove users for any company</p>
+          </button>
+          <button onClick={() => onViewChange?.('analytics')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
+            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-yellow-200 transition-colors"><BarChart3 className="w-6 h-6 text-yellow-600" /></div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">System Analytics</h3>
+            <p className="text-gray-500 text-sm">Deeper platform usage and performance trends</p>
+          </button>
+          <button onClick={() => onViewChange?.('platform')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
+            <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors"><Shield className="w-6 h-6 text-indigo-600" /></div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">Platform Settings</h3>
+            <p className="text-gray-500 text-sm">Configure platform-wide settings</p>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (isCompanyUser) {
     return (
       <div className="space-y-6">

@@ -279,6 +279,51 @@ class EmailService {
   }
 
   /**
+   * Sent when a system admin creates a user account directly (Company/User
+   * Management screens) — includes the system-generated temporary password,
+   * since this account was never self-registered.
+   */
+  async sendAdminCreatedAccountEmail(
+    to: string,
+    data: {
+      name: string;
+      email: string;
+      tempPassword: string;
+      roleLabel: string;
+      companyName?: string;
+      loginUrl: string;
+    }
+  ): Promise<void> {
+    const { name, email, tempPassword, roleLabel, companyName, loginUrl } = data;
+    const subject = companyName
+      ? `Your account for ${companyName} has been created`
+      : 'Your account has been created';
+
+    const html = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
+        <div style="background:linear-gradient(135deg,#7c3aed,#2563eb);border-radius:12px;padding:24px;text-align:center">
+          <h1 style="color:#fff;margin:0;font-size:20px">Welcome${name ? `, ${name}` : ''}</h1>
+        </div>
+        <div style="background:#fff;border-radius:12px;padding:24px;margin-top:16px">
+          <p style="color:#374151;margin:0 0 8px">Hi <strong>${name || 'there'}</strong>,</p>
+          <p style="color:#374151;margin:0 0 12px">An administrator created an account for you${companyName ? ` at <strong>${companyName}</strong>` : ''} as <strong>${roleLabel}</strong>. Use the credentials below to log in:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">
+            <tr><td style="padding:6px 0;color:#6b7280;width:160px">Login email</td><td style="padding:6px 0;color:#111827;font-weight:600">${email}</td></tr>
+            <tr><td style="padding:6px 0;color:#6b7280">Temporary password</td><td style="padding:6px 0;color:#111827;font-weight:600;font-family:monospace">${tempPassword}</td></tr>
+          </table>
+          <div style="margin-top:20px">
+            <a href="${loginUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Log in</a>
+          </div>
+          <p style="color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:20px">For your security, please log in and change this password as soon as possible.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
+        </div>
+      </div>
+      ${this.standardFooter()}`;
+
+    await this.sendEmail({ to, subject, html });
+  }
+
+  /**
    * Branded email sent to a candidate about their job application — covers the
    * initial "received" confirmation, status changes, and withdrawal confirmations.
    */

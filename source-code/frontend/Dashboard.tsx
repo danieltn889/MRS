@@ -26,6 +26,9 @@ import OfferManagement from './components/OfferManagement';
 import CandidateOnboarding from './components/CandidateOnboarding';
 import PerformanceReporting from './components/PerformanceReporting';
 import PlatformFeatures from './components/PlatformFeatures';
+import CompanyManagement from './components/CompanyManagement';
+import UserManagement from './components/UserManagement';
+import SystemAnalytics from './components/SystemAnalytics';
 import SimulationDesigner from './components/SimulationDesigner';
 import SimulationList from './components/Simulation/SimulationList';
 import SimulationSessionViewer from './components/SimulationSessionViewer';
@@ -73,6 +76,7 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
     return false;
   });
   const [currentView, setCurrentView] = useState('dashboard');
+  const [selectedAdminCompany, setSelectedAdminCompany] = useState<any>(null);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
   const [editingSimulationId, setEditingSimulationId] = useState<string | null>(null);
 
@@ -354,6 +358,9 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
 
       case 'recruiter-analytics':
       case 'analytics':
+        if ((user?.userType || user?.user_type) === 'system_admin') {
+          return <SystemAnalytics onBack={() => setCurrentView('dashboard')} />;
+        }
         return <RecruiterAnalytics onBack={() => setCurrentView('dashboard')} />;
 
       case 'team-collaboration':
@@ -374,6 +381,25 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
 
       case 'platform':
         return <PlatformFeatures onBack={() => setCurrentView('dashboard')} />;
+
+      case 'companies':
+        return (
+          <CompanyManagement
+            onBack={() => setCurrentView('dashboard')}
+            onManageUsers={(company) => {
+              setSelectedAdminCompany(company);
+              setCurrentView('users');
+            }}
+          />
+        );
+
+      case 'users':
+        return (
+          <UserManagement
+            onBack={() => setCurrentView('dashboard')}
+            initialCompany={selectedAdminCompany}
+          />
+        );
 
       default:
         return (
