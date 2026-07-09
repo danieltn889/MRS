@@ -2797,6 +2797,16 @@ class RecommendationEngine:
             return frame
         return frame[frame[column].astype(str) != str(value)].reset_index(drop=True)
 
+    def _remove_interaction_row(self, frame: Optional[pd.DataFrame], user_id: str, job_id: str) -> Optional[pd.DataFrame]:
+        """Un-save / un-view / un-ignore a specific job — a DELETE on
+        saved_jobs/job_views/ignored_jobs means the candidate's interest
+        signal for that exact pair should disappear from the cache, not
+        just get a duplicate row appended alongside the one already there."""
+        if frame is None or frame.empty or "user_id" not in frame.columns or "job_id" not in frame.columns:
+            return frame
+        mask = (frame["user_id"].astype(str) == str(user_id)) & (frame["job_id"].astype(str) == str(job_id))
+        return frame[~mask].reset_index(drop=True)
+
     def _refresh_candidate_related_data(self, candidate_id: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         cid = str(candidate_id)
         skills = self.skills_df[self.skills_df["user_id"].astype(str) == cid].copy() if self.skills_df is not None and not self.skills_df.empty else pd.DataFrame(columns=["user_id", "skill_name", "years_experience"])
@@ -2979,29 +2989,41 @@ class RecommendationEngine:
                             "searched_at": payload.get("searched_at") or event.get("created_at") or datetime.utcnow().isoformat(),
                         })
                     elif entity_type in {"view", "job_views"}:
-                        self.views = self._append_frame_row(self.views, {
-                            "user_id": candidate_id,
-                            "job_id": job_id,
-                            "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
-                        })
+                        if operation in {"delete", "removed"}:
+                            self.views = self._remove_interaction_row(self.views, candidate_id, job_id)
+                        else:
+                            self.views = self._append_frame_row(self.views, {
+                                "user_id": candidate_id,
+                                "job_id": job_id,
+                                "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
+                            })
                     elif entity_type in {"saved_job", "saved_jobs", "save"}:
-                        self.saves = self._append_frame_row(self.saves, {
-                            "user_id": candidate_id,
-                            "job_id": job_id,
-                            "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
-                        })
+                        if operation in {"delete", "removed"}:
+                            self.saves = self._remove_interaction_row(self.saves, candidate_id, job_id)
+                        else:
+                            self.saves = self._append_frame_row(self.saves, {
+                                "user_id": candidate_id,
+                                "job_id": job_id,
+                                "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
+                            })
                     elif entity_type in {"application", "applications"}:
-                        self.applications = self._append_frame_row(self.applications, {
-                            "user_id": candidate_id,
-                            "job_id": job_id,
-                            "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
-                            "status": payload.get("status") or operation or "submitted",
-                        })
+                        if operation in {"delete", "removed"}:
+                            self.applications = self._remove_interaction_row(self.applications, candidate_id, job_id)
+                        else:
+                            self.applications = self._append_frame_row(self.applications, {
+                                "user_id": candidate_id,
+                                "job_id": job_id,
+                                "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
+                                "status": payload.get("status") or operation or "submitted",
+                            })
                     elif entity_type in {"ignored_job", "ignored_jobs", "ignore"}:
-                        self.ignored = self._append_frame_row(self.ignored, {
-                            "user_id": candidate_id,
-                            "job_id": job_id,
-                        })
+                        if operation in {"delete", "removed"}:
+                            self.ignored = self._remove_interaction_row(self.ignored, candidate_id, job_id)
+                        else:
+                            self.ignored = self._append_frame_row(self.ignored, {
+                                "user_id": candidate_id,
+                                "job_id": job_id,
+                            })
                     applied += 1
                     continue
 
