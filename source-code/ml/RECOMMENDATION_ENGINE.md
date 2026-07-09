@@ -169,6 +169,62 @@ similar-candidate IDs; Freshness's days-old; Popularity's raw counts; and the
 Business Rules reasons — nothing is ever shown as a bare percentage with no
 way to inspect what produced it.
 
+### Model persistence, change detection, and incremental learning (added 2026-07-09)
+
+`RecommendationEngine.prepare()` used to unconditionally re-fetch every table
+and refit every model on every process start — expensive (TF-IDF fitting,
+matrix factorization, semantic embedding) and wasteful when nothing actually
+changed since the last run. It now checks first via
+`Database.fetch_fingerprints()`, which runs three cheap `(COUNT(*),
+MAX(updated_at/applied_at/...))` queries — one each for jobs, candidates,
+and interactions (applications + views + saves + searches combined) — and
+compares them against the fingerprints stored alongside the last saved
+model (`ModelStore`, which pickles the fitted model objects plus a JSON
+metadata file with a semver `version`, timestamps, vocabulary sizes, and the
+fingerprints themselves, under `source-code/ml/models/`, gitignored).
+
+Three outcomes, in order of preference:
+
+1. **Cache hit** (`_restore_cache_hit`) — all three fingerprints match the
+   persisted metadata exactly → the entire trained state (content model,
+   behavior model, collaborative model, dataframes, preprocessor) is loaded
+   from disk and reused as-is. No DB fetch, no fitting. This is the common
+   case for a plain process restart/redeploy with no data changes in between
+   — typically under a second instead of the 10-20s full fit.
+2. **Interactions-only refresh** (`_refresh_interactions_only`) — jobs and
+   candidates fingerprints match (so the expensive per-job/per-candidate
+   TF-IDF and semantic vectorizer fitting is still valid and reused
+   untouched), but the interactions fingerprint differs. Only
+   `views`/`applications`/`saves`/`ignored`/`search_events` are re-fetched;
+   `CollaborativeModel` is retrained (cheap, a handful of epochs) and
+   `BehaviorModel.fit_profiles()` is re-run on the *same* already-fitted
+   `BehaviorModel` object to rebuild just the candidate interest profiles.
+   Persists with a version **patch** bump (e.g. `1.0.0` → `1.0.1`).
+3. **Full fit** (`_full_fit`) — jobs or candidates fingerprints changed
+   (something was added/edited/removed at the structural level), or no
+   valid persisted state exists yet. This is exactly the original
+   always-run-everything logic, unchanged, run as a fallback. Persists with
+   a version **minor** bump (e.g. `1.0.1` → `1.1.0`).
+
+This is separate from, and layered on top of, the realtime `upsert_job` /
+`delete_job` / `upsert_candidate` / `delete_candidate` methods on both
+`ContentBasedModel` and `BehaviorModel` (see above) — those keep the
+**live, already-running** engine in sync with individual DB writes via
+Postgres `LISTEN`/`NOTIFY` without waiting for the next `prepare()` call at
+all. `prepare()`'s fingerprint check only matters at process
+start/restart, deciding how much re-fitting (if any) that restart needs to
+do before it can start serving.
+
+`ModelStore.save()` writes to temp files and atomically renames them into
+place, and `ModelStore.load()` returns `None` on any corruption or missing
+file (falling back to a full fit) rather than raising — a broken or
+half-written snapshot can never wedge a restart. The pickled state is only
+ever read back by the same running codebase; it is not meant to be a
+portable or long-lived artifact, and the `SentenceTransformer` encoder
+itself is deliberately excluded from the pickle (stripped from a shallow
+copy before saving, re-attached from the live `self.semantic_encoder`
+after loading) since it's large and is loaded once per process anyway.
+
 ## 3. Combining them — `combined_score_candidate()`
 
 This is what the frontend actually calls (`POST /score/combined`). For every

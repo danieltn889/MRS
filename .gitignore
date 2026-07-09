@@ -84,5 +84,6 @@ Thumbs.db
 job_feed/data/
 backup/
 db_backups/
+source-code/ml/models/
 *.tar.gz
 *.csv

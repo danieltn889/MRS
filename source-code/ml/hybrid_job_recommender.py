@@ -33,8 +33,10 @@ avoids standing up new bulk API surface just for this.
 import os
 import re
 import sys
+import copy
 import time
 import math
+import pickle
 import threading
 import argparse
 import json
@@ -265,6 +267,41 @@ class Database:
                 cur.execute(sql)
                 rows = cur.fetchall()
         return pd.DataFrame([dict(r) for r in rows])
+
+    def fetch_fingerprints(self) -> Dict[str, Tuple[int, Optional[str]]]:
+        """Cheap (COUNT, MAX(timestamp)) aggregates — NOT the full rows — used
+        by ModelStore to decide whether a persisted model is still valid
+        without re-fetching/re-fitting anything. A single row inserted,
+        updated, or deleted changes the count and/or the max timestamp, so
+        this is a reliable enough change signal without hashing full table
+        contents."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*), MAX(updated_at) FROM jobs WHERE deleted_at IS NULL")
+                jobs_count, jobs_max = cur.fetchone()
+                cur.execute("""
+                    SELECT COUNT(*), MAX(GREATEST(u.updated_at, cp.updated_at)) FROM users u
+                    JOIN candidate_profiles cp ON cp.user_id = u.id
+                    WHERE u.user_type = 'candidate' AND u.deleted_at IS NULL
+                """)
+                cand_count, cand_max = cur.fetchone()
+                cur.execute("""
+                    SELECT
+                        (SELECT COUNT(*) FROM applications) + (SELECT COUNT(*) FROM job_views)
+                      + (SELECT COUNT(*) FROM saved_jobs) + (SELECT COUNT(*) FROM job_searches),
+                        GREATEST(
+                            (SELECT MAX(applied_at) FROM applications),
+                            (SELECT MAX(viewed_at) FROM job_views),
+                            (SELECT MAX(saved_at) FROM saved_jobs),
+                            (SELECT MAX(searched_at) FROM job_searches)
+                        )
+                """)
+                inter_count, inter_max = cur.fetchone()
+        return {
+            "jobs": (int(jobs_count), jobs_max.isoformat() if jobs_max else None),
+            "candidates": (int(cand_count), cand_max.isoformat() if cand_max else None),
+            "interactions": (int(inter_count), inter_max.isoformat() if inter_max else None),
+        }
 
     def fetch_active_jobs(self) -> pd.DataFrame:
         return self._query_df("""
@@ -2241,6 +2278,87 @@ class HybridRanker:
 
 
 # ==========================================================================
+# 8.5 MODEL PERSISTENCE — save the expensive-to-fit pieces (ContentBasedModel/
+# BehaviorModel's vectorizers + matrices, the DataFrames they were fit from)
+# so a restart doesn't have to redo ~25-45s of TF-IDF/semantic-embedding
+# fitting when nothing that would change them actually changed.
+# ==========================================================================
+
+class ModelStore:
+    """Persist/restore the trained engine state across a process restart.
+
+    Uses plain pickle for everything (sklearn vectorizers, scipy sparse
+    matrices, numpy arrays, pandas DataFrames, the PyTorch nn.Module all
+    round-trip through it fine) — this is deliberately NOT meant to be
+    portable across Python/library versions or machines, only across a
+    restart of the SAME deployed service, so pickle's simplicity outweighs
+    its portability limitations here.
+
+    metadata.json (human-readable, checked separately from the pickle so it
+    can be inspected/compared without unpickling anything) records: version
+    (auto-incrementing), created_at, training_duration_seconds, dataset
+    counts, vocabulary sizes per pair, the fingerprints used to decide
+    whether this snapshot is still valid, and training_reason (why this
+    particular save happened — full retrain vs. interactions-only refresh)."""
+
+    DIR = Path(__file__).parent / "models"
+    STATE_FILE = DIR / "state.pkl"
+    METADATA_FILE = DIR / "metadata.json"
+
+    @classmethod
+    def load(cls) -> Optional[dict]:
+        """Returns {"metadata": {...}, "state": {...}} or None if nothing
+        persisted yet, or the persisted snapshot is unreadable/corrupt (in
+        which case the caller should fall back to a full fit — never let a
+        bad cache file block startup)."""
+        if not cls.STATE_FILE.exists() or not cls.METADATA_FILE.exists():
+            return None
+        try:
+            with open(cls.METADATA_FILE, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+            with open(cls.STATE_FILE, "rb") as f:
+                state = pickle.load(f)
+            return {"metadata": metadata, "state": state}
+        except Exception as e:
+            log.warning("ModelStore.load failed (%s) — falling back to full training.", e)
+            return None
+
+    @classmethod
+    def save(cls, state: dict, metadata: dict) -> None:
+        """Writes to temp files then atomically renames into place, so a
+        crash mid-write never leaves a half-written, corrupt snapshot that
+        the next startup would try (and fail) to load."""
+        cls.DIR.mkdir(parents=True, exist_ok=True)
+        try:
+            tmp_state = cls.STATE_FILE.with_suffix(".pkl.tmp")
+            with open(tmp_state, "wb") as f:
+                pickle.dump(state, f, protocol=pickle.HIGHEST_PROTOCOL)
+            tmp_state.replace(cls.STATE_FILE)
+
+            tmp_meta = cls.METADATA_FILE.with_suffix(".json.tmp")
+            with open(tmp_meta, "w", encoding="utf-8") as f:
+                json.dump(metadata, f, indent=2, default=str)
+            tmp_meta.replace(cls.METADATA_FILE)
+            log.info("ModelStore: saved model v%s (%s)", metadata.get("version"), metadata.get("training_reason"))
+        except Exception as e:
+            log.warning("ModelStore.save failed (%s) — next restart will retrain from scratch.", e)
+
+    @staticmethod
+    def next_version(prev_metadata: Optional[dict]) -> str:
+        """Simple semantic-ish counter: a structural change (full retrain)
+        bumps the minor version; an interactions-only refresh bumps the
+        patch version. Not full semver — just enough to see at a glance
+        whether the last save was a full retrain or a light refresh."""
+        if not prev_metadata or "version" not in prev_metadata:
+            return "1.0.0"
+        try:
+            major, minor, patch = (int(x) for x in prev_metadata["version"].split("."))
+        except Exception:
+            return "1.0.0"
+        return f"{major}.{minor}.{patch}"
+
+
+# ==========================================================================
 # 9. RECOMMENDATION ENGINE (orchestrator)
 # ==========================================================================
 
@@ -2282,7 +2400,135 @@ class RecommendationEngine:
         self._lock = threading.RLock()
 
     def prepare(self) -> dict:
+        """Decides, via cheap (COUNT, MAX(timestamp)) fingerprints, whether a
+        persisted model can be reused as-is, partially refreshed (only
+        interactions changed — the expensive TF-IDF/semantic fitting is
+        still valid), or must be fully retrained (jobs/candidates changed,
+        or nothing usable is persisted yet). See ModelStore's docstring for
+        why pickle, and _persist() for what gets stripped before saving."""
         t0 = time.time()
+        fingerprints = self.db.fetch_fingerprints()
+        persisted = ModelStore.load()
+        prev_fp = ((persisted or {}).get("metadata") or {}).get("fingerprints") or {}
+
+        jobs_same = persisted is not None and list(fingerprints["jobs"]) == list(prev_fp.get("jobs") or [])
+        cands_same = persisted is not None and list(fingerprints["candidates"]) == list(prev_fp.get("candidates") or [])
+        inter_same = persisted is not None and list(fingerprints["interactions"]) == list(prev_fp.get("interactions") or [])
+
+        if jobs_same and cands_same and inter_same:
+            return self._restore_cache_hit(persisted, t0)
+        if jobs_same and cands_same:
+            return self._refresh_interactions_only(persisted, fingerprints, t0)
+        return self._full_fit(fingerprints, t0)
+
+    def _restore_cache_hit(self, persisted: dict, t0: float) -> dict:
+        """Nothing changed since the last save at all — skip fetching AND
+        fitting entirely."""
+        state = persisted["state"]
+        with self._lock:
+            self.candidates, self.jobs = state["candidates"], state["jobs"]
+            self.skills_df, self.education_df = state["skills_df"], state["education_df"]
+            self.work_df, self.certifications_df = state["work_df"], state["certifications_df"]
+            self.ignored = state["ignored"]
+            self.views, self.applications, self.saves = state["views"], state["applications"], state["saves"]
+            self.search_events = state["search_events"]
+            self.events = state["events"]
+            self.preprocessor = state["preprocessor"]
+            self.content_model = state["content_model"]
+            self.content_model.encoder = self.semantic_encoder
+            self.behavior_model = state["behavior_model"]
+            self.behavior_model.encoder = self.semantic_encoder
+            self.collaborative_model = state["collaborative_model"]
+            self.last_trained_at = datetime.now()
+
+        meta = persisted["metadata"]
+        stats = {
+            "n_candidates": len(self.candidates), "n_jobs": len(self.jobs),
+            "n_interactions": int(meta.get("n_interactions") or 0),
+            "collaborative_trained": self.collaborative_model.trained,
+            "seconds": round(time.time() - t0, 1),
+            "training_reason": "cache-hit (no changes detected)",
+            "model_version": meta.get("version"),
+        }
+        log.info("Loaded persisted model v%s, no changes detected: %s", meta.get("version"), stats)
+        return stats
+
+    def _refresh_interactions_only(self, persisted: dict, fingerprints: dict, t0: float) -> dict:
+        """Jobs/candidates are unchanged, so the expensive per-pair
+        vectorizer fitting (ContentBasedModel.fit / BehaviorModel.
+        fit_job_corpus) is still valid — reused as-is. Only what genuinely
+        depends on interaction data is rebuilt: collaborative filtering
+        (cheap, a few epochs) and behavior_model's candidate PROFILES
+        (fit_profiles — a weighted average of already-fitted vectors, no
+        new TF-IDF/semantic computation)."""
+        state = persisted["state"]
+        candidates, jobs = state["candidates"], state["jobs"]
+        skills_df, education_df = state["skills_df"], state["education_df"]
+        work_df, certifications_df = state["work_df"], state["certifications_df"]
+        preprocessor = state["preprocessor"]
+        content_model = state["content_model"]
+        content_model.encoder = self.semantic_encoder
+
+        views = self.db.fetch_view_events()
+        applications = self.db.fetch_application_events()
+        saves = self.db.fetch_save_events()
+        ignored = self.db.fetch_ignored_pairs()
+        search_events = self.db.fetch_search_events()
+
+        events = preprocessor.build_events(views, applications, saves)
+        matrix = preprocessor.build_interaction_matrix(events, len(candidates), len(jobs))
+
+        hard_negatives: Dict[int, List[int]] = {}
+        if not ignored.empty:
+            ig = ignored.copy()
+            ig["candidate_idx"] = ig["user_id"].astype(str).map(preprocessor.candidate_id_to_idx)
+            ig["job_idx"] = ig["job_id"].astype(str).map(preprocessor.job_id_to_idx)
+            ig = ig.dropna(subset=["candidate_idx", "job_idx"])
+            for cand_idx, sub in ig.groupby(ig["candidate_idx"].astype(int)):
+                hard_negatives[int(cand_idx)] = sub["job_idx"].astype(int).tolist()
+
+        collaborative_model = CollaborativeModel(self.cfg.mf)
+        collaborative_model.fit(matrix, len(candidates), len(jobs), self.cfg.interaction_weights.max_weight,
+                                 hard_negatives=hard_negatives)
+
+        behavior_model = state["behavior_model"]
+        behavior_model.encoder = self.semantic_encoder
+        behavior_model.fit_profiles(events, jobs, preprocessor.idx_to_job_id,
+                                     search_events=search_events, candidate_id_to_idx=preprocessor.candidate_id_to_idx)
+
+        with self._lock:
+            self.candidates, self.jobs = candidates, jobs
+            self.skills_df, self.education_df, self.work_df = skills_df, education_df, work_df
+            self.certifications_df = certifications_df
+            self.ignored = ignored
+            self.views, self.applications, self.saves = views, applications, saves
+            self.search_events = search_events
+            self.events = events
+            self.preprocessor = preprocessor
+            self.content_model = content_model
+            self.collaborative_model = collaborative_model
+            self.behavior_model = behavior_model
+            self.last_trained_at = datetime.now()
+
+        stats = {
+            "n_candidates": len(candidates), "n_jobs": len(jobs),
+            "n_interactions": int(matrix.nnz), "collaborative_trained": collaborative_model.trained,
+            "seconds": round(time.time() - t0, 1),
+            "training_reason": "interactions-only refresh (jobs/candidates unchanged)",
+        }
+        log.info("Interactions-only refresh complete: %s", stats)
+        self._persist(content_model, behavior_model, collaborative_model, jobs, candidates,
+                      skills_df, education_df, work_df, certifications_df, ignored,
+                      views, applications, saves, search_events, events, preprocessor,
+                      fingerprints, stats, bump="patch")
+        return stats
+
+    def _full_fit(self, fingerprints: dict, t0: float) -> dict:
+        """Structural change (jobs and/or candidates added/updated/removed)
+        or nothing valid persisted yet — the full fit, unchanged from
+        before this feature existed. Always ends by persisting the result,
+        so the NEXT restart can potentially skip straight to a cache hit or
+        an interactions-only refresh."""
         candidates = self.db.fetch_candidates()
         jobs = self.db.fetch_active_jobs()
         skills_df = self.db.fetch_candidate_skills()
@@ -2299,7 +2545,8 @@ class RecommendationEngine:
             log.warning("No candidates or no active jobs — engine left untrained.")
             with self._lock:
                 self.candidates, self.jobs = candidates, jobs
-            return {"n_candidates": len(candidates), "n_jobs": len(jobs), "n_interactions": 0, "collaborative_trained": False}
+            return {"n_candidates": len(candidates), "n_jobs": len(jobs), "n_interactions": 0, "collaborative_trained": False,
+                    "training_reason": "full retrain (empty dataset)"}
 
         preprocessor = Preprocessor(self.cfg)
         preprocessor.fit_id_maps(candidates, jobs)
@@ -2345,9 +2592,70 @@ class RecommendationEngine:
             "n_candidates": len(candidates), "n_jobs": len(jobs),
             "n_interactions": int(matrix.nnz), "collaborative_trained": collaborative_model.trained,
             "seconds": round(time.time() - t0, 1),
+            "training_reason": "full retrain (jobs/candidates changed, or no valid cache)",
         }
         log.info("Training complete: %s", stats)
+        self._persist(content_model, behavior_model, collaborative_model, jobs, candidates,
+                      skills_df, education_df, work_df, certifications_df, ignored,
+                      views, applications, saves, search_events, events, preprocessor,
+                      fingerprints, stats, bump="minor")
         return stats
+
+    def _persist(self, content_model, behavior_model, collaborative_model, jobs, candidates,
+                 skills_df, education_df, work_df, certifications_df, ignored,
+                 views, applications, saves, search_events, events, preprocessor,
+                 fingerprints: dict, stats: dict, bump: str) -> None:
+        """Shallow-copies content_model/behavior_model with .encoder
+        stripped (the SentenceTransformer is loaded once per process and
+        reused — pickling it too would bloat the snapshot for no benefit,
+        and re-attaching self.semantic_encoder on load is trivial) so saving
+        never touches the live in-memory objects still serving concurrent
+        requests. Never raises — a failed save just means the next restart
+        does a full retrain, same as today's behavior with no persistence."""
+        try:
+            cm = copy.copy(content_model)
+            cm.encoder = None
+            bm = copy.copy(behavior_model)
+            bm.encoder = None
+
+            state = {
+                "content_model": cm, "behavior_model": bm, "collaborative_model": collaborative_model,
+                "jobs": jobs, "candidates": candidates,
+                "skills_df": skills_df, "education_df": education_df,
+                "work_df": work_df, "certifications_df": certifications_df,
+                "ignored": ignored, "views": views, "applications": applications, "saves": saves,
+                "search_events": search_events, "events": events, "preprocessor": preprocessor,
+            }
+
+            prev_meta = (ModelStore.load() or {}).get("metadata") or {}
+            if "version" not in prev_meta:
+                version = "1.0.0"
+            else:
+                try:
+                    major, minor, patch = (int(x) for x in str(prev_meta["version"]).split("."))
+                except Exception:
+                    major, minor, patch = 1, 0, 0
+                if bump == "minor":
+                    minor, patch = minor + 1, 0
+                else:
+                    patch += 1
+                version = f"{major}.{minor}.{patch}"
+
+            vocab_sizes = {pair: len(vec.vocabulary_) for pair, vec in (behavior_model._tfidf or {}).items()}
+
+            metadata = {
+                "version": version,
+                "created_at": datetime.now().isoformat(),
+                "training_duration_seconds": stats.get("seconds"),
+                "training_reason": stats.get("training_reason"),
+                "n_jobs": stats.get("n_jobs"), "n_candidates": stats.get("n_candidates"),
+                "n_interactions": stats.get("n_interactions"),
+                "vocabulary_sizes": vocab_sizes,
+                "fingerprints": fingerprints,
+            }
+            ModelStore.save(state, metadata)
+        except Exception as e:
+            log.warning("Persisting trained model failed (%s) — next restart will retrain from scratch.", e)
 
     def start_realtime_updates(self) -> None:
         if self._realtime_started:
