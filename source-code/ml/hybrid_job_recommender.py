@@ -1557,6 +1557,116 @@ class BehaviorModel:
         norms[norms == 0] = 1.0
         return mat / norms
 
+    @staticmethod
+    def _replace_sparse_row(matrix: Optional[sp.csr_matrix], row_idx: int, new_row: sp.csr_matrix) -> sp.csr_matrix:
+        if matrix is None:
+            return new_row.tocsr()
+        if row_idx == matrix.shape[0]:
+            return sp.vstack([matrix, new_row]).tocsr()
+        updated = matrix.tolil(copy=True)
+        updated[row_idx] = new_row
+        return updated.tocsr()
+
+    @staticmethod
+    def _delete_sparse_row(matrix: Optional[sp.csr_matrix], row_idx: int) -> Optional[sp.csr_matrix]:
+        if matrix is None:
+            return None
+        if row_idx < 0 or row_idx >= matrix.shape[0]:
+            return matrix
+        keep = [i for i in range(matrix.shape[0]) if i != row_idx]
+        if not keep:
+            return sp.csr_matrix((0, matrix.shape[1]), dtype=matrix.dtype)
+        return matrix[keep]
+
+    @staticmethod
+    def _replace_dense_row(matrix: Optional[np.ndarray], row_idx: int, new_row: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        if new_row is None:
+            return matrix
+        if matrix is None:
+            return np.asarray([new_row], dtype=np.float32)
+        if row_idx < 0 or row_idx >= matrix.shape[0]:
+            return matrix
+        updated = matrix.copy()
+        updated[row_idx] = new_row
+        return updated
+
+    def _job_row_vector(self, job_row: dict) -> Tuple[sp.csr_matrix, Optional[np.ndarray], Dict[str, str]]:
+        """Transform ONE job through the ALREADY-FITTED per-pair vectorizers
+        (never re-fits — a realtime job add/update must not shift the
+        vocabulary/dimensions every other candidate's stored profile was
+        built against)."""
+        doc_frame = self._job_text_frame(pd.DataFrame([job_row]))
+        blocks = []
+        for pair in self.PAIRS:
+            vec = self._tfidf.get(pair)
+            val = doc_frame[pair].iloc[0] if pair in doc_frame.columns else ""
+            if vec is None:
+                start, end = self._pair_col_ranges.get(pair, (0, 1))
+                blocks.append(sp.csr_matrix((1, end - start)))
+                continue
+            block = vec.transform([val])
+            if pair == "company_name":
+                block = block * self.COMPANY_NAME_SCALE
+            blocks.append(block)
+        tfidf_row = sk_normalize(sp.hstack(blocks).tocsr()) if blocks else sp.csr_matrix((1, 0))
+
+        semantic_vec = None
+        if self.encoder and self.encoder.available:
+            semantic_text = " ".join(doc_frame[self.PAIRS].fillna("").iloc[0].tolist())
+            semantic_vec = self.encoder.encode(semantic_text)
+            if semantic_vec is not None:
+                n = np.linalg.norm(semantic_vec)
+                semantic_vec = semantic_vec / n if n > 0 else semantic_vec
+        return tfidf_row, semantic_vec, doc_frame.iloc[0].to_dict()
+
+    def upsert_job(self, job_row: dict) -> None:
+        """Incremental counterpart to fit_job_corpus, used after a realtime
+        job insert/update so a single change doesn't require rebuilding the
+        whole 17-pair TF-IDF space (which would also invalidate every
+        candidate's stored behavior_profile, since it's a weighted average
+        of THESE job vectors). Without this, self.job_matrix silently falls
+        behind self.jobs/content_model's job count after any realtime job
+        change, causing a numpy shape mismatch the next time a candidate is
+        scored."""
+        if self._tfidf is None or not self._pair_col_ranges:
+            return  # not fitted yet — fit_job_corpus will pick this job up
+        job_id = str(job_row.get("id", ""))
+        if not job_id:
+            return
+        tfidf_row, semantic_vec, doc = self._job_row_vector(job_row)
+
+        if job_id in self._job_id_to_row:
+            row_idx = self._job_id_to_row[job_id]
+        else:
+            row_idx = len(self._job_ids)
+            self._job_ids.append(job_id)
+            self._job_id_to_row[job_id] = row_idx
+            doc["id"] = job_id
+            self._job_text = pd.concat([self._job_text, pd.DataFrame([doc])], ignore_index=True) \
+                if self._job_text is not None and not self._job_text.empty else pd.DataFrame([doc])
+
+        self.job_matrix = self._replace_sparse_row(self.job_matrix, row_idx, tfidf_row)
+        if semantic_vec is not None:
+            self.job_semantic_matrix = self._replace_dense_row(self.job_semantic_matrix, row_idx, semantic_vec)
+
+    def delete_job(self, job_id: str) -> None:
+        jid = str(job_id)
+        row_idx = self._job_id_to_row.pop(jid, None)
+        if row_idx is None:
+            return
+        self._job_ids.pop(row_idx)
+        self._job_id_to_row = {j: i for i, j in enumerate(self._job_ids)}
+        self.job_matrix = self._delete_sparse_row(self.job_matrix, row_idx)
+        self.job_semantic_matrix = None if self.job_semantic_matrix is None else np.delete(self.job_semantic_matrix, row_idx, axis=0)
+        if self._job_text is not None and not self._job_text.empty:
+            self._job_text = self._job_text[self._job_text["id"].astype(str) != jid].reset_index(drop=True)
+        # Any candidate profile built partly from this job's row_pos is now
+        # stale (row indices shift after a delete) — drop profiles rather
+        # than risk scoring against the wrong job's vector. They rebuild on
+        # next full fit_profiles() or the next interaction for that candidate.
+        self.behavior_profile = {}
+        self.behavior_profile_sources = {}
+
     def _search_query_row(self, text: str) -> Optional[sp.csr_matrix]:
         """A search query has no associated job (job_searches has no
         clicked-job column) — approximate it as a job-shaped row with
@@ -2401,6 +2511,12 @@ class RecommendationEngine:
         if job_row is None:
             return False
         self.content_model.upsert_job(job_row)
+        # Keeps behavior_model.job_matrix in lockstep with content_model's —
+        # without this it silently falls behind self.jobs' row count after
+        # any realtime job add/update, causing a numpy shape mismatch the
+        # next time a candidate is scored (score_batch/freshness_scores/
+        # popularity_scores all size their output off len(self.jobs)).
+        self.behavior_model.upsert_job(job_row)
         self.jobs = self._upsert_frame_row(self.jobs, "id", job_id, job_row)
         return True
 
@@ -2414,6 +2530,7 @@ class RecommendationEngine:
 
     def _remove_job_snapshot(self, job_id: str) -> None:
         self.content_model.delete_job(job_id)
+        self.behavior_model.delete_job(job_id)
         self.jobs = self._remove_frame_row(self.jobs, "id", job_id)
         if self.events is not None and not self.events.empty:
             self.events = self.events[self.events["job_idx"].astype(str) != str(self.preprocessor.job_id_to_idx.get(str(job_id), job_id))].reset_index(drop=True)
