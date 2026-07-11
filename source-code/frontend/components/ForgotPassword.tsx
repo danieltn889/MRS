@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { forgotPassword } from '../services/authAPI';
 
 interface ForgotPasswordState {
-  status: 'idle' | 'loading' | 'success' | 'error' | 'rate_limit';
+  status: 'idle'| 'loading'| 'success'| 'error'| 'rate_limit';
   message: string;
   code?: string;
 }
@@ -33,7 +33,7 @@ const ForgotPassword: React.FC = () => {
 
   // Handle rate limit countdown
   useEffect(() => {
-    if (forgotState.status === 'rate_limit' && rateLimitCountdown > 0) {
+    if (forgotState.status === 'rate_limit'&& rateLimitCountdown > 0) {
       const timer = setTimeout(() => {
         setRateLimitCountdown(rateLimitCountdown - 1);
       }, 1000);
@@ -54,7 +54,7 @@ const ForgotPassword: React.FC = () => {
       return;
     }
 
-    setForgotState({ status: 'loading', message: '' });
+    setForgotState({ status: 'loading', message: ''});
 
     try {
       await forgotPassword(email);
@@ -109,7 +109,7 @@ const ForgotPassword: React.FC = () => {
               <div>
                 <p className="font-medium text-amber-900">Too many requests</p>
                 <p className="text-sm text-amber-700 mt-1">
-                  You've requested too many password resets. Try again in <span className="font-semibold">{Math.ceil(rateLimitCountdown / 60)} minute{Math.ceil(rateLimitCountdown / 60) !== 1 ? 's' : ''}</span>.
+                  You've requested too many password resets. Try again in <span className="font-semibold">{Math.ceil(rateLimitCountdown / 60)} minute{Math.ceil(rateLimitCountdown / 60) !== 1 ? 's': ''}</span>.
                 </p>
               </div>
             </div>
@@ -159,7 +159,7 @@ const ForgotPassword: React.FC = () => {
 
           {/* Success Message */}
           <AnimatePresence>
-            {forgotState.status === 'success' && submitted && (
+            {forgotState.status === 'success'&& submitted && (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -189,7 +189,7 @@ const ForgotPassword: React.FC = () => {
 
           {/* Error Message */}
           <AnimatePresence>
-            {forgotState.status === 'error' && (
+            {forgotState.status === 'error'&& (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -203,7 +203,7 @@ const ForgotPassword: React.FC = () => {
 
           {/* Rate Limit Message */}
           <AnimatePresence>
-            {forgotState.status === 'rate_limit' && (
+            {forgotState.status === 'rate_limit'&& (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -216,7 +216,7 @@ const ForgotPassword: React.FC = () => {
           </AnimatePresence>
 
           {/* Form - Show only if not rate limited */}
-          {forgotState.status !== 'rate_limit' ? (
+          {forgotState.status !== 'rate_limit'? (
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Email Field */}
               <div>
@@ -230,7 +230,7 @@ const ForgotPassword: React.FC = () => {
                     type="email"
                     value={email}
                     onChange={handleEmailChange}
-                    disabled={forgotState.status === 'loading' || submitted}
+                    disabled={forgotState.status === 'loading'|| submitted}
                     placeholder="your@email.com"
                     className={`w-full pl-12 pr-4 py-3 border-2 rounded-lg font-medium transition-all ${
                       isValidEmail
@@ -239,7 +239,7 @@ const ForgotPassword: React.FC = () => {
                         ? 'border-red-500 bg-red-50 text-gray-900'
                         : 'border-gray-200 bg-gray-50 text-gray-900'
                     } ${
-                      submitted ? 'opacity-75 cursor-not-allowed' : ''
+                      submitted ? 'opacity-75 cursor-not-allowed': ''
                     }`}
                   />
                 </div>
@@ -247,23 +247,23 @@ const ForgotPassword: React.FC = () => {
 
               {/* Submit Button */}
               <motion.button
-                whileHover={!submitted && isValidEmail && forgotState.status !== 'loading' ? { scale: 1.02 } : {}}
-                whileTap={!submitted && isValidEmail && forgotState.status !== 'loading' ? { scale: 0.98 } : {}}
+                whileHover={!submitted && isValidEmail && forgotState.status !== 'loading'? { scale: 1.02 } : {}}
+                whileTap={!submitted && isValidEmail && forgotState.status !== 'loading'? { scale: 0.98 } : {}}
                 type="submit"
-                disabled={!isValidEmail || forgotState.status === 'loading' || submitted}
+                disabled={!isValidEmail || forgotState.status === 'loading'|| submitted}
                 className={`w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
-                  isValidEmail && forgotState.status !== 'loading' && !submitted
+                  isValidEmail && forgotState.status !== 'loading'&& !submitted
                     ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:shadow-lg'
                     : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                {forgotState.status === 'loading' && (
+                {forgotState.status === 'loading'&& (
                   <>
                     <Loader className="w-5 h-5 animate-spin" />
                     <span>Sending...</span>
                   </>
                 )}
-                {forgotState.status !== 'loading' && !submitted && (
+                {forgotState.status !== 'loading'&& !submitted && (
                   <>
                     <Mail className="w-5 h-5" />
                     <span>Send Reset Link</span>
@@ -288,7 +288,7 @@ const ForgotPassword: React.FC = () => {
           {/* Footer Links */}
           <div className="mt-8 pt-8 border-t border-gray-200 text-center">
             <p className="text-sm text-gray-600">
-              Remember your password?{' '}
+              Remember your password?{''}
               <button
                 onClick={() => navigate('/login')}
                 className="font-semibold text-blue-600 hover:text-blue-700 transition-colors"

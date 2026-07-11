@@ -1,15 +1,15 @@
-"""
+"
 taxonomy.py
 ===========
 Field-of-study -> skills mapping, grounded in the real `Field_Of_Study` /
 `Required_Field_Of_Study` taxonomy that appears in both CSVs (10 categories,
-verified against the real data — not invented). Used to generate candidate
+verified against the real data   not invented). Used to generate candidate
 skills (from their real field of study) and job skills_required (from the
 job's real required field), so the generated skills are consistent with
-the record's real data and — deliberately — overlap between candidates and
+the record's real data and   deliberately   overlap between candidates and
 jobs in the same field, which is what makes the hybrid recommender's
 content-based matching meaningful on this dataset.
-"""
+"
 
 FIELD_SKILLS = {
     "Education": [
@@ -76,12 +76,12 @@ def skills_for_field(field_of_study: str) -> list:
 
 
 def extract_known_fields(raw_text: str) -> list:
-    """Required_Field_Of_Study can list several categories joined with plain
+    "Required_Field_Of_Study can list several categories joined with plain
     commas (e.g. "Business, Administration and Law, Engineering, ..."), and
     several category names themselves contain commas ("Business,
     Administration and Law"), so a naive comma-split mis-parses it. Instead,
-    just test which of the 10 known category strings appear as a substring —
-    order-independent, and immune to the internal-comma ambiguity."""
+    just test which of the 10 known category strings appear as a substring  
+    order-independent, and immune to the internal-comma ambiguity."
     if not isinstance(raw_text, str) or not raw_text.strip():
         return []
     return [cat for cat in FIELD_SKILLS if cat in raw_text]

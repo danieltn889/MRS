@@ -8,8 +8,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/
 // ============================================
 
 interface LoginHistoryFilters {
-  dateRange?: '7days' | '30days' | '90days' | 'all' | 'custom';
-  status?: 'success' | 'failed' | 'all';
+  dateRange?: '7days'| '30days'| '90days'| 'all'| 'custom';
+  status?: 'success'| 'failed'| 'all';
   page?: number;
   limit?: number;
   startDate?: string;
@@ -64,30 +64,69 @@ export const checkEmailExists = async (email: string) => {
   }
 };
 
+export interface CandidateRegistrationPayload {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  gender: 'male'| 'female'| 'other';
+  dateOfBirth: string; // YYYY-MM-DD
+  phone: string;
+  isRwandan: boolean;
+  // Required when isRwandan is true
+  province?: string;
+  district?: string;
+  sector?: string;
+  cell?: string;
+  village?: string;
+  // Required when isRwandan is false
+  country?: string;
+  city?: string;
+  documentType: 'national_id'| 'passport';
+  documentNumber: string;
+  documentFront: File;
+  documentBack?: File | null;
+}
+
 /**
- * Register a new candidate
- * @param {Object} payload - Registration data
- * @param {string} payload.email - User email
- * @param {string} payload.password - User password
- * @param {string} payload.firstName - First name
- * @param {string} payload.lastName - Last name
- * @returns {Promise<{success: boolean, message: string, userId?: string, verificationEmailSent?: boolean}>}
+ * Register a new candidate. Sent as multipart/form-data since the identity
+ * document file(s) travel in the same request as the rest of the signup data.
  */
-export const registerCandidate = async (payload: any) => {
+export const registerCandidate = async (payload: CandidateRegistrationPayload) => {
   try {
+    const formData = new FormData();
+    formData.append('email', payload.email);
+    formData.append('password', payload.password);
+    formData.append('firstName', payload.firstName);
+    formData.append('lastName', payload.lastName);
+    formData.append('userType', 'candidate');
+    formData.append('gender', payload.gender);
+    formData.append('dateOfBirth', payload.dateOfBirth);
+    formData.append('phone', payload.phone);
+    formData.append('isRwandan', String(payload.isRwandan));
+
+    if (payload.isRwandan) {
+      formData.append('province', payload.province || '');
+      formData.append('district', payload.district || '');
+      formData.append('sector', payload.sector || '');
+      formData.append('cell', payload.cell || '');
+      formData.append('village', payload.village || '');
+    } else {
+      formData.append('country', payload.country || '');
+      formData.append('city', payload.city || '');
+    }
+
+    formData.append('documentType', payload.documentType);
+    formData.append('documentNumber', payload.documentNumber);
+    formData.append('documentFront', payload.documentFront);
+    if (payload.documentBack) {
+      formData.append('documentBack', payload.documentBack);
+    }
+
     const response = await fetch(`${API_BASE_URL}/auth/register`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        email: payload.email,
-        password: payload.password,
-        firstName: payload.firstName,
-        lastName: payload.lastName,
-        userType: 'candidate',
-        companyId: null,
-      }),
+      // No Content-Type header   the browser sets the multipart boundary automatically.
+      body: formData,
     });
 
     const data = await response.json();
@@ -98,9 +137,8 @@ export const registerCandidate = async (payload: any) => {
 
     return {
       success: true,
-      message: data.message || 'Account created successfully',
-      userId: data.userId,
-      verificationEmailSent: true,
+      user: data.data?.user,
+      token: data.data?.token,
     };
   } catch (error: any) {
     console.error('Error during registration:', error);
@@ -515,7 +553,7 @@ export const getLoginHistory = async (filters: LoginHistoryFilters = {}): Promis
 
     const params = new URLSearchParams();
     
-    // ✅ Fixed: Now using optional chaining with proper type checking
+    // ''Fixed: Now using optional chaining with proper type checking
     if (filters.dateRange) params.append('dateRange', filters.dateRange);
     if (filters.status && filters.status !== 'all') params.append('status', filters.status);
     if (filters.page) params.append('page', filters.page.toString());
@@ -560,7 +598,7 @@ export const exportLoginHistory = async (filters: LoginHistoryFilters = {}): Pro
 
     const params = new URLSearchParams();
     
-    // ✅ Fixed: Now using optional chaining with proper type checking
+    // ''Fixed: Now using optional chaining with proper type checking
     if (filters.dateRange) params.append('dateRange', filters.dateRange);
     if (filters.status && filters.status !== 'all') params.append('status', filters.status);
     if (filters.startDate) params.append('startDate', filters.startDate);

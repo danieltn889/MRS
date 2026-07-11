@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""
-COMMIT-TO-TASK MATCHER  —  Test Suite
-Runs directly — no server needed.
+"
+COMMIT-TO-TASK MATCHER     Test Suite
+Runs directly   no server needed.
 Run:  python test_commit_matcher.py
-"""
+"
 
 import subprocess
 import sys
@@ -98,7 +98,7 @@ SIMULATION_TASKS = [
 # ──────────────────────────────────────────────────────────────
 print("\n📥 Loading NLP libraries...")
 
-# spaCy — prefer md (real word vectors), fall back to sm
+# spaCy   prefer md (real word vectors), fall back to sm
 nlp = None
 SPACY_MODEL    = "en_core_web_md"
 SPACY_FALLBACK = "en_core_web_sm"
@@ -108,16 +108,16 @@ try:
     for model in (SPACY_MODEL, SPACY_FALLBACK):
         try:
             nlp = spacy.load(model)
-            print(f"  ✅ spaCy  ({model})")
+            print(f"  ''spaCy  ({model})")
             break
         except OSError:
             print(f"  Downloading {model}...")
             subprocess.check_call([sys.executable, "-m", "spacy", "download", model, "--quiet"])
             nlp = spacy.load(model)
-            print(f"  ✅ spaCy  ({model})")
+            print(f"  ''spaCy  ({model})")
             break
 except Exception as e:
-    print(f"  ⚠️  spaCy: {e}")
+    print(f"    spaCy: {e}")
 
 # NLTK
 stopwords         = None
@@ -138,18 +138,18 @@ try:
             nltk.data.find(path)
         except LookupError:
             nltk.download(resource, quiet=True)
-    print("  ✅ NLTK")
+    print("  ''NLTK")
 except Exception as e:
-    print(f"  ⚠️  NLTK: {e}")
+    print(f"    NLTK: {e}")
 
 # VADER
 sia = None
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
     sia = SentimentIntensityAnalyzer()
-    print("  ✅ VADER")
+    print("  ''VADER")
 except Exception as e:
-    print(f"  ⚠️  VADER: {e}")
+    print(f"    VADER: {e}")
 
 # scikit-learn
 TfidfVectorizer  = None
@@ -157,9 +157,9 @@ cosine_similarity = None
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
-    print("  ✅ scikit-learn")
+    print("  ''scikit-learn")
 except Exception as e:
-    print(f"  ⚠️  scikit-learn: {e}")
+    print(f"    scikit-learn: {e}")
 
 
 # ──────────────────────────────────────────────────────────────
@@ -182,10 +182,10 @@ class TextProcessor:
 
     def clean_text(self, text: str) -> str:
         if not text:
-            return ""
+            return 
         text = text.lower()
-        text = re.sub(r'[^\w\s]', ' ', text)
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r'[^\w\s]', '', text)
+        text = re.sub(r'\s+', '', text).strip()
         try:
             tokens = word_tokenize(text) if word_tokenize else text.split()
         except Exception:
@@ -199,7 +199,7 @@ class TextProcessor:
                     except Exception:
                         pass
                 cleaned.append(token)
-        return ' '.join(cleaned)
+        return ''.join(cleaned)
 
     def tfidf_similarity(self, text1: str, text2: str) -> float:
         c1 = self.clean_text(text1)
@@ -257,21 +257,21 @@ class TaskMatcher:
 
     def _task_text(self, task: Dict) -> str:
         return " ".join([
-            task.get("name", ""),
-            task.get("description", ""),
-            task.get("instructions", ""),
+            task.get("name", ),
+            task.get("description", ),
+            task.get("instructions", ),
         ])
 
     def _match_level(self, confidence: float) -> str:
         if confidence >= 65:
-            return "Excellent Match 🌟"
+            return "Excellent Match "
         elif confidence >= 50:
-            return "Strong Match ✅"
+            return "Strong Match ''"
         elif confidence >= 35:
-            return "Good Match 👍"
+            return "Good Match "
         elif confidence >= 20:
-            return "Weak Match 📝"
-        return "No Match ❌"
+            return "Weak Match "
+        return "No Match "
 
     def match(self, commit_message: str) -> Dict:
         if not commit_message or not commit_message.strip():
@@ -290,8 +290,8 @@ class TaskMatcher:
             confidence      = round(min((combined_sim + sentiment_bonus) * 100, 100.0), 1)
 
             results.append({
-                "task_id":          task.get("id", ""),
-                "task_name":        task.get("name", ""),
+                "task_id":          task.get("id", ),
+                "task_name":        task.get("name", ),
                 "confidence":       confidence,
                 "match_level":      self._match_level(confidence),
                 "tfidf_score":      round(tfidf_sim * 100, 1),
@@ -323,9 +323,9 @@ def hdr(title: str):
 
 def show(result: Dict):
     best = result.get("best_match", {})
-    print(f"  Commit  : \"{result['commit_message']}\"")
+    print(f"  Commit  : \"{result['commit_message']}\)
     print(f"  Best    : {best.get('task_name')}")
-    print(f"  Conf    : {best.get('confidence')}%  —  {best.get('match_level')}")
+    print(f"  Conf    : {best.get('confidence')}%     {best.get('match_level')}")
     print(f"  TF-IDF  : {best.get('tfidf_score')}%   spaCy: {best.get('spacy_score')}%")
     print(f"  Sentiment  commit={best.get('sentiment_commit')}  "
           f"task={best.get('sentiment_task')}  match={best.get('sentiment_match')}")
@@ -337,18 +337,18 @@ def show(result: Dict):
 def ok(cond: bool, label: str):
     global passed, failed
     if cond:
-        print(f"  ✅ PASSED — {label}")
+        print(f"  ''PASSED   {label}")
         passed += 1
     else:
-        print(f"  ❌ FAILED — {label}")
+        print(f"   FAILED   {label}")
         failed += 1
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 1 — Libraries loaded
+# TEST 1   Libraries loaded
 # ──────────────────────────────────────────────────────────────
 def test_libraries():
-    hdr("TEST 1 — NLP Libraries Loaded")
+    hdr("TEST 1   NLP Libraries Loaded")
     ok(TfidfVectorizer  is not None, "scikit-learn TfidfVectorizer")
     ok(cosine_similarity is not None, "scikit-learn cosine_similarity")
     ok(sia is not None,               "VADER SentimentIntensityAnalyzer")
@@ -362,34 +362,34 @@ def test_libraries():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 2 — Tasks loaded with all fields
+# TEST 2   Tasks loaded with all fields
 # ──────────────────────────────────────────────────────────────
 def test_tasks_loaded():
-    hdr("TEST 2 — SIMULATION_TASKS Loaded")
+    hdr("TEST 2   SIMULATION_TASKS Loaded")
     ok(len(SIMULATION_TASKS) == 3, "exactly 3 tasks")
     for t in SIMULATION_TASKS:
-        ok(bool(t.get("id")),           f"'{t.get('name')}' has id")
-        ok(bool(t.get("name")),         f"'{t.get('name')}' has name")
-        ok(bool(t.get("description")),  f"'{t.get('name')}' has description")
-        ok(bool(t.get("instructions")), f"'{t.get('name')}' has instructions")
+        ok(bool(t.get("id")),           f"'{t.get('name')}'has id")
+        ok(bool(t.get("name")),         f"'{t.get('name')}'has name")
+        ok(bool(t.get("description")),  f"'{t.get('name')}'has description")
+        ok(bool(t.get("instructions")), f"'{t.get('name')}'has instructions")
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 3 — Empty commit returns error
+# TEST 3   Empty commit returns error
 # ──────────────────────────────────────────────────────────────
 def test_empty_commit():
-    hdr("TEST 3 — Empty Commit Message (error expected)")
-    result = matcher.match("")
+    hdr("TEST 3   Empty Commit Message (error expected)")
+    result = matcher.match()
     print(f"  success : {result.get('success')}")
     print(f"  error   : {result.get('error')}")
     ok(result["success"] is False, "returns success=False for empty commit")
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 4 — Match: Todo bug fix commit
+# TEST 4   Match: Todo bug fix commit
 # ──────────────────────────────────────────────────────────────
 def test_match_todo():
-    hdr("TEST 4 — Match: Todo bug fix commit")
+    hdr("TEST 4   Match: Todo bug fix commit")
     commit = "fixed delete button removing wrong todo item and added confirm dialog"
     result = matcher.match(commit)
     show(result)
@@ -399,10 +399,10 @@ def test_match_todo():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 5 — Match: React profile card commit
+# TEST 5   Match: React profile card commit
 # ──────────────────────────────────────────────────────────────
 def test_match_react_component():
-    hdr("TEST 5 — Match: React profile card commit")
+    hdr("TEST 5   Match: React profile card commit")
     commit = "added loading spinner and follow button to user profile card component"
     result = matcher.match(commit)
     show(result)
@@ -413,10 +413,10 @@ def test_match_react_component():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 6 — Match: GET API endpoint commit
+# TEST 6   Match: GET API endpoint commit
 # ──────────────────────────────────────────────────────────────
 def test_match_api_endpoint():
-    hdr("TEST 6 — Match: GET API endpoint commit")
+    hdr("TEST 6   Match: GET API endpoint commit")
     commit = "created GET /api/users endpoint with pagination and role filter"
     result = matcher.match(commit)
     show(result)
@@ -427,10 +427,10 @@ def test_match_api_endpoint():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 7 — Unrelated commit → low confidence
+# TEST 7   Unrelated commit → low confidence
 # ──────────────────────────────────────────────────────────────
 def test_match_unrelated():
-    hdr("TEST 7 — Unrelated Commit (low confidence expected)")
+    hdr("TEST 7   Unrelated Commit (low confidence expected)")
     commit = "updated README with deployment instructions"
     result = matcher.match(commit)
     show(result)
@@ -441,10 +441,10 @@ def test_match_unrelated():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 8 — VADER sentiment analysis
+# TEST 8   VADER sentiment analysis
 # ──────────────────────────────────────────────────────────────
 def test_sentiment():
-    hdr("TEST 8 — VADER Sentiment Analysis")
+    hdr("TEST 8   VADER Sentiment Analysis")
     proc = TextProcessor()
     cases = [
         ("fixed critical bug causing crashes and data loss", "negative"),
@@ -453,17 +453,17 @@ def test_sentiment():
     ]
     for text, expected in cases:
         got = proc.get_sentiment(text)
-        print(f"  Text     : \"{text}\"")
+        print(f"  Text     : \"{text}\)
         print(f"  Expected : {expected}   Got : {got}")
         ok(got in ("positive", "negative", "neutral"), f"valid sentiment returned: {got}")
         print()
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 9 — TF-IDF: identical texts → 1.0
+# TEST 9   TF-IDF: identical texts → 1.0
 # ──────────────────────────────────────────────────────────────
 def test_tfidf_identical():
-    hdr("TEST 9 — TF-IDF: identical texts → similarity = 1.0")
+    hdr("TEST 9   TF-IDF: identical texts → similarity = 1.0")
     proc = TextProcessor()
     text = "fixed delete button removing wrong todo item"
     sim  = proc.tfidf_similarity(text, text)
@@ -472,25 +472,25 @@ def test_tfidf_identical():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 10 — TF-IDF: unrelated texts → low similarity
+# TEST 10   TF-IDF: unrelated texts → low similarity
 # ──────────────────────────────────────────────────────────────
 def test_tfidf_unrelated():
-    hdr("TEST 10 — TF-IDF: unrelated texts → low similarity")
+    hdr("TEST 10   TF-IDF: unrelated texts → low similarity")
     proc = TextProcessor()
     t1   = "fixed delete button in todo list"
     t2   = "deployed kubernetes cluster on AWS with autoscaling"
     sim  = proc.tfidf_similarity(t1, t2)
-    print(f"  Text 1    : \"{t1}\"")
-    print(f"  Text 2    : \"{t2}\"")
+    print(f"  Text 1    : \"{t1}\)
+    print(f"  Text 2    : \"{t2}\)
     print(f"  Similarity: {round(sim, 4)}")
     ok(sim < 0.3, f"unrelated texts score < 0.3  (got {round(sim, 4)})")
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 11 — spaCy: identical texts → similarity ≥ 0.99
+# TEST 11   spaCy: identical texts → similarity ≥ 0.99
 # ──────────────────────────────────────────────────────────────
 def test_spacy_identical():
-    hdr("TEST 11 — spaCy: identical texts → similarity ≥ 0.99")
+    hdr("TEST 11   spaCy: identical texts → similarity ≥ 0.99")
     proc = TextProcessor()
     text = "fixed delete button removing wrong todo item"
     sim  = proc.spacy_similarity(text, text)
@@ -499,10 +499,10 @@ def test_spacy_identical():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 12 — All 3 tasks each matched by their own commit
+# TEST 12   All 3 tasks each matched by their own commit
 # ──────────────────────────────────────────────────────────────
 def test_all_three_tasks_distinct():
-    hdr("TEST 12 — All 3 tasks matched by distinct commits")
+    hdr("TEST 12   All 3 tasks matched by distinct commits")
     cases = [
         (
             "fixed handleAdd function and NaN todo count bug",
@@ -521,7 +521,7 @@ def test_all_three_tasks_distinct():
         result = matcher.match(commit)
         best   = result["best_match"]["task_name"]
         conf   = result["best_match"]["confidence"]
-        print(f"  Commit   : \"{commit}\"")
+        print(f"  Commit   : \"{commit}\)
         print(f"  Expected : {expected}")
         print(f"  Got      : {best}  ({conf}%)")
         ok(best == expected, f"correct task matched")
@@ -529,10 +529,10 @@ def test_all_three_tasks_distinct():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 13 — Confidence scores are within 0–100
+# TEST 13   Confidence scores are within 0–100
 # ──────────────────────────────────────────────────────────────
 def test_confidence_bounds():
-    hdr("TEST 13 — Confidence scores within 0–100")
+    hdr("TEST 13   Confidence scores within 0–100")
     commits = [
         "fixed delete function",
         "added loading spinner",
@@ -550,10 +550,10 @@ def test_confidence_bounds():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 14 — Custom tasks override hardcoded tasks
+# TEST 14   Custom tasks override hardcoded tasks
 # ──────────────────────────────────────────────────────────────
 def test_custom_tasks():
-    hdr("TEST 14 — Custom tasks override hardcoded tasks")
+    hdr("TEST 14   Custom tasks override hardcoded tasks")
     custom = [
         {
             "id": "custom_001",
@@ -586,10 +586,10 @@ def test_custom_tasks():
 
 
 # ──────────────────────────────────────────────────────────────
-# TEST 15 — Batch: multiple commits, all succeed
+# TEST 15   Batch: multiple commits, all succeed
 # ──────────────────────────────────────────────────────────────
 def test_batch_commits():
-    hdr("TEST 15 — Batch: multiple commit messages")
+    hdr("TEST 15   Batch: multiple commit messages")
     commits = [
         "refactored handleAdd to correctly append new todo items to state",
         "implemented search and pagination for the users REST API endpoint",
@@ -599,7 +599,7 @@ def test_batch_commits():
     for commit in commits:
         result = matcher.match(commit)
         best   = result.get("best_match", {})
-        print(f"  Commit : \"{commit[:60]}\"")
+        print(f"  Commit : \"{commit[:60]}\)
         print(f"  Best   : {best.get('task_name')}  ({best.get('confidence')}%)")
         print()
         if not result["success"]:
@@ -612,8 +612,8 @@ def test_batch_commits():
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("\n" + "=" * 60)
-    print("  COMMIT-TO-TASK MATCHER — TEST SUITE  v2.0")
-    print("  (runs directly — no server needed)")
+    print("  COMMIT-TO-TASK MATCHER   TEST SUITE  v2.0")
+    print("  (runs directly   no server needed)")
     print("=" * 60)
 
     test_libraries()
@@ -633,7 +633,7 @@ if __name__ == "__main__":
     test_batch_commits()
 
     print("\n" + "=" * 60)
-    print(f"  RESULTS:  ✅ {passed} passed   ❌ {failed} failed")
+    print(f"  RESULTS:  ''{passed} passed    {failed} failed")
     print("=" * 60 + "\n")
 
     sys.exit(0 if failed == 0 else 1)

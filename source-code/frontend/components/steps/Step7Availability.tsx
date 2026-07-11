@@ -73,10 +73,10 @@ const Step7Availability: React.FC<Props> = ({ simulation, setSimulation }) => {
                 <option value="Africa/Nairobi">Nairobi (EAT +3)</option>
               </optgroup>
               <optgroup label="Americas">
-                <option value="America/New_York">New York — Eastern (EST −5)</option>
-                <option value="America/Chicago">Chicago — Central (CST −6)</option>
-                <option value="America/Denver">Denver — Mountain (MST −7)</option>
-                <option value="America/Los_Angeles">Los Angeles — Pacific (PST −8)</option>
+                <option value="America/New_York">New York   Eastern (EST −5)</option>
+                <option value="America/Chicago">Chicago   Central (CST −6)</option>
+                <option value="America/Denver">Denver   Mountain (MST −7)</option>
+                <option value="America/Los_Angeles">Los Angeles   Pacific (PST −8)</option>
                 <option value="America/Sao_Paulo">São Paulo (BRT −3)</option>
                 <option value="America/Toronto">Toronto (EST −5)</option>
               </optgroup>

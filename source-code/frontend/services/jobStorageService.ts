@@ -35,10 +35,10 @@ const extractJobs = (raw: any): SavedJob[] => {
   // { data: SavedJob[] }
   if (Array.isArray(inner)) return inner;
 
-  // { data: { data: SavedJob[], … } }  — paginated envelope
+  // { data: { data: SavedJob[], … } }    paginated envelope
   if (inner && Array.isArray(inner.data)) return inner.data;
 
-  // { data: { jobs: SavedJob[], … } }  — some backends use "jobs"
+  // { data: { jobs: SavedJob[], … } }    some backends use "jobs"
   if (inner && Array.isArray(inner.jobs)) return inner.jobs;
 
   return [];

@@ -10,8 +10,8 @@ import DatabaseService from '../../services/database.service.js';
 const router: Router = express.Router();
 
 // =====================================================
-// ⚠️ SAVED JOBS ROUTES - MUST BE FIRST (NO :id parameters)
-// ✅ ACCESSIBLE BY ALL AUTHENTICATED USERS (no role restriction)
+//  SAVED JOBS ROUTES - MUST BE FIRST (NO :id parameters)
+// ''ACCESSIBLE BY ALL AUTHENTICATED USERS (no role restriction)
 // =====================================================
 
 // @route   GET /api/v1/jobs/saved
@@ -172,7 +172,7 @@ router.post('/', [
     if (!value) return true;
     if (value === null) return true;
     if (typeof value === 'string') return true;
-    if (typeof value === 'object' && !Array.isArray(value)) {
+    if (typeof value === 'object'&& !Array.isArray(value)) {
       if (value.minimum_degree && typeof value.minimum_degree !== 'string') {
         throw new Error('minimum_degree must be a string');
       }
@@ -448,7 +448,7 @@ router.put('/:id', [
     if (!value) return true;
     if (value === null) return true;
     if (typeof value === 'string') return true;
-    if (typeof value === 'object' && !Array.isArray(value)) {
+    if (typeof value === 'object'&& !Array.isArray(value)) {
       if (value.minimum_degree && typeof value.minimum_degree !== 'string') {
         throw new Error('minimum_degree must be a string');
       }
@@ -505,7 +505,7 @@ router.put('/:id', [
     }
     
     // Only validate dates if both exist and are not null
-    if (value.publishedAt != null && value.publishedAt !== '' && 
+    if (value.publishedAt != null && value.publishedAt !== ''&& 
         value.expiresAt != null && value.expiresAt !== '') {
       const published = new Date(value.publishedAt);
       const expires = new Date(value.expiresAt);
@@ -722,7 +722,7 @@ router.put('/:id/education', [
   body('educationLevel').custom(value => {
     if (!value) return true;
     if (typeof value === 'string') return true;
-    if (typeof value === 'object' && !Array.isArray(value)) {
+    if (typeof value === 'object'&& !Array.isArray(value)) {
       if (value.minimum_degree && typeof value.minimum_degree !== 'string') {
         throw new Error('minimum_degree must be a string');
       }

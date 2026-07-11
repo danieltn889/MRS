@@ -28,15 +28,15 @@ const handleResponse = async (response: Response) => {
   }
   const data = await response.json();
 
-  // ✅ Check if this is a task progress response (has task_index)
+  // ''Check if this is a task progress response (has task_index)
   const isTaskProgressResponse = data.data && Array.isArray(data.data) && 
     data.data.length > 0 && (data.data[0]?.task_index !== undefined || data.data[0]?.taskIndex !== undefined);
   
-  // ✅ Check if this is a simulation session response (has tasks array)
+  // ''Check if this is a simulation session response (has tasks array)
   const isSimulationSessionResponse = data.data && !Array.isArray(data.data) && 
     (data.data.tasks !== undefined || data.data.session_id !== undefined);
   
-  // ✅ Check if this is a GitHub repository response (has repo_url, repo_name, or github_links)
+  // ''Check if this is a GitHub repository response (has repo_url, repo_name, or github_links)
   const isGitHubRepoResponse = data.data && (
     data.data.repo_url !== undefined ||
     data.data.repoName !== undefined ||
@@ -45,7 +45,7 @@ const handleResponse = async (response: Response) => {
     (Array.isArray(data.data) && data.data[0]?.repo_name !== undefined)
   );
   
-  // ✅ Check if this is a blockchain/verification response
+  // ''Check if this is a blockchain/verification response
   const isBlockchainResponse = data.data && (
     data.data.credential_hash !== undefined ||
     data.data.blockchain_tx_id !== undefined ||
@@ -53,7 +53,7 @@ const handleResponse = async (response: Response) => {
     data.data.verified !== undefined
   );
   
-  // ✅ Check if this is a GitHub score analysis response
+  // ''Check if this is a GitHub score analysis response
   const isGitHubScoreResponse = data.data && (
     data.data.analysis !== undefined ||
     data.data.detailedMarks !== undefined ||
@@ -71,20 +71,20 @@ const handleResponse = async (response: Response) => {
     dataKeys: data.data && !Array.isArray(data.data) ? Object.keys(data.data) : []
   });
 
-  // ✅ For task progress responses - DO NOT modify the status
+  // ''For task progress responses - DO NOT modify the status
   if (isTaskProgressResponse) {
     console.log('📊 [handleResponse] Task progress response - keeping original statuses:', 
       data.data.map((item: any) => ({ task_index: item.task_index, status: item.status })));
     return data;
   }
 
-  // ✅ For simulation session responses - DO NOT modify (contains tasks, current_task, etc.)
+  // ''For simulation session responses - DO NOT modify (contains tasks, current_task, etc.)
   if (isSimulationSessionResponse) {
     console.log('📊 [handleResponse] Simulation session response - keeping original data');
     return data;
   }
   
-  // ✅ For GitHub repository responses - DO NOT modify, return as-is
+  // ''For GitHub repository responses - DO NOT modify, return as-is
   if (isGitHubRepoResponse) {
     console.log('📊 [handleResponse] GitHub repository response - keeping original repo data');
     if (data.data && Array.isArray(data.data)) {
@@ -107,24 +107,24 @@ const handleResponse = async (response: Response) => {
     return data;
   }
   
-  // ✅ For blockchain/verification responses - DO NOT modify
+  // ''For blockchain/verification responses - DO NOT modify
   if (isBlockchainResponse) {
     console.log('📊 [handleResponse] Blockchain/verification response - keeping original data');
     return data;
   }
   
-  // ✅ For GitHub score analysis responses - DO NOT modify
+  // ''For GitHub score analysis responses - DO NOT modify
   if (isGitHubScoreResponse) {
     console.log('📊 [handleResponse] GitHub score analysis response - keeping original data');
     if (data.data?.analysis) {
-      console.log('  Score:', data.data.analysis.score || data.data.score);
-      console.log('  Has detailed marks:', !!data.data.analysis.detailedMarks);
-      console.log('  Repo URL:', data.data.analysis.repoUrl);
+      console.log(' Score:', data.data.analysis.score || data.data.score);
+      console.log(' Has detailed marks:', !!data.data.analysis.detailedMarks);
+      console.log(' Repo URL:', data.data.analysis.repoUrl);
     }
     return data;
   }
 
-  // ✅ ONLY for simulation templates (has is_active property)
+  // ''ONLY for simulation templates (has is_active property)
   if (data.data && Array.isArray(data.data)) {
     // Check if this is a template response (has is_active, not task_index)
     const isTemplateResponse = data.data.length === 0 || data.data[0]?.is_active !== undefined;
@@ -159,7 +159,7 @@ const handleResponse = async (response: Response) => {
     console.log('📊 [handleResponse] Single template response - transforming status');
     data.data = {
       ...data.data,
-      status: data.data.is_active === true ? 'active' : 'inactive',
+      status: data.data.is_active === true ? 'active': 'inactive',
       title: data.data.name || data.data.title,
     };
   }
@@ -242,25 +242,25 @@ export const publishSimulation = async (simulation: any) => {
   const hasRealId = simulation.id && isValidUUID(simulation.id);
 
   if (hasRealId) {
-    // ✅ FIRST: Update the simulation to 'active' status (NOT 'published')
+    // ''FIRST: Update the simulation to 'active'status (NOT 'published')
     await fetch(`${API_BASE_URL}/simulations/${simulation.id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
-      body: JSON.stringify(buildFullPayload(simulation, 'active')), // ✅ Use 'active'
+      body: JSON.stringify(buildFullPayload(simulation, 'active')), // ''Use 'active'
     });
     
-    // ✅ SECOND: Call the dedicated publish endpoint
+    // ''SECOND: Call the dedicated publish endpoint
     const publishRes = await fetch(`${API_BASE_URL}/simulations/${simulation.id}/publish`, {
       method: 'POST',
       headers: getAuthHeaders(),
     });
     return handleResponse(publishRes);
   } else {
-    // For new simulations without an ID, create with 'active' status
+    // For new simulations without an ID, create with 'active'status
     const response = await fetch(`${API_BASE_URL}/simulations`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify(buildFullPayload(simulation, 'active')), // ✅ Use 'active'
+      body: JSON.stringify(buildFullPayload(simulation, 'active')), // ''Use 'active'
     });
     return handleResponse(response);
   }
@@ -326,7 +326,7 @@ export const getMySimulations = async (
   params: {
     page?: number;
     limit?: number;
-    status?: 'not_started' | 'in_progress' | 'completed';
+    status?: 'not_started'| 'in_progress'| 'completed';
   } = {}
 ) => {
   const qs = new URLSearchParams();
@@ -441,7 +441,7 @@ export const saveSimulationProgress = async (
     );
     if (!response.ok) return { success: false, data: null };
     const result = await response.json();
-    console.log('✅ [saveSimulationProgress] Response:', result);
+    console.log('[saveSimulationProgress] Response:', result);
     return result;
   } catch (error) {
     console.error('Save progress error:', error);
@@ -472,7 +472,7 @@ export const submitSimulationSession = async (
 export const getMySimulationSessions = async (params?: {
   page?: number;
   limit?: number;
-  status?: 'in_progress' | 'completed' | 'all';
+  status?: 'in_progress'| 'completed'| 'all';
 }) => {
   const queryParams = new URLSearchParams();
   if (params?.page) queryParams.append('page', params.page.toString());
@@ -638,7 +638,7 @@ export const updateTaskProgress = async (
   sessionId: string,
   taskIndex: number,
   data: {
-    status?: 'not_started' | 'in_progress' | 'completed';
+    status?: 'not_started'| 'in_progress'| 'completed';
     answer?: any;
     score?: number;
     feedback?: string;
@@ -675,7 +675,7 @@ export const getChatMessagesWithReplies = async (
   sessionId: string,
   options: { limit?: number; offset?: number; filter?: string } = {}
 ) => {
-  const { limit = 50, offset = 0, filter = 'all' } = options;
+  const { limit = 50, offset = 0, filter = 'all'} = options;
   const params = new URLSearchParams({ 
     limit: limit.toString(), 
     offset: offset.toString(),
@@ -801,7 +801,7 @@ export const getChatMessagesWithRepliesBySimulation = async (
   simulationId: string,
   options: { limit?: number; offset?: number; filter?: string } = {}
 ) => {
-  const { limit = 50, offset = 0, filter = 'all' } = options;
+  const { limit = 50, offset = 0, filter = 'all'} = options;
   const params = new URLSearchParams({ 
     limit: limit.toString(), 
     offset: offset.toString(),
@@ -964,7 +964,7 @@ export const getSimulationCandidates = async (
   params?: {
     page?: number;
     limit?: number;
-    status?: 'all' | 'completed' | 'in_progress';
+    status?: 'all'| 'completed'| 'in_progress';
   }
 ) => {
   const queryParams = new URLSearchParams();
@@ -1197,16 +1197,16 @@ function deriveType(tasks: any[]): string {
 }
 
 function buildFullPayload(simulation: any, statusOverride?: string) {
-  // ✅ Ensure status is either 'draft' or 'active' (NOT 'published')
+  // ''Ensure status is either 'draft'or 'active'(NOT 'published')
   let finalStatus = statusOverride || simulation.status || 'draft';
   
-  // ✅ Map 'published' to 'active' if it somehow gets through
+  // ''Map 'published'to 'active'if it somehow gets through
   if (finalStatus === 'published') {
-    console.warn('⚠️ "published" status detected, mapping to "active"');
+    console.warn(' "published" status detected, mapping to "active"');
     finalStatus = 'active';
   }
   
-  // ✅ Also map 'inactive' to 'archived' if needed
+  // ''Also map 'inactive'to 'archived'if needed
   if (finalStatus === 'inactive') {
     finalStatus = 'archived';
   }
@@ -1218,7 +1218,7 @@ function buildFullPayload(simulation: any, statusOverride?: string) {
     description: simulation.description,
     duration: simulation.duration,
     difficulty: simulation.difficulty,
-    status: finalStatus, // ✅ Now will be 'draft' or 'active' or 'archived'
+    status: finalStatus, // ''Now will be 'draft'or 'active'or 'archived'
     objectives: simulation.objectives ?? [],
     tasks: simulation.tasks ?? [],
     scoring: simulation.scoring ?? {},

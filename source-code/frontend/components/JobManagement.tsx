@@ -19,7 +19,7 @@ const formatLocation = (job: any): string => {
     if (loc?.is_remote) return 'Remote';
     return [loc?.city, loc?.country].filter(Boolean).join(', ') || 'Remote';
   }
-  return typeof job.location === 'string' ? job.location : 'Remote';
+  return typeof job.location === 'string'? job.location : 'Remote';
 };
 
 const formatSalary = (job: any): string => {
@@ -65,10 +65,10 @@ const extractJobsArray = (response: any): any[] => {
 // ─── Status badge ───────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<JobStatus, { label: string; dot: string; bg: string; text: string }> = {
-  active:  { label: 'Active',  dot: '#22c55e', bg: '#f0fdf4', text: '#15803d' },
-  draft:   { label: 'Draft',   dot: '#f59e0b', bg: '#fffbeb', text: '#b45309' },
-  closed:  { label: 'Closed',  dot: '#ef4444', bg: '#fef2f2', text: '#b91c1c' },
-  pending: { label: 'Pending', dot: '#8b5cf6', bg: '#f5f3ff', text: '#6d28d9' },
+  active:  { label: 'Active',  dot: '#22c55e', bg: '#f0fdf4', text: '#15803d'},
+  draft:   { label: 'Draft',   dot: '#f59e0b', bg: '#fffbeb', text: '#b45309'},
+  closed:  { label: 'Closed',  dot: '#ef4444', bg: '#fef2f2', text: '#b91c1c'},
+  pending: { label: 'Pending', dot: '#8b5cf6', bg: '#f5f3ff', text: '#6d28d9'},
 };
 
 const StatusBadge = ({ status }: { status: JobStatus }) => {
@@ -102,7 +102,7 @@ const StatCard = ({
     border: '1px solid #f1f5f9',
   }}>
     <div>
-      <p style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase' }}>{label}</p>
+      <p style={{ fontSize: 12, color: '#94a3b8', fontWeight: 500, marginBottom: 4, letterSpacing: 0.5, textTransform: 'uppercase'}}>{label}</p>
       <p style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', lineHeight: 1 }}>{value}</p>
     </div>
     <div style={{
@@ -211,7 +211,7 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
   const filtered = jobs.filter(j => {
     const q = searchTerm.toLowerCase();
     return (j.title.toLowerCase().includes(q) || j.department.toLowerCase().includes(q))
-      && (statusFilter === 'all' || j.status === statusFilter);
+      && (statusFilter === 'all'|| j.status === statusFilter);
   });
 
   const stats = {
@@ -279,7 +279,7 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
       border: '1px solid #e2e8f0',
     } as React.CSSProperties,
 
-    body: { padding: '32px 32px' } as React.CSSProperties,
+    body: { padding: '32px 32px'} as React.CSSProperties,
 
     sectionTitle: {
       fontSize: 24, fontWeight: 700, color: '#0f172a', letterSpacing: -0.5, marginBottom: 4,
@@ -319,21 +319,21 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
     } as React.CSSProperties,
 
     table: {
-      width: '100%', borderCollapse: 'collapse' as const,
+      width: '100%', borderCollapse: 'collapse'as const,
       background: '#fff', borderRadius: 16, overflow: 'hidden',
       boxShadow: '0 1px 3px rgba(0,0,0,.06)',
     } as React.CSSProperties,
 
     th: {
-      padding: '12px 20px', textAlign: 'left' as const,
+      padding: '12px 20px', textAlign: 'left'as const,
       fontSize: 11, fontWeight: 600, color: '#64748b',
-      letterSpacing: 0.8, textTransform: 'uppercase' as const,
+      letterSpacing: 0.8, textTransform: 'uppercase'as const,
       background: '#f8fafc', borderBottom: '1px solid #e2e8f0',
     } as React.CSSProperties,
 
     td: {
       padding: '14px 20px', fontSize: 14, color: '#334155',
-      borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle' as const,
+      borderBottom: '1px solid #f1f5f9', verticalAlign: 'middle'as const,
     } as React.CSSProperties,
 
     iconBtn: (color: string) => ({
@@ -358,15 +358,15 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
     } as React.CSSProperties,
 
     emptyBox: {
-      textAlign: 'center' as const, padding: '64px 0',
+      textAlign: 'center'as const, padding: '64px 0',
       background: '#fff', borderRadius: 16,
       boxShadow: '0 1px 3px rgba(0,0,0,.06)',
     } as React.CSSProperties,
   };
 
   if (loading) return (
-    <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ textAlign: 'center' }}>
+    <div style={{ ...s.page, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
+      <div style={{ textAlign: 'center'}}>
         <div style={{
           width: 44, height: 44, borderRadius: '50%',
           border: '3px solid #e2e8f0', borderTopColor: '#2563eb',
@@ -424,21 +424,21 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
 
         {filtered.length === 0 ? (
           <div style={s.emptyBox}>
-            <Briefcase size={48} color="#cbd5e1" style={{ margin: '0 auto 16px' }} />
+            <Briefcase size={48} color="#cbd5e1" style={{ margin: '0 auto 16px'}} />
             <p style={{ fontSize: 18, fontWeight: 600, color: '#0f172a', marginBottom: 8 }}>No jobs found</p>
             <p style={{ fontSize: 14, color: '#64748b', marginBottom: 24 }}>
               {searchTerm || statusFilter !== 'all'
                 ? 'Try different search terms or filters.'
                 : 'Create your first job posting to get started.'}
             </p>
-            {!searchTerm && statusFilter === 'all' && (
+            {!searchTerm && statusFilter === 'all'&& (
               <button onClick={onCreateJob} style={{ ...s.btn, ...s.primaryBtn }}>
                 <Plus size={15} /> Post a Job
               </button>
             )}
           </div>
         ) : (
-          <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflowX: 'auto' }}>
+          <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflowX: 'auto'}}>
             <table style={{ ...s.table, minWidth: 1020 }}>
               <thead>
                 <tr>
@@ -449,7 +449,7 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
               </thead>
               <tbody>
                 {filtered.map((job, i) => (
-                  <tr key={job.id} style={{ background: i % 2 === 0 ? '#fff' : '#fafafa' }}>
+                  <tr key={job.id} style={{ background: i % 2 === 0 ? '#fff': '#fafafa'}}>
                     <td style={s.td}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <div style={{
@@ -459,7 +459,7 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
                         }}>
                           <Briefcase size={16} color="#2563eb" />
                         </div>
-                        <span style={{ fontWeight: 600, color: '#0f172a' }}>{job.title}</span>
+                        <span style={{ fontWeight: 600, color: '#0f172a'}}>{job.title}</span>
                       </div>
                     </td>
                     <td style={s.td}>{job.department}</td>
@@ -478,27 +478,27 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
                         <Users size={12} />{job.applications_count ?? 0}
                       </span>
                     </td>
-                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>
+                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap'}}>
                       {job.opens_at
-                        ? new Date(job.opens_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                        ? new Date(job.opens_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric'})
                         : job.status === 'draft'
                           ? 'Not published'
                           /* Active/open job with no published_at → it's been open since creation */
-                          : new Date(job.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          : new Date(job.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric'})}
                     </td>
-                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>
+                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap'}}>
                       {job.closes_at
-                        ? new Date(job.closes_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                        ? new Date(job.closes_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric'})
                         : 'No deadline'}
                     </td>
-                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap' }}>
+                    <td style={{ ...s.td, fontSize: 13, color: '#64748b', whiteSpace: 'nowrap'}}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Clock size={13} color="#94a3b8" />
-                        {new Date(job.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        {new Date(job.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric'})}
                       </span>
                     </td>
                     <td style={s.td}>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap'}}>
                         <button onClick={() => handleView(job.id)} style={s.actionBtn('#2563eb')} title="View job details">
                           <Eye size={14} /> View
                         </button>

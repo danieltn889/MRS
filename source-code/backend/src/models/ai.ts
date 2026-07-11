@@ -21,7 +21,7 @@ export interface SkillGap extends BaseEntity {
   current_level?: number;
   required_level?: number;
   gap?: number;
-  priority: 'critical' | 'high' | 'medium' | 'low';
+  priority: 'critical'| 'high'| 'medium'| 'low';
   learning_resources?: JSONB;
   development_plan?: JSONB;
   status: string;

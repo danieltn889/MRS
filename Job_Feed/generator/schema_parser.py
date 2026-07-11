@@ -1,8 +1,8 @@
-"""
+"
 schema_parser.py
 =================
 Lightweight but real parser for the pg_dump schema (db_backup_20260705_182104.sql).
-Not a general SQL parser — tailored to pg_dump's consistent, regular output:
+Not a general SQL parser   tailored to pg_dump's consistent, regular output:
 
     CREATE TABLE public.<name> (
         col1 type ... ,
@@ -18,7 +18,7 @@ Not a general SQL parser — tailored to pg_dump's consistent, regular output:
 Splitting a column list on commas has to respect nesting (numeric(10,2),
 ARRAY['a','b'], CHECK((a OR b))), so columns are split by tracking paren/
 bracket depth rather than a naive comma split.
-"""
+"
 
 from __future__ import annotations
 
@@ -55,13 +55,13 @@ class TableSchema:
 
     @property
     def required_columns(self) -> List[str]:
-        """NOT NULL columns with no default — a generator MUST supply these."""
+        "NOT NULL columns with no default   a generator MUST supply these."
         return [c.name for c in self.columns.values() if c.not_null and c.default is None]
 
 
 def _split_top_level(text: str) -> List[str]:
-    """Split a CREATE TABLE column/constraint list on commas, ignoring commas
-    nested inside (), [], or single-quoted strings."""
+    "Split a CREATE TABLE column/constraint list on commas, ignoring commas
+    nested inside (), [], or single-quoted strings."
     parts, depth, buf, in_quote = [], 0, [], False
     i = 0
     while i < len(text):
@@ -69,7 +69,7 @@ def _split_top_level(text: str) -> List[str]:
         if in_quote:
             buf.append(ch)
             if ch == "'" and text[i - 1:i] != "\\":
-                # handle doubled '' as an escaped quote inside pg literals
+                # handle doubled ''as an escaped quote inside pg literals
                 if text[i + 1:i + 2] == "'":
                     buf.append("'")
                     i += 2
@@ -87,13 +87,13 @@ def _split_top_level(text: str) -> List[str]:
             depth -= 1
             buf.append(ch)
         elif ch == "," and depth == 0:
-            parts.append("".join(buf))
+            parts.append(.join(buf))
             buf = []
         else:
             buf.append(ch)
         i += 1
     if buf:
-        parts.append("".join(buf))
+        parts.append(.join(buf))
     return [p.strip() for p in parts if p.strip()]
 
 
@@ -113,7 +113,7 @@ def _parse_column_or_constraint(field_text: str, table: TableSchema) -> None:
     upper = stripped.upper()
 
     if upper.startswith("CONSTRAINT"):
-        # CONSTRAINT <name> CHECK (...)   — table-level named check
+        # CONSTRAINT <name> CHECK (...)     table-level named check
         check_m = re.search(r"CHECK\s*\((.*)\)\s*$", stripped, re.DOTALL)
         if check_m:
             enum_vals = _extract_enum_values(check_m.group(1))
@@ -135,7 +135,7 @@ def _parse_column_or_constraint(field_text: str, table: TableSchema) -> None:
             table.unique_constraints.append([c.strip() for c in cols_m.group(1).split(",")])
         return
 
-    # Column definition: "name TYPE [modifiers...]" — name may be double-quoted
+    # Column definition: "name TYPE [modifiers...]"   name may be double-quoted
     name_m = re.match(r'^("(?:[^"]+)"|\w+)\s+(.*)$', stripped, re.DOTALL)
     if not name_m:
         return
@@ -143,7 +143,7 @@ def _parse_column_or_constraint(field_text: str, table: TableSchema) -> None:
     rest = name_m.group(2).strip()
 
     not_null = bool(re.search(r"\bNOT NULL\b", rest))
-    rest_wo_notnull = re.sub(r"\bNOT NULL\b", "", rest)
+    rest_wo_notnull = re.sub(r"\bNOT NULL\b", , rest)
 
     default = None
     default_m = re.search(r"\bDEFAULT\s+(.*)$", rest_wo_notnull, re.DOTALL)
@@ -208,7 +208,7 @@ def parse_schema(sql_path: Path) -> Dict[str, TableSchema]:
 
 
 def render_schema_report(tables: Dict[str, TableSchema], only: Optional[List[str]] = None) -> str:
-    lines = ["# Database Schema Inspection Report", ""]
+    lines = ["# Database Schema Inspection Report", ]
     names = only or sorted(tables.keys())
     for name in names:
         t = tables.get(name)
@@ -216,24 +216,24 @@ def render_schema_report(tables: Dict[str, TableSchema], only: Optional[List[str
             lines.append(f"## {name}  (NOT FOUND IN SCHEMA)\n")
             continue
         lines.append(f"## Table: `{t.name}`")
-        lines.append("")
+        lines.append()
         lines.append("| Column | Type | Nullable | Default | Enum values |")
         lines.append("|---|---|---|---|---|")
         for c in t.columns.values():
             nullable = "NO" if c.not_null else "YES"
-            default = f"`{c.default}`" if c.default else ""
-            enums = ", ".join(c.enum_values) if c.enum_values else ""
+            default = f"`{c.default}`" if c.default else 
+            enums = ", ".join(c.enum_values) if c.enum_values else 
             lines.append(f"| {c.name} | {c.data_type} | {nullable} | {default} | {enums} |")
-        lines.append("")
+        lines.append()
         lines.append(f"- **Primary key**: {', '.join(t.primary_key) or '(none found)'}")
         for u in t.unique_constraints:
             lines.append(f"- **Unique**: ({', '.join(u)})")
         for fk in t.foreign_keys:
-            cascade = " ON DELETE CASCADE" if fk.on_delete_cascade else ""
+            cascade = " ON DELETE CASCADE" if fk.on_delete_cascade else 
             lines.append(f"- **Foreign key**: ({', '.join(fk.columns)}) -> "
                           f"`{fk.ref_table}`({', '.join(fk.ref_columns)}){cascade}")
         required = t.required_columns
         if required:
             lines.append(f"- **Required (NOT NULL, no default)**: {', '.join(required)}")
-        lines.append("")
+        lines.append()
     return "\n".join(lines)

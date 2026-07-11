@@ -153,7 +153,7 @@ export class AnalyticsController extends BaseController {
         `;
         params = [];
       } else {
-        // Recruiters see only their own jobs' simulations
+        // Recruiters see only their own jobs'simulations
         simulationsQuery = `
           SELECT s.id, s.type, s.status, s.overall_score, s.created_at,
                  j.title as job_title, u.name as candidate_name
@@ -279,7 +279,7 @@ export class AnalyticsController extends BaseController {
     const dashboardQuery = `
       SELECT
         COUNT(DISTINCT j.id) as total_jobs,
-        COUNT(DISTINCT CASE WHEN j.status = 'active' THEN j.id END) as active_jobs,
+        COUNT(DISTINCT CASE WHEN j.status = 'active'THEN j.id END) as active_jobs,
         COUNT(DISTINCT a.id) as total_applications,
         COUNT(DISTINCT s.id) as total_simulations,
         AVG(s.overall_score) as avg_candidate_score
@@ -301,11 +301,11 @@ export class AnalyticsController extends BaseController {
     const dashboardQuery = `
       SELECT
         COUNT(DISTINCT u.id) as total_users,
-        COUNT(DISTINCT CASE WHEN u.user_type = 'candidate' THEN u.id END) as total_candidates,
+        COUNT(DISTINCT CASE WHEN u.user_type = 'candidate'THEN u.id END) as total_candidates,
         COUNT(DISTINCT CASE WHEN u.user_type IN ('recruiter', 'company_admin') THEN u.id END) as total_recruiters,
         COUNT(DISTINCT c.id) as total_companies,
         COUNT(DISTINCT j.id) as total_jobs,
-        COUNT(DISTINCT CASE WHEN j.status = 'active' THEN j.id END) as active_jobs,
+        COUNT(DISTINCT CASE WHEN j.status = 'active'THEN j.id END) as active_jobs,
         COUNT(DISTINCT a.id) as total_applications,
         COUNT(DISTINCT s.id) as total_simulations
       FROM users u

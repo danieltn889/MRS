@@ -83,12 +83,12 @@ class AppliedJobsManager {
       if (response.success && response.data?.applications && Array.isArray(response.data.applications)) {
         // Only ACTIVE applications count as "applied". Withdrawn/rejected applications
         // can be re-applied to (the backend allows it), so treating them as applied
-        // would wrongly show "View Application / Withdraw" — and withdrawing an already
+        // would wrongly show "View Application / Withdraw"   and withdrawing an already
         // withdrawn application fails the backend guard.
         const appliedJobIds = response.data.applications
-          .filter((app: any) => app.status !== 'withdrawn' && app.status !== 'rejected')
+          .filter((app: any) => app.status !== 'withdrawn'&& app.status !== 'rejected')
           .map((app) => app.job_id)
-          .filter((id): id is string => typeof id === 'string' && id.length > 0);
+          .filter((id): id is string => typeof id === 'string'&& id.length > 0);
 
         console.log('AppliedJobsManager: Active applied job IDs from API:', appliedJobIds);
         this.appliedJobs = new Set(appliedJobIds);

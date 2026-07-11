@@ -4,7 +4,7 @@ import { Play, Timer, CheckCircle, AlertCircle, FileText, LucideIcon } from 'luc
 export interface StatusBadge {
   label: string;
   color: string;
-  icon: LucideIcon;  // ✅ Use LucideIcon instead of IconType
+  icon: LucideIcon;  // ''Use LucideIcon instead of IconType
 }
 
 export interface DailyWindow {
@@ -52,7 +52,7 @@ export interface Simulation {
 // Helper function to get numeric score safely
 export function getNumericScore(score: number | string | null | undefined): number | undefined {
   if (score === null || score === undefined) return undefined;
-  const num = typeof score === 'string' ? parseFloat(score) : score;
+  const num = typeof score === 'string'? parseFloat(score) : score;
   return isNaN(num) ? undefined : num;
 }
 
@@ -60,7 +60,7 @@ export function getNumericScore(score: number | string | null | undefined): numb
 export function hasValidScore(score: number | string | null | undefined): boolean {
   if (score === null || score === undefined) return false;
   const strScore = String(score).trim();
-  if (strScore === '' || strScore === 'null' || strScore === 'undefined') return false;
+  if (strScore === ''|| strScore === 'null'|| strScore === 'undefined') return false;
   const numScore = parseFloat(strScore);
   return !isNaN(numScore) && numScore > 0;
 }
@@ -125,7 +125,7 @@ export function getNextAvailableLabel(simulation: Simulation): string {
     if (nextWindow) {
       const future = new Date(local);
       future.setDate(local.getDate() + i);
-      const dayName = future.toLocaleDateString('en-US', { weekday: 'long' });
+      const dayName = future.toLocaleDateString('en-US', { weekday: 'long'});
       return `${dayName} ${nextWindow.startTime}–${nextWindow.endTime}`;
     }
   }
@@ -198,8 +198,8 @@ export function deduplicateSimulations(sims: Simulation[]): Simulation[] {
     }
     const existing = map.get(key);
     if (existing && !existing.sessionId && sim.sessionId) map.set(key, sim);
-    else if (sim.status === 'in_progress' && existing && existing.status !== 'in_progress') map.set(key, sim);
-    else if (sim.status === 'completed' && existing && existing.status === 'not_started') map.set(key, sim);
+    else if (sim.status === 'in_progress'&& existing && existing.status !== 'in_progress') map.set(key, sim);
+    else if (sim.status === 'completed'&& existing && existing.status === 'not_started') map.set(key, sim);
     else if (sim.startedAt && existing && existing.startedAt && new Date(sim.startedAt) > new Date(existing.startedAt)) map.set(key, sim);
   }
   return Array.from(map.values());

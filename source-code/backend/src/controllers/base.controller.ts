@@ -189,7 +189,7 @@ class BaseController {
           if (Array.isArray(value)) {
             conditions.push(`${key} = ANY($${paramIndex})`);
             params.push(value);
-          } else if (typeof value === 'string' && value.includes('%')) {
+          } else if (typeof value === 'string'&& value.includes('%')) {
             conditions.push(`${key} ILIKE $${paramIndex}`);
             params.push(value);
           } else {
@@ -198,13 +198,13 @@ class BaseController {
           }
           paramIndex++;
         }
-        whereClause = `WHERE ${conditions.join(' AND ')}`;
+        whereClause = `WHERE ${conditions.join('AND ')}`;
       }
 
       // Build JOIN clause
       let joinClause = '';
       if (joins.length > 0) {
-        joinClause = joins.join(' ');
+        joinClause = joins.join('');
       }
 
       // Get total count
@@ -295,7 +295,7 @@ class BaseController {
         paramIndex++;
       }
 
-      query += ' RETURNING *';
+      query += 'RETURNING *';
 
       const result = await dbQuery(query, params);
       return result.rows[0] || null;
@@ -320,7 +320,7 @@ class BaseController {
         paramIndex++;
       }
 
-      const query = `SELECT 1 FROM ${tableName} WHERE ${whereConditions.join(' AND ')} LIMIT 1`;
+      const query = `SELECT 1 FROM ${tableName} WHERE ${whereConditions.join('AND ')} LIMIT 1`;
       const result = await dbQuery(query, params);
 
       return result.rows.length > 0;

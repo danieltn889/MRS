@@ -9,7 +9,7 @@ interface Simulation {
   title?: string;
   description?: string;
   duration?: number;
-  status?: 'completed' | 'in_progress' | 'not_started' | 'expired';
+  status?: 'completed'| 'in_progress'| 'not_started'| 'expired';
   score?: number;
   scheduledAt?: string;
   appliedAt?: string;
@@ -66,7 +66,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
         
         // Set first simulation as active if available
         if (mappedSimulations.length > 0) {
-          const firstActive = mappedSimulations.find(s => s.status !== 'completed' && s.status !== 'expired');
+          const firstActive = mappedSimulations.find(s => s.status !== 'completed'&& s.status !== 'expired');
           setActiveSim(firstActive?.id || mappedSimulations[0].id);
         }
       }
@@ -139,15 +139,15 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
   // Helper function to get status color and icon
   const getStatusInfo = (sim: Simulation) => {
     if (sim.status === 'completed') {
-      return { color: 'green', icon: CheckCircle, label: 'Completed', bgColor: 'bg-green-50', borderColor: 'border-green-200', textColor: 'text-green-700' };
+      return { color: 'green', icon: CheckCircle, label: 'Completed', bgColor: 'bg-green-50', borderColor: 'border-green-200', textColor: 'text-green-700'};
     }
     if (sim.status === 'in_progress') {
-      return { color: 'orange', icon: Timer, label: 'In Progress', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', textColor: 'text-orange-700' };
+      return { color: 'orange', icon: Timer, label: 'In Progress', bgColor: 'bg-orange-50', borderColor: 'border-orange-200', textColor: 'text-orange-700'};
     }
     if (sim.status === 'expired') {
-      return { color: 'red', icon: AlertCircle, label: 'Expired', bgColor: 'bg-red-50', borderColor: 'border-red-200', textColor: 'text-red-700' };
+      return { color: 'red', icon: AlertCircle, label: 'Expired', bgColor: 'bg-red-50', borderColor: 'border-red-200', textColor: 'text-red-700'};
     }
-    return { color: 'blue', icon: Play, label: 'Available', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', textColor: 'text-blue-700' };
+    return { color: 'blue', icon: Play, label: 'Available', bgColor: 'bg-blue-50', borderColor: 'border-blue-200', textColor: 'text-blue-700'};
   };
 
   // Refresh simulations
@@ -183,7 +183,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
             className="p-1 hover:bg-gray-100 rounded-full transition-colors"
             disabled={loading}
           >
-            <RefreshCw size={16} className={`text-gray-500 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw size={16} className={`text-gray-500 ${loading ? 'animate-spin': ''}`} />
           </button>
         </div>
         <div className="flex items-center justify-center py-8">
@@ -314,7 +314,7 @@ const SimulationScheduler: React.FC<SimulationSchedulerProps> = ({
                 <div className="mb-3">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-medium text-gray-600">
-                      {isCompleted ? 'Completed' : isInProgress ? 'In Progress' : 'Progress'}
+                      {isCompleted ? 'Completed': isInProgress ? 'In Progress': 'Progress'}
                     </span>
                     <span className="text-xs font-bold text-gray-800">
                       {progress}%

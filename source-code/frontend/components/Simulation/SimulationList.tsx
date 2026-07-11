@@ -16,12 +16,12 @@ interface Simulation {
   jobId?: string;
   description: string;
   duration: number;
-  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  difficulty: 'beginner'| 'intermediate'| 'advanced'| 'expert';
   objectives: string[];
   tasks: any[];
   scoring: any;
   settings: any;
-  status: 'scheduled' | 'in_progress' | 'paused' | 'completed' | 'expired' | 'cancelled' | 'failed' | 'not_started' | null;
+  status: 'scheduled'| 'in_progress'| 'paused'| 'completed'| 'expired'| 'cancelled'| 'failed'| 'not_started'| null;
   latest_simulation_status: string | null;
   createdAt: string;
   updatedAt: string;
@@ -49,12 +49,12 @@ interface SimulationListProps {
 const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulation, onCreateNew, onOpenChat }) => {
   const [simulations, setSimulations] = useState<Simulation[]>([]);
   const [loading, setLoading] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'scheduled' | 'in_progress' | 'paused' | 'completed' | 'expired' | 'cancelled' | 'failed' | 'not_started'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all'| 'scheduled'| 'in_progress'| 'paused'| 'completed'| 'expired'| 'cancelled'| 'failed'| 'not_started'>('all');
   const [showAllSimulations, setShowAllSimulations] = useState(false);
   const [selectedSimulation, setSelectedSimulation] = useState<Simulation | null>(null);
   const [showCandidatePerformance, setShowCandidatePerformance] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'date' | 'name' | 'score'>('date');
+  const [sortBy, setSortBy] = useState<'date'| 'name'| 'score'>('date');
 
   useEffect(() => {
     fetchSimulations();
@@ -63,7 +63,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
   const fetchSimulations = async () => {
     try {
       setLoading(true);
-      const response = await simulationAPI.getAllSimulations({ limit: 100, sort: '-updated_at' });
+      const response = await simulationAPI.getAllSimulations({ limit: 100, sort: '-updated_at'});
       let simulationsArray = [];
       if (response?.data?.data && Array.isArray(response.data.data)) simulationsArray = response.data.data;
       else if (response?.data && Array.isArray(response.data)) simulationsArray = response.data;
@@ -79,15 +79,15 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
         duration: data.duration || data.duration_minutes || 60,
         difficulty: data.difficulty || 'intermediate',
         objectives: data.objectives || data.tasks_structure?.objectives || [],
-        tasks: typeof data.tasks === 'string' ? JSON.parse(data.tasks) : (data.tasks || []),
-        scoring: typeof data.scoring === 'string' ? JSON.parse(data.scoring) : (data.scoring || data.scoring_rubric || {}),
+        tasks: typeof data.tasks === 'string'? JSON.parse(data.tasks) : (data.tasks || []),
+        scoring: typeof data.scoring === 'string'? JSON.parse(data.scoring) : (data.scoring || data.scoring_rubric || {}),
         settings: data.settings || data.tasks_structure?.settings || {
           allowPause: true, showTimer: true, randomizeTasks: false, allowHints: true,
           recordScreen: false, recordAudio: false, maxAttempts: 1, timeLimit: 60,
           environment: 'office', tools: [], constraints: [],
         },
         latest_simulation_status: data.latest_simulation_status || null,
-        status: data.latest_simulation_status === null ? 'not_started' : (data.latest_simulation_status || 'not_started'),
+        status: data.latest_simulation_status === null ? 'not_started': (data.latest_simulation_status || 'not_started'),
         createdAt: data.createdAt || data.created_at || new Date().toISOString(),
         updatedAt: data.updatedAt || data.updated_at || new Date().toISOString(),
         compliance: data.compliance || data.tasks_structure?.compliance || [],
@@ -117,9 +117,9 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
       setLoading(true);
       await simulationAPI.duplicateSimulation(simId);
       await fetchSimulations();
-      alert('✅ Practical Assessment duplicated successfully!');
+      alert('Practical Assessment duplicated successfully!');
     } catch (error: any) {
-      alert(`❌ Error duplicating practical assessment: ${error?.message || 'Failed.'}`);
+      alert(` Error duplicating practical assessment: ${error?.message || 'Failed.'}`);
     } finally {
       setLoading(false);
     }
@@ -131,23 +131,23 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
       setLoading(true);
       await simulationAPI.archiveSimulation(simId);
       await fetchSimulations();
-      alert('✅ Practical Assessment archived!');
+      alert('Practical Assessment archived!');
     } catch (error: any) {
-      alert(`❌ Error: ${error?.message}`);
+      alert(` Error: ${error?.message}`);
     } finally {
       setLoading(false);
     }
   };
 
   const deleteSimulation = async (simId: string) => {
-    if (!confirm('⚠️ Permanently delete? This cannot be undone.')) return;
+    if (!confirm(' Permanently delete? This cannot be undone.')) return;
     try {
       setLoading(true);
       await simulationAPI.deleteSimulation(simId);
       await fetchSimulations();
-      alert('✅ Practical Assessment deleted!');
+      alert('Practical Assessment deleted!');
     } catch (error: any) {
-      alert(`❌ Error: ${error?.message}`);
+      alert(` Error: ${error?.message}`);
     } finally {
       setLoading(false);
     }
@@ -160,9 +160,9 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
 
   const getFilteredSimulations = () => {
     let filtered = simulations.filter(s => {
-      // ✅ FIX: Handle null status by converting to string for comparison
+      // ''FIX: Handle null status by converting to string for comparison
       const simStatus = s.status || 'not_started';
-      if (statusFilter !== 'all' && simStatus !== statusFilter) return false;
+      if (statusFilter !== 'all'&& simStatus !== statusFilter) return false;
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
         return s.title.toLowerCase().includes(term) || 
@@ -182,7 +182,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
     return filtered;
   };
 
-  // ✅ FIX: Add type safety for status parameter
+  // ''FIX: Add type safety for status parameter
   const getStatusColor = (status: string | null) => {
     const safeStatus = status || 'not_started';
     switch (safeStatus) {
@@ -206,7 +206,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
     }
   };
 
-  // ✅ FIX: Add type safety for status parameter
+  // ''FIX: Add type safety for status parameter
   const getStatusIcon = (status: string | null) => {
     const safeStatus = status || 'not_started';
     switch (safeStatus) {
@@ -258,10 +258,10 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
   const filteredSims = getFilteredSimulations();
   const displaySims = showAllSimulations ? filteredSims : filteredSims.slice(0, 10);
   
-  // ✅ FIX: Handle null status in counts
+  // ''FIX: Handle null status in counts
   const counts = {
     all: simulations.length,
-    scheduled: simulations.filter(s => s.status === 'scheduled' || s.status === 'not_started' || s.status === null).length,
+    scheduled: simulations.filter(s => s.status === 'scheduled'|| s.status === 'not_started'|| s.status === null).length,
     in_progress: simulations.filter(s => s.status === 'in_progress').length,
     paused: simulations.filter(s => s.status === 'paused').length,
     completed: simulations.filter(s => s.status === 'completed').length,
@@ -273,7 +273,7 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
   // Helper function to get display status text
   const getDisplayStatus = (status: string | null) => {
     const safeStatus = status || 'not_started';
-    return safeStatus === 'not_started' ? 'scheduled' : safeStatus.replace('_', ' ');
+    return safeStatus === 'not_started'? 'scheduled': safeStatus.replace('_', '');
   };
 
   if (showCandidatePerformance && selectedSimulation) {
@@ -337,25 +337,25 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
                   onClick={() => { setStatusFilter(filter); setShowAllSimulations(false); }}
                   className={`px-2 py-1 rounded-lg text-xs font-medium transition-all capitalize flex items-center gap-1 ${
                     statusFilter === filter
-                      ? filter === 'completed' ? 'bg-green-600 text-white shadow-sm'
-                        : filter === 'in_progress' ? 'bg-purple-600 text-white shadow-sm'
-                        : filter === 'paused' ? 'bg-yellow-600 text-white shadow-sm'
-                        : filter === 'scheduled' ? 'bg-blue-600 text-white shadow-sm'
-                        : filter === 'expired' ? 'bg-gray-600 text-white shadow-sm'
-                        : filter === 'cancelled' || filter === 'failed' ? 'bg-red-600 text-white shadow-sm'
+                      ? filter === 'completed'? 'bg-green-600 text-white shadow-sm'
+                        : filter === 'in_progress'? 'bg-purple-600 text-white shadow-sm'
+                        : filter === 'paused'? 'bg-yellow-600 text-white shadow-sm'
+                        : filter === 'scheduled'? 'bg-blue-600 text-white shadow-sm'
+                        : filter === 'expired'? 'bg-gray-600 text-white shadow-sm'
+                        : filter === 'cancelled'|| filter === 'failed'? 'bg-red-600 text-white shadow-sm'
                         : 'bg-purple-600 text-white shadow-sm'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  {filter === 'scheduled' && <Calendar size={10} />}
-                  {filter === 'in_progress' && <Play size={10} />}
-                  {filter === 'paused' && <PauseCircle size={10} />}
-                  {filter === 'completed' && <CheckCircle size={10} />}
-                  {filter === 'expired' && <ClockIcon size={10} />}
-                  {filter === 'cancelled' && <XCircle size={10} />}
-                  {filter === 'failed' && <AlertCircle size={10} />}
-                  {filter === 'all' && <Puzzle size={10} />}
-                  {filter === 'all' ? 'All' : filter.replace('_', ' ')} 
+                  {filter === 'scheduled'&& <Calendar size={10} />}
+                  {filter === 'in_progress'&& <Play size={10} />}
+                  {filter === 'paused'&& <PauseCircle size={10} />}
+                  {filter === 'completed'&& <CheckCircle size={10} />}
+                  {filter === 'expired'&& <ClockIcon size={10} />}
+                  {filter === 'cancelled'&& <XCircle size={10} />}
+                  {filter === 'failed'&& <AlertCircle size={10} />}
+                  {filter === 'all'&& <Puzzle size={10} />}
+                  {filter === 'all'? 'All': filter.replace('_', '')} 
                   <span className="opacity-80 text-[10px]">({counts[filter]})</span>
                 </button>
               ))}
@@ -402,15 +402,15 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
             <Puzzle className="mx-auto h-16 w-16 text-gray-300" />
             <h3 className="mt-4 text-lg font-medium text-gray-900">No practical assessments found</h3>
             <p className="mt-1 text-sm text-gray-500">
-              {searchTerm ? 'No practical assessments match your search.' :
-               statusFilter !== 'all' ? `No ${statusFilter} practical assessments.` : 'Get started by creating your first practical assessment.'}
+              {searchTerm ? 'No practical assessments match your search.':
+               statusFilter !== 'all'? `No ${statusFilter} practical assessments.` : 'Get started by creating your first practical assessment.'}
             </p>
-            {statusFilter !== 'all' && (
+            {statusFilter !== 'all'&& (
               <button onClick={() => setStatusFilter('all')} className="mt-4 text-purple-600 hover:text-purple-700 text-sm">
                 View all practical assessments
               </button>
             )}
-            {statusFilter === 'all' && !searchTerm && (
+            {statusFilter === 'all'&& !searchTerm && (
               <button onClick={onCreateNew} className="mt-6 inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
                 <Plus size={16} className="mr-2" />
                 Create New Practical Assessment
@@ -425,14 +425,14 @@ const SimulationList: React.FC<SimulationListProps> = ({ onBack, onEditSimulatio
                   key={sim.id}
                   className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-xl hover:border-purple-200 transition-all duration-300"
                 >
-                  {/* ✅ FIX: Handle null status in status bar */}
+                  {/* ''FIX: Handle null status in status bar */}
                   <div className={`h-1 w-full ${
-                    (sim.status === 'completed') ? 'bg-gradient-to-r from-green-400 to-emerald-500' :
-                    (sim.status === 'in_progress') ? 'bg-gradient-to-r from-purple-400 to-indigo-500' :
-                    (sim.status === 'scheduled' || sim.status === 'not_started' || sim.status === null) ? 'bg-gradient-to-r from-blue-400 to-cyan-500' :
-                    (sim.status === 'paused') ? 'bg-gradient-to-r from-yellow-400 to-amber-500' :
-                    (sim.status === 'expired') ? 'bg-gradient-to-r from-gray-400 to-gray-500' :
-                    (sim.status === 'cancelled' || sim.status === 'failed') ? 'bg-gradient-to-r from-red-400 to-rose-500' :
+                    (sim.status === 'completed') ? 'bg-gradient-to-r from-green-400 to-emerald-500':
+                    (sim.status === 'in_progress') ? 'bg-gradient-to-r from-purple-400 to-indigo-500':
+                    (sim.status === 'scheduled'|| sim.status === 'not_started'|| sim.status === null) ? 'bg-gradient-to-r from-blue-400 to-cyan-500':
+                    (sim.status === 'paused') ? 'bg-gradient-to-r from-yellow-400 to-amber-500':
+                    (sim.status === 'expired') ? 'bg-gradient-to-r from-gray-400 to-gray-500':
+                    (sim.status === 'cancelled'|| sim.status === 'failed') ? 'bg-gradient-to-r from-red-400 to-rose-500':
                     'bg-gradient-to-r from-gray-400 to-gray-500'
                   }`} />
 

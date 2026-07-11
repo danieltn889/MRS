@@ -10,7 +10,7 @@ const ML_GATEWAY = process.env.ML_GATEWAY_URL || 'http://localhost:8080';
 
 class FeedController extends BaseController {
 
-  // GET /api/v1/feed  — returns personalized ranked jobs for the logged-in candidate
+  // GET /api/v1/feed    returns personalized ranked jobs for the logged-in candidate
   async getPersonalizedFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user.id;
@@ -19,7 +19,7 @@ class FeedController extends BaseController {
 
       // ── 1. Candidate profile ──────────────────────────────
       // candidate_profiles has no skills/years_of_experience/education_level/
-      // preferred_job_titles/preferred_locations columns — skills live in the
+      // preferred_job_titles/preferred_locations columns   skills live in the
       // user_skills/skills join table, experience is derived from
       // work_experience date ranges, education level from the education
       // table, and job-title/location preferences inside job_preferences
@@ -27,6 +27,8 @@ class FeedController extends BaseController {
       const profileResult = await DatabaseService.query(`
         SELECT
           cp.job_preferences,
+          cp.is_rwandan, cp.province, cp.district, cp.sector, cp.cell, cp.village,
+          cp.country, cp.city,
           COALESCE(
             (SELECT array_agg(s.name) FROM user_skills us JOIN skills s ON s.id = us.skill_id WHERE us.user_id = cp.user_id),
             ARRAY[]::text[]
@@ -44,6 +46,13 @@ class FeedController extends BaseController {
 
       const profile = profileResult.rows[0] || {};
       const jobPrefs = profile.job_preferences || {};
+
+      // Actual residence   distinct from jobPrefs.locations (where the
+      // candidate said they'd LIKE to work). Rwandans store province/
+      // district/sector/cell/village instead of country/city.
+      const homeLocation = profile.is_rwandan
+        ? [profile.sector, profile.district, profile.province, 'Rwanda'].filter(Boolean).join(' ')
+        : [profile.city, profile.country].filter(Boolean).join(' ');
 
       // ── 2. Activity history ───────────────────────────────
       const [viewsRes, appliedRes, savedRes, ignoredRes, searchRes] = await Promise.all([
@@ -112,7 +121,7 @@ class FeedController extends BaseController {
           j.education_required,
           COALESCE(
             (SELECT string_agg(elem->>'city', ', ')
-             FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
+             FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city'IS NOT NULL),
             'Remote'
           ) AS location,
           j.skills_required,
@@ -153,6 +162,7 @@ class FeedController extends BaseController {
           education_level:      profile.education_level || '',
           preferred_job_titles: jobPrefs.job_types || jobPrefs.preferred_job_types || [],
           preferred_locations:  jobPrefs.locations || jobPrefs.preferred_locations || [],
+          home_location:        homeLocation || '',
         },
         activity,
         jobs,
@@ -250,7 +260,7 @@ class FeedController extends BaseController {
     }
   }
 
-  // DELETE /api/v1/feed/ignore/:jobId  — undo ignore
+  // DELETE /api/v1/feed/ignore/:jobId    undo ignore
   async unignoreJob(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { jobId } = req.params;
@@ -341,7 +351,7 @@ class FeedController extends BaseController {
     }
   }
 
-  // GET /api/v1/feed/saved  — list saved jobs
+  // GET /api/v1/feed/saved    list saved jobs
   async getSavedJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const result = await DatabaseService.query(`
@@ -364,7 +374,7 @@ class FeedController extends BaseController {
   private _parseSkillArray(raw: any): string[] {
     if (!raw) return [];
     if (Array.isArray(raw)) {
-      return raw.map((s: any) => (typeof s === 'string' ? s : s?.name || s?.skill_name || '')).filter(Boolean);
+      return raw.map((s: any) => (typeof s === 'string'? s : s?.name || s?.skill_name || '')).filter(Boolean);
     }
     if (typeof raw === 'string') {
       try {

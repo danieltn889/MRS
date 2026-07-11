@@ -36,7 +36,7 @@ router.get('/', [
     res.json({ success: true, data: result });
   } catch (error) {
     logger.error('Error fetching notifications:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch notifications' });
+    res.status(500).json({ success: false, message: 'Failed to fetch notifications'});
   }
 });
 
@@ -50,7 +50,7 @@ router.get('/unread-count', async (req: Request, res: Response): Promise<void> =
     res.json({ success: true, data: { count } });
   } catch (error) {
     logger.error('Error fetching unread count:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch unread count' });
+    res.status(500).json({ success: false, message: 'Failed to fetch unread count'});
   }
 });
 
@@ -67,7 +67,7 @@ router.get('/preferences', async (req: Request, res: Response): Promise<void> =>
     res.json({ success: true, data: result.rows[0] || null });
   } catch (error) {
     logger.error('Error fetching notification preferences:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch preferences' });
+    res.status(500).json({ success: false, message: 'Failed to fetch preferences'});
   }
 });
 
@@ -102,10 +102,10 @@ router.put('/preferences', async (req: Request, res: Response): Promise<void> =>
       ]
     );
 
-    res.json({ success: true, data: result.rows[0], message: 'Preferences updated' });
+    res.json({ success: true, data: result.rows[0], message: 'Preferences updated'});
   } catch (error) {
     logger.error('Error updating notification preferences:', error);
-    res.status(500).json({ success: false, message: 'Failed to update preferences' });
+    res.status(500).json({ success: false, message: 'Failed to update preferences'});
   }
 });
 
@@ -124,7 +124,7 @@ router.get('/stats', [authorize('system_admin')], async (_req: Request, res: Res
     res.json({ success: true, data: result.rows[0] });
   } catch (error) {
     logger.error('Error fetching notification stats:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch stats' });
+    res.status(500).json({ success: false, message: 'Failed to fetch stats'});
   }
 });
 
@@ -138,7 +138,7 @@ router.put('/mark-all-read', async (req: Request, res: Response): Promise<void> 
     res.json({ success: true, data: { updated } });
   } catch (error) {
     logger.error('Error marking all notifications read:', error);
-    res.status(500).json({ success: false, message: 'Failed to mark all as read' });
+    res.status(500).json({ success: false, message: 'Failed to mark all as read'});
   }
 });
 
@@ -153,13 +153,13 @@ router.put('/:id/read', [
     const userId = (req as any).user.id;
     const notification = await NotificationService.markRead(userId, String(req.params.id));
     if (!notification) {
-      res.status(404).json({ success: false, message: 'Notification not found' });
+      res.status(404).json({ success: false, message: 'Notification not found'});
       return;
     }
     res.json({ success: true, data: notification });
   } catch (error) {
     logger.error('Error marking notification read:', error);
-    res.status(500).json({ success: false, message: 'Failed to mark as read' });
+    res.status(500).json({ success: false, message: 'Failed to mark as read'});
   }
 });
 
@@ -174,13 +174,13 @@ router.delete('/:id', [
     const userId = (req as any).user.id;
     const removed = await NotificationService.remove(userId, String(req.params.id));
     if (!removed) {
-      res.status(404).json({ success: false, message: 'Notification not found' });
+      res.status(404).json({ success: false, message: 'Notification not found'});
       return;
     }
-    res.json({ success: true, message: 'Notification deleted' });
+    res.json({ success: true, message: 'Notification deleted'});
   } catch (error) {
     logger.error('Error deleting notification:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete notification' });
+    res.status(500).json({ success: false, message: 'Failed to delete notification'});
   }
 });
 
@@ -209,7 +209,7 @@ router.post('/send', [
     res.json({ success: true, data: notification });
   } catch (error) {
     logger.error('Error sending notification:', error);
-    res.status(500).json({ success: false, message: 'Failed to send notification' });
+    res.status(500).json({ success: false, message: 'Failed to send notification'});
   }
 });
 

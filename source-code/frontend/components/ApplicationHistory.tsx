@@ -30,7 +30,7 @@ interface Application {
   company_name?: string;
   company_logo?: string;
   applied_at: string;
-  status: 'submitted' | 'under_review' | 'shortlisted' | 'interview' | 'assessment' | 'reference_check' | 'offer' | 'hired' | 'rejected' | 'withdrawn' | 'on_hold';
+  status: 'submitted'| 'under_review'| 'shortlisted'| 'interview'| 'assessment'| 'reference_check'| 'offer'| 'hired'| 'rejected'| 'withdrawn'| 'on_hold';
   cover_letter?: string;
   expected_salary?: number;
   match_score?: number;
@@ -192,7 +192,7 @@ const ApplicationHistory: React.FC<ApplicationHistoryProps> = ({ onBack }) => {
     const monthlyData: { [key: string]: { count: number; hired: number } } = {};
 
     filteredApps.forEach(app => {
-      const month = new Date(app.applied_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+      const month = new Date(app.applied_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short'});
       if (!monthlyData[month]) {
         monthlyData[month] = { count: 0, hired: 0 };
       }
@@ -281,7 +281,7 @@ const ApplicationHistory: React.FC<ApplicationHistoryProps> = ({ onBack }) => {
       case 'under_review': return 'Under Review';
       case 'reference_check': return 'Reference Check';
       case 'on_hold': return 'On Hold';
-      default: return status.replace('_', ' ');
+      default: return status.replace('_', '');
     }
   };
 
@@ -322,7 +322,7 @@ const ApplicationHistory: React.FC<ApplicationHistoryProps> = ({ onBack }) => {
                 disabled={refreshing}
                 className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
               >
-                <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
+                <RefreshCw size={18} className={refreshing ? 'animate-spin': ''} />
               </button>
               <div className="flex items-center space-x-2">
                 <Filter size={16} className="text-gray-500" />
@@ -577,9 +577,9 @@ const ApplicationHistory: React.FC<ApplicationHistoryProps> = ({ onBack }) => {
                   <h4 className="text-sm font-medium text-gray-900">Response Rate</h4>
                   <p className="text-sm text-gray-600">
                     Your {stats.responseRate.toFixed(1)}% response rate is
-                    {stats.responseRate > 30 ? ' excellent! Keep up the good work.' :
-                     stats.responseRate > 15 ? ' good. Consider tailoring your applications more.' :
-                     ' below average. Focus on customizing your applications to each role.'}
+                    {stats.responseRate > 30 ? 'excellent! Keep up the good work.':
+                     stats.responseRate > 15 ? 'good. Consider tailoring your applications more.':
+                     'below average. Focus on customizing your applications to each role.'}
                   </p>
                 </div>
               </div>
@@ -590,9 +590,9 @@ const ApplicationHistory: React.FC<ApplicationHistoryProps> = ({ onBack }) => {
                   <h4 className="text-sm font-medium text-gray-900">Response Time</h4>
                   <p className="text-sm text-gray-600">
                     Average response time is {stats.averageResponseTime.toFixed(0)} days.
-                    {stats.averageResponseTime > 21 ? ' This is quite long. Consider following up on applications.' :
-                     stats.averageResponseTime > 14 ? ' This is slightly above average.' :
-                     ' This is within normal range.'}
+                    {stats.averageResponseTime > 21 ? 'This is quite long. Consider following up on applications.':
+                     stats.averageResponseTime > 14 ? 'This is slightly above average.':
+                     'This is within normal range.'}
                   </p>
                 </div>
               </div>
@@ -606,7 +606,7 @@ const ApplicationHistory: React.FC<ApplicationHistoryProps> = ({ onBack }) => {
                   <p className="text-sm text-gray-600">
                     You've applied to {topCompanies.length} different companies.
                     {jobTypeSuccess.length > 0 && (
-                      <> Your best performing job type is{' '}
+                      <> Your best performing job type is{''}
                         <strong>
                           {jobTypeSuccess.reduce((best, current) => 
                             current.successRate > best.successRate ? current : best
@@ -624,9 +624,9 @@ const ApplicationHistory: React.FC<ApplicationHistoryProps> = ({ onBack }) => {
                   <h4 className="text-sm font-medium text-gray-900">Conversion Rate</h4>
                   <p className="text-sm text-gray-600">
                     Your application to hire conversion rate is {stats.conversionRate.toFixed(1)}%.
-                    {stats.conversionRate > 10 ? ' This is excellent!' :
-                     stats.conversionRate > 5 ? ' This is good.' :
-                     ' Focus on improving interview skills and application quality.'}
+                    {stats.conversionRate > 10 ? 'This is excellent!':
+                     stats.conversionRate > 5 ? 'This is good.':
+                     'Focus on improving interview skills and application quality.'}
                   </p>
                 </div>
               </div>

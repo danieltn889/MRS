@@ -56,7 +56,7 @@ export interface LoginHistory extends BaseEntity {
   os?: string;
   browser?: string;
   location?: JSONB;
-  status: 'success' | 'failed';
+  status: 'success'| 'failed';
   failure_reason?: string;
   session_id?: UUID;
 }
@@ -94,7 +94,7 @@ export interface RecoveryCode extends BaseEntity {
 export interface SecurityAlert extends BaseEntity {
   user_id: UUID;
   alert_type: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: 'low'| 'medium'| 'high'| 'critical';
   title: string;
   description?: string;
   metadata?: JSONB;

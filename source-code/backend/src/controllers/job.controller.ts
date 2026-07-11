@@ -66,7 +66,7 @@ class JobController extends BaseController {
       };
     }
 
-    if (typeof educationLevel === 'object' && !Array.isArray(educationLevel)) {
+    if (typeof educationLevel === 'object'&& !Array.isArray(educationLevel)) {
       return {
         minimum_degree: educationLevel.minimum_degree || null,
         qualification_entries: educationLevel.qualification_entries || [],  // ← ADD
@@ -84,7 +84,7 @@ class JobController extends BaseController {
       };
     }
 
-    // array / string cases — keep as-is, just add qualification_entries: []
+    // array / string cases   keep as-is, just add qualification_entries: []
     if (Array.isArray(educationLevel)) {
       return {
         minimum_degree: educationLevel[0] || null,
@@ -103,7 +103,7 @@ class JobController extends BaseController {
       };
     }
 
-    if (typeof educationLevel === 'string' && educationLevel.trim() !== '') {
+    if (typeof educationLevel === 'string'&& educationLevel.trim() !== '') {
       return {
         minimum_degree: educationLevel.trim(),
         qualification_entries: [],        // ← ADD
@@ -194,11 +194,11 @@ class JobController extends BaseController {
 
   private normalizeJobSkillEntries(requiredSkills: any[], preferredSkills: any[] = []): any[] {
     const toSkillObject = (skill: any, isRequired: boolean) => {
-      const skillData = typeof skill === 'string' ? { name: skill } : skill;
+      const skillData = typeof skill === 'string'? { name: skill } : skill;
       return {
         ...skillData,
         is_required: isRequired,
-        importance: skillData.importance || (isRequired ? 'required' : 'preferred')
+        importance: skillData.importance || (isRequired ? 'required': 'preferred')
       };
     };
 
@@ -457,10 +457,10 @@ class JobController extends BaseController {
         job.documents = JSON.parse(job.documents);
       }
 
-      // ✅ CRITICAL: Map education_required to educationLevel for frontend
+      // ''CRITICAL: Map education_required to educationLevel for frontend
       job.educationLevel = job.education_required;
 
-      // ✅ Ensure default structure if empty
+      // ''Ensure default structure if empty
       if (!job.education_required) {
         const defaultEducation = {
           minimum_degree: null,
@@ -542,7 +542,7 @@ class JobController extends BaseController {
       }
 
       // For company admins and recruiters, lookup company from company_team table first
-      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
         const teamResult = await DatabaseService.execute(
           'SELECT company_id FROM company_team WHERE user_id = $1',
           [userId]
@@ -697,7 +697,7 @@ class JobController extends BaseController {
     } catch (error) {
       logger.error('========== CREATE JOB ERROR ==========');
       logger.error('Error creating job:', error);
-      this.sendError(res, 'Failed to create job: ' + (error as Error).message, 500, error as Error);
+      this.sendError(res, 'Failed to create job: '+ (error as Error).message, 500, error as Error);
     }
   }
 
@@ -728,7 +728,7 @@ class JobController extends BaseController {
 
       const newStatus = jobData.status || existingJob.status;
 
-      if (newStatus === 'active' && existingJob.status !== 'active') {
+      if (newStatus === 'active'&& existingJob.status !== 'active') {
         publishedAt = jobData.publishedAt ? new Date(jobData.publishedAt) : new Date();
         expiresAt = jobData.expiresAt
           ? new Date(jobData.expiresAt)
@@ -884,7 +884,7 @@ class JobController extends BaseController {
       this.sendSuccess(res, updatedJob, 'Job updated successfully');
     } catch (error) {
       logger.error('Error updating job:', error);
-      this.sendError(res, 'Failed to update job: ' + (error as Error).message, 500, error as Error);
+      this.sendError(res, 'Failed to update job: '+ (error as Error).message, 500, error as Error);
     }
   }
 
@@ -907,7 +907,7 @@ class JobController extends BaseController {
         return;
       }
 
-      // ✅ FIX: Use 'archived' which is a valid status in CHECK constraint
+      // ''FIX: Use 'archived'which is a valid status in CHECK constraint
       await DatabaseService.execute(
         'UPDATE jobs SET status = $1, updated_at = NOW() WHERE id = $2',
         ['archived', id]
@@ -1020,13 +1020,13 @@ class JobController extends BaseController {
 
   async getMyJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const { page = '1', limit = '20' } = req.query as { page?: string; limit?: string };
+      const { page = '1', limit = '20'} = req.query as { page?: string; limit?: string };
       const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
 
       let companyId: string | null = null;
 
       // Use company from company_team table first, fallback to token
-      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
         // Always lookup from company_team table to ensure correct company
         const teamResult = await DatabaseService.execute(
           'SELECT company_id FROM company_team WHERE user_id = $1',
@@ -1050,12 +1050,12 @@ class JobController extends BaseController {
 
       const offset = (validPage - 1) * validLimit;
 
-      // ✅ FIX: Exclude archived jobs from the list
+      // ''FIX: Exclude archived jobs from the list
       const result = await DatabaseService.execute(`
       SELECT *,
         CASE
-          WHEN status = 'active' AND published_at IS NOT NULL AND published_at > NOW() THEN 'scheduled'
-          WHEN status = 'active' AND (expires_at IS NOT NULL AND expires_at <= NOW())  THEN 'expired'
+          WHEN status = 'active'AND published_at IS NOT NULL AND published_at > NOW() THEN 'scheduled'
+          WHEN status = 'active'AND (expires_at IS NOT NULL AND expires_at <= NOW())  THEN 'expired'
           ELSE status
         END AS effective_status
       FROM jobs
@@ -1064,23 +1064,23 @@ class JobController extends BaseController {
         AND status != 'deleted'
       ORDER BY
         CASE status
-          WHEN 'active' THEN 1
-          WHEN 'draft' THEN 2
-          WHEN 'paused' THEN 3
-          WHEN 'closed' THEN 4
-          WHEN 'expired' THEN 5
+          WHEN 'active'THEN 1
+          WHEN 'draft'THEN 2
+          WHEN 'paused'THEN 3
+          WHEN 'closed'THEN 4
+          WHEN 'expired'THEN 5
           ELSE 6
         END,
         created_at DESC
       LIMIT $2 OFFSET $3
     `, [companyId, validLimit, offset]);
 
-      // ✅ FIX: Count only non-archived jobs
+      // ''FIX: Count only non-archived jobs
       const countResult = await DatabaseService.execute(
         `SELECT COUNT(*) as total 
        FROM jobs 
        WHERE company_id = $1 
-         AND status != 'archived' 
+         AND status != 'archived'
          AND status != 'deleted'`,
         [companyId]
       );
@@ -1196,7 +1196,7 @@ class JobController extends BaseController {
       let companyId: string | null = null;
 
       // Use company from company_team table first, fallback to token
-      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
         // Always lookup from company_team table to ensure correct company
         const teamResult = await DatabaseService.execute(
           'SELECT company_id FROM company_team WHERE user_id = $1',
@@ -1499,7 +1499,7 @@ class JobController extends BaseController {
         return;
       }
 
-      const status = paused ? 'paused' : 'active';
+      const status = paused ? 'paused': 'active';
       const pausedAt = paused ? new Date() : null;
 
       await DatabaseService.execute(
@@ -1507,7 +1507,7 @@ class JobController extends BaseController {
         [status, pausedAt, id]
       );
 
-      this.sendSuccess(res, null, `Job ${paused ? 'paused' : 'resumed'} successfully`);
+      this.sendSuccess(res, null, `Job ${paused ? 'paused': 'resumed'} successfully`);
     } catch (error) {
       logger.error('Error pausing/resuming job:', error);
       this.sendError(res, 'Failed to pause/resume job', 500, error as Error);
@@ -1574,7 +1574,7 @@ class JobController extends BaseController {
         return;
       }
 
-      // ✅ FIX: Use 'status' column
+      // ''FIX: Use 'status'column
       await DatabaseService.execute(
         'UPDATE jobs SET status = $1, closed_at = NOW(), updated_at = NOW() WHERE id = $2',
         ['archived', id]
@@ -1590,7 +1590,7 @@ class JobController extends BaseController {
   /**
    * Change a job's status to any supported value and record the change in
    * job_status_history (previous status, new status, who, when, optional reason).
-   * Only Active/Open jobs are visible to candidates — the public listing already
+   * Only Active/Open jobs are visible to candidates   the public listing already
    * filters on status, so moving a job out of Active/Open hides it.
    */
   async updateJobStatus(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -1630,7 +1630,7 @@ class JobController extends BaseController {
 
       // Keep the relevant lifecycle timestamps in sync with the new status.
       let tsSet = '';
-      if (status === 'active' || status === 'open') {
+      if (status === 'active'|| status === 'open') {
         tsSet = ', published_at = COALESCE(published_at, NOW())';
       } else if (status === 'paused') {
         tsSet = ', paused_at = NOW()';
@@ -1762,7 +1762,7 @@ class JobController extends BaseController {
 
   async filterByLocation(req: Request, res: Response): Promise<void> {
     try {
-      const { location, radius = 50, page = '1', limit = '20' } = req.query as any;
+      const { location, radius = 50, page = '1', limit = '20'} = req.query as any;
       const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
 
       const offset = (validPage - 1) * validLimit;
@@ -1802,7 +1802,7 @@ class JobController extends BaseController {
 
   async filterBySalary(req: Request, res: Response): Promise<void> {
     try {
-      const { min, max, currency, page = '1', limit = '20' } = req.query as any;
+      const { min, max, currency, page = '1', limit = '20'} = req.query as any;
       const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
 
       let query = `
@@ -1846,7 +1846,7 @@ class JobController extends BaseController {
 
   async filterByExperience(req: Request, res: Response): Promise<void> {
     try {
-      const { level, page = '1', limit = '20' } = req.query as any;
+      const { level, page = '1', limit = '20'} = req.query as any;
       const { page: validPage, limit: validLimit } = PaginationService.validatePaginationParams(page, limit);
 
       const offset = (validPage - 1) * validLimit;
@@ -2318,15 +2318,15 @@ class JobController extends BaseController {
             'Professional Development Budget'
           ],
           skills_required: [
-            { name: 'JavaScript', proficiency_level: 4, is_required: true, importance: 'required' },
-            { name: 'React', proficiency_level: 4, is_required: true, importance: 'required' },
-            { name: 'Node.js', proficiency_level: 3, is_required: true, importance: 'required' },
-            { name: 'TypeScript', proficiency_level: 3, is_required: true, importance: 'required' }
+            { name: 'JavaScript', proficiency_level: 4, is_required: true, importance: 'required'},
+            { name: 'React', proficiency_level: 4, is_required: true, importance: 'required'},
+            { name: 'Node.js', proficiency_level: 3, is_required: true, importance: 'required'},
+            { name: 'TypeScript', proficiency_level: 3, is_required: true, importance: 'required'}
           ],
           skills_preferred: [
-            { name: 'Python', proficiency_level: 3, is_required: false, importance: 'preferred' },
-            { name: 'AWS', proficiency_level: 2, is_required: false, importance: 'preferred' },
-            { name: 'Docker', proficiency_level: 2, is_required: false, importance: 'preferred' }
+            { name: 'Python', proficiency_level: 3, is_required: false, importance: 'preferred'},
+            { name: 'AWS', proficiency_level: 2, is_required: false, importance: 'preferred'},
+            { name: 'Docker', proficiency_level: 2, is_required: false, importance: 'preferred'}
           ],
           experience_min: 3,
           experience_max: 7,
@@ -2404,14 +2404,14 @@ class JobController extends BaseController {
             'Learning & Development Allowance'
           ],
           skills_required: [
-            { name: 'Product Strategy', proficiency_level: 4, is_required: true, importance: 'required' },
-            { name: 'Agile Methodologies', proficiency_level: 4, is_required: true, importance: 'required' },
-            { name: 'Market Research', proficiency_level: 3, is_required: true, importance: 'required' }
+            { name: 'Product Strategy', proficiency_level: 4, is_required: true, importance: 'required'},
+            { name: 'Agile Methodologies', proficiency_level: 4, is_required: true, importance: 'required'},
+            { name: 'Market Research', proficiency_level: 3, is_required: true, importance: 'required'}
           ],
           skills_preferred: [
-            { name: 'Data Analysis', proficiency_level: 3, is_required: false, importance: 'preferred' },
-            { name: 'SQL', proficiency_level: 2, is_required: false, importance: 'preferred' },
-            { name: 'UI/UX Design', proficiency_level: 2, is_required: false, importance: 'preferred' }
+            { name: 'Data Analysis', proficiency_level: 3, is_required: false, importance: 'preferred'},
+            { name: 'SQL', proficiency_level: 2, is_required: false, importance: 'preferred'},
+            { name: 'UI/UX Design', proficiency_level: 2, is_required: false, importance: 'preferred'}
           ],
           experience_min: 5,
           experience_max: 10,
@@ -2488,15 +2488,15 @@ class JobController extends BaseController {
             'On-call Bonus'
           ],
           skills_required: [
-            { name: 'AWS', proficiency_level: 4, is_required: true, importance: 'required' },
-            { name: 'Docker', proficiency_level: 4, is_required: true, importance: 'required' },
-            { name: 'Kubernetes', proficiency_level: 3, is_required: true, importance: 'required' },
-            { name: 'Terraform', proficiency_level: 3, is_required: true, importance: 'required' }
+            { name: 'AWS', proficiency_level: 4, is_required: true, importance: 'required'},
+            { name: 'Docker', proficiency_level: 4, is_required: true, importance: 'required'},
+            { name: 'Kubernetes', proficiency_level: 3, is_required: true, importance: 'required'},
+            { name: 'Terraform', proficiency_level: 3, is_required: true, importance: 'required'}
           ],
           skills_preferred: [
-            { name: 'Python', proficiency_level: 3, is_required: false, importance: 'preferred' },
-            { name: 'GitHub Actions', proficiency_level: 3, is_required: false, importance: 'preferred' },
-            { name: 'Prometheus', proficiency_level: 2, is_required: false, importance: 'preferred' }
+            { name: 'Python', proficiency_level: 3, is_required: false, importance: 'preferred'},
+            { name: 'GitHub Actions', proficiency_level: 3, is_required: false, importance: 'preferred'},
+            { name: 'Prometheus', proficiency_level: 2, is_required: false, importance: 'preferred'}
           ],
           experience_min: 3,
           experience_max: 8,
@@ -2607,10 +2607,10 @@ class JobController extends BaseController {
 
   private validateJobData(data: JobData, isCreate: boolean = true): { isValid: boolean; error?: string } {
     if (isCreate && !data.title) {
-      return { isValid: false, error: 'Title is required' };
+      return { isValid: false, error: 'Title is required'};
     }
     if (isCreate && !data.description) {
-      return { isValid: false, error: 'Description is required' };
+      return { isValid: false, error: 'Description is required'};
     }
     return { isValid: true };
   }
@@ -2625,8 +2625,8 @@ class JobController extends BaseController {
     if (user.id === job.created_by) return true;
 
     // Company admin or recruiter can edit jobs for their company
-    if (user.user_type === 'company_admin' || user.user_type === 'recruiter') {
-      // ✅ FIX: Use 'company_id' instead of 'companyId'
+    if (user.user_type === 'company_admin'|| user.user_type === 'recruiter') {
+      // ''FIX: Use 'company_id'instead of 'companyId'
       if (job.company_id && user.company_id === job.company_id) {
         return true;
       }
@@ -2856,8 +2856,8 @@ class JobController extends BaseController {
       if (location) {
         sql += ` AND (j.locations::text ILIKE $${paramIndex} 
                  OR EXISTS (SELECT 1 FROM jsonb_array_elements(j.locations) AS loc 
-                           WHERE loc->>'city' ILIKE $${paramIndex}
-                           OR loc->>'country' ILIKE $${paramIndex}))`;
+                           WHERE loc->>'city'ILIKE $${paramIndex}
+                           OR loc->>'country'ILIKE $${paramIndex}))`;
         params.push(`%${location}%`);
         paramIndex++;
       }
@@ -3131,7 +3131,7 @@ class JobController extends BaseController {
         [id]
       );
 
-      // ✅ COMPLETE SELECT WITH ALL 70+ JOB FIELDS FROM YOUR SCHEMA
+      // ''COMPLETE SELECT WITH ALL 70+ JOB FIELDS FROM YOUR SCHEMA
       const jobResult = await DatabaseService.execute(`
       SELECT 
         -- Job basic info (13 fields)
@@ -3247,7 +3247,7 @@ class JobController extends BaseController {
       const job = jobResult.rows[0];
       const now = new Date();
 
-      // ✅ CHECK IF JOB IS AVAILABLE FOR APPLICATION
+      // ''CHECK IF JOB IS AVAILABLE FOR APPLICATION
       const publishedAt = job.published_at ? new Date(job.published_at) : null;
       const expiresAt = job.expires_at ? new Date(job.expires_at) : null;
 
@@ -3261,11 +3261,11 @@ class JobController extends BaseController {
       const isClosed = job.status === 'closed';
       const isArchived = job.status === 'archived';
 
-      // ✅ MAIN FLAG: Can user apply?
+      // ''MAIN FLAG: Can user apply?
       const canApply = isActive && isPublished && !isExpired && !isPaused && !isClosed && !isArchived;
 
-      // ✅ Detailed status messages
-      let applicationStatus: 'available' | 'not_published' | 'expired' | 'paused' | 'closed' | 'archived' | 'unavailable' = 'available';
+      // ''Detailed status messages
+      let applicationStatus: 'available'| 'not_published'| 'expired'| 'paused'| 'closed'| 'archived'| 'unavailable'= 'available';
       let applicationStatusMessage: string = 'You can apply for this position';
 
       if (!isActive) {
@@ -3289,19 +3289,19 @@ class JobController extends BaseController {
         applicationStatusMessage = 'This job has been archived';
       }
 
-      // ✅ Calculate days until publish (if not published yet)
+      // ''Calculate days until publish (if not published yet)
       let daysUntilPublish: number | null = null;
       if (isNotPublishedYet && publishedAt) {
         daysUntilPublish = Math.ceil((publishedAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       }
 
-      // ✅ Calculate days remaining (if not expired)
+      // ''Calculate days remaining (if not expired)
       let daysRemaining: number | null = null;
       if (!isExpired && expiresAt) {
         daysRemaining = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       }
 
-      // ✅ Check application limit
+      // ''Check application limit
       const applicationLimit = job.application_limit;
       let hasReachedApplicationLimit = false;
       if (applicationLimit && applicationLimit > 0) {
@@ -3309,7 +3309,7 @@ class JobController extends BaseController {
         hasReachedApplicationLimit = currentApplicationCount >= applicationLimit;
       }
 
-      // ✅ PARSE ALL JOB JSONB FIELDS
+      // ''PARSE ALL JOB JSONB FIELDS
       const jobJsonFields = [
         'locations', 'responsibilities', 'qualifications', 'preferred_qualifications',
         'requirements', 'benefits', 'skills_required', 'skills_preferred',
@@ -3324,14 +3324,14 @@ class JobController extends BaseController {
             try {
               job[field] = JSON.parse(job[field]);
             } catch {
-              job[field] = field === 'tags' || field === 'locations' ? [] : {};
+              job[field] = field === 'tags'|| field === 'locations'? [] : {};
             }
           }
         } else {
-          if (field === 'tags' || field === 'locations' || field === 'responsibilities' ||
-            field === 'requirements' || field === 'benefits' || field === 'screening_questions' ||
-            field === 'documents' || field === 'skills_required' || field === 'skills_preferred' ||
-            field === 'language_requirements' || field === 'experience_requirements') {
+          if (field === 'tags'|| field === 'locations'|| field === 'responsibilities'||
+            field === 'requirements'|| field === 'benefits'|| field === 'screening_questions'||
+            field === 'documents'|| field === 'skills_required'|| field === 'skills_preferred'||
+            field === 'language_requirements'|| field === 'experience_requirements') {
             job[field] = [];
           } else {
             job[field] = {};
@@ -3339,7 +3339,7 @@ class JobController extends BaseController {
         }
       }
 
-      // ✅ PARSE COMPANY JSON FIELDS
+      // ''PARSE COMPANY JSON FIELDS
       const companyJsonFields = [
         'company_headquarters_location', 'company_culture', 'company_values',
         'company_industries', 'company_social_links'
@@ -3357,7 +3357,7 @@ class JobController extends BaseController {
         }
       }
 
-      // ✅ MAP TO FRONTEND-FRIENDLY FIELD NAMES
+      // ''MAP TO FRONTEND-FRIENDLY FIELD NAMES
       job.jobType = job.job_type;
       job.workArrangement = job.work_arrangement;
       job.experienceLevel = job.experience_level;
@@ -3377,7 +3377,7 @@ class JobController extends BaseController {
       job.requiredDocuments = job.documents;
       job.aiMatchRequiredScore = job.ai_match_required_score;
 
-      // ✅ MAP EDUCATION REQUIREMENTS
+      // ''MAP EDUCATION REQUIREMENTS
       if (job.education_required && Object.keys(job.education_required).length > 0) {
         job.educationLevel = {
           minimum_degree: job.education_required.minimum_degree || null,
@@ -3408,11 +3408,11 @@ class JobController extends BaseController {
         };
       }
 
-      // ✅ MAP SKILLS FIELDS
+      // ''MAP SKILLS FIELDS
       job.requiredSkills = Array.isArray(job.skills_required) ? job.skills_required : [];
       job.preferredSkills = Array.isArray(job.skills_preferred) ? job.skills_preferred : [];
 
-      // ✅ GET SKILLS FROM JOB_SKILLS TABLE
+      // ''GET SKILLS FROM JOB_SKILLS TABLE
       const skills = await DatabaseService.execute(`
       SELECT 
         s.id as skill_id,
@@ -3440,7 +3440,7 @@ class JobController extends BaseController {
         job.skills = [...(job.requiredSkills || []), ...(job.preferredSkills || [])];
       }
 
-      // ✅ ENSURE ALL ARRAY FIELDS ARE PROPERLY INITIALIZED
+      // ''ENSURE ALL ARRAY FIELDS ARE PROPERLY INITIALIZED
       if (!job.locations) job.locations = [];
       if (!job.responsibilities) job.responsibilities = [];
       if (!job.requirements) job.requirements = [];
@@ -3451,17 +3451,17 @@ class JobController extends BaseController {
       if (!job.language_requirements) job.language_requirements = [];
       if (!job.experience_requirements) job.experience_requirements = [];
 
-      // ✅ ENSURE ALL OBJECT FIELDS ARE PROPERLY INITIALIZED
+      // ''ENSURE ALL OBJECT FIELDS ARE PROPERLY INITIALIZED
       if (!job.metadata) job.metadata = {};
       if (!job.education_required) job.education_required = {};
       if (!job.education_requirements) job.education_requirements = {};
       if (!job.skill_experience_requirements) job.skill_experience_requirements = {};
 
-      // ✅ ADD COMPANY VERIFICATION STATUS FLAGS
-      job.companyIsVerified = job.company_verification_status === 'verified' || job.company_verified === true;
+      // ''ADD COMPANY VERIFICATION STATUS FLAGS
+      job.companyIsVerified = job.company_verification_status === 'verified'|| job.company_verified === true;
       job.companyVerificationLevel = job.company_verification_level || 'basic';
 
-      // ✅ ADD JOB STATUS FLAGS FOR FRONTEND
+      // ''ADD JOB STATUS FLAGS FOR FRONTEND
       job.isActive = isActive;
       job.isPublished = isPublished;
       job.isNotPublishedYet = isNotPublishedYet;
@@ -3473,7 +3473,7 @@ class JobController extends BaseController {
       job.isHybrid = job.work_arrangement === 'hybrid';
       job.isOnsite = job.work_arrangement === 'onsite';
 
-      // ✅ ADD APPLICATION AVAILABILITY FLAGS
+      // ''ADD APPLICATION AVAILABILITY FLAGS
       job.canApply = canApply;
       job.applicationStatus = applicationStatus;
       job.applicationStatusMessage = applicationStatusMessage;
@@ -3482,7 +3482,7 @@ class JobController extends BaseController {
       job.hasReachedApplicationLimit = hasReachedApplicationLimit;
       job.currentApplicationCount = job.application_count || 0;
 
-      // ✅ ADD PUBLISH DATE DISPLAY
+      // ''ADD PUBLISH DATE DISPLAY
       if (isNotPublishedYet && publishedAt) {
         job.publishDateDisplay = `Opens on ${publishedAt.toLocaleDateString()}`;
       } else if (isPublished) {
@@ -3491,25 +3491,25 @@ class JobController extends BaseController {
         job.publishDateDisplay = 'Not yet published';
       }
 
-      // ✅ ADD EXPIRY DATE DISPLAY
+      // ''ADD EXPIRY DATE DISPLAY
       if (isExpired) {
         job.expiryDateDisplay = `Closed on ${expiresAt?.toLocaleDateString()}`;
       } else if (expiresAt) {
-        job.expiryDateDisplay = `Closes in ${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} (${expiresAt.toLocaleDateString()})`;
+        job.expiryDateDisplay = `Closes in ${daysRemaining} day${daysRemaining !== 1 ? 's': ''} (${expiresAt.toLocaleDateString()})`;
       } else {
         job.expiryDateDisplay = 'No deadline';
       }
 
-      // ✅ ADD SALARY DISPLAY FIELD
+      // ''ADD SALARY DISPLAY FIELD
       if (job.salary_min && job.salary_max) {
-        job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()} ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
+        job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()} ${job.salary_period === 'year'? '/year': job.salary_period === 'month'? '/month': ''}`;
       } else if (job.salary_min) {
-        job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()}+ ${job.salary_period === 'year' ? '/year' : job.salary_period === 'month' ? '/month' : ''}`;
+        job.salaryDisplay = `${job.salary_currency || 'Rwf'} ${job.salary_min.toLocaleString()}+ ${job.salary_period === 'year'? '/year': job.salary_period === 'month'? '/month': ''}`;
       } else {
         job.salaryDisplay = 'Salary not specified';
       }
 
-      // ✅ ADD EXPERIENCE DISPLAY FIELD
+      // ''ADD EXPERIENCE DISPLAY FIELD
       if (job.experience_min && job.experience_max) {
         job.experienceDisplay = `${job.experience_min}-${job.experience_max} years`;
       } else if (job.experience_min) {
@@ -3520,7 +3520,7 @@ class JobController extends BaseController {
         job.experienceDisplay = 'Experience not specified';
       }
 
-      // ✅ ADD LOCATION DISPLAY FIELD
+      // ''ADD LOCATION DISPLAY FIELD
       if (job.locations && job.locations.length > 0) {
         const locationNames = job.locations.map((loc: any) => {
           if (typeof loc === 'string') return loc;
@@ -3534,10 +3534,10 @@ class JobController extends BaseController {
         job.locationDisplay = 'Location not specified';
       }
 
-      // ✅ ADD APPLICATION BUTTON LABEL AND STYLES
+      // ''ADD APPLICATION BUTTON LABEL AND STYLES
       if (!canApply) {
         if (isNotPublishedYet) {
-          job.applyButtonLabel = `Opens in ${daysUntilPublish} day${daysUntilPublish !== 1 ? 's' : ''}`;
+          job.applyButtonLabel = `Opens in ${daysUntilPublish} day${daysUntilPublish !== 1 ? 's': ''}`;
           job.applyButtonDisabled = true;
           job.applyButtonVariant = 'gray';
         } else if (isExpired) {
@@ -3567,7 +3567,7 @@ class JobController extends BaseController {
         job.applyButtonVariant = 'green';
       }
 
-      // ✅ ADD COUNTS
+      // ''ADD COUNTS
       job.responsibilitiesCount = job.responsibilities?.length || 0;
       job.benefitsCount = job.benefits?.length || 0;
       job.screeningQuestionsCount = job.screening_questions?.length || 0;
@@ -3588,7 +3588,7 @@ class JobController extends BaseController {
   async getJobCandidatesWithMatches(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { jobId } = req.params;
-      const { page = '1', limit = '20', sortBy = 'match_score', sortOrder = 'DESC' } = req.query;
+      const { page = '1', limit = '20', sortBy = 'match_score', sortOrder = 'DESC'} = req.query;
 
       if (!jobId || !ValidationService.isValidUUID(jobId)) {
         this.sendError(res, 'Invalid job ID format', 400);
@@ -3646,7 +3646,7 @@ class JobController extends BaseController {
       const validPage = Math.max(1, parseInt(page as string));
       const validLimit = Math.min(100, parseInt(limit as string));
       const offset = (validPage - 1) * validLimit;
-      const order = (sortOrder as string).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+      const order = (sortOrder as string).toUpperCase() === 'ASC'? 'ASC': 'DESC';
 
       // Validate sort column
       let orderByClause = '';
@@ -3693,7 +3693,7 @@ class JobController extends BaseController {
         u.last_login_at,
         cp.first_name,
         cp.last_name,
-        CONCAT(cp.first_name, ' ', cp.last_name) as full_name,
+        CONCAT(cp.first_name, '', cp.last_name) as full_name,
         cp.phone,
         cp.country,
         cp.city,
@@ -3741,14 +3741,14 @@ class JobController extends BaseController {
         COUNT(CASE WHEN a.match_score >= 80 THEN 1 END) as high_match_count,
         COUNT(CASE WHEN a.match_score >= 60 AND a.match_score < 80 THEN 1 END) as medium_match_count,
         COUNT(CASE WHEN a.match_score < 60 THEN 1 END) as low_match_count,
-        COUNT(CASE WHEN a.status = 'submitted' THEN 1 END) as submitted_count,
-        COUNT(CASE WHEN a.status = 'under_review' THEN 1 END) as under_review_count,
-        COUNT(CASE WHEN a.status = 'shortlisted' THEN 1 END) as shortlisted_count,
-        COUNT(CASE WHEN a.status = 'interview' THEN 1 END) as interview_count,
-        COUNT(CASE WHEN a.status = 'assessment' THEN 1 END) as assessment_count,
-        COUNT(CASE WHEN a.status = 'offer' THEN 1 END) as offer_count,
-        COUNT(CASE WHEN a.status = 'hired' THEN 1 END) as hired_count,
-        COUNT(CASE WHEN a.status = 'rejected' THEN 1 END) as rejected_count
+        COUNT(CASE WHEN a.status = 'submitted'THEN 1 END) as submitted_count,
+        COUNT(CASE WHEN a.status = 'under_review'THEN 1 END) as under_review_count,
+        COUNT(CASE WHEN a.status = 'shortlisted'THEN 1 END) as shortlisted_count,
+        COUNT(CASE WHEN a.status = 'interview'THEN 1 END) as interview_count,
+        COUNT(CASE WHEN a.status = 'assessment'THEN 1 END) as assessment_count,
+        COUNT(CASE WHEN a.status = 'offer'THEN 1 END) as offer_count,
+        COUNT(CASE WHEN a.status = 'hired'THEN 1 END) as hired_count,
+        COUNT(CASE WHEN a.status = 'rejected'THEN 1 END) as rejected_count
       FROM applications a
       WHERE a.job_id = $1 AND a.deleted_at IS NULL
     `, [jobId]);
@@ -4125,7 +4125,7 @@ class JobController extends BaseController {
               }
             }
 
-            // ✅ Calculate average task score with 2 decimal places
+            // ''Calculate average task score with 2 decimal places
             const avgTaskScore = totalTemplateTasks > 0
               ? parseFloat((totalScoreSum / totalTemplateTasks).toFixed(2))
               : 0;
@@ -4180,7 +4180,7 @@ class JobController extends BaseController {
           const assignResult = await DatabaseService.execute(`
           SELECT asgn.assignee_id, asgn.assigned_by, asgn.assigned_at, asgn.role, asgn.notes,
             u2.email as assignee_email,
-            CONCAT(cp2.first_name, ' ', cp2.last_name) as assignee_name
+            CONCAT(cp2.first_name, '', cp2.last_name) as assignee_name
           FROM application_assignments asgn
           LEFT JOIN users u2 ON asgn.assignee_id = u2.id
           LEFT JOIN candidate_profiles cp2 ON u2.id = cp2.user_id
@@ -4264,7 +4264,7 @@ class JobController extends BaseController {
     }
   }
   private async getUserCompanyId(userId: string, userType: string): Promise<string | null> {
-    if (userType !== 'company_admin' && userType !== 'recruiter') {
+    if (userType !== 'company_admin'&& userType !== 'recruiter') {
       return null;
     }
 
@@ -4392,7 +4392,7 @@ class JobController extends BaseController {
   async getSavedJobs(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const userId = req.user.id;
-      const { page = '1', limit = '20' } = req.query;
+      const { page = '1', limit = '20'} = req.query;
 
       const validPage = Math.max(1, parseInt(page as string));
       const validLimit = Math.min(100, parseInt(limit as string));
@@ -4486,7 +4486,7 @@ class JobController extends BaseController {
   }
 
   // =====================================================
-  // SUGGESTIONS — unique values from DB for autocomplete
+  // SUGGESTIONS   unique values from DB for autocomplete
   // =====================================================
 
   async getSuggestions(req: Request, res: Response): Promise<void> {
@@ -4504,8 +4504,8 @@ class JobController extends BaseController {
       SELECT DISTINCT item FROM (
         SELECT jsonb_array_elements_text(
           CASE
-            WHEN jsonb_typeof(${col}) = 'array' THEN ${col}
-            WHEN jsonb_typeof(${col}) = 'object' AND ${col} ? 'required' THEN ${col}->'required'
+            WHEN jsonb_typeof(${col}) = 'array'THEN ${col}
+            WHEN jsonb_typeof(${col}) = 'object'AND ${col} ? 'required'THEN ${col}->'required'
             ELSE '[]'::jsonb
           END
         ) AS item
@@ -4529,7 +4529,7 @@ class JobController extends BaseController {
       // a combined display string in minimum_degree, so keep only clean degree names.
       const degreeTypesResult = await DatabaseService.execute(`
       SELECT DISTINCT item FROM (
-        SELECT entry->>'degree' AS item
+        SELECT entry->>'degree'AS item
         FROM jobs
         CROSS JOIN LATERAL jsonb_array_elements(
           CASE
@@ -4542,7 +4542,7 @@ class JobController extends BaseController {
           AND jsonb_typeof(education_required) = 'object'
           AND deleted_at IS NULL
         UNION
-        SELECT education_required->>'minimum_degree' AS item
+        SELECT education_required->>'minimum_degree'AS item
         FROM jobs
         WHERE education_required IS NOT NULL
           AND jsonb_typeof(education_required) = 'object'
@@ -4611,7 +4611,7 @@ class JobController extends BaseController {
       });
       console.log('Headers:', req.headers.authorization?.substring(0, 50) + '...');
 
-      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
         const teamResult = await DatabaseService.execute(
           'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
           [req.user.id]
@@ -4670,18 +4670,18 @@ class JobController extends BaseController {
       // Optional: Get additional stats for more insights
       const additionalStats = await DatabaseService.execute(`
       SELECT 
-        COUNT(CASE WHEN j.status = 'active' THEN 1 END) as active_jobs,
-        COUNT(CASE WHEN j.status = 'draft' THEN 1 END) as draft_jobs,
-        COUNT(CASE WHEN j.status = 'paused' THEN 1 END) as paused_jobs,
-        COUNT(CASE WHEN j.status = 'closed' THEN 1 END) as closed_jobs,
-        COUNT(CASE WHEN j.status = 'expired' THEN 1 END) as expired_jobs,
-        COUNT(CASE WHEN a.status = 'submitted' THEN 1 END) as pending_applications,
-        COUNT(CASE WHEN a.status = 'under_review' THEN 1 END) as under_review,
-        COUNT(CASE WHEN a.status = 'shortlisted' THEN 1 END) as shortlisted,
-        COUNT(CASE WHEN a.status = 'interview' THEN 1 END) as interviews,
-        COUNT(CASE WHEN a.status = 'offer' THEN 1 END) as offers,
-        COUNT(CASE WHEN a.status = 'hired' THEN 1 END) as hired,
-        COUNT(CASE WHEN a.status = 'rejected' THEN 1 END) as rejected
+        COUNT(CASE WHEN j.status = 'active'THEN 1 END) as active_jobs,
+        COUNT(CASE WHEN j.status = 'draft'THEN 1 END) as draft_jobs,
+        COUNT(CASE WHEN j.status = 'paused'THEN 1 END) as paused_jobs,
+        COUNT(CASE WHEN j.status = 'closed'THEN 1 END) as closed_jobs,
+        COUNT(CASE WHEN j.status = 'expired'THEN 1 END) as expired_jobs,
+        COUNT(CASE WHEN a.status = 'submitted'THEN 1 END) as pending_applications,
+        COUNT(CASE WHEN a.status = 'under_review'THEN 1 END) as under_review,
+        COUNT(CASE WHEN a.status = 'shortlisted'THEN 1 END) as shortlisted,
+        COUNT(CASE WHEN a.status = 'interview'THEN 1 END) as interviews,
+        COUNT(CASE WHEN a.status = 'offer'THEN 1 END) as offers,
+        COUNT(CASE WHEN a.status = 'hired'THEN 1 END) as hired,
+        COUNT(CASE WHEN a.status = 'rejected'THEN 1 END) as rejected
       FROM jobs j
       LEFT JOIN applications a ON j.id = a.job_id AND a.deleted_at IS NULL
       WHERE j.company_id = $1 AND j.deleted_at IS NULL
@@ -4782,7 +4782,7 @@ class JobController extends BaseController {
         whereConditions.push(`s.id IS NULL`);
       }
 
-      const whereClause = whereConditions.join(' AND ');
+      const whereClause = whereConditions.join('AND ');
 
       // Determine sort column
       let orderByColumn = '';
@@ -4802,7 +4802,7 @@ class JobController extends BaseController {
         default:
           orderByColumn = 'candidate_overall_score';
       }
-      const orderDirection = sortOrder === 'ASC' ? 'ASC' : 'DESC';
+      const orderDirection = sortOrder === 'ASC'? 'ASC': 'DESC';
 
       // ============================================
       // MAIN QUERY - Get ALL candidates with complete data
@@ -4843,7 +4843,7 @@ class JobController extends BaseController {
           u.last_login_at,
           cp.first_name,
           cp.last_name,
-          CONCAT(cp.first_name, ' ', cp.last_name) as candidate_name,
+          CONCAT(cp.first_name, '', cp.last_name) as candidate_name,
           cp.phone,
           cp.country,
           cp.city,
@@ -5066,7 +5066,7 @@ class JobController extends BaseController {
             SELECT jsonb_agg(
               jsonb_build_object(
                 'task_index', stp.task_index,
-                'task_name', COALESCE(st.tasks->stp.task_index->>'title', 'Task ' || (stp.task_index + 1)),
+                'task_name', COALESCE(st.tasks->stp.task_index->>'title', 'Task '|| (stp.task_index + 1)),
                 'status', stp.status,
                 'score', stp.score,
                 'feedback', stp.feedback,
@@ -5075,8 +5075,8 @@ class JobController extends BaseController {
                 'started_at', stp.started_at,
                 'completed_at', stp.completed_at,
                 'github_commit_url', stp.github_commit_url,
-                'has_code', CASE WHEN stp.answer->>'code' IS NOT NULL THEN true ELSE false END,
-                'has_essay', CASE WHEN stp.answer->>'essay' IS NOT NULL THEN true ELSE false END,
+                'has_code', CASE WHEN stp.answer->>'code'IS NOT NULL THEN true ELSE false END,
+                'has_essay', CASE WHEN stp.answer->>'essay'IS NOT NULL THEN true ELSE false END,
                 'proficiency_level', 
                   CASE 
                     WHEN stp.score >= 90 THEN 'Master'
@@ -5201,7 +5201,7 @@ class JobController extends BaseController {
       FROM applications a
       LEFT JOIN simulations s ON s.application_id = a.id AND s.job_id = a.job_id
       LEFT JOIN evaluations e ON e.simulation_id = s.id
-      WHERE ${countWhereConditions.join(' AND ')}
+      WHERE ${countWhereConditions.join('AND ')}
     `, countParams);
 
       const total = parseInt(countResult.rows[0]?.total || '0');
@@ -5212,13 +5212,13 @@ class JobController extends BaseController {
       const statsResult = await DatabaseService.execute(`
       SELECT 
         COUNT(DISTINCT a.user_id) as total_applicants,
-        COUNT(DISTINCT CASE WHEN a.status = 'submitted' THEN a.user_id END) as submitted,
-        COUNT(DISTINCT CASE WHEN a.status = 'under_review' THEN a.user_id END) as under_review,
-        COUNT(DISTINCT CASE WHEN a.status = 'shortlisted' THEN a.user_id END) as shortlisted,
-        COUNT(DISTINCT CASE WHEN a.status = 'interview' THEN a.user_id END) as interviewing,
-        COUNT(DISTINCT CASE WHEN a.status = 'offer' THEN a.user_id END) as offers,
-        COUNT(DISTINCT CASE WHEN a.status = 'hired' THEN a.user_id END) as hired,
-        COUNT(DISTINCT CASE WHEN a.status = 'rejected' THEN a.user_id END) as rejected,
+        COUNT(DISTINCT CASE WHEN a.status = 'submitted'THEN a.user_id END) as submitted,
+        COUNT(DISTINCT CASE WHEN a.status = 'under_review'THEN a.user_id END) as under_review,
+        COUNT(DISTINCT CASE WHEN a.status = 'shortlisted'THEN a.user_id END) as shortlisted,
+        COUNT(DISTINCT CASE WHEN a.status = 'interview'THEN a.user_id END) as interviewing,
+        COUNT(DISTINCT CASE WHEN a.status = 'offer'THEN a.user_id END) as offers,
+        COUNT(DISTINCT CASE WHEN a.status = 'hired'THEN a.user_id END) as hired,
+        COUNT(DISTINCT CASE WHEN a.status = 'rejected'THEN a.user_id END) as rejected,
         ROUND(AVG(COALESCE(s.overall_score, e.overall_score, a.match_score, 0))) as avg_score,
         MAX(COALESCE(s.overall_score, e.overall_score, a.match_score, 0)) as max_score,
         MIN(COALESCE(s.overall_score, e.overall_score, a.match_score, 0)) as min_score,
@@ -5235,29 +5235,29 @@ class JobController extends BaseController {
       // Parse JSON fields for each candidate
       const parsedCandidates = result.rows.map((row: any) => ({
         ...row,
-        match_details: row.match_details ? (typeof row.match_details === 'string' ? JSON.parse(row.match_details) : row.match_details) : null,
-        ai_score: row.ai_score ? (typeof row.ai_score === 'string' ? JSON.parse(row.ai_score) : row.ai_score) : null,
-        screening_answers: row.screening_answers ? (typeof row.screening_answers === 'string' ? JSON.parse(row.screening_answers) : row.screening_answers) : [],
-        notes: row.notes ? (typeof row.notes === 'string' ? JSON.parse(row.notes) : row.notes) : [],
-        internal_notes: row.internal_notes ? (typeof row.internal_notes === 'string' ? JSON.parse(row.internal_notes) : row.internal_notes) : [],
+        match_details: row.match_details ? (typeof row.match_details === 'string'? JSON.parse(row.match_details) : row.match_details) : null,
+        ai_score: row.ai_score ? (typeof row.ai_score === 'string'? JSON.parse(row.ai_score) : row.ai_score) : null,
+        screening_answers: row.screening_answers ? (typeof row.screening_answers === 'string'? JSON.parse(row.screening_answers) : row.screening_answers) : [],
+        notes: row.notes ? (typeof row.notes === 'string'? JSON.parse(row.notes) : row.notes) : [],
+        internal_notes: row.internal_notes ? (typeof row.internal_notes === 'string'? JSON.parse(row.internal_notes) : row.internal_notes) : [],
         application_tags: row.application_tags || [],
-        current_salary: row.current_salary ? (typeof row.current_salary === 'string' ? JSON.parse(row.current_salary) : row.current_salary) : null,
-        expected_salary: row.expected_salary ? (typeof row.expected_salary === 'string' ? JSON.parse(row.expected_salary) : row.expected_salary) : null,
+        current_salary: row.current_salary ? (typeof row.current_salary === 'string'? JSON.parse(row.current_salary) : row.current_salary) : null,
+        expected_salary: row.expected_salary ? (typeof row.expected_salary === 'string'? JSON.parse(row.expected_salary) : row.expected_salary) : null,
         languages: row.languages || [],
         availability: row.availability || {},
         job_preferences: row.job_preferences || {},
-        github_links: row.github_links ? (typeof row.github_links === 'string' ? JSON.parse(row.github_links) : row.github_links) : null,
-        submission_results: row.submission_results ? (typeof row.submission_results === 'string' ? JSON.parse(row.submission_results) : row.submission_results) : null,
+        github_links: row.github_links ? (typeof row.github_links === 'string'? JSON.parse(row.github_links) : row.github_links) : null,
+        submission_results: row.submission_results ? (typeof row.submission_results === 'string'? JSON.parse(row.submission_results) : row.submission_results) : null,
         strengths: row.strengths || [],
         improvements: row.improvements || [],
-        template_tasks: row.template_tasks ? (typeof row.template_tasks === 'string' ? JSON.parse(row.template_tasks) : row.template_tasks) : [],
-        scoring_rubric: row.scoring_rubric ? (typeof row.scoring_rubric === 'string' ? JSON.parse(row.scoring_rubric) : row.scoring_rubric) : {},
-        pass_fail_criteria: row.pass_fail_criteria ? (typeof row.pass_fail_criteria === 'string' ? JSON.parse(row.pass_fail_criteria) : row.pass_fail_criteria) : {},
+        template_tasks: row.template_tasks ? (typeof row.template_tasks === 'string'? JSON.parse(row.template_tasks) : row.template_tasks) : [],
+        scoring_rubric: row.scoring_rubric ? (typeof row.scoring_rubric === 'string'? JSON.parse(row.scoring_rubric) : row.scoring_rubric) : {},
+        pass_fail_criteria: row.pass_fail_criteria ? (typeof row.pass_fail_criteria === 'string'? JSON.parse(row.pass_fail_criteria) : row.pass_fail_criteria) : {},
       }));
 
       /// Calculate rank for each candidate
       let rankedCandidates = parsedCandidates;
-      if (sortBy === 'overall_score' && sortOrder === 'DESC') {
+      if (sortBy === 'overall_score'&& sortOrder === 'DESC') {
         type RankedCandidate = typeof parsedCandidates[0] & { rank: number | null };
 
         let currentRank = 1;

@@ -39,7 +39,7 @@ test('computeHash changes when any field changes (tamper-evident)', () => {
   };
   const original = AuditChainService.computeHash(block);
   assert.notEqual(original, AuditChainService.computeHash({ ...block, metadata: { score: 81 } }));
-  assert.notEqual(original, AuditChainService.computeHash({ ...block, event_type: 'other' }));
+  assert.notEqual(original, AuditChainService.computeHash({ ...block, event_type: 'other'}));
   assert.notEqual(original, AuditChainService.computeHash({ ...block, prev_hash: 'f'.repeat(64) }));
   assert.notEqual(original, AuditChainService.computeHash({ ...block, nonce: 1 }));
 });
@@ -105,7 +105,7 @@ test('an invalid genesis previous-hash fails verification', () => {
 
 test('a missing block (non-sequential numbers) fails verification', () => {
   const chain = buildChain(10);
-  // Remove block 4 — the chain is now broken at block 5.
+  // Remove block 4   the chain is now broken at block 5.
   const broken = chain.filter((b) => b.block_number !== 4);
   const report = AuditChainService.verifyBlocks(broken);
   assert.equal(report.valid, false);

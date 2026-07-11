@@ -1,9 +1,9 @@
-"""
+"
 date_shift.py
 =============
 Step 7 forces every job's posting date into Jun-Dec 2026, but the real
 application/engagement dates in the source CSVs are historical (2022-2026,
-whatever the job's real posting time was — which isn't in the CSV at all).
+whatever the job's real posting time was   which isn't in the CSV at all).
 
 Rather than discard that real chronology, each job gets a constant-offset
 shift: delta = (new_published_at + buffer) - (earliest real event date for
@@ -11,9 +11,9 @@ that job). Adding the same delta to every real event for that job preserves
 the *relative* order and spacing (view before apply before shortlist, N
 days apart) while landing the whole timeline inside the job's new active
 window. This is why applications.py/engagement.py take a shared shift map
-instead of each picking dates independently — a candidate's view-then-apply
+instead of each picking dates independently   a candidate's view-then-apply
 sequence for a given job must shift together or the order breaks.
-"""
+"
 
 from __future__ import annotations
 

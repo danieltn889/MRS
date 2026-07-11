@@ -60,12 +60,12 @@ const seedDatabase = async (): Promise<void> => {
     logger.info('Cleaning duplicate records...');
 
     const dedupeQueries: Array<{ table: string; partition: string }> = [
-      { table: 'candidate_profiles', partition: 'user_id' },
-      { table: 'company_team', partition: 'company_id, user_id' },
-      { table: 'user_skills', partition: 'user_id, skill_id' },
-      { table: 'education', partition: 'user_id, institution, degree, field_of_study, start_date, end_date' },
-      { table: 'work_experience', partition: 'user_id, company, title, start_date, end_date' },
-      { table: 'jobs', partition: 'company_id, title' },
+      { table: 'candidate_profiles', partition: 'user_id'},
+      { table: 'company_team', partition: 'company_id, user_id'},
+      { table: 'user_skills', partition: 'user_id, skill_id'},
+      { table: 'education', partition: 'user_id, institution, degree, field_of_study, start_date, end_date'},
+      { table: 'work_experience', partition: 'user_id, company, title, start_date, end_date'},
+      { table: 'jobs', partition: 'company_id, title'},
     ];
 
     for (const { table, partition } of dedupeQueries) {
@@ -276,7 +276,7 @@ const seedDatabase = async (): Promise<void> => {
             { title: "Product Management", years: "5", description: "in SaaS or technology products" },
             { title: "Team Leadership", years: "2", description: "leading cross-functional teams" }
           ],
-          age_requirement: "",
+          age_requirement: ,
           is_degree_required: true,
           no_experience_needed: false,
           no_languages_needed: false,
@@ -340,7 +340,7 @@ const seedDatabase = async (): Promise<void> => {
             { title: "DevOps / SRE", years: "3", description: "in cloud infrastructure" },
             { title: "Kubernetes", years: "2", description: "in production environments" }
           ],
-          age_requirement: "",
+          age_requirement: ,
           is_degree_required: true,
           no_experience_needed: false,
           no_languages_needed: true,
@@ -439,16 +439,16 @@ const seedDatabase = async (): Promise<void> => {
 
     type SeedUser = {
       email: string;
-      user_type: 'system_admin' | 'recruiter' | 'company_admin' | 'candidate';
+      user_type: 'system_admin'| 'recruiter'| 'company_admin'| 'candidate';
     };
 
     const seedUsers: SeedUser[] = [
-      { email: 'admin@recruitment.com',                    user_type: 'system_admin'   },
-      { email: 'danieltn889@gmail.com',                    user_type: 'recruiter'      },
-      { email: 'turikumwenimanadaniel0@gmail.com',         user_type: 'company_admin'  },
-      { email: 'turikumwenimanadaniel727@gmail.com',       user_type: 'candidate'      },
-      { email: 'candidate2@email.com',                     user_type: 'candidate'      },
-      { email: 'candidate3@email.com',                     user_type: 'candidate'      },
+      { email: 'admin@recruitment.com',                    user_type: 'system_admin'  },
+      { email: 'danieltn889@gmail.com',                    user_type: 'recruiter'     },
+      { email: 'turikumwenimanadaniel0@gmail.com',         user_type: 'company_admin' },
+      { email: 'turikumwenimanadaniel727@gmail.com',       user_type: 'candidate'     },
+      { email: 'candidate2@email.com',                     user_type: 'candidate'     },
+      { email: 'candidate3@email.com',                     user_type: 'candidate'     },
     ];
 
     for (const u of seedUsers) {
@@ -535,14 +535,14 @@ const seedDatabase = async (): Promise<void> => {
     if (techCorpId) {
       type TeamMemberSeed = {
         email: string;
-        role: 'admin' | 'recruiter' | 'reviewer' | 'viewer';
+        role: 'admin'| 'recruiter'| 'reviewer'| 'viewer';
         name: string;
         title: string;
       };
 
       const teamMembers: TeamMemberSeed[] = [
-        { email: 'danieltn889@gmail.com',            role: 'recruiter', name: 'Daniel TN',            title: 'Senior Recruiter'      },
-        { email: 'turikumwenimanadaniel0@gmail.com', role: 'admin',     name: 'Daniel Company Admin', title: 'Company Administrator' },
+        { email: 'danieltn889@gmail.com',            role: 'recruiter', name: 'Daniel TN',            title: 'Senior Recruiter'     },
+        { email: 'turikumwenimanadaniel0@gmail.com', role: 'admin',     name: 'Daniel Company Admin', title: 'Company Administrator'},
       ];
 
       for (const m of teamMembers) {
@@ -582,13 +582,13 @@ const seedDatabase = async (): Promise<void> => {
     logger.info('Seeding candidate profiles...');
 
     const candidateProfiles: SeedCandidateProfile[] = [
-      { firstName: 'John',  lastName: 'Doe',     country: 'USA',    city: 'New York', timezone: 'America/New_York', profileCompletion: 85, summary: 'Experienced software developer with 5+ years in full-stack development.' },
-      { firstName: 'Jane',  lastName: 'Smith',   country: 'Canada', city: 'Toronto',  timezone: 'America/Toronto',  profileCompletion: 90, summary: 'Passionate about creating innovative solutions and leading development teams.' },
-      { firstName: 'Mike',  lastName: 'Johnson', country: 'UK',     city: 'London',   timezone: 'Europe/London',    profileCompletion: 75, summary: 'Full-stack developer specializing in React and Node.js applications.' },
+      { firstName: 'John',  lastName: 'Doe',     country: 'USA',    city: 'New York', timezone: 'America/New_York', profileCompletion: 85, summary: 'Experienced software developer with 5+ years in full-stack development.'},
+      { firstName: 'Jane',  lastName: 'Smith',   country: 'Canada', city: 'Toronto',  timezone: 'America/Toronto',  profileCompletion: 90, summary: 'Passionate about creating innovative solutions and leading development teams.'},
+      { firstName: 'Mike',  lastName: 'Johnson', country: 'UK',     city: 'London',   timezone: 'Europe/London',    profileCompletion: 75, summary: 'Full-stack developer specializing in React and Node.js applications.'},
     ];
 
     const candidateUsersRes = await client.query<CompanyRow>(`
-      SELECT id FROM users WHERE user_type = 'candidate' ORDER BY created_at ASC
+      SELECT id FROM users WHERE user_type = 'candidate'ORDER BY created_at ASC
     `);
 
     for (let i = 0; i < candidateUsersRes.rows.length; i++) {
@@ -643,21 +643,21 @@ const seedDatabase = async (): Promise<void> => {
     type SeedSkill = { name: string; category: string; skill_type: string };
 
     const skills: SeedSkill[] = [
-      { name: 'JavaScript',        category: 'Programming Languages', skill_type: 'technical' },
-      { name: 'TypeScript',        category: 'Programming Languages', skill_type: 'technical' },
-      { name: 'React',             category: 'Frontend Frameworks',   skill_type: 'technical' },
-      { name: 'Node.js',           category: 'Backend Frameworks',    skill_type: 'technical' },
-      { name: 'Python',            category: 'Programming Languages', skill_type: 'technical' },
-      { name: 'AWS',               category: 'Cloud Platforms',       skill_type: 'tool'      },
-      { name: 'Docker',            category: 'DevOps Tools',          skill_type: 'tool'      },
-      { name: 'Kubernetes',        category: 'DevOps Tools',          skill_type: 'tool'      },
-      { name: 'Terraform',         category: 'DevOps Tools',          skill_type: 'tool'      },
-      { name: 'Product Strategy',  category: 'Product Management',    skill_type: 'soft'      },
-      { name: 'Agile Methodologies', category: 'Project Management',  skill_type: 'soft'      },
-      { name: 'Market Research',   category: 'Product Management',    skill_type: 'soft'      },
-      { name: 'SQL',               category: 'Databases',             skill_type: 'technical' },
-      { name: 'Git',               category: 'Version Control',       skill_type: 'tool'      },
-      { name: 'GitHub Actions',    category: 'CI/CD',                 skill_type: 'tool'      },
+      { name: 'JavaScript',        category: 'Programming Languages', skill_type: 'technical'},
+      { name: 'TypeScript',        category: 'Programming Languages', skill_type: 'technical'},
+      { name: 'React',             category: 'Frontend Frameworks',   skill_type: 'technical'},
+      { name: 'Node.js',           category: 'Backend Frameworks',    skill_type: 'technical'},
+      { name: 'Python',            category: 'Programming Languages', skill_type: 'technical'},
+      { name: 'AWS',               category: 'Cloud Platforms',       skill_type: 'tool'     },
+      { name: 'Docker',            category: 'DevOps Tools',          skill_type: 'tool'     },
+      { name: 'Kubernetes',        category: 'DevOps Tools',          skill_type: 'tool'     },
+      { name: 'Terraform',         category: 'DevOps Tools',          skill_type: 'tool'     },
+      { name: 'Product Strategy',  category: 'Product Management',    skill_type: 'soft'     },
+      { name: 'Agile Methodologies', category: 'Project Management',  skill_type: 'soft'     },
+      { name: 'Market Research',   category: 'Product Management',    skill_type: 'soft'     },
+      { name: 'SQL',               category: 'Databases',             skill_type: 'technical'},
+      { name: 'Git',               category: 'Version Control',       skill_type: 'tool'     },
+      { name: 'GitHub Actions',    category: 'CI/CD',                 skill_type: 'tool'     },
     ];
 
     for (const s of skills) {
@@ -673,10 +673,10 @@ const seedDatabase = async (): Promise<void> => {
     logger.info('Skills seeded');
 
     // =====================================================
-    // COMPLETE CANDIDATE PROFILE — turikumwenimanadaniel727@gmail.com
+    // COMPLETE CANDIDATE PROFILE   turikumwenimanadaniel727@gmail.com
     // Fully fills this candidate's profile (bio, links, education, experience,
     // skills, preferences) so they pass the 80% profile gate and receive job
-    // feeds / can apply. Idempotent — safe to re-run.
+    // feeds / can apply. Idempotent   safe to re-run.
     // =====================================================
     logger.info('Seeding complete profile for primary candidate...');
 
@@ -781,7 +781,7 @@ const seedDatabase = async (): Promise<void> => {
 
       logger.info('Complete candidate profile seeded for turikumwenimanadaniel727@gmail.com');
     } else {
-      logger.warn('Primary candidate not found — complete profile skipped');
+      logger.warn('Primary candidate not found   complete profile skipped');
     }
 
     // =====================================================
@@ -847,7 +847,7 @@ const seedDatabase = async (): Promise<void> => {
     // JOB-LINKED SIMULATION TEMPLATES
     // Attach an ACTIVE simulation template to each seeded job (via job_id) so that
     // applicants get a simulation instead of the "no simulation yet" notice.
-    // Idempotent — re-running re-links and keeps it active.
+    // Idempotent   re-running re-links and keeps it active.
     // =====================================================
     logger.info('Seeding job-linked simulation templates...');
 
@@ -864,7 +864,7 @@ const seedDatabase = async (): Promise<void> => {
     let simIdx = 0;
     for (const job of jobsForSim.rows) {
       simIdx += 1;
-      // 4-digit index (supports up to 9999 jobs) — a 2-digit pad silently overflowed
+      // 4-digit index (supports up to 9999 jobs)   a 2-digit pad silently overflowed
       // the UUID's 12-char final segment once the seeded jobs count passed 99.
       const tplId = `d0eebc99-9c0b-4ef8-bb6d-6bb9bd38${simIdx.toString().padStart(4, '0')}`;
       const slug = `sim-${job.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`.slice(0, 90);
@@ -887,7 +887,7 @@ const seedDatabase = async (): Promise<void> => {
         ON CONFLICT (id) DO UPDATE SET
           job_id = EXCLUDED.job_id, is_active = TRUE, tasks = EXCLUDED.tasks, updated_at = NOW()
         `,
-        [tplId, job.company_id, job.id, `${job.title} — Technical Simulation`, slug, `Hands-on technical simulation for the ${job.title} role.`, jobSimTasks]
+        [tplId, job.company_id, job.id, `${job.title}   Technical Simulation`, slug, `Hands-on technical simulation for the ${job.title} role.`, jobSimTasks]
       );
     }
     logger.info(`Job-linked simulation templates seeded (${jobsForSim.rows.length})`);
@@ -1404,11 +1404,11 @@ const seedDatabase = async (): Promise<void> => {
     // COMMIT
     // =====================================================
     await client.query('COMMIT');
-    logger.info('✅ Database seeding completed successfully!');
+    logger.info('Database seeding completed successfully!');
 
   } catch (error) {
     await client.query('ROLLBACK');
-    logger.error('❌ Seeding failed, rolled back:', error);
+    logger.error(' Seeding failed, rolled back:', error);
     throw error;
   } finally {
     await client.end();
@@ -1418,7 +1418,7 @@ const seedDatabase = async (): Promise<void> => {
 // =====================================================
 // JOB FEED DEMO DATASET (queries/initial_db.sql)
 // =====================================================
-// Generated by Job_Feed/generator (real CSV data + the production schema) —
+// Generated by Job_Feed/generator (real CSV data + the production schema)  
 // 1000 candidates/jobs with realistic applications, views, saves, searches,
 // and feed scores. It manages its own BEGIN/COMMIT and uses
 // ON CONFLICT DO NOTHING throughout, so it runs as an independent step
@@ -1427,7 +1427,7 @@ const seedDatabase = async (): Promise<void> => {
 const seedJobFeedDemoData = async (): Promise<void> => {
   const sqlPath = path.join(__dirname, 'queries', 'initial_db.sql');
   if (!fs.existsSync(sqlPath)) {
-    logger.warn(`Job feed demo dataset not found at ${sqlPath} — skipping`);
+    logger.warn(`Job feed demo dataset not found at ${sqlPath}   skipping`);
     return;
   }
 
@@ -1444,9 +1444,96 @@ const seedJobFeedDemoData = async (): Promise<void> => {
     logger.info('Seeding job feed demo dataset from initial_db.sql...');
     const sql = fs.readFileSync(sqlPath, 'utf8');
     await client.query(sql);
-    logger.info('✅ Job feed demo dataset seeded successfully!');
+    logger.info('Job feed demo dataset seeded successfully!');
   } catch (error) {
-    logger.error('❌ Job feed demo dataset seeding failed:', error);
+    logger.error(' Job feed demo dataset seeding failed:', error);
+    throw error;
+  } finally {
+    await client.end();
+  }
+};
+
+// =====================================================
+// RWANDA ADMINISTRATIVE LOCATIONS (Candidate Signup)
+// =====================================================
+// Populates rw_locations from the bundled MIT-licensed dataset
+// (db/data/rwanda-locations.json   sourced from jnkindi/rwanda-locations-json:
+// 5 provinces, 30 districts, 416 sectors, 2,148 cells, 14,842 villages).
+// Runs as its own connection/transaction, guarded by a row-count check, so
+// it's safe to re-run alongside seedDatabase()/seedJobFeedDemoData().
+type RwLocationRow = {
+  province_code: string;
+  province_name: string;
+  district_code: string;
+  district_name: string;
+  sector_code: string;
+  sector_name: string;
+  cell_code: string;
+  cell_name: string;
+  village_code: string;
+  village_name: string;
+};
+
+const seedRwandaLocations = async (): Promise<void> => {
+  const dataPath = path.join(__dirname, 'data', 'rwanda-locations.json');
+  if (!fs.existsSync(dataPath)) {
+    logger.warn(`Rwanda locations dataset not found at ${dataPath}   skipping`);
+    return;
+  }
+
+  const client = new Client({
+    host: process.env.DB_HOST || 'localhost',
+    port: parseInt(process.env.DB_PORT || '8090'),
+    database: process.env.DB_NAME || 'SVWR-CFE_DB',
+    user: process.env.DB_USER || 'postgres',
+    password: process.env.DB_PASSWORD || 'TN12',
+  });
+
+  try {
+    await client.connect();
+
+    const { rows: countRows } = await client.query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM rw_locations'
+    );
+    if (parseInt(countRows[0]!.count, 10) > 0) {
+      logger.info('rw_locations already populated   skipping Rwanda locations seed');
+      return;
+    }
+
+    const locations: RwLocationRow[] = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    logger.info(`Seeding rw_locations with ${locations.length} villages...`);
+
+    const columns = [
+      'province_code', 'province_name', 'district_code', 'district_name',
+      'sector_code', 'sector_name', 'cell_code', 'cell_name', 'village_code', 'village_name',
+    ];
+    const batchSize = 1000;
+
+    await client.query('BEGIN');
+    for (let i = 0; i < locations.length; i += batchSize) {
+      const batch = locations.slice(i, i + batchSize);
+      const values: string[] = [];
+      const placeholders: string[] = [];
+      let paramIndex = 1;
+      for (const row of batch) {
+        const rowPlaceholders = columns.map(() => `$${paramIndex++}`);
+        placeholders.push(`(${rowPlaceholders.join(', ')})`);
+        values.push(
+          row.province_code, row.province_name, row.district_code, row.district_name,
+          row.sector_code, row.sector_name, row.cell_code, row.cell_name,
+          row.village_code, row.village_name
+        );
+      }
+      await client.query(
+        `INSERT INTO rw_locations (${columns.join(', ')}) VALUES ${placeholders.join(', ')}`,
+        values
+      );
+    }
+    await client.query('COMMIT');
+    logger.info('Rwanda locations seeded successfully!');
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    logger.error(' Rwanda locations seeding failed:', error);
     throw error;
   } finally {
     await client.end();
@@ -1459,6 +1546,7 @@ const seedJobFeedDemoData = async (): Promise<void> => {
 const seed = async (): Promise<void> => {
   try {
     logger.info('Starting database seeding...');
+    await seedRwandaLocations();
     await seedDatabase();
     await seedJobFeedDemoData();
     logger.info('Seeding completed, exiting...');

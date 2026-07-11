@@ -1,4 +1,4 @@
-"""
+"
 faker_utils.py
 ==============
 Realistic value generation for fields the source CSVs simply don't have
@@ -6,14 +6,14 @@ Realistic value generation for fields the source CSVs simply don't have
 value is seeded (reproducible) and, where possible, derived FROM the real
 fields already present for that record (e.g. a job's generated description
 references its real title/institution/field of study) rather than being
-generic filler — the goal is "plausible and consistent," not "random text."
+generic filler   the goal is "plausible and consistent," not "random text."
 
 Faker has no Kinyarwanda locale, and inventing ethnically-marked names
 algorithmically risks getting them wrong, so first/last names are drawn
 from a small curated bank of common, genuinely-used Rwandan given/family
 names (no real individuals, no public figures) rather than Faker's default
 en_US bank, since the underlying dataset is Rwandan public-service jobs.
-"""
+"
 
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ def seed_all(seed: int) -> None:
 
 
 def person_name() -> Tuple[str, str, str]:
-    """Returns (first_name, last_name, gender)."""
+    "Returns (first_name, last_name, gender)."
     if random.random() < 0.5:
         return random.choice(MALE_FIRST_NAMES), random.choice(LAST_NAMES), "male"
     return random.choice(FEMALE_FIRST_NAMES), random.choice(LAST_NAMES), "female"
@@ -88,8 +88,8 @@ def phone_number() -> str:
 
 
 def date_of_birth(graduation_year: Optional[float], degree: str) -> date:
-    """Back-calculate a plausible DOB from graduation year + degree level so
-    age is internally consistent with the candidate's real education record."""
+    "Back-calculate a plausible DOB from graduation year + degree level so
+    age is internally consistent with the candidate's real education record."
     grad_age = {
         "PhD": 30, "Master's": 26, "Post Graduate Diploma": 25,
         "Bachelor's(A0)": 23, "Advanced Diploma(A1)": 22, "Diploma(A1)": 21,
@@ -115,7 +115,7 @@ def bio_for(first: str, field_of_study: str, district: str, years_experience: fl
 
 
 def expected_salary(degree: str, years_experience: float) -> Tuple[int, int]:
-    """RWF/month bands, roughly scaled to Rwandan public-service pay grades."""
+    "RWF/month bands, roughly scaled to Rwandan public-service pay grades."
     base = {
         "PhD": 900_000, "Master's": 650_000, "Post Graduate Diploma": 550_000,
         "Bachelor's(A0)": 400_000, "Advanced Diploma(A1)": 300_000,

@@ -29,14 +29,14 @@ interface Offer {
   candidateEmail: string;
   jobTitle: string;
   companyName: string;
-  status: 'draft' | 'sent' | 'viewed' | 'accepted' | 'declined' | 'expired' | 'withdrawn';
+  status: 'draft'| 'sent'| 'viewed'| 'accepted'| 'declined'| 'expired'| 'withdrawn';
   salary: number;
   bonus?: number;
   equity?: string;
   benefits: string[];
   startDate: string;
   location: string;
-  employmentType: 'full_time' | 'part_time' | 'contract' | 'internship';
+  employmentType: 'full_time'| 'part_time'| 'contract'| 'internship';
   createdAt: string;
   sentAt?: string;
   expiresAt: string;
@@ -49,7 +49,7 @@ interface Offer {
 
 interface FollowUp {
   id: string;
-  type: 'email' | 'call' | 'meeting';
+  type: 'email'| 'call'| 'meeting';
   scheduledAt: string;
   completedAt?: string;
   notes: string;
@@ -81,13 +81,13 @@ const OfferManagement = ({ onBack }: OfferManagementProps) => {
     benefits: [] as string[],
     startDate: '',
     location: '',
-    employmentType: 'full_time' as const,
+    employmentType: 'full_time'as const,
     expiresAt: '',
     notes: ''
   });
 
   const [newFollowUp, setNewFollowUp] = useState({
-    type: 'email' as const,
+    type: 'email'as const,
     scheduledAt: '',
     notes: ''
   });
@@ -206,12 +206,12 @@ const OfferManagement = ({ onBack }: OfferManagementProps) => {
 
   const getFilteredOffers = () => {
     return offers.filter(offer => {
-      const matchesSearch = searchTerm === '' ||
+      const matchesSearch = searchTerm === ''||
         offer.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         offer.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
         offer.candidateEmail.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesStatus = filterStatus === 'all' || offer.status === filterStatus;
+      const matchesStatus = filterStatus === 'all'|| offer.status === filterStatus;
 
       return matchesSearch && matchesStatus;
     });
@@ -573,9 +573,9 @@ const OfferManagement = ({ onBack }: OfferManagementProps) => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(offer.status)}`}>
                         {getStatusIcon(offer.status)}
-                        <span className="ml-1 capitalize">{offer.status.replace('_', ' ')}</span>
+                        <span className="ml-1 capitalize">{offer.status.replace('_', '')}</span>
                       </span>
-                      {isExpired(offer.expiresAt) && offer.status === 'sent' && (
+                      {isExpired(offer.expiresAt) && offer.status === 'sent'&& (
                         <div className="text-xs text-red-600 mt-1">Expired</div>
                       )}
                     </td>
@@ -590,7 +590,7 @@ const OfferManagement = ({ onBack }: OfferManagementProps) => {
                         >
                           <Eye size={16} />
                         </button>
-                        {offer.status === 'draft' && (
+                        {offer.status === 'draft'&& (
                           <button
                             onClick={() => sendOffer(offer.id)}
                             className="text-green-600 hover:text-green-800"
@@ -598,7 +598,7 @@ const OfferManagement = ({ onBack }: OfferManagementProps) => {
                             <Send size={16} />
                           </button>
                         )}
-                        {offer.status === 'sent' && (
+                        {offer.status === 'sent'&& (
                           <>
                             <button
                               onClick={() => {
@@ -711,7 +711,7 @@ const OfferManagement = ({ onBack }: OfferManagementProps) => {
                       </div>
                       <div className="flex items-center space-x-3">
                         <Clock size={16} className="text-gray-400" />
-                        <span className="text-gray-700 capitalize">{selectedOffer.employmentType.replace('_', ' ')}</span>
+                        <span className="text-gray-700 capitalize">{selectedOffer.employmentType.replace('_', '')}</span>
                       </div>
                     </div>
                   </div>
@@ -741,9 +741,9 @@ const OfferManagement = ({ onBack }: OfferManagementProps) => {
                         <div key={followUp.id} className="bg-gray-50 p-3 rounded-lg">
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center space-x-2">
-                              {followUp.type === 'email' && <Mail size={16} className="text-blue-500" />}
-                              {followUp.type === 'call' && <Phone size={16} className="text-green-500" />}
-                              {followUp.type === 'meeting' && <Users size={16} className="text-purple-500" />}
+                              {followUp.type === 'email'&& <Mail size={16} className="text-blue-500" />}
+                              {followUp.type === 'call'&& <Phone size={16} className="text-green-500" />}
+                              {followUp.type === 'meeting'&& <Users size={16} className="text-purple-500" />}
                               <span className="text-sm font-medium text-gray-900 capitalize">
                                 {followUp.type}
                               </span>

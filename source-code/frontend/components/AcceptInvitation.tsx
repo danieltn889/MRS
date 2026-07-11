@@ -15,7 +15,7 @@ const AcceptInvitation: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [step, setStep] = useState<'loading' | 'details' | 'form' | 'success' | 'error'>('loading');
+  const [step, setStep] = useState<'loading'| 'details'| 'form'| 'success'| 'error'>('loading');
   const [invitationDetails, setInvitationDetails] = useState<InvitationDetails | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -136,7 +136,7 @@ const AcceptInvitation: React.FC = () => {
           <CheckCircle className="w-16 h-16 mx-auto text-green-500 mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome to the Team!</h1>
           <p className="text-gray-600 mb-4">
-            You've successfully joined <strong>{invitationDetails?.company_name}</strong> as a{' '}
+            You've successfully joined <strong>{invitationDetails?.company_name}</strong> as a{''}
             <strong>{invitationDetails?.role}</strong>.
           </p>
           <div className="bg-gray-50 p-4 rounded-lg mb-6">
@@ -271,7 +271,7 @@ const AcceptInvitation: React.FC = () => {
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-3 rounded-lg transition flex items-center justify-center gap-2"
           >
             {loading && <Loader className="w-4 h-4 animate-spin" />}
-            {loading ? 'Joining Team...' : 'Join Team'}
+            {loading ? 'Joining Team...': 'Join Team'}
           </button>
         </form>
 

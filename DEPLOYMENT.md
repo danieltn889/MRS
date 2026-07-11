@@ -1,4 +1,4 @@
-# CI/CD Deployment — push to `main` → auto-deploy to AWS
+# CI/CD Deployment   push to `main` → auto-deploy to AWS
 
 On every push to `main`, GitHub Actions SSHes into the EC2 server and deploys all
 three projects (backend, frontend, ML) via [`deploy.sh`](deploy.sh) + pm2.
@@ -7,7 +7,7 @@ three projects (backend, frontend, ML) via [`deploy.sh`](deploy.sh) + pm2.
 
 ---
 
-## 1. Add GitHub Secrets  ⚠️ required (do this first)
+## 1. Add GitHub Secrets  required (do this first)
 
 Repo → **Settings → Secrets and variables → Actions → New repository secret**:
 
@@ -25,7 +25,7 @@ Repo → **Settings → Secrets and variables → Actions → New repository sec
 ## 2. One-time server setup (fresh server → deploy-ready)
 
 First create the env files the apps need (these hold secrets, so they are **not** in
-git — template: `source-code/backend/.env.example`):
+git   template: `source-code/backend/.env.example`):
 
 ```bash
 # on the server, in the repo root (~/SVWR-CFE):
@@ -33,19 +33,19 @@ nano source-code/backend/.env    # DB_*, JWT_SECRET, SMTP_*, GROQ_API_KEY, GITHU
 nano source-code/frontend/.env   # VITE_API_URL=/api/v1  VITE_ML_GATEWAY_URL=/matcher  VITE_SEARCH_URL=/search/search
 ```
 
-Then run the **bootstrap script once** — it installs Node 20, pm2, Python, PostgreSQL
+Then run the **bootstrap script once**   it installs Node 20, pm2, Python, PostgreSQL
 (+ creates the DB matching your `.env`), Nginx (reverse proxy), and enables pm2 on boot:
 
 ```bash
 bash deploy/bootstrap-server.sh
 ```
 
-That's the whole server. The database **tables** are created automatically — `deploy.sh`
+That's the whole server. The database **tables** are created automatically   `deploy.sh`
 runs the idempotent migration on every deploy.
 
 ---
 
-## 3. AWS Security Group — open the ports
+## 3. AWS Security Group   open the ports
 
 Nginx fronts everything on port 80/443, so you only need to expose:
 
@@ -55,7 +55,7 @@ Nginx fronts everything on port 80/443, so you only need to expose:
 | 443 | HTTPS (after SSL) |
 | 22 | SSH (your IP only, ideally) |
 
-The internal ports (3000/3001/8080/8000) stay private — Nginx proxies to them on localhost.
+The internal ports (3000/3001/8080/8000) stay private   Nginx proxies to them on localhost.
 
 ---
 
@@ -66,7 +66,7 @@ workflow rsyncs the code to the server (preserving the server's `.env`) and runs
 `deploy.sh`, which:
 
 1. installs backend deps,
-2. **runs database migrations** (idempotent — creates the DB/tables if missing),
+2. **runs database migrations** (idempotent   creates the DB/tables if missing),
 3. builds the frontend (`vite build` → `dist/`),
 4. prepares the ML Python venv,
 5. restarts everything with **pm2** (`backend`, `ml-gateway`, `frontend`),
@@ -80,7 +80,7 @@ Check status on the server: `pm2 status` · logs: `pm2 logs backend`.
 - **ML dependencies:** there's no `requirements.txt` yet, so `deploy.sh` installs a
   best-guess list (fastapi, uvicorn, sentence-transformers, scikit-learn, nltk, …).
   For reproducible installs, run `pip freeze > source-code/ml/requirements.txt` on a
-  working setup and commit it — `deploy.sh` will use it automatically.
+  working setup and commit it   `deploy.sh` will use it automatically.
 - **Frontend in production:** `vite preview` is fine to start; for real traffic, serve
   `source-code/frontend/dist/` with **nginx** and reverse-proxy `/api` → `:3001`.
 - The first deploy is slow (ML installs sentence-transformers models). Later deploys

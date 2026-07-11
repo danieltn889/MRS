@@ -12,6 +12,7 @@ import {
   type AppNotification,
 } from '../services/notificationAPI';
 import { getCandidateProfile } from '../services/candidateAPI';
+import { resolveFileUrl } from '../utils/fileUrl';
 
 // Same search endpoint the landing page uses, so the navbar search behaves
 // exactly like the public search (just without the auth gate, since the
@@ -115,7 +116,7 @@ const Header: React.FC<HeaderProps> = ({
     
     // Then try localStorage with different possible keys
     if (typeof window !== 'undefined') {
-      // Try 'company' key
+      // Try 'company'key
       let storedCompany = localStorage.getItem('company');
       if (storedCompany) {
         try {
@@ -126,7 +127,7 @@ const Header: React.FC<HeaderProps> = ({
         } catch {}
       }
       
-      // Try 'companyData' key
+      // Try 'companyData'key
       storedCompany = localStorage.getItem('companyData');
       if (storedCompany) {
         try {
@@ -157,7 +158,7 @@ const Header: React.FC<HeaderProps> = ({
   // 🔧 FIXED: Better company user detection
   const isCompanyUser = (): boolean => {
     const userType = normalizedUser?.user_type || normalizedUser?.userType || '';
-    return userType === 'company_admin' || userType === 'recruiter';
+    return userType === 'company_admin'|| userType === 'recruiter';
   };
   
   // Get user name
@@ -248,7 +249,7 @@ const Header: React.FC<HeaderProps> = ({
     try {
       let current: any = message;
       let depth = 0;
-      while (typeof current === 'string' && depth < 10) {
+      while (typeof current === 'string'&& depth < 10) {
         const trimmed = current.trim();
         if (!trimmed.startsWith('{') && !trimmed.startsWith('"')) return current;
         current = JSON.parse(current);
@@ -296,28 +297,28 @@ const Header: React.FC<HeaderProps> = ({
     console.log('═══════════════════════════════════════');
     console.log('🔍 HEADER DEBUG - COMPANY DATA');
     console.log('═══════════════════════════════════════');
-    console.log('📌 user prop:', user);
-    console.log('📌 company prop:', company);
-    console.log('📌 normalizedUser:', normalizedUser);
-    console.log('📌 normalizedCompany:', normalizedCompany);
+    console.log('user prop:', user);
+    console.log('company prop:', company);
+    console.log('normalizedUser:', normalizedUser);
+    console.log('normalizedCompany:', normalizedCompany);
     console.log('───────────────────────────────────────');
-    console.log('👤 User Info:');
-    console.log('   - userName:', userName);
-    console.log('   - userType:', userType);
-    console.log('   - isCompanyUser:', isCompanyUser());
-    console.log('   - companyId:', normalizedUser?.company_id || normalizedUser?.companyId);
+    console.log(' User Info:');
+    console.log('  - userName:', userName);
+    console.log('  - userType:', userType);
+    console.log('  - isCompanyUser:', isCompanyUser());
+    console.log('  - companyId:', normalizedUser?.company_id || normalizedUser?.companyId);
     console.log('───────────────────────────────────────');
     console.log('🏢 Company Info:');
-    console.log('   - companyName:', companyName);
-    console.log('   - companyInitial:', companyInitial);
-    console.log('   - showCompanyInfo:', showCompanyInfo);
+    console.log('  - companyName:', companyName);
+    console.log('  - companyInitial:', companyInitial);
+    console.log('  - showCompanyInfo:', showCompanyInfo);
     console.log('═══════════════════════════════════════');
     
     // Also check localStorage
     console.log('💾 localStorage keys and values:');
-    console.log('   - user:', localStorage.getItem('user'));
-    console.log('   - company:', localStorage.getItem('company'));
-    console.log('   - companyData:', localStorage.getItem('companyData'));
+    console.log('  - user:', localStorage.getItem('user'));
+    console.log('  - company:', localStorage.getItem('company'));
+    console.log('  - companyData:', localStorage.getItem('companyData'));
   }, [user, company, normalizedUser, normalizedCompany, userName, userType, companyName, showCompanyInfo]);
 
   useEffect(() => {
@@ -346,7 +347,7 @@ const Header: React.FC<HeaderProps> = ({
       setNotifUnread((c) => c + 1);
     });
     socket.on('notification_unread_count', (data: { count: number }) => {
-      setNotifUnread(typeof data?.count === 'number' ? data.count : 0);
+      setNotifUnread(typeof data?.count === 'number'? data.count : 0);
     });
 
     socket.on('simulation_chat_message', (message: ChatMessage) => {
@@ -355,7 +356,7 @@ const Header: React.FC<HeaderProps> = ({
 
       const isOnChatRoute =
         window.location.pathname.startsWith('/simulation/execute/') &&
-        new URLSearchParams(window.location.search).get('tab') === 'chat' &&
+        new URLSearchParams(window.location.search).get('tab') === 'chat'&&
         (!message.session_id || window.location.pathname.includes(message.session_id));
 
       if (isOnChatRoute) return;
@@ -416,7 +417,7 @@ const Header: React.FC<HeaderProps> = ({
           setNotifUnread(count);
         }
       } catch {
-        // Non-fatal — bell just stays empty if the request fails.
+        // Non-fatal   bell just stays empty if the request fails.
       }
     })();
     return () => { cancelled = true; };
@@ -465,7 +466,7 @@ const Header: React.FC<HeaderProps> = ({
   const openAppNotification = async (n: AppNotification): Promise<void> => {
     setShowNotifications(false);
     if (n.status !== 'read') {
-      setAppNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, status: 'read' } : x)));
+      setAppNotifications((prev) => prev.map((x) => (x.id === n.id ? { ...x, status: 'read'} : x)));
       setNotifUnread((c) => Math.max(0, c - 1));
       try { await markNotificationRead(n.id); } catch { /* ignore */ }
     }
@@ -478,7 +479,7 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const handleMarkAllNotificationsRead = async (): Promise<void> => {
-    setAppNotifications((prev) => prev.map((x) => ({ ...x, status: 'read' })));
+    setAppNotifications((prev) => prev.map((x) => ({ ...x, status: 'read'})));
     setNotifUnread(0);
     try { await markAllNotificationsRead(); } catch { /* ignore */ }
   };
@@ -552,14 +553,14 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  // Logged-in users go straight to the detailed analysis — no auth gate needed.
+  // Logged-in users go straight to the detailed analysis   no auth gate needed.
   const handleViewJob = (jobId: string): void => {
     setShowSearchResults(false);
     navigate(`/jobs/${jobId}`);
   };
 
   // Same ?apply=1 pattern used by the Job Feed and Saved Jobs "Apply Now"
-  // buttons — lands on the job details page with the real application modal
+  // buttons   lands on the job details page with the real application modal
   // already open, instead of just viewing the job first.
   const handleApplyJob = (jobId: string): void => {
     setShowSearchResults(false);
@@ -641,7 +642,7 @@ const Header: React.FC<HeaderProps> = ({
                 ) : searchResults.length > 0 ? (
                   <div className="py-1">
                     <div className="px-3 py-2 text-xs font-semibold text-gray-500 border-b border-gray-100">
-                      {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
+                      {searchResults.length} {searchResults.length === 1 ? 'result': 'results'}
                     </div>
                     {searchResults.map((job) => (
                       <div
@@ -705,7 +706,7 @@ const Header: React.FC<HeaderProps> = ({
                   >
                     <UserPlus size={18} />
                     Sign Up
-                    <ChevronDown size={16} className={`transition-transform duration-200 ${showSignupDropdown ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={16} className={`transition-transform duration-200 ${showSignupDropdown ? 'rotate-180': ''}`} />
                   </button>
 
                   {showSignupDropdown && (
@@ -750,7 +751,7 @@ const Header: React.FC<HeaderProps> = ({
                 <Bell size={20} />
                 {notifUnread > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full text-[10px] leading-[18px] text-white text-center font-bold">
-                    {notifUnread > 9 ? '9+' : notifUnread}
+                    {notifUnread > 9 ? '9+': notifUnread}
                   </span>
                 )}
               </button>
@@ -770,7 +771,7 @@ const Header: React.FC<HeaderProps> = ({
                     className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:bg-gray-50 rounded-lg p-2 transition-colors duration-200"
                   >
                     {avatarUrl ? (
-                      <img src={avatarUrl} alt="" className="w-8 sm:w-10 h-8 sm:h-10 rounded-full object-cover flex-shrink-0 shadow-md" />
+                      <img src={resolveFileUrl(avatarUrl)} alt="" className="w-8 sm:w-10 h-8 sm:h-10 rounded-full object-cover flex-shrink-0 shadow-md" />
                     ) : (
                       <div className="w-8 sm:w-10 h-8 sm:h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-xs sm:text-sm flex-shrink-0 shadow-md">
                         {userInitial}
@@ -789,7 +790,7 @@ const Header: React.FC<HeaderProps> = ({
                       <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-purple-50">
                         <div className="flex items-center gap-3">
                           {avatarUrl ? (
-                            <img src={avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover shadow-md" />
+                            <img src={resolveFileUrl(avatarUrl)} alt="" className="w-12 h-12 rounded-full object-cover shadow-md" />
                           ) : (
                             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
                               {userInitial}
@@ -886,7 +887,7 @@ const Header: React.FC<HeaderProps> = ({
                         <button
                           key={notification.id}
                           onClick={() => openAppNotification(notification)}
-                          className={`w-full text-left p-4 hover:bg-blue-50 border-b border-gray-100 cursor-pointer transition-colors ${isUnread ? 'bg-blue-50/60' : 'bg-white'}`}
+                          className={`w-full text-left p-4 hover:bg-blue-50 border-b border-gray-100 cursor-pointer transition-colors ${isUnread ? 'bg-blue-50/60': 'bg-white'}`}
                         >
                           <div className="flex items-start gap-3">
                             <div className="mt-0.5 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
@@ -901,7 +902,7 @@ const Header: React.FC<HeaderProps> = ({
                                 <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words">{notification.content}</p>
                               )}
                               <p className="text-[11px] text-gray-400 mt-1">
-                                {new Date(notification.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                {new Date(notification.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'})}
                               </p>
                             </div>
                           </div>

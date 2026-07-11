@@ -62,7 +62,7 @@ export interface ApplicationAssignment extends BaseEntity {
   assigned_by?: UUID;
   assigned_at: TIMESTAMP;
   role?: string;
-  status: 'active' | 'completed' | 'removed';
+  status: 'active'| 'completed'| 'removed';
   notes?: string;
 
   // Relationships
@@ -74,12 +74,12 @@ export interface ApplicationAssignment extends BaseEntity {
 export interface ApplicationReminder extends BaseEntity {
   application_id: UUID;
   user_id: UUID;
-  reminder_type: 'follow_up' | 'review' | 'interview' | 'assessment' | 'offer' | 'deadline';
+  reminder_type: 'follow_up'| 'review'| 'interview'| 'assessment'| 'offer'| 'deadline';
   title: string;
   description?: string;
   reminder_time: TIMESTAMP;
   recurrence?: string;
-  status: 'pending' | 'sent' | 'acknowledged' | 'cancelled' | 'failed';
+  status: 'pending'| 'sent'| 'acknowledged'| 'cancelled'| 'failed';
   sent_at?: TIMESTAMP;
   acknowledged_at?: TIMESTAMP;
   created_by?: UUID;
@@ -94,13 +94,13 @@ export interface BlacklistedCandidate extends BaseEntity {
   company_id: UUID;
   user_id: UUID;
   reason: string;
-  reason_category: 'unprofessional' | 'fraud' | 'no_show' | 'policy_violation' | 'security' | 'other';
+  reason_category: 'unprofessional'| 'fraud'| 'no_show'| 'policy_violation'| 'security'| 'other';
   description?: string;
   evidence: JSONB;
   blacklisted_by?: UUID;
   blacklisted_at: TIMESTAMP;
   expires_at?: TIMESTAMP;
-  level: 'temporary' | 'permanent' | 'role_specific' | 'company_wide';
+  level: 'temporary'| 'permanent'| 'role_specific'| 'company_wide';
 
   // Relationships
   company?: Company;

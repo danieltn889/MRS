@@ -35,11 +35,11 @@ interface FormData {
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
 const PROFICIENCY: Record<number, { label: string; color: string; bar: string }> = {
-  1: { label: 'Beginner',     color: 'bg-red-100 text-red-800',     bar: 'bg-red-400'    },
-  2: { label: 'Intermediate', color: 'bg-orange-100 text-orange-800', bar: 'bg-orange-400' },
-  3: { label: 'Advanced',     color: 'bg-yellow-100 text-yellow-800', bar: 'bg-yellow-400' },
-  4: { label: 'Expert',       color: 'bg-blue-100 text-blue-800',   bar: 'bg-blue-500'   },
-  5: { label: 'Master',       color: 'bg-green-100 text-green-800', bar: 'bg-green-500'  },
+  1: { label: 'Beginner',     color: 'bg-red-100 text-red-800',     bar: 'bg-red-400'   },
+  2: { label: 'Intermediate', color: 'bg-orange-100 text-orange-800', bar: 'bg-orange-400'},
+  3: { label: 'Advanced',     color: 'bg-yellow-100 text-yellow-800', bar: 'bg-yellow-400'},
+  4: { label: 'Expert',       color: 'bg-blue-100 text-blue-800',   bar: 'bg-blue-500'  },
+  5: { label: 'Master',       color: 'bg-green-100 text-green-800', bar: 'bg-green-500' },
 };
 
 const profLabel = (n: number) => PROFICIENCY[n]?.label || 'Unknown';
@@ -81,7 +81,7 @@ const SaveSuccessModal = ({ skillName, isEdit, onClose }: { skillName: string; i
         <CheckCircle className="w-11 h-11 text-green-600" strokeWidth={1.5} />
       </div>
       <h2 className="text-2xl font-extrabold text-gray-900 mb-1">
-        {isEdit ? 'Skill Updated!' : 'Skill Added!'}
+        {isEdit ? 'Skill Updated!': 'Skill Added!'}
       </h2>
       <p className="text-sm text-gray-500 mb-4">
         <span className="font-semibold text-gray-700">"{skillName}"</span> has been saved to your profile.
@@ -147,7 +147,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
   };
 
   const getSkillName = (skill: UserSkill): string => {
-    if (skill.name && skill.name !== 'undefined' && skill.name.trim()) return skill.name;
+    if (skill.name && skill.name !== 'undefined'&& skill.name.trim()) return skill.name;
     const mapped = skillsMap.get(skill.skill_id);
     if (mapped) return mapped;
     const found = availableSkills.find(s => s.id === skill.skill_id);
@@ -225,7 +225,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
     setFormError('');
     setEditingId(skill.skill_id);
     setIsAdding(true);
-    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start'}), 50);
   };
 
   // ── Delete ──────────────────────────────────────────────────────────────────
@@ -296,7 +296,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
         {isAdding && (
           <div ref={formRef} className="bg-gray-50 border border-gray-200 rounded-2xl p-6 space-y-5">
             <h3 className="text-lg font-semibold text-gray-900">
-              {editingId ? 'Edit Skill' : 'Add New Skill'}
+              {editingId ? 'Edit Skill': 'Add New Skill'}
             </h3>
 
             <form onSubmit={handleSubmit} noValidate className="space-y-5">
@@ -313,7 +313,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                   list="skillSuggestions"
                   placeholder="e.g. JavaScript, Python, Project Management"
                   className={`w-full px-3 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                    fieldError ? 'border-red-400 bg-red-50' : 'border-gray-300 bg-white'
+                    fieldError ? 'border-red-400 bg-red-50': 'border-gray-300 bg-white'
                   }`}
                 />
                 <datalist id="skillSuggestions">
@@ -345,7 +345,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                 )}
               </div>
 
-              {/* ✅ Proficiency Level - All labels on one line */}
+              {/* ''Proficiency Level - All labels on one line */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Proficiency Level
@@ -366,7 +366,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                     <div key={n} className={`flex-1 h-1.5 rounded-full transition-colors ${n <= formData.proficiencyLevel ? profBar(formData.proficiencyLevel) : 'bg-gray-200'}`} />
                   ))}
                 </div>
-                {/* ✅ All labels in one horizontal line */}
+                {/* ''All labels in one horizontal line */}
                 <div className="flex justify-between text-xs text-gray-400 mt-1">
                   <span>Beginner</span>
                   <span>Intermediate</span>
@@ -402,7 +402,7 @@ const SkillsSection: React.FC<SkillsSectionProps> = ({ profile, onUpdate }) => {
                   className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                   {loading
                     ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
-                    : <><Save size={16} />{editingId ? 'Update Skill' : 'Save Skill'}</>
+                    : <><Save size={16} />{editingId ? 'Update Skill': 'Save Skill'}</>
                   }
                 </button>
                 <button type="button" onClick={handleCancel}

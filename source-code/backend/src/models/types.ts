@@ -249,7 +249,7 @@ export interface Location {
 export interface Salary {
   amount: number;
   currency: string;
-  period: 'hourly' | 'daily' | 'weekly' | 'monthly' | 'yearly';
+  period: 'hourly'| 'daily'| 'weekly'| 'monthly'| 'yearly';
   range?: {
     min: number;
     max: number;

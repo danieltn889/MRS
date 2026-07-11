@@ -30,8 +30,8 @@ const Step10Publish: React.FC<Props> = ({
   const canPublish = checklistItems.every(item => item.ok);
 
   const summaryItems = [
-    { label: 'Title',         value: simulation.title        || '—' },
-    { label: 'Job Role',      value: simulation.jobRole      || '—' },
+    { label: 'Title',         value: simulation.title        || ' '},
+    { label: 'Job Role',      value: simulation.jobRole      || ' '},
     { label: 'Duration',      value: `${simulation.duration} minutes` },
     { label: 'Difficulty',    value: simulation.difficulty },
     { label: 'Tasks',         value: `${simulation.tasks.length} tasks` },
@@ -68,7 +68,7 @@ const Step10Publish: React.FC<Props> = ({
                 ? <CheckCircle size={16} className="text-green-500 flex-shrink-0" />
                 : <X size={16} className="text-red-400 flex-shrink-0" />
               }
-              <span className={`text-sm ${item.ok ? 'text-gray-700' : 'text-red-600'}`}>{item.label}</span>
+              <span className={`text-sm ${item.ok ? 'text-gray-700': 'text-red-600'}`}>{item.label}</span>
             </div>
           ))}
         </div>

@@ -105,7 +105,7 @@ const authorize = (...roles: string[]) => {
 const ownerOrAdmin = (resourceUserIdField: string = 'user_id') => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const authReq = req as AuthenticatedRequest;
-    if (authReq.user.user_type === 'system_admin' || authReq.user.user_type === 'company_admin') {
+    if (authReq.user.user_type === 'system_admin'|| authReq.user.user_type === 'company_admin') {
       next();
       return;
     }

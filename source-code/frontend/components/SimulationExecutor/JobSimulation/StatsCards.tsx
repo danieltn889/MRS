@@ -26,11 +26,11 @@ const StatsCards: React.FC<StatsCardsProps> = ({ stats }) => {
   if (!stats) return null;
 
   const cards: StatCard[] = [
-    { label: 'Applications', value: stats.total_applications_with_simulations, color: 'text-gray-900', icon: Briefcase, iconColor: 'text-gray-600' },
-    { label: 'Completed', value: stats.completed_simulations, color: 'text-green-600', icon: CheckCircle, iconColor: 'text-green-600' },
-    { label: 'In Progress', value: stats.in_progress_simulations, color: 'text-orange-600', icon: Timer, iconColor: 'text-orange-600' },
-    { label: 'Pending', value: stats.pending_simulations, color: 'text-blue-600', icon: Play, iconColor: 'text-blue-600' },
-    { label: 'Avg. Score', value: `${stats.average_score ?? 0}%`, color: 'text-purple-600', icon: TrendingUp, iconColor: 'text-purple-600' },
+    { label: 'Applications', value: stats.total_applications_with_simulations, color: 'text-gray-900', icon: Briefcase, iconColor: 'text-gray-600'},
+    { label: 'Completed', value: stats.completed_simulations, color: 'text-green-600', icon: CheckCircle, iconColor: 'text-green-600'},
+    { label: 'In Progress', value: stats.in_progress_simulations, color: 'text-orange-600', icon: Timer, iconColor: 'text-orange-600'},
+    { label: 'Pending', value: stats.pending_simulations, color: 'text-blue-600', icon: Play, iconColor: 'text-blue-600'},
+    { label: 'Avg. Score', value: `${stats.average_score ?? 0}%`, color: 'text-purple-600', icon: TrendingUp, iconColor: 'text-purple-600'},
   ];
 
   return (

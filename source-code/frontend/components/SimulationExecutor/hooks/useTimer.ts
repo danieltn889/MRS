@@ -83,7 +83,7 @@ export function useTimer(
   // Timer that updates UI every second (NO saving)
   const startTimer = useCallback(() => {
     if (!session) return;
-    if (session.status === 'completed' || session.status === 'submitted') return;
+    if (session.status === 'completed'|| session.status === 'submitted') return;
     if (!sessionStartTimeRef.current) return;
     
     if (timerRef.current) clearInterval(timerRef.current);
@@ -111,14 +111,14 @@ export function useTimer(
   }, [session, calculateElapsedTime, onTick]);
 
   const pauseTimer = useCallback(() => {
-    if (session?.status === 'completed' || session?.status === 'submitted') return;
+    if (session?.status === 'completed'|| session?.status === 'submitted') return;
     clearTimer();
     setIsRunning(false);
     setIsPaused(true);
   }, [clearTimer, session?.status]);
 
   const resumeTimer = useCallback(() => {
-    if (session?.status === 'completed' || session?.status === 'submitted') return;
+    if (session?.status === 'completed'|| session?.status === 'submitted') return;
     startTimer();
   }, [startTimer, session?.status]);
 
@@ -174,7 +174,7 @@ export function useTimer(
 
   // Auto-start timer when session is in_progress
   useEffect(() => {
-    if (session?.status === 'in_progress' && !isPaused && !isRunning && sessionStartTimeRef.current && isInitializedRef.current) {
+    if (session?.status === 'in_progress'&& !isPaused && !isRunning && sessionStartTimeRef.current && isInitializedRef.current) {
       startTimer();
     }
   }, [session?.status, isPaused, isRunning, startTimer]);

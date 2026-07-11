@@ -117,7 +117,7 @@ class ValidationService {
    * Validate date format and range
    */
   static isValidDate(dateString: string, options: DateValidationOptions = {}): boolean {
-    const { minDate, maxDate, format = 'YYYY-MM-DD' } = options;
+    const { minDate, maxDate, format = 'YYYY-MM-DD'} = options;
 
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return false;
@@ -159,7 +159,7 @@ class ValidationService {
    * Check if user can create jobs
    */
   static canCreateJob(user: User | null): boolean {
-    return !!(user && (user.user_type === 'recruiter' || user.user_type === 'company_admin'));
+    return !!(user && (user.user_type === 'recruiter'|| user.user_type === 'company_admin'));
   }
 
   /**
@@ -273,7 +273,7 @@ class ValidationService {
 
       // Type validation
       if (rules.type) {
-        const actualType = Array.isArray(value) ? 'array' : typeof value;
+        const actualType = Array.isArray(value) ? 'array': typeof value;
         if (actualType !== rules.type) {
           return { isValid: false, error: `${field} must be of type ${rules.type}` };
         }
@@ -285,20 +285,20 @@ class ValidationService {
       }
 
       // Length validation for strings
-      if (rules.type === 'string' && rules.minLength && value.length < rules.minLength) {
+      if (rules.type === 'string'&& rules.minLength && value.length < rules.minLength) {
         return { isValid: false, error: `${field} must be at least ${rules.minLength} characters` };
       }
 
-      if (rules.type === 'string' && rules.maxLength && value.length > rules.maxLength) {
+      if (rules.type === 'string'&& rules.maxLength && value.length > rules.maxLength) {
         return { isValid: false, error: `${field} must be at most ${rules.maxLength} characters` };
       }
 
       // Range validation for numbers
-      if (rules.type === 'number' && rules.min !== undefined && value < rules.min) {
+      if (rules.type === 'number'&& rules.min !== undefined && value < rules.min) {
         return { isValid: false, error: `${field} must be at least ${rules.min}` };
       }
 
-      if (rules.type === 'number' && rules.max !== undefined && value > rules.max) {
+      if (rules.type === 'number'&& rules.max !== undefined && value > rules.max) {
         return { isValid: false, error: `${field} must be at most ${rules.max}` };
       }
     }
@@ -322,7 +322,7 @@ class ValidationService {
    */
   static isValidSkill(skill: string): boolean {
     return !!(skill &&
-           typeof skill === 'string' &&
+           typeof skill === 'string'&&
            skill.length >= 2 &&
            skill.length <= 50 &&
            /^[a-zA-Z\s\-\+\#\.\(\)]+$/.test(skill));

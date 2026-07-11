@@ -26,8 +26,8 @@ interface PerformanceMetric {
   value: number;
   previousValue: number;
   unit: string;
-  trend: 'up' | 'down' | 'stable';
-  category: 'recruitment' | 'onboarding' | 'retention' | 'quality';
+  trend: 'up'| 'down'| 'stable';
+  category: 'recruitment'| 'onboarding'| 'retention'| 'quality';
 }
 
 interface ReportData {
@@ -266,7 +266,7 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           );
           const profileResponses = await Promise.all(profilePromises);
           const profiles = await Promise.all(profileResponses.filter(r => r.ok).map(r => r.json()));
-          const diverseCount = profiles.filter(p => p.data?.gender === 'female' || p.data?.gender === 'non-binary').length;
+          const diverseCount = profiles.filter(p => p.data?.gender === 'female'|| p.data?.gender === 'non-binary').length;
           diversityHireRate = hiredCurrent.length > 0 ? Math.round((diverseCount / hiredCurrent.length) * 100) : 0;
         }
       }
@@ -281,8 +281,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: avgTimeToHire,
           previousValue: prevAvgTimeToHire,
           unit: 'days',
-          trend: avgTimeToHire <= prevAvgTimeToHire ? ('up' as const) : ('down' as const),
-          category: 'recruitment' as const
+          trend: avgTimeToHire <= prevAvgTimeToHire ? ('up'as const) : ('down'as const),
+          category: 'recruitment'as const
         },
         {
           id: '2',
@@ -290,8 +290,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: offerAcceptanceRate,
           previousValue: prevOfferAcceptanceRate,
           unit: '%',
-          trend: offerAcceptanceRate >= prevOfferAcceptanceRate ? ('up' as const) : ('down' as const),
-          category: 'recruitment' as const
+          trend: offerAcceptanceRate >= prevOfferAcceptanceRate ? ('up'as const) : ('down'as const),
+          category: 'recruitment'as const
         },
         {
           id: '3',
@@ -299,8 +299,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: Math.round(avgQualityScore * 10) / 10,
           previousValue: Math.round(prevAvgQualityScore * 10) / 10,
           unit: '/10',
-          trend: avgQualityScore >= prevAvgQualityScore ? ('up' as const) : ('down' as const),
-          category: 'quality' as const
+          trend: avgQualityScore >= prevAvgQualityScore ? ('up'as const) : ('down'as const),
+          category: 'quality'as const
         },
         {
           id: '4',
@@ -308,8 +308,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: submitToReviewRate,
           previousValue: prevSubmitToReviewRate,
           unit: '%',
-          trend: submitToReviewRate >= prevSubmitToReviewRate ? ('up' as const) : ('down' as const),
-          category: 'recruitment' as const
+          trend: submitToReviewRate >= prevSubmitToReviewRate ? ('up'as const) : ('down'as const),
+          category: 'recruitment'as const
         },
         {
           id: '5',
@@ -317,8 +317,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: reviewToInterviewRate,
           previousValue: prevReviewToInterviewRate,
           unit: '%',
-          trend: reviewToInterviewRate >= prevReviewToInterviewRate ? ('up' as const) : ('down' as const),
-          category: 'recruitment' as const
+          trend: reviewToInterviewRate >= prevReviewToInterviewRate ? ('up'as const) : ('down'as const),
+          category: 'recruitment'as const
         },
         {
           id: '6',
@@ -326,8 +326,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: interviewToOfferRate,
           previousValue: prevInterviewToOfferRate,
           unit: '%',
-          trend: interviewToOfferRate >= prevInterviewToOfferRate ? ('up' as const) : ('down' as const),
-          category: 'recruitment' as const
+          trend: interviewToOfferRate >= prevInterviewToOfferRate ? ('up'as const) : ('down'as const),
+          category: 'recruitment'as const
         },
         {
           id: '7',
@@ -335,8 +335,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: onboardingCompletionRate,
           previousValue: onboardingCompletionRate,
           unit: '%',
-          trend: 'stable' as const,
-          category: 'onboarding' as const
+          trend: 'stable'as const,
+          category: 'onboarding'as const
         },
         {
           id: '8',
@@ -344,8 +344,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: retentionRate,
           previousValue: retentionRate,
           unit: '%',
-          trend: 'stable' as const,
-          category: 'retention' as const
+          trend: 'stable'as const,
+          category: 'retention'as const
         },
         {
           id: '9',
@@ -353,8 +353,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: costPerHire,
           previousValue: costPerHire,
           unit: '$',
-          trend: 'stable' as const,
-          category: 'recruitment' as const
+          trend: 'stable'as const,
+          category: 'recruitment'as const
         },
         {
           id: '10',
@@ -362,10 +362,10 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           value: diversityHireRate,
           previousValue: diversityHireRate,
           unit: '%',
-          trend: 'stable' as const,
-          category: 'quality' as const
+          trend: 'stable'as const,
+          category: 'quality'as const
         }
-      ].filter(metric => selectedCategory === 'all' || metric.category === selectedCategory);
+      ].filter(metric => selectedCategory === 'all'|| metric.category === selectedCategory);
 
       // ============================================
       // GENERATE INSIGHTS FROM DATABASE DATA (NO HARDCODED TEXT)
@@ -456,14 +456,14 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
       
       const monthlyHired = filteredByJob.filter((app: any) => {
         const appDate = new Date(app.applied_at);
-        return app.status === 'hired' && appDate >= sixMonthsAgo;
+        return app.status === 'hired'&& appDate >= sixMonthsAgo;
       });
       
       const timeToHireData = [];
       for (let i = 0; i < 6; i++) {
         const monthDate = new Date();
         monthDate.setMonth(monthDate.getMonth() - i);
-        const monthName = monthDate.toLocaleString('default', { month: 'short' });
+        const monthName = monthDate.toLocaleString('default', { month: 'short'});
         const monthHired = monthlyHired.filter((app: any) => {
           const appDate = new Date(app.applied_at);
           return appDate.getMonth() === monthDate.getMonth() && appDate.getFullYear() === monthDate.getFullYear();
@@ -533,7 +533,7 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
       ...reportData.recommendations.map(r => [r])
     ].map(row => row.join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv'});
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -542,7 +542,7 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
     window.URL.revokeObjectURL(url);
   };
 
-  const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
+  const getTrendIcon = (trend: 'up'| 'down'| 'stable') => {
     switch (trend) {
       case 'up': return <TrendingUp size={16} className="text-green-500" />;
       case 'down': return <TrendingDown size={16} className="text-red-500" />;
@@ -550,7 +550,7 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
     }
   };
 
-  const getTrendColor = (trend: 'up' | 'down' | 'stable') => {
+  const getTrendColor = (trend: 'up'| 'down'| 'stable') => {
     switch (trend) {
       case 'up': return 'text-green-600';
       case 'down': return 'text-red-600';
@@ -696,7 +696,7 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
                   <div className="flex items-center mt-2">
                     {getTrendIcon(metric.trend)}
                     <span className={`text-sm ml-1 ${getTrendColor(metric.trend)}`}>
-                      {metric.trend === 'up' ? '+' : metric.trend === 'down' ? '-' : ''}
+                      {metric.trend === 'up'? '+': metric.trend === 'down'? '-': ''}
                       {metric.previousValue > 0 ? Math.abs(Math.round(((metric.value - metric.previousValue) / metric.previousValue) * 100)) : 0}%
                     </span>
                   </div>
@@ -828,12 +828,12 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
                         <div className="flex items-center">
                           <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                             <div
-                              className={`h-2 rounded-full ${conversionRate >= 10 ? 'bg-green-500' : conversionRate >= 5 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                              className={`h-2 rounded-full ${conversionRate >= 10 ? 'bg-green-500': conversionRate >= 5 ? 'bg-yellow-500': 'bg-red-500'}`}
                               style={{ width: `${Math.min(conversionRate * 10, 100)}%` }}
                             />
                           </div>
-                          <span className={`text-xs font-medium ${conversionRate >= 10 ? 'text-green-600' : conversionRate >= 5 ? 'text-yellow-600' : 'text-red-600'}`}>
-                            {conversionRate >= 10 ? 'Excellent' : conversionRate >= 5 ? 'Good' : 'Needs Improvement'}
+                          <span className={`text-xs font-medium ${conversionRate >= 10 ? 'text-green-600': conversionRate >= 5 ? 'text-yellow-600': 'text-red-600'}`}>
+                            {conversionRate >= 10 ? 'Excellent': conversionRate >= 5 ? 'Good': 'Needs Improvement'}
                           </span>
                         </div>
                       </td>

@@ -19,11 +19,11 @@ const FALLBACK_PRIVATE_KEYS = [
 function loadPrivateKeysFromFile() {
   try {
     if (fs.existsSync(LOCAL_KEYS_PATH)) {
-      console.log(`📁 Loading private keys from: ${LOCAL_KEYS_PATH}`);
+      console.log(` Loading private keys from: ${LOCAL_KEYS_PATH}`);
       const keysData = JSON.parse(fs.readFileSync(LOCAL_KEYS_PATH, 'utf8'));
       
       if (keysData.accounts && Array.isArray(keysData.accounts)) {
-        console.log(`✅ Loaded ${keysData.accounts.length} accounts from local-keys.json`);
+        console.log(`''Loaded ${keysData.accounts.length} accounts from local-keys.json`);
         
         // Create a map of address -> privateKey
         const keyMap = new Map();
@@ -33,26 +33,26 @@ function loadPrivateKeysFromFile() {
           }
         }
         
-        return { keys: keysData.accounts, keyMap, source: 'local-keys.json' };
+        return { keys: keysData.accounts, keyMap, source: 'local-keys.json'};
       }
     }
   } catch (error) {
-    console.warn(`⚠️ Could not load local-keys.json: ${error.message}`);
+    console.warn(` Could not load local-keys.json: ${error.message}`);
   }
   
-  console.log("⚠️ Using fallback private keys");
+  console.log(" Using fallback private keys");
   const fallbackAccounts = FALLBACK_PRIVATE_KEYS.map((key, index) => ({
     index,
     address: "unknown",
     privateKey: key
   }));
   
-  return { keys: fallbackAccounts, keyMap: new Map(), source: 'fallback' };
+  return { keys: fallbackAccounts, keyMap: new Map(), source: 'fallback'};
 }
 
 async function main() {
   console.log("═══════════════════════════════════════════════════════════════");
-  console.log("🚀 Deploying LocalSimulation contract...");
+  console.log(" Deploying LocalSimulation contract...");
   console.log("═══════════════════════════════════════════════════════════════");
   console.log(`📡 Network: ${hre.network.name}`);
   
@@ -65,15 +65,15 @@ async function main() {
   console.log(`🔑 Private keys source: ${source}`);
   
   // Check if this is a local network
-  const isLocalNetwork = hre.network.name === 'hardhat' || 
-                         hre.network.name === 'localhost' || 
+  const isLocalNetwork = hre.network.name === 'hardhat'|| 
+                         hre.network.name === 'localhost'|| 
                          hre.network.name === 'ganache';
   
   // Create blockchain directory if it doesn't exist
   const blockchainDir = path.join(__dirname, '../blockchain');
   if (!fs.existsSync(blockchainDir)) {
     fs.mkdirSync(blockchainDir, { recursive: true });
-    console.log(`📁 Created blockchain directory: ${blockchainDir}`);
+    console.log(` Created blockchain directory: ${blockchainDir}`);
   }
   
   // Display account information
@@ -104,7 +104,7 @@ async function main() {
   }
   
   // Get the contract factory
-  console.log("\n📝 Compiling and deploying contract...");
+  console.log("\n Compiling and deploying contract...");
   const LocalSimulation = await hre.ethers.getContractFactory("LocalSimulation");
   
   // Deploy the contract
@@ -115,7 +115,7 @@ async function main() {
   await simulation.deployed();
   const deploymentEnd = Date.now();
   
-  console.log(`\n✅ LocalSimulation deployed successfully!`);
+  console.log(`\n''LocalSimulation deployed successfully!`);
   console.log(`   📍 Contract Address: ${simulation.address}`);
   console.log(`   ⏱️  Deployment time: ${deploymentEnd - deploymentStart}ms`);
   console.log(`   🔗 Transaction: ${simulation.deployTransaction.hash}`);
@@ -155,7 +155,7 @@ async function main() {
       network: hre.network.name,
       chainId: hre.network.config.chainId || (await hre.ethers.provider.getNetwork()).chainId,
       generatedAt: new Date().toISOString(),
-      warning: "⚠️ THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ⚠️",
+      warning: " THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ",
       neverUseOnMainnet: "Never use these keys on Mainnet or any live network!",
       accounts: accounts.map(acc => ({
         index: acc.index,
@@ -192,14 +192,14 @@ async function main() {
   
   const deploymentPath = path.join(blockchainDir, `deployment-${hre.network.name}.json`);
   fs.writeFileSync(deploymentPath, JSON.stringify(deploymentInfo, null, 2));
-  console.log(`📁 Deployment info saved to: ${deploymentPath}`);
+  console.log(` Deployment info saved to: ${deploymentPath}`);
   
   // ============================================
   // SAVE JUST THE CONTRACT ADDRESS
   // ============================================
   const addressPath = path.join(blockchainDir, 'contract.address');
   fs.writeFileSync(addressPath, simulation.address);
-  console.log(`📁 Contract address saved to: ${addressPath}`);
+  console.log(` Contract address saved to: ${addressPath}`);
   
   // ============================================
   // SAVE ABI
@@ -212,7 +212,7 @@ async function main() {
   const artifact = await hre.artifacts.readArtifact("LocalSimulation");
   const abiPath = path.join(artifactsDir, 'LocalSimulationABI.json');
   fs.writeFileSync(abiPath, JSON.stringify(artifact.abi, null, 2));
-  console.log(`📁 ABI saved to: ${abiPath}`);
+  console.log(` ABI saved to: ${abiPath}`);
   
   // ============================================
   // SAVE A SIMPLE ADDRESS FILE FOR NODE.JS BACKEND
@@ -225,7 +225,7 @@ async function main() {
     deployedAt: new Date().toISOString()
   };
   fs.writeFileSync(simpleDeployPath, JSON.stringify(simpleDeploy, null, 2));
-  console.log(`📁 Simple deployment info saved to: ${simpleDeployPath}`);
+  console.log(` Simple deployment info saved to: ${simpleDeployPath}`);
   
   // ============================================
   // VERIFICATION (for non-local networks)
@@ -237,9 +237,9 @@ async function main() {
         address: simulation.address,
         constructorArguments: [],
       });
-      console.log("✅ Contract verified successfully!");
+      console.log("''Contract verified successfully!");
     } catch (verifyError) {
-      console.log("⚠️ Contract verification failed. You can verify manually later.");
+      console.log(" Contract verification failed. You can verify manually later.");
       console.log(`   Run: npx hardhat verify --network ${hre.network.name} ${simulation.address}`);
     }
   }
@@ -248,7 +248,7 @@ async function main() {
   // SUMMARY
   // ============================================
   console.log("\n═══════════════════════════════════════════════════════════════");
-  console.log("✅ DEPLOYMENT COMPLETED SUCCESSFULLY");
+  console.log("''DEPLOYMENT COMPLETED SUCCESSFULLY");
   console.log("═══════════════════════════════════════════════════════════════");
   console.log("\n📋 SUMMARY:");
   console.log(`   Contract Address: ${simulation.address}`);
@@ -267,11 +267,11 @@ async function main() {
   
   // Security reminder
   if (isLocalNetwork) {
-    console.log("\n⚠️  SECURITY REMINDER:");
+    console.log("\n️  SECURITY REMINDER:");
     console.log("   - local-keys.json contains private keys for local development only");
     console.log("   - DO NOT commit this file to version control!");
     console.log("   - DO NOT use these keys on Mainnet or any live network!");
-    console.log("   - Add 'blockchain/local-keys.json' to .gitignore");
+    console.log("   - Add 'blockchain/local-keys.json'to .gitignore");
   }
   
   console.log("\n🎉 Ready to use! Update your .env file with:");

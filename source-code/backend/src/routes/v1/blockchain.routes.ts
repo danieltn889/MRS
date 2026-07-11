@@ -11,19 +11,19 @@ const router: Router = express.Router();
 // AUDIT CHAIN (hash-linked, tamper-evident audit trail)
 // =====================================================
 
-// @route GET /api/v1/blockchain/chain/stats — chain status for the dashboard
+// @route GET /api/v1/blockchain/chain/stats   chain status for the dashboard
 router.get('/chain/stats', protect, async (_req: Request, res: Response): Promise<void> => {
   try {
     const stats = await AuditChainService.getStats();
     res.json({ success: true, data: stats });
   } catch (error) {
     logger.error('audit chain stats error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load chain stats' });
+    res.status(500).json({ success: false, message: 'Failed to load chain stats'});
   }
 });
 
-// @route GET /api/v1/blockchain/chain/verify — verify the ENTIRE chain.
-// Read-only integrity check (no sensitive data) — available to any authenticated
+// @route GET /api/v1/blockchain/chain/verify   verify the ENTIRE chain.
+// Read-only integrity check (no sensitive data)   available to any authenticated
 // user so candidates can verify their own results have not been tampered with.
 router.get('/chain/verify', protect, async (_req: Request, res: Response): Promise<void> => {
   try {
@@ -31,11 +31,11 @@ router.get('/chain/verify', protect, async (_req: Request, res: Response): Promi
     res.json({ success: true, data: report });
   } catch (error) {
     logger.error('audit chain verify error:', error);
-    res.status(500).json({ success: false, message: 'Failed to verify chain' });
+    res.status(500).json({ success: false, message: 'Failed to verify chain'});
   }
 });
 
-// @route GET /api/v1/blockchain/chain — browse / search the explorer
+// @route GET /api/v1/blockchain/chain   browse / search the explorer
 router.get('/chain', protect, [
   query('page').optional().isInt({ min: 1 }).toInt(),
   query('limit').optional().isInt({ min: 1, max: 100 }).toInt(),
@@ -51,37 +51,37 @@ router.get('/chain', protect, [
     res.json({ success: true, data: result });
   } catch (error) {
     logger.error('audit chain search error:', error);
-    res.status(500).json({ success: false, message: 'Failed to search chain' });
+    res.status(500).json({ success: false, message: 'Failed to search chain'});
   }
 });
 
-// @route GET /api/v1/blockchain/chain/:id/verify — verify a single block
+// @route GET /api/v1/blockchain/chain/:id/verify   verify a single block
 router.get('/chain/:id/verify', protect, [param('id').isUUID(), validateRequest], async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await AuditChainService.verifyBlock(String(req.params.id));
     if (!result.found) {
-      res.status(404).json({ success: false, message: 'Block not found' });
+      res.status(404).json({ success: false, message: 'Block not found'});
       return;
     }
     res.json({ success: true, data: result });
   } catch (error) {
     logger.error('audit chain verify block error:', error);
-    res.status(500).json({ success: false, message: 'Failed to verify block' });
+    res.status(500).json({ success: false, message: 'Failed to verify block'});
   }
 });
 
-// @route GET /api/v1/blockchain/chain/:id — get a single block
+// @route GET /api/v1/blockchain/chain/:id   get a single block
 router.get('/chain/:id', protect, [param('id').isUUID(), validateRequest], async (req: Request, res: Response): Promise<void> => {
   try {
     const block = await AuditChainService.getBlock(String(req.params.id));
     if (!block) {
-      res.status(404).json({ success: false, message: 'Block not found' });
+      res.status(404).json({ success: false, message: 'Block not found'});
       return;
     }
     res.json({ success: true, data: block });
   } catch (error) {
     logger.error('audit chain get block error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load block' });
+    res.status(500).json({ success: false, message: 'Failed to load block'});
   }
 });
 

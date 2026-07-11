@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { resetPassword, checkPasswordStrength, validateResetToken } from '../services/authAPI';
 
 interface ResetPasswordState {
-  status: 'idle' | 'loading' | 'success' | 'error' | 'validating';
+  status: 'idle'| 'loading'| 'success'| 'error'| 'validating';
   message: string;
   code?: string;
 }
@@ -67,7 +67,7 @@ const ResetPassword: React.FC = () => {
             code: 'INVALID_TOKEN',
           });
         } else {
-          setResetState({ status: 'idle', message: '' });
+          setResetState({ status: 'idle', message: ''});
         }
       } catch (error) {
         setResetState({
@@ -120,7 +120,7 @@ const ResetPassword: React.FC = () => {
       return;
     }
 
-    setResetState({ status: 'loading', message: '' });
+    setResetState({ status: 'loading', message: ''});
 
     try {
       await resetPassword({ token, password });
@@ -277,7 +277,7 @@ const ResetPassword: React.FC = () => {
 
           {/* Success Message */}
           <AnimatePresence>
-            {resetState.status === 'success' && (
+            {resetState.status === 'success'&& (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -299,7 +299,7 @@ const ResetPassword: React.FC = () => {
 
           {/* Error Message */}
           <AnimatePresence>
-            {resetState.status === 'error' && (
+            {resetState.status === 'error'&& (
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -312,14 +312,14 @@ const ResetPassword: React.FC = () => {
           </AnimatePresence>
 
           {/* Show error message above the form if present */}
-          {resetState.status === 'error' && (
+          {resetState.status === 'error'&& (
             <div className="mb-4">
               {renderErrorContent()}
             </div>
           )}
 
           {/* Form - Show only if token is valid */}
-          {resetState.status !== 'error' ? (
+          {resetState.status !== 'error'? (
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* New Password Field */}
               <div>
@@ -330,7 +330,7 @@ const ResetPassword: React.FC = () => {
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     id="password"
-                    type={showPassword ? 'text' : 'password'}
+                    type={showPassword ? 'text': 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={resetState.status === 'loading'}
@@ -359,9 +359,9 @@ const ResetPassword: React.FC = () => {
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-gray-700">Strength</span>
                       <span className={`text-xs font-semibold ${
-                        passwordStrength?.strength === 'weak' ? 'text-red-600' :
-                        passwordStrength?.strength === 'fair' ? 'text-orange-600' :
-                        passwordStrength?.strength === 'good' ? 'text-blue-600' :
+                        passwordStrength?.strength === 'weak'? 'text-red-600':
+                        passwordStrength?.strength === 'fair'? 'text-orange-600':
+                        passwordStrength?.strength === 'good'? 'text-blue-600':
                         'text-green-600'
                       }`}>
                         {passwordStrength?.strength?.toUpperCase()}
@@ -372,9 +372,9 @@ const ResetPassword: React.FC = () => {
                         initial={{ width: 0 }}
                         animate={{ width: `${passwordStrength?.score}%` }}
                         className={`h-full transition-all ${
-                          passwordStrength?.strength === 'weak' ? 'bg-red-500' :
-                          passwordStrength?.strength === 'fair' ? 'bg-orange-500' :
-                          passwordStrength?.strength === 'good' ? 'bg-blue-500' :
+                          passwordStrength?.strength === 'weak'? 'bg-red-500':
+                          passwordStrength?.strength === 'fair'? 'bg-orange-500':
+                          passwordStrength?.strength === 'good'? 'bg-blue-500':
                           'bg-green-500'
                         }`}
                       />
@@ -389,11 +389,11 @@ const ResetPassword: React.FC = () => {
                         initial={{ opacity: 0, x: -10 }}
                         animate={{ opacity: 1, x: 0 }}
                         className={`flex items-center gap-2 text-xs transition-colors ${
-                          req.check ? 'text-green-700' : 'text-gray-500'
+                          req.check ? 'text-green-700': 'text-gray-500'
                         }`}
                       >
                         <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                          req.check ? 'border-green-500 bg-green-50' : 'border-gray-300'
+                          req.check ? 'border-green-500 bg-green-50': 'border-gray-300'
                         }`}>
                           {req.check && <CheckCircle className="w-3 h-3 text-green-600" />}
                         </div>
@@ -413,7 +413,7 @@ const ResetPassword: React.FC = () => {
                   <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <input
                     id="confirmPassword"
-                    type={showConfirmPassword ? 'text' : 'password'}
+                    type={showConfirmPassword ? 'text': 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     disabled={resetState.status === 'loading'}
@@ -450,8 +450,8 @@ const ResetPassword: React.FC = () => {
 
               {/* Submit Button */}
               <motion.button
-                whileHover={allRequirementsMet && passwordsMatch && resetState.status !== 'loading' ? { scale: 1.02 } : {}}
-                whileTap={allRequirementsMet && passwordsMatch && resetState.status !== 'loading' ? { scale: 0.98 } : {}}
+                whileHover={allRequirementsMet && passwordsMatch && resetState.status !== 'loading'? { scale: 1.02 } : {}}
+                whileTap={allRequirementsMet && passwordsMatch && resetState.status !== 'loading'? { scale: 0.98 } : {}}
                 type="submit"
                 disabled={!allRequirementsMet || !passwordsMatch || resetState.status === 'loading'}
                 className={`w-full py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
@@ -460,13 +460,13 @@ const ResetPassword: React.FC = () => {
                     : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                {resetState.status === 'loading' && (
+                {resetState.status === 'loading'&& (
                   <>
                     <Loader className="w-5 h-5 animate-spin" />
                     <span>Resetting...</span>
                   </>
                 )}
-                {resetState.status !== 'loading' && (
+                {resetState.status !== 'loading'&& (
                   <>
                     <Zap className="w-5 h-5" />
                     <span>Reset Password</span>
@@ -477,7 +477,7 @@ const ResetPassword: React.FC = () => {
           ) : null}
 
           {/* Security Note */}
-          {resetState.status !== 'error' && (
+          {resetState.status !== 'error'&& (
             <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
               <p className="text-xs text-blue-700">
                 <strong>🔒 Security:</strong> For your protection, you'll be logged out of all devices. Log in again with your new password.

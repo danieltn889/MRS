@@ -3,17 +3,17 @@ import { io, Socket } from 'socket.io-client';
 import { Loader2, CheckCircle2, Circle, AlertCircle } from 'lucide-react';
 import { SOCKET_BASE_URL } from '../../services/simulationAPI';
 
-// Canonical evaluation stages — keys match the backend `evaluation_progress`
+// Canonical evaluation stages   keys match the backend `evaluation_progress`
 // events emitted during submitSimulation. This makes the evaluation transparent
 // (no "black box") by showing the candidate exactly what is being analyzed.
 const STAGES: Array<{ key: string; label: string }> = [
-  { key: 'saving', label: 'Saving submission' },
-  { key: 'repository', label: 'Analyzing repository & commit history' },
-  { key: 'communication', label: 'Calculating communication score' },
-  { key: 'code_quality', label: 'Evaluating code quality & task completion' },
-  { key: 'technical', label: 'Measuring technical implementation' },
-  { key: 'feedback', label: 'Generating AI feedback' },
-  { key: 'finalizing', label: 'Finalizing report' },
+  { key: 'saving', label: 'Saving submission'},
+  { key: 'repository', label: 'Analyzing repository & commit history'},
+  { key: 'communication', label: 'Calculating communication score'},
+  { key: 'code_quality', label: 'Evaluating code quality & task completion'},
+  { key: 'technical', label: 'Measuring technical implementation'},
+  { key: 'feedback', label: 'Generating AI feedback'},
+  { key: 'finalizing', label: 'Finalizing report'},
 ];
 
 interface EvaluationProgressProps {
@@ -61,20 +61,20 @@ const EvaluationProgress: React.FC<EvaluationProgressProps> = ({ sessionId, user
   }, [sessionId, userId]);
 
   const currentIndex = STAGES.findIndex((s) => s.key === currentStage);
-  const isComplete = currentStage === 'complete' || percent >= 100;
+  const isComplete = currentStage === 'complete'|| percent >= 100;
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-gray-900/90 backdrop-blur-sm p-4">
       <div className="w-full max-w-md rounded-2xl bg-gray-800 border border-gray-700 p-6 shadow-2xl">
         <h3 className="text-lg font-bold text-white text-center mb-1">Evaluating your submission</h3>
         <p className="text-xs text-gray-400 text-center mb-5">
-          Our AI is analyzing your work — repository, code, tasks and communication. This usually takes a few seconds.
+          Our AI is analyzing your work   repository, code, tasks and communication. This usually takes a few seconds.
         </p>
 
         {hasError ? (
           <div className="flex flex-col items-center gap-2 py-4 text-center">
             <AlertCircle size={28} className="text-red-400" />
-            <p className="text-sm text-red-300">Evaluation hit a problem. Your work was saved — please check your results.</p>
+            <p className="text-sm text-red-300">Evaluation hit a problem. Your work was saved   please check your results.</p>
           </div>
         ) : (
           <>
@@ -101,7 +101,7 @@ const EvaluationProgress: React.FC<EvaluationProgressProps> = ({ sessionId, user
                     ) : (
                       <Circle size={18} className="text-gray-600 flex-shrink-0" />
                     )}
-                    <span className={done ? 'text-gray-300' : active ? 'text-white font-medium' : 'text-gray-500'}>
+                    <span className={done ? 'text-gray-300': active ? 'text-white font-medium': 'text-gray-500'}>
                       {s.label}
                     </span>
                   </li>

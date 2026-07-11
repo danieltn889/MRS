@@ -34,7 +34,7 @@ src/
     └── validation.middleware.js
 ```
 
-## 🚀 How to Use OOP Pattern
+##  How to Use OOP Pattern
 
 ### 1. Creating a New Controller
 
@@ -88,7 +88,7 @@ const result = await DatabaseService.execute('SELECT * FROM users WHERE id = $1'
 const result = await DatabaseService.getPaginatedResults('jobs', {
   page: 1,
   limit: 20,
-  where: { status: 'active' },
+  where: { status: 'active'},
   orderBy: 'created_at DESC',
   select: 'id, title, description',
   joins: [{
@@ -100,8 +100,8 @@ const result = await DatabaseService.getPaginatedResults('jobs', {
 
 // Aggregation
 const stats = await DatabaseService.aggregate('applications', [
-  { field: 'id', function: 'COUNT', alias: 'total_applications' },
-  { field: 'created_at', function: 'MAX', alias: 'latest_application' }
+  { field: 'id', function: 'COUNT', alias: 'total_applications'},
+  { field: 'created_at', function: 'MAX', alias: 'latest_application'}
 ], { job_id: jobId });
 ```
 
@@ -297,7 +297,7 @@ router.get('/', async (req, res) => {
 
     res.json({ success: true, data: result.rows });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error' });
+    res.status(500).json({ success: false, message: 'Error'});
   }
 });
 ```
@@ -338,7 +338,7 @@ router.get('/', [
 ], jobController.getJobs);
 ```
 
-## 🎯 Benefits of OOP Approach
+## ''Benefits of OOP Approach
 
 1. **Reusability** - Common functionality in base classes and services
 2. **Maintainability** - Consistent patterns across all controllers
@@ -347,7 +347,7 @@ router.get('/', [
 5. **Consistency** - Standardized error handling, validation, and responses
 6. **Readability** - Clear separation of concerns and self-documenting code
 
-## 🚀 Next Steps
+##  Next Steps
 
 1. Refactor existing controllers to use the OOP pattern
 2. Create additional services for specific business logic

@@ -1,20 +1,20 @@
-"""
+"
 engagement.py
 =============
 Builds `job_views` from real Cleaned_Combined_Engagement.csv rows (real
 candidate/job/view-date + real funnel flags used only to bias generated
-`seconds_spent`). `job_views` has a UNIQUE(user_id, job_id) constraint —
+`seconds_spent`). `job_views` has a UNIQUE(user_id, job_id) constraint  
 same semantics as the app's own upsert (see feed.controller.ts
-logJobView: GREATEST(seconds_spent), latest viewed_at) — so multiple real
+logJobView: GREATEST(seconds_spent), latest viewed_at)   so multiple real
 view rows for the same pair are collapsed to one, keeping the latest date
 and the max engagement signal.
 
 `saved_jobs` has NO real source data at all (Job_Save is empty across all
-4.85M rows — verified, not assumed) — it's entirely generated, biased
+4.85M rows   verified, not assumed)   it's entirely generated, biased
 towards views that also show real Applied/Shortlisted engagement, which is
 a realistic proxy for "candidates are more likely to save jobs they're
 seriously considering."
-"""
+"
 
 from __future__ import annotations
 

@@ -55,18 +55,18 @@ export class BlockchainService {
     this.contractAddress = this.loadContractAddress();
     
     console.log(`🔗 Blockchain connected to: ${rpcUrl}`);
-    console.log(`👤 Wallet Address: ${this.wallet.address}`);
+    console.log(` Wallet Address: ${this.wallet.address}`);
     
     this.getBalance().then(balance => {
       console.log(`💰 Balance: ${balance} ETH`);
     }).catch((err: Error) => {
-      console.warn(`⚠️ Could not fetch balance: ${err.message}`);
+      console.warn(` Could not fetch balance: ${err.message}`);
     });
     
     if (this.contractAddress) {
       console.log(`📄 Contract Address: ${this.contractAddress}`);
     } else {
-      console.log(`⚠️ No contract address found. Please deploy the contract first.`);
+      console.log(` No contract address found. Please deploy the contract first.`);
     }
   }
 
@@ -86,19 +86,19 @@ export class BlockchainService {
   }
 
   private loadPrivateKey(): string {
-    // FIRST: check .env ETHEREUM_PRIVATE_KEY — this is the primary source for Sepolia
+    // FIRST: check .env ETHEREUM_PRIVATE_KEY   this is the primary source for Sepolia
     const envKey = process.env.ETHEREUM_PRIVATE_KEY;
     if (envKey && envKey.trim().length > 10) {
       const key = envKey.trim().startsWith('0x') ? envKey.trim() : `0x${envKey.trim()}`;
       try {
         const w = new ethers.Wallet(key);
-        console.log(`✅ [Blockchain] Using ETHEREUM_PRIVATE_KEY from .env → Wallet: ${w.address}`);
+        console.log(`''[Blockchain] Using ETHEREUM_PRIVATE_KEY from .env → Wallet: ${w.address}`);
         return key;
       } catch {
-        console.warn('⚠️ ETHEREUM_PRIVATE_KEY in .env is invalid, falling back to local-keys.json');
+        console.warn(' ETHEREUM_PRIVATE_KEY in .env is invalid, falling back to local-keys.json');
       }
     } else {
-      console.warn('⚠️ ETHEREUM_PRIVATE_KEY not set in .env — falling back to local-keys.json (no Sepolia ETH)');
+      console.warn(' ETHEREUM_PRIVATE_KEY not set in .env   falling back to local-keys.json (no Sepolia ETH)');
     }
 
     try {
@@ -112,27 +112,27 @@ export class BlockchainService {
 
       for (const keysPath of possiblePaths) {
         if (fs.existsSync(keysPath)) {
-          console.log(`📁 Loading keys from: ${keysPath}`);
+          console.log(` Loading keys from: ${keysPath}`);
           const keysData = JSON.parse(fs.readFileSync(keysPath, 'utf8'));
           this.localKeys = keysData.accounts || [];
 
           if (this.localKeys.length > 0) {
-            console.log(`✅ Loaded ${this.localKeys.length} local accounts`);
+            console.log(`''Loaded ${this.localKeys.length} local accounts`);
             const account = this.localKeys[0];
             if (account && account.privateKey) {
-              console.log(`✅ Using Account #${account.index}: ${account.address}`);
+              console.log(`''Using Account #${account.index}: ${account.address}`);
               return account.privateKey;
             }
           }
         }
       }
 
-      console.warn('⚠️ local-keys.json not found, using default Hardhat Account #0 (no Sepolia ETH)');
+      console.warn(' local-keys.json not found, using default Hardhat Account #0 (no Sepolia ETH)');
       return '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
     } catch (error) {
       const err = error as Error;
-      console.error('❌ Failed to load private key:', err.message);
+      console.error(' Failed to load private key:', err.message);
       return '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
     }
   }
@@ -142,7 +142,7 @@ export class BlockchainService {
     if (process.env.ETHEREUM_CONTRACT_ADDRESS) {
       const envAddress = this.cleanAddress(process.env.ETHEREUM_CONTRACT_ADDRESS);
       if (envAddress && envAddress.match(/^0x[a-fA-F0-9]{40}$/i)) {
-        console.log(`✅ Using contract address from ETHEREUM_CONTRACT_ADDRESS: ${envAddress}`);
+        console.log(`''Using contract address from ETHEREUM_CONTRACT_ADDRESS: ${envAddress}`);
         return envAddress;
       }
     }
@@ -150,7 +150,7 @@ export class BlockchainService {
     if (process.env.CONTRACT_ADDRESS) {
       const envAddress = this.cleanAddress(process.env.CONTRACT_ADDRESS);
       if (envAddress && envAddress.match(/^0x[a-fA-F0-9]{40}$/i)) {
-        console.log(`✅ Using contract address from CONTRACT_ADDRESS: ${envAddress}`);
+        console.log(`''Using contract address from CONTRACT_ADDRESS: ${envAddress}`);
         return envAddress;
       }
     }
@@ -166,25 +166,25 @@ export class BlockchainService {
       
       for (const deploymentPath of possiblePaths) {
         if (fs.existsSync(deploymentPath)) {
-          console.log(`📁 Loading deployment from: ${deploymentPath}`);
+          console.log(` Loading deployment from: ${deploymentPath}`);
           const deploymentData = JSON.parse(fs.readFileSync(deploymentPath, 'utf8'));
           
           if (deploymentData.contractAddress) {
             const cleaned = this.cleanAddress(deploymentData.contractAddress);
             if (cleaned) {
-              console.log(`✅ Found contract address: ${cleaned}`);
+              console.log(`''Found contract address: ${cleaned}`);
               return cleaned;
             }
           } else if (deploymentData.address) {
             const cleaned = this.cleanAddress(deploymentData.address);
             if (cleaned) {
-              console.log(`✅ Found contract address: ${cleaned}`);
+              console.log(`''Found contract address: ${cleaned}`);
               return cleaned;
             }
           } else if (typeof deploymentData === 'string') {
             const cleaned = this.cleanAddress(deploymentData);
             if (cleaned) {
-              console.log(`✅ Found contract address: ${cleaned}`);
+              console.log(`''Found contract address: ${cleaned}`);
               return cleaned;
             }
           }
@@ -196,12 +196,12 @@ export class BlockchainService {
         let address = fs.readFileSync(addressPath, 'utf8').trim();
         const cleaned = this.cleanAddress(address);
         if (cleaned) {
-          console.log(`✅ Found contract address in contract.address: ${cleaned}`);
+          console.log(`''Found contract address in contract.address: ${cleaned}`);
           return cleaned;
         }
       }
       
-      console.warn('⚠️ No contract address found');
+      console.warn(' No contract address found');
       return '';
       
     } catch (error) {
@@ -226,7 +226,7 @@ export class BlockchainService {
   async switchToAccount(index: number): Promise<boolean> {
     const account = this.getAccountByIndex(index);
     if (!account) {
-      console.error(`❌ Account ${index} not found`);
+      console.error(` Account ${index} not found`);
       return false;
     }
     
@@ -241,7 +241,7 @@ export class BlockchainService {
 
   async initializeContract(abi: any): Promise<ethers.Contract | null> {
     if (!this.contractAddress) {
-      console.error('❌ Contract address not set. Please deploy the contract first.');
+      console.error(' Contract address not set. Please deploy the contract first.');
       return null;
     }
     
@@ -249,20 +249,20 @@ export class BlockchainService {
     const cleanAddress = this.cleanAddress(this.contractAddress);
     
     this.contract = new ethers.Contract(cleanAddress, abi, this.wallet);
-    console.log(`✅ Contract initialized at: ${cleanAddress}`);
+    console.log(`''Contract initialized at: ${cleanAddress}`);
     
     try {
       const code = await this.provider.getCode(cleanAddress);
       if (code === '0x') {
-        console.warn('⚠️ Warning: No contract code found at address');
-        console.log('   Make sure the contract is deployed and the address is correct');
+        console.warn(' Warning: No contract code found at address');
+        console.log('  Make sure the contract is deployed and the address is correct');
         return null;
       } else {
-        console.log('✅ Contract verified on blockchain');
+        console.log('Contract verified on blockchain');
       }
     } catch (error) {
       const err = error as Error;
-      console.warn('⚠️ Could not verify contract:', err.message);
+      console.warn(' Could not verify contract:', err.message);
     }
     
     return this.contract;
@@ -287,14 +287,14 @@ export class BlockchainService {
     );
     
     console.log(`📊 Using blockchain address: ${address}`);
-    console.log(`📊 Address is ${isNew ? 'NEW' : 'EXISTING'} for this simulation`);
+    console.log(`📊 Address is ${isNew ? 'NEW': 'EXISTING'} for this simulation`);
     
     // The PLATFORM wallet signs + pays gas for EVERY credential. The candidate's address
-    // is still recorded on-chain as the credential owner — storeResult() takes `candidate`
+    // is still recorded on-chain as the credential owner   storeResult() takes `candidate`
     // as a parameter and does NOT require the candidate to be the sender. So each candidate
     // keeps a unique address WITHOUT funding it: only the one platform wallet needs test ETH,
     // which scales to any number of candidates on a real testnet (Sepolia).
-    void privateKey; // candidate key no longer used to sign — kept only as the owner address
+    void privateKey; // candidate key no longer used to sign   kept only as the owner address
     const contract = this.contract.connect(this.wallet);
     
     // Format scores to 2 decimal places for blockchain storage
@@ -304,7 +304,7 @@ export class BlockchainService {
     const adaptabilityScore = Number(data.adaptabilityScore.toFixed(2));
     const githubScore = Number(data.githubScore.toFixed(2));
     
-    console.log('📝 Storing simulation result on blockchain...');
+    console.log(' Storing simulation result on blockchain...');
     console.log(`   Session: ${data.sessionId}`);
     console.log(`   Candidate: ${address}`);
     console.log(`   Scores (2 decimals): Overall=${overallScore}%, Tech=${technicalScore}%, Punctuality=${punctualityScore}%, Adapt=${adaptabilityScore}%, GitHub=${githubScore}%`);
@@ -323,7 +323,7 @@ export class BlockchainService {
     console.log(`⏳ Transaction sent: ${tx.hash}`);
     const receipt = await tx.wait();
     
-    console.log(`✅ Stored on blockchain!`);
+    console.log(`''Stored on blockchain!`);
     console.log(`   Block: ${receipt.blockNumber}`);
     console.log(`   Gas Used: ${receipt.gasUsed.toString()}`);
     
@@ -358,7 +358,7 @@ export class BlockchainService {
     `, [userId, simulationId]);
     
     if (existingForSimulation.rows[0]) {
-      console.log(`✅ Candidate already has address for simulation ${simulationId}`);
+      console.log(`''Candidate already has address for simulation ${simulationId}`);
       return {
         address: existingForSimulation.rows[0].address,
         privateKey: existingForSimulation.rows[0].private_key,
@@ -392,7 +392,7 @@ export class BlockchainService {
           ) VALUES ($1, $2, $3, $4, $5, 'active', NOW(), NOW())
         `, [userId, simulationId, sessionId, address, privateKey]);
         
-        console.log(`✅ Generated NEW unique address for candidate: ${address.substring(0, 10)}...`);
+        console.log(`''Generated NEW unique address for candidate: ${address.substring(0, 10)}...`);
         
         return {
           address,
@@ -401,7 +401,7 @@ export class BlockchainService {
         };
       }
       
-      console.log(`⚠️ Address ${address.substring(0, 10)}... already in use by another candidate, retrying...`);
+      console.log(` Address ${address.substring(0, 10)}... already in use by another candidate, retrying...`);
       attempt++;
     }
     
@@ -431,7 +431,7 @@ export class BlockchainService {
     return result.rows;
   }
 
-  async markAddressAsUsed(address: string, newStatus: 'used' | 'expired' | 'revoked'): Promise<void> {
+  async markAddressAsUsed(address: string, newStatus: 'used'| 'expired'| 'revoked'): Promise<void> {
     await DatabaseService.query(`
       UPDATE wallet_addresses 
       SET status = $1, updated_at = NOW()
@@ -477,7 +477,7 @@ export class BlockchainService {
     const tx = await this.contract.verifyResult(sessionId, { gasLimit: 100000 });
     const receipt = await tx.wait();
     
-    console.log(`✅ Verified! Tx: ${receipt.transactionHash}`);
+    console.log(`''Verified! Tx: ${receipt.transactionHash}`);
     
     return {
       txHash: receipt.transactionHash,

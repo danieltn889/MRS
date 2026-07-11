@@ -6,7 +6,7 @@
 #     bash deploy/bootstrap-server.sh
 #
 # Installs: Node 20, pm2, Python3 + venv, PostgreSQL (+ creates the app DB),
-# and Nginx (reverse proxy). Idempotent — safe to re-run.
+# and Nginx (reverse proxy). Idempotent   safe to re-run.
 #
 # PREREQUISITE: the production env files must already exist (they hold secrets,
 # so they are NOT in git):
@@ -23,14 +23,14 @@ ENV_FILE="$ROOT/source-code/backend/.env"
 
 # Pull DB settings from the backend .env (fallback to safe defaults).
 DB_NAME="SVWR_CFE_DB_OG"
-DB_PASSWORD=""
+DB_PASSWORD=
 if [ -f "$ENV_FILE" ]; then
-  DB_NAME="$(grep -E '^DB_NAME=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
-  DB_PASSWORD="$(grep -E '^DB_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  DB_NAME="$(grep -E '^DB_NAME='"$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  DB_PASSWORD="$(grep -E '^DB_PASSWORD='"$ENV_FILE" | head -1 | cut -d= -f2- || true)"
 fi
 : "${DB_NAME:=SVWR_CFE_DB_OG}"
 if [ -z "$DB_PASSWORD" ]; then
-  echo "⚠ No DB_PASSWORD found in $ENV_FILE — create the .env first (see .env.example). Aborting."
+  echo " No DB_PASSWORD found in $ENV_FILE   create the .env first (see .env.example). Aborting."
   exit 1
 fi
 
@@ -62,8 +62,8 @@ sudo nginx -t && sudo systemctl reload nginx
 echo "▶ [5/5] pm2 start-on-boot…"
 sudo env PATH="$PATH:$(dirname "$(command -v node)")" pm2 startup systemd -u "$USER" --hp "$HOME" || true
 
-echo ""
-echo "✅ Bootstrap complete. This server is deploy-ready."
+echo 
+echo "''Bootstrap complete. This server is deploy-ready."
 echo "   Next: run  bash deploy.sh   (or push to main). deploy.sh runs migrations,"
 echo "   builds, and starts everything with pm2."
 echo "   Don't forget: open ports 80/443 in the AWS Security Group for public access."

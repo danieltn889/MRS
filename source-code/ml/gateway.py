@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SimuHire Rwanda — API GATEWAY
+SimuHire Rwanda- API GATEWAY
 ==============================
 Single entry point on port 8080 that proxies all 4 microservices.
 
@@ -21,7 +21,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 # Windows' default console codepage (cp1252) can't encode the emoji used in
-# this file's own print()s below — gateway.py sets UTF-8 env vars for the
+# this file's own print()s below- gateway.py sets UTF-8 env vars for the
 # CHILD services it spawns, but that doesn't affect its own stdout. Without
 # this, the process crashes on the first emoji print before any service
 # even starts.
@@ -52,22 +52,8 @@ SERVICES = {
         "prefix": "/feed",
         "description": "Personalized job feed scoring (Profile 40%, Search 20%, Views 15%, Recency 5%, Popularity 10%)",
         "endpoints": [
-            "POST /feed/score   — Score and rank jobs for a candidate",
-            "GET  /feed/health  — Health check",
-        ],
-    },
-    "matcher": {
-        "name": "AI Job Matcher",
-        "file": "ai_job_matcher_og.py",
-        "port": 8000,
-        "prefix": "/matcher",
-        "description": "4-factor ML job matching (Skills 40%, Qualifications 25%, Experience 20%, Preferences 15%)",
-        "endpoints": [
-            "POST /matcher/match               — Match candidate against ALL jobs",
-            "POST /matcher/match/job/{job_id}  — Match candidate against a specific job",
-            "GET  /matcher/health              — Health check",
-            "GET  /matcher/stats               — Cache statistics",
-            "GET  /matcher/logs/{log_type}     — View logs",
+            "POST /feed/score  - Score and rank jobs for a candidate",
+            "GET  /feed/health - Health check",
         ],
     },
     "commits": {
@@ -77,8 +63,8 @@ SERVICES = {
         "prefix": "/commits",
         "description": "Matches git commit messages to tasks using spaCy + TF-IDF + VADER",
         "endpoints": [
-            "POST /commits/match   — Match a commit message against a task list",
-            "GET  /commits/health  — Health check",
+            "POST /commits/match  - Match a commit message against a task list",
+            "GET  /commits/health - Health check",
         ],
     },
     "search": {
@@ -88,10 +74,10 @@ SERVICES = {
         "prefix": "/search",
         "description": "5-level priority NLP job search",
         "endpoints": [
-            "GET  /search/search?q=query  — Search jobs",
-            "GET  /search/health          — Health check",
-            "POST /search/refresh         — Refresh job index",
-            "GET  /search/logs/all        — View all logs",
+            "GET  /search/search?q=query - Search jobs",
+            "GET  /search/health         - Health check",
+            "POST /search/refresh        - Refresh job index",
+            "GET  /search/logs/all       - View all logs",
         ],
     },
     "vwes": {
@@ -101,25 +87,31 @@ SERVICES = {
         "prefix": "/vwes",
         "description": "Communication style classifier using Random Forest",
         "endpoints": [
-            "POST   /vwes/train            — Train model in background",
-            "POST   /vwes/train/sync       — Train model synchronously",
-            "POST   /vwes/predict          — Classify a single message",
-            "POST   /vwes/predict/batch    — Classify multiple messages",
-            "POST   /vwes/analyze/chat     — Analyse a full chat conversation",
-            "GET    /vwes/status           — Training status",
-            "GET    /vwes/health           — Health check",
+            "POST   /vwes/train           - Train model in background",
+            "POST   /vwes/train/sync      - Train model synchronously",
+            "POST   /vwes/predict         - Classify a single message",
+            "POST   /vwes/predict/batch   - Classify multiple messages",
+            "POST   /vwes/analyze/chat    - Analyse a full chat conversation",
+            "GET    /vwes/status          - Training status",
+            "GET    /vwes/health          - Health check",
         ],
     },
     "hybrid": {
-        "name": "Hybrid Job Recommender",
+        "name": "Hybrid Job Recommender + AI Job Matcher (merged)",
         "file": "hybrid_job_recommender.py",
         "port": 8003,
         "prefix": "/hybrid",
-        "description": "Content + collaborative-filtering (PyTorch MF) + behavior hybrid job recommendations",
+        "description": "Content + collaborative-filtering (PyTorch MF) + behavior hybrid job recommendations, merged in-process with the 4-factor Matcher (Skills 40%, Qualifications 25%, Experience 20%, Preferences 15%)- one process now serves both the /hybrid/* and /matcher/* prefixes (see route_matcher below).",
         "endpoints": [
-            "POST /hybrid/score    — Ranked jobs for a candidate_id",
-            "POST /hybrid/refresh  — Retrain from current DB state",
-            "GET  /hybrid/health   — Health check",
+            "POST /hybrid/score              - Ranked jobs for a candidate_id",
+            "POST /hybrid/score/combined     - Matcher+hybrid blended feed",
+            "POST /hybrid/refresh            - Retrain hybrid models from current DB state",
+            "GET  /hybrid/health             - Hybrid health check",
+            "POST /matcher/match             - Match candidate against ALL jobs",
+            "POST /matcher/match/job/{job_id}- Match candidate against a specific job",
+            "GET  /matcher/health            - Matcher health check",
+            "GET  /matcher/stats             - Matcher cache statistics",
+            "GET  /matcher/logs/{log_type}   - View matcher logs",
         ],
     },
 }
@@ -168,13 +160,13 @@ def _kill_port(port: int):
 def start_service(key: str, svc: dict):
     file_path = SERVICES_DIR / svc["file"]
     if not file_path.exists():
-        print(f"  ⚠️  '{svc['file']}' not found — {svc['name']} will NOT start")
+        print(f"  ️  '{svc['file']}' not found- {svc['name']} will NOT start")
         service_status[key] = "missing"
         return
 
     # Free the port if something is already on it
     if _port_open(svc["port"]):
-        print(f"  ⚠️  Port {svc['port']} already in use — attempting to free it…")
+        print(f"  ️  Port {svc['port']} already in use- attempting to free it…")
         _kill_port(svc["port"])
         time.sleep(1)
 
@@ -186,7 +178,7 @@ def start_service(key: str, svc: dict):
     print(f"  🚀 Starting {svc['name']} (port {svc['port']})…")
     print(f"     Log: {log_path}")
 
-    # Fix Windows cp1252 UnicodeEncodeError — emoji in print() crash child processes
+    # Fix Windows cp1252 UnicodeEncodeError- emoji in print() crash child processes
     env = os.environ.copy()
     env["PYTHONUTF8"]        = "1"
     env["PYTHONIOENCODING"]  = "utf-8"
@@ -285,7 +277,7 @@ def background_status_watcher():
     for key in pending:
         if service_status[key] == "starting":
             service_status[key] = "timeout"
-            print(f"\n  ⏰ {SERVICES[key]['name']} timed out — check log: {log_files.get(key)}")
+            print(f"\n  ⏰ {SERVICES[key]['name']} timed out- check log: {log_files.get(key)}")
 
 
 # ── SIGNAL HANDLER ───────────────────────────────────────────
@@ -310,7 +302,7 @@ async def lifespan(app: FastAPI):
     http_client = httpx.AsyncClient(timeout=300.0)  # 5 minutes for AI processing
 
     print("\n" + "=" * 65)
-    print("🌐  SimuHire Rwanda — API GATEWAY")
+    print("🌐  SimuHire Rwanda- API GATEWAY")
     print(f"  Services folder: {SERVICES_DIR}")
     print("=" * 65)
 
@@ -322,7 +314,7 @@ async def lifespan(app: FastAPI):
     for t in threads: t.start()
     for t in threads: t.join()
 
-    # Quick startup check (60 s) — also detects immediate crashes
+    # Quick startup check (60 s)- also detects immediate crashes
     print(f"\n  ⏳ Startup check ({QUICK_WAIT}s)…")
     check_threads = [
         threading.Thread(
@@ -341,8 +333,8 @@ async def lifespan(app: FastAPI):
         st = service_status[key]
         icons = {
             "up":       ("✅", "ready"),
-            "missing":  ("⚠️ ", "file not found — skipped"),
-            "crashed":  ("💥", f"CRASHED — check {log_files.get(key)}"),
+            "missing":  ("️ ", "file not found- skipped"),
+            "crashed":  ("💥", f"CRASHED- check {log_files.get(key)}"),
             "starting": ("⏳", f"still loading… (background watcher active, up to {STARTUP_WAIT//60} min)"),
             "timeout":  ("⏰", "timed out"),
         }
@@ -362,7 +354,7 @@ async def lifespan(app: FastAPI):
 
     stop_all()
     # A shutdown-time failure here (observed: anyio backend lookup breaking
-    # mid-interpreter-teardown) must not crash the whole shutdown sequence —
+    # mid-interpreter-teardown) must not crash the whole shutdown sequence-
     # that turns a normal pm2 restart into a crash-then-recover cycle, which
     # is exactly what makes the CI health check flaky right after a deploy.
     # The process is exiting either way, so the socket gets cleaned up
@@ -370,12 +362,12 @@ async def lifespan(app: FastAPI):
     try:
         await http_client.aclose()
     except Exception as e:
-        print(f"  ⚠️  http_client.aclose() failed during shutdown (non-fatal): {e}")
+        print(f"  ️  http_client.aclose() failed during shutdown (non-fatal): {e}")
 
 # ── APP ──────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="SimuHire Rwanda — API Gateway",
+    title="SimuHire Rwanda- API Gateway",
     description=(
         "Single entry point for all SimuHire microservices.\n\n"
         "| Prefix | Service |\n"
@@ -399,9 +391,13 @@ app.add_middleware(
 
 # ── PROXY ────────────────────────────────────────────────────
 
-async def proxy(request: Request, target_port: int, strip_prefix: str) -> Response:
+async def proxy(request: Request, target_port: int, strip_prefix: str | None) -> Response:
+    """strip_prefix=None forwards the path unchanged -- used for /matcher, which
+    (since the merge) lands on the same process as /hybrid and needs its own
+    /matcher/... routes intact rather than stripped down to a bare path that
+    would collide with /hybrid's own bare-path routes on that same port."""
     path = request.url.path
-    if path.startswith(strip_prefix):
+    if strip_prefix is not None and path.startswith(strip_prefix):
         path = path[len(strip_prefix):] or "/"
 
     url = f"http://127.0.0.1:{target_port}{path}"
@@ -432,7 +428,7 @@ async def proxy(request: Request, target_port: int, strip_prefix: str) -> Respon
                 "service":        SERVICES[key]["name"] if key else str(target_port),
                 "service_status": st,
                 "detail": (
-                    "Service is still loading — please wait and retry."
+                    "Service is still loading- please wait and retry."
                     if st == "starting"
                     else f"Service is {st}. Check log: {log}"
                 ),
@@ -455,7 +451,10 @@ async def route_feed(request: Request, path: str = ""):
 @app.api_route("/matcher",             methods=METHODS)
 @app.api_route("/matcher/{path:path}", methods=METHODS)
 async def route_matcher(request: Request, path: str = ""):
-    return await proxy(request, 8000, "/matcher")
+    # Merged into the hybrid process (port 8003) -- forward the full
+    # "/matcher/..." path unchanged (no prefix stripping) since the merged
+    # app's own /matcher routes expect it, unlike /hybrid's bare paths below.
+    return await proxy(request, 8003, None)
 
 @app.api_route("/commits",             methods=METHODS)
 @app.api_route("/commits/{path:path}", methods=METHODS)
@@ -544,7 +543,7 @@ async def view_service_log(service_key: str, lines: int = 50):
 
 if __name__ == "__main__":
     print("\n" + "=" * 65)
-    print("🌐  SimuHire Rwanda — API GATEWAY  v1.0.0")
+    print("🌐  SimuHire Rwanda- API GATEWAY  v1.0.0")
     print("=" * 65)
     print(f"  Single port : http://localhost:{GATEWAY_PORT}")
     print(f"  Services dir: {SERVICES_DIR}")

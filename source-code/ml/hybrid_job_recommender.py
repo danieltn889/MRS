@@ -1,33 +1,49 @@
 #!/usr/bin/env python3
 """
-SimuHire Rwanda — Hybrid Job Recommender  (DB-backed live microservice)
-========================================================================
-Live counterpart of Job_Feed/hybrid_job_recommender.py (the CSV/offline
-prototype). Same three-signal design, wired directly to Postgres instead
-of synthetic CSVs:
+SimuHire Rwanda- Recommendation Service  (Matcher + Hybrid Recommender, merged)
+====================================================================================
+One FastAPI process/port serving BOTH ML scorers that used to run as two
+separate services (ai_job_matcher_og.py on 8000 + hybrid_job_recommender.py
+on 8003)- merged so each signal is computed exactly once, the same-machine
+HTTP round trip between them is a direct function call instead, and the two
+independent loads of the shared sentence-transformer model become one.
 
-    1. ContentBasedModel   - candidate/job similarity (shared TF-IDF space)
-    2. CollaborativeModel  - implicit-feedback matrix factorization (PyTorch)
-    3. BehaviorModel       - recency-weighted preference over job attributes
+    MATCHER   (mounted at /matcher, ported from ai_job_matcher_og.py):
+      deterministic 4-factor scorer- Skills 40% / Qualifications 25% /
+      Experience 20% / Preferences 15%- candidate/job data fetched from the
+      Node backend's REST API via BackendClient (unchanged from before).
 
-    Final Score = w_content * Content + w_collab * Collaborative + w_behavior * Behavior
+    HYBRID    (mounted at the app root, this file's original logic):
+      5-signal statistical/ML scorer- Content 35% / Behavior 30% /
+      Collaborative 20% / Freshness 10% / Popularity 5%- reading Postgres
+      directly. Same three-signal design as before:
+        1. ContentBasedModel   - candidate/job similarity (shared TF-IDF space)
+        2. CollaborativeModel  - implicit-feedback matrix factorization (PyTorch)
+        3. BehaviorModel       - recency-weighted preference over job attributes
 
-Runs as its own FastAPI service (default port 8003), proxied through
-gateway.py at /hybrid, the same way feed_recommender.py (/feed) and
-ai_job_matcher_og.py (/matcher) are.
+    combined_score_candidate() blends the two (matcher 70% / hybrid 30% by
+    default) for /score/combined- now an in-process call to the matcher's
+    score_candidate_against_jobs() instead of requests.post() over loopback.
+
+Proxied through gateway.py at /matcher and /hybrid- both prefixes now
+route to this SAME process/port; see gateway.py's SERVICES registry.
 
 Endpoints
 ---------
-    POST /score     {candidate_id, top_n?}  -> ranked jobs + score breakdown
-    POST /refresh    retrain from current DB state (call after bulk data changes)
-    GET  /health     model status: candidates/jobs/interactions loaded, last trained
+    POST /score               {candidate_id, top_n?}  -> hybrid-only ranked jobs
+    POST /score/combined      {candidate_id, top_n?}  -> matcher+hybrid blended feed
+    POST /matcher/match       {candidate_id}          -> matcher-only, all jobs
+    POST /refresh              retrain hybrid models from current DB state
+    GET  /health               hybrid model status
+    GET  /matcher/health       matcher status
 
-Why direct DB access (unlike ai_job_matcher_og.py, which calls the backend
-REST API): the collaborative model needs the FULL cross-candidate
-interaction matrix (every view/save/application across every candidate) to
-train, and no bulk endpoint like that exists in the backend today. Reusing
-the same read-only Postgres credentials as the backend (source-code/backend/.env)
-avoids standing up new bulk API surface just for this.
+Why the Matcher keeps calling the backend's REST API instead of also
+switching to direct Postgres access (unlike Hybrid): its BackendClient/
+per-request data shape is unrelated to Hybrid's DataFrame-based fetch, and
+unifying the two data-access layers is a separate, much larger change not
+implied by "compute each signal once"- the actual duplication eliminated
+here was in scoring/model-loading/the network hop, not in how each
+subsystem sources its rows.
 """
 
 import os
@@ -49,7 +65,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 # NOTE: deliberately NOT forcing TRANSFORMERS_OFFLINE here. Tried it first
 # (same as ai_job_matcher_og.py) expecting it to avoid a slow/hung HuggingFace
-# Hub version-check on startup — instead it made model loading fail
+# Hub version-check on startup- instead it made model loading fail
 # deterministically ("does not appear to have a file named pytorch_model.bin
 # or model.safetensors") against this exact cache + transformers version,
 # confirmed by isolated testing: offline=fails every time, online=loads in
@@ -57,7 +73,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 # (below) is the actual defense against a slow/flaky connection.
 
 import subprocess
-for pkg in ["fastapi", "uvicorn", "numpy", "pandas", "scipy", "scikit-learn", "torch", "psycopg2-binary", "python-dotenv", "requests"]:
+for pkg in ["fastapi", "uvicorn", "numpy", "pandas", "scipy", "scikit-learn", "torch", "psycopg2-binary", "python-dotenv", "requests", "nltk"]:
     mod = {"scikit-learn": "sklearn", "psycopg2-binary": "psycopg2", "python-dotenv": "dotenv"}.get(pkg, pkg.replace("-", "_"))
     try:
         __import__(mod)
@@ -75,12 +91,28 @@ from dotenv import load_dotenv
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import normalize as sk_normalize
+from sklearn.metrics.pairwise import cosine_similarity
+
+# NLTK (ported from ai_job_matcher_og.py, needed by LocalTextProcessor.lemmatize
+# for the Matcher subsystem)- tokenizer/lemmatizer data downloaded once if
+# missing, mirroring the self-install loop above.
+import nltk
+from nltk.stem import WordNetLemmatizer
+from nltk.tokenize import word_tokenize
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt', quiet=True)
+try:
+    nltk.data.find('corpora/wordnet')
+except LookupError:
+    nltk.download('wordnet', quiet=True)
 
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader as TorchDataLoader
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Request, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
@@ -106,7 +138,7 @@ class DBConfig:
 class HybridWeights:
     """Content 35% + Behavior 30% + Collaborative 20% + Freshness 10% +
     Popularity 5% = 100%. Business-rule (salary fit, verified employer, etc.)
-    is deliberately NOT a 6th weighted component here — it's a policy
+    is deliberately NOT a 6th weighted component here- it's a policy
     adjustment (does this job clear a minimum bar?), not a continuous
     similarity signal, so it's applied as a bonus/gate multiplier on top of
     the weighted sum instead of diluting the other five weights."""
@@ -116,27 +148,34 @@ class HybridWeights:
     freshness: float = 0.10
     popularity: float = 0.05
 
-    def normalized(self, has_collab: bool, has_behavior: bool, exclude_content: bool = False) -> "HybridWeights":
+    def normalized(self, has_collab: bool, has_behavior: bool, exclude_content: bool = False,
+                   has_freshness: bool = True) -> "HybridWeights":
         """Cold-start-safe renormalization: a fresh/dev DB may have zero
         interaction history, so collaborative/behavior signals may be
         untrained. Redistribute their weight onto whatever signals exist
         rather than silently scoring everyone 0 on a missing component.
-        Freshness/popularity are always computable (pure job attributes,
-        no candidate history needed), so they're never zeroed out here.
+        Popularity is always computable (a pure job attribute, no candidate
+        history needed), so it's never zeroed out here. Freshness is
+        normally always computable too, but has_freshness=False covers the
+        rare edge case where literally every job in the batch has no usable
+        created_at- freshness_scores() would otherwise fake a uniform
+        "30 days old" for all of them rather than a real signal, so that
+        case is excluded and redistributed like any other missing signal.
 
         exclude_content: used ONLY when this hybrid score is being blended
-        with ai_job_matcher_og.py's score (see combined_score_candidate) —
+        with ai_job_matcher_og.py's score (see combined_score_candidate)-
         that matcher score IS a profile-vs-job fit, computed a different way
         (structured factors) from Content's TF-IDF/semantic cosine, but
         measuring the same underlying thing. Including both would silently
         double-count profile-fit and understate how much of the blended
         score is genuinely new signal (Behavior/Collaborative/Freshness/
-        Popularity). Standalone /score calls never pass this — there's no
+        Popularity). Standalone /score calls never pass this- there's no
         matcher score to be redundant with there."""
         c = 0.0 if exclude_content else self.content
         b = self.behavior if has_behavior else 0.0
         k = self.collaborative if has_collab else 0.0
-        f, p = self.freshness, self.popularity
+        f = self.freshness if has_freshness else 0.0
+        p = self.popularity
         total = c + b + k + f + p
         if total <= 0:
             return HybridWeights(content=1.0, behavior=0.0, collaborative=0.0, freshness=0.0, popularity=0.0)
@@ -249,7 +288,7 @@ log = get_logger("hybrid_recommender", CFG.log_dir)
 
 class Database:
     """Read-only access to the real schema. Every query below matches the
-    actual column names in db/migrations — not the CSV headers from the
+    actual column names in db/migrations- not the CSV headers from the
     offline prototype."""
 
     def __init__(self, cfg: DBConfig):
@@ -269,7 +308,7 @@ class Database:
         return pd.DataFrame([dict(r) for r in rows])
 
     def fetch_fingerprints(self) -> Dict[str, Tuple[int, Optional[str]]]:
-        """Cheap (COUNT, MAX(timestamp)) aggregates — NOT the full rows — used
+        """Cheap (COUNT, MAX(timestamp)) aggregates- NOT the full rows- used
         by ModelStore to decide whether a persisted model is still valid
         without re-fetching/re-fitting anything. A single row inserted,
         updated, or deleted changes the count and/or the max timestamp, so
@@ -347,7 +386,8 @@ class Database:
         return self._query_df("""
             SELECT u.id AS user_id, cp.city, cp.country, cp.headline,
                    cp.summary, cp.job_preferences, cp.languages, cp.expected_salary,
-                   cp.date_of_birth
+                   cp.date_of_birth, cp.is_rwandan, cp.province, cp.district,
+                   cp.sector, cp.cell, cp.village
             FROM users u
             JOIN candidate_profiles cp ON cp.user_id = u.id
             WHERE u.user_type = 'candidate' AND u.deleted_at IS NULL
@@ -357,7 +397,8 @@ class Database:
         df = self._query_df(f"""
             SELECT u.id AS user_id, cp.city, cp.country, cp.headline,
                    cp.summary, cp.job_preferences, cp.languages, cp.expected_salary,
-                   cp.date_of_birth
+                   cp.date_of_birth, cp.is_rwandan, cp.province, cp.district,
+                   cp.sector, cp.cell, cp.village
             FROM users u
             JOIN candidate_profiles cp ON cp.user_id = u.id
             WHERE u.id = '{user_id}'::uuid AND u.deleted_at IS NULL
@@ -431,7 +472,7 @@ class Database:
 def _s(x) -> str:
     """Safe string coercion for nullable DB text fields. A DataFrame column
     that is NULL for every row (common on a small dev dataset) gets coerced
-    by pandas to float64 NaN rather than None/"" — and `nan or ""` still
+    by pandas to float64 NaN rather than None/""- and `nan or ""` still
     evaluates to `nan` (NaN is truthy), which breaks `" ".join(...)` with a
     'expected str instance, float found' error. Route every nullable field
     through this instead of `x or ""`."""
@@ -479,7 +520,7 @@ def job_location_text(row) -> str:
 
 def job_title_text(row) -> str:
     # job_type included so it lines up with the candidate side, which already
-    # folds job_preferences.job_types into title_text — without this, a
+    # folds job_preferences.job_types into title_text- without this, a
     # candidate's declared job-type preference had nothing on the job side to
     # match against via Content (it only ever surfaced through Behavior's
     # categorical ATTRS, which needs prior interaction history to exist).
@@ -498,14 +539,14 @@ def job_experience_text(row) -> str:
 def _jsonable(value):
     """psycopg2 already parses jsonb columns into Python list/dict, but NaN
     (from a column that's NULL for a row with mixed non-null siblings) isn't
-    valid JSON — normalize to None/[] so FastAPI's response encoder doesn't choke."""
+    valid JSON- normalize to None/[] so FastAPI's response encoder doesn't choke."""
     if value is None or (isinstance(value, float) and math.isnan(value)):
         return None
     return value
 
 
 def job_details_dict(job_row: pd.Series) -> dict:
-    """Full job payload for the frontend — one call gets both the ranking
+    """Full job payload for the frontend- one call gets both the ranking
     score AND everything needed to render the job card, instead of a second
     round-trip per job. Field names mirror what ai_job_matcher_og.py already
     returned (job.locations, job.skills_required, etc.) so existing frontend
@@ -567,7 +608,7 @@ def _years_between(start, end, is_current: bool) -> float:
 
 def _str_list_text(raw) -> str:
     """responsibilities/requirements/benefits are jsonb arrays of plain
-    strings (unlike skills, which are {"name": ...} objects) — tolerate a
+    strings (unlike skills, which are {"name": ...} objects)- tolerate a
     JSON-string-encoded list too, same defensive pattern ai_job_matcher_og.py
     uses for these same three columns."""
     if not raw:
@@ -583,7 +624,7 @@ def _str_list_text(raw) -> str:
 
 
 # Single-purpose job-field extractors for BehaviorModel's 17-pair system.
-# Deliberately NOT reusing job_title_text()/job_fields_text() above — those
+# Deliberately NOT reusing job_title_text()/job_fields_text() above- those
 # intentionally blend several raw fields together for Content's 7-pair space,
 # which would double-count the same information once it's also broken out
 # into its own independent pair here.
@@ -640,7 +681,7 @@ def job_qualifications_text(row) -> str:
 def _parse_language_list(raw) -> List[str]:
     """candidate_profiles.languages / jobs.language_requirements are both
     jsonb lists of {"name": ...} objects (see candidates.py/jobs.py in the
-    Job_Feed generator) — normalize both shapes (also tolerate a plain list
+    Job_Feed generator)- normalize both shapes (also tolerate a plain list
     of strings) to a flat list of language names."""
     if not isinstance(raw, list):
         return []
@@ -656,15 +697,2363 @@ def _parse_language_list(raw) -> List[str]:
 
 
 # ==========================================================================
-# 3.5 SEMANTIC ENCODER — Model 1's "understand relationships, not just exact
+# 3.5 SEMANTIC ENCODER- Model 1's "understand relationships, not just exact
 # keyword overlap" requirement (e.g. candidate skill "Python" should pull in
 # "Backend Developer" / "Machine Learning Engineer", not just literal
 # "Python Developer" postings). Pure TF-IDF only overlaps on shared tokens;
 # sentence embeddings place semantically related phrases near each other in
 # vector space even with zero shared words. Falls back to TF-IDF-only
 # similarity (still functional, just less semantic) if the model can't load
-# — this service must keep working on a machine with no internet access to
+#- this service must keep working on a machine with no internet access to
 # download the model.
+# ==========================================================================
+
+# ==========================================================================
+# 1.5 MATCHER SUBSYSTEM (ported from ai_job_matcher_og.py) -- deterministic
+# 4-factor scorer: Skills 40% / Qualifications 25% / Experience 20% /
+# Preferences 15%. Own logging (writes to ml/logs/*.log, same filenames as
+# before), own candidate/job data access (BackendClient -> Node backend REST
+# API), mounted at /matcher below. LocalTextProcessor shares this file's
+# SemanticEncoder instance instead of loading a second copy of the model.
+# ==========================================================================
+
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+MAIN_LOG = LOG_DIR / "ai_service.log"
+ERROR_LOG = LOG_DIR / "ai_service_errors.log"
+PERFORMANCE_LOG = LOG_DIR / "performance.log"
+REQUEST_LOG = LOG_DIR / "requests.log"
+CANDIDATE_LOG = LOG_DIR / "candidate_data.log"
+JOB_LOG = LOG_DIR / "job_data.log"
+MATCH_LOG = LOG_DIR / "match_results.log"
+
+def write_log(log_file, message, log_type="INFO"):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    try:
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] [{log_type}] {message}\n")
+    except:
+        pass
+
+def log_info(message):
+    print(message)
+    write_log(MAIN_LOG, message, "INFO")
+
+def log_error(message):
+    print(f"❌ {message}")
+    write_log(ERROR_LOG, message, "ERROR")
+
+def log_performance(operation, duration_ms, details=""):
+    message = f"⏱️ {operation}: {duration_ms:.2f}ms {details}"
+    print(message)
+    write_log(PERFORMANCE_LOG, f"{operation}|{duration_ms:.2f}ms|{details}", "PERF")
+
+def log_candidate(message):
+    print(f"👤 {message}")
+    write_log(CANDIDATE_LOG, message, "CANDIDATE")
+
+def log_job(message):
+    print(f"💼 {message}")
+    write_log(JOB_LOG, message, "JOB")
+
+def log_match(message):
+    print(f"🎯 {message}")
+    write_log(MATCH_LOG, message, "MATCH")
+
+log_info("="*70)
+log_info("🚀 AI JOB MATCHING API - PURE SEMANTIC MATCHING")
+log_info("✅ EVERYTHING COMES FROM DATABASE - NO HARDCODED VALUES")
+log_info(f"📁 Log directory: {LOG_DIR}")
+log_info("="*70)
+
+# API Configuration (Matcher subsystem -- candidate/job data fetched from the
+# Node backend's REST API, unlike Hybrid's direct-Postgres access below).
+BASE_URL = "http://localhost:3001/api/v1"
+BACKEND_REQUEST_TIMEOUT = 120
+
+class LocalTextProcessor:
+    def __init__(self, semantic_encoder=None):
+        self.lemmatizer = WordNetLemmatizer()
+        # Shared SemanticEncoder instance (engine.semantic_encoder) instead of
+        # loading a second independent copy of the same sentence-transformer
+        # model -- this used to be the one clearly duplicated resource load
+        # between the Matcher and Hybrid services when they ran separately.
+        self.semantic_encoder = semantic_encoder
+
+        self.embeddings_cache = {}
+        self.cache_hits = 0
+        self.cache_misses = 0
+        # Correction vocabulary built dynamically from the candidate's and job's
+        # OWN skills at match time- no hardcoded/static skill list.
+        self.dynamic_vocab = set()
+
+    def add_to_vocab(self, terms):
+        """Populate the fuzzy-correction vocabulary from real data (skill names)."""
+        if not terms:
+            return
+        for term in terms:
+            if not term or not isinstance(term, str):
+                continue
+            cleaned = re.sub(r'[^\w\s+#.]', ' ', term.lower())
+            for tok in cleaned.split():
+                if len(tok) > 3:
+                    self.dynamic_vocab.add(tok)
+
+    def normalize_terms(self, text: str) -> str:
+        """Correct typos against the vocabulary built from the candidate's and job's
+        own skills (e.g. a misspelled job skill 'javascrit' aligns to the candidate's
+        'javascript'). Purely data-driven- a no-op when no vocabulary is set."""
+        if not text or not self.dynamic_vocab:
+            return text
+        try:
+            import difflib
+            out = []
+            for tok in text.split():
+                if len(tok) <= 3 or tok in self.dynamic_vocab:
+                    out.append(tok)
+                    continue
+                match = difflib.get_close_matches(tok, self.dynamic_vocab, n=1, cutoff=0.86)
+                out.append(match[0] if match else tok)
+            return ' '.join(out)
+        except Exception:
+            return text
+
+    def lemmatize(self, text: str) -> str:
+        if not text:
+            return text
+        try:
+            tokens = word_tokenize(text.lower())
+            lemmatized = [self.lemmatizer.lemmatize(token) for token in tokens]
+            return ' '.join(lemmatized)
+        except:
+            return text
+
+    def clean(self, text: str) -> str:
+        if not text:
+            return ""
+        if not isinstance(text, str):
+            text = str(text)
+        text = text.lower()
+        text = re.sub(r'[^\w\s]', ' ', text)
+        text = re.sub(r'\s+', ' ', text)
+        text = self.normalize_terms(text)   # typo / abbreviation correction
+        text = self.lemmatize(text)
+        return text.strip()
+    
+    def get_embedding(self, text: str) -> np.ndarray:
+        if not text:
+            return np.zeros(384)
+        if text in self.embeddings_cache:
+            self.cache_hits += 1
+            return self.embeddings_cache[text]
+        self.cache_misses += 1
+        if self.semantic_encoder:
+            emb = self.semantic_encoder.encode(text)
+            if emb is not None:
+                self.embeddings_cache[text] = emb
+                return emb
+        return np.zeros(384)
+
+    def semantic_similarity(self, text1: str, text2: str) -> float:
+        if not text1 or not text2:
+            return 0.0
+
+        if self.semantic_encoder and self.semantic_encoder.available:
+            sim = self.semantic_encoder.similarity(text1, text2)
+            if sim > 0:
+                return sim
+
+        try:
+            vec = TfidfVectorizer(max_features=300)
+            tfidf = vec.fit_transform([text1, text2])
+            return float(cosine_similarity(tfidf[0:1], tfidf[1:2])[0][0])
+        except:
+            return 0.0
+
+    def get_cache_stats(self):
+        return {"hits": self.cache_hits, "misses": self.cache_misses}
+
+
+def redistribute_weights(components: dict) -> dict:
+    """components: {name: (applicable: bool, base_weight: float)}.
+
+    Returns {name: effective_weight}: inapplicable dimensions (nothing to
+    evaluate -- the job simply didn't state a requirement for them) get 0,
+    and every applicable dimension's weight is renormalized so the survivors
+    still sum to 1.0. Mirrors HybridWeights.normalized() below, which
+    already does this correctly for the Hybrid engine's Content/Behavior/
+    Collaborative signals -- this is the same pattern applied to the
+    Matcher's factors/sub-dimensions, where "no requirement stated" was
+    previously scored as a flat 100% (free credit) instead of being
+    excluded and its weight handed to the dimensions that ARE applicable.
+
+    If every dimension is inapplicable, all weights are 0 -- the caller
+    is responsible for deciding what an empty parent factor means (usually:
+    exclude that whole factor too, one level up)."""
+    total = sum(w for applicable, w in components.values() if applicable)
+    if total <= 0:
+        return {name: 0.0 for name in components}
+    return {name: (w / total if applicable else 0.0) for name, (applicable, w) in components.items()}
+
+
+class Factor1_SkillsMatcher:
+    def __init__(self, tp):
+        self.tp = tp
+    
+    def extract_candidate_skills(self, profile_data):
+        skills = set()
+        for skill in profile_data.get('skills', []):
+            name = skill.get('skill_name', '') or skill.get('name', '')
+            if name:
+                cleaned = self.tp.clean(name)
+                if cleaned:
+                    skills.add(cleaned)
+                    log_candidate(f"   Skill from DB: {name}")
+        
+        for work in profile_data.get('work_experience', []):
+            for skill in work.get('skills', []):
+                if skill and isinstance(skill, str):
+                    cleaned = self.tp.clean(skill)
+                    if cleaned:
+                        skills.add(cleaned)
+                        log_candidate(f"   Skill from work DB: {skill}")
+        
+        return list(skills)
+    
+    def extract_job_skills(self, job):
+        skills = set()
+        for skill in job.get('skills_required', []):
+            if isinstance(skill, dict):
+                name = skill.get('name', '')
+            elif isinstance(skill, str):
+                name = skill
+            else:
+                continue
+            if name:
+                name = name.replace('•', '').strip()
+                cleaned = self.tp.clean(name)
+                if cleaned:
+                    skills.add(cleaned)
+                    log_job(f"   Required skill from DB: {name}")
+        return list(skills)
+    
+    def match(self, candidate_skills, job_skills):
+        if not job_skills:
+            # Job lists no required skills at all -- nothing to evaluate, so
+            # this factor is EXCLUDED (weight 0) rather than given free 100%
+            # credit; its 40% base weight is redistributed across the other
+            # 3 factors by the caller (see the top-level combine step).
+            return {"score": 0.0, "match_percentage": 0.0, "matched_count": 0, "total": 0,
+                    "applicable": False, "note": "Job doesn't list any required skills",
+                    "weight": 0.0, "weighted_score": 0.0}
+        if not candidate_skills:
+            return {"score": 0.0, "match_percentage": 0.0, "matched_count": 0, "total": len(job_skills),
+                    "applicable": True, "weight": 0.40, "weighted_score": 0.0}
+        
+        matched = []
+        match_scores = []
+        
+        for js in job_skills:
+            best = 0.0
+            for cs in candidate_skills:
+                sim = self.tp.semantic_similarity(cs, js)
+                if sim > best:
+                    best = sim
+            match_scores.append(best)
+            if best >= 0.3:
+                matched.append(js)
+                log_match(f"      Skill matched: '{js}' (similarity: {best:.2f})")
+            else:
+                log_match(f"      Skill NOT matched: '{js}' (best similarity: {best:.2f})")
+        
+        score = sum(match_scores) / len(job_skills) if job_skills else 1.0
+        
+        return {
+            "score": round(score, 4),
+            "match_percentage": round(score * 100, 1),
+            "matched_count": len(matched),
+            "total_job_skills": len(job_skills),
+            "matched_skills": matched,
+            "missing_skills": [js for js in job_skills if js not in matched],
+            "individual_scores": match_scores,
+            "applicable": True,
+            "weight": 0.40,
+            "weighted_score": round(score * 0.40, 4)
+        }
+
+class Factor2_QualificationsMatcher:
+    def __init__(self, tp):
+        self.tp = tp
+        
+        # Degree level hierarchy (Lower number = lower degree)
+        self.degree_levels = {
+            # Level 0 - No degree
+            "no formal education": 0, 
+            "high school": 0, 
+            "secondary school": 0,
+            "ged": 0,
+            
+            # Level 1 - Certificate/Diploma
+            "certificate": 1, 
+            "diploma": 1,
+            "certification": 1,
+            
+            # Level 2 - Advanced Diploma/Associate
+            "advanced diploma": 2, 
+            "associate degree": 2, 
+            "hnd": 2,
+            "foundation degree": 2,
+            
+            # Level 3 - Bachelor's
+            "bachelor": 3, 
+            "bachelor's": 3, 
+            "bachelor's degree": 3,
+            "bsc": 3, 
+            "ba": 3, 
+            "beng": 3,
+            "bachelor degree": 3,
+            "undergraduate": 3,
+            
+            # Level 4 - Postgraduate Diploma/Certificate
+            "postgraduate diploma": 4, 
+            "postgraduate certificate": 4,
+            "pgdip": 4,
+            "pgcert": 4,
+            
+            # Level 5 - Master's
+            "master": 5, 
+            "master's": 5, 
+            "master's degree": 5,
+            "msc": 5, 
+            "ma": 5, 
+            "mba": 5,
+            "masters": 5,
+            "postgraduate": 5,
+            
+            # Level 6 - Doctorate
+            "phd": 6, 
+            "doctorate": 6, 
+            "doctoral": 6,
+            "doctor": 6,
+            "dphil": 6,
+        }
+        
+        # Qualification entry weights
+        self.qualification_weights = {
+            "degree": 0.6,
+            "field": 0.4
+        }
+    
+    def get_degree_level(self, degree_text: str) -> int:
+        """Get hierarchical level - returns -1 if not found"""
+        if not degree_text:
+            return -1
+        
+        degree_lower = degree_text.lower().strip()
+        
+        # Direct match first
+        for degree_name, level in self.degree_levels.items():
+            if degree_name in degree_lower:
+                return level
+        
+        # Try semantic similarity with known levels
+        highest_score = 0.0
+        best_level = -1
+        
+        for degree_name, level in self.degree_levels.items():
+            sim = self.tp.semantic_similarity(degree_lower, degree_name)
+            if sim > highest_score and sim > 0.4:
+                highest_score = sim
+                best_level = level
+        
+        return best_level if best_level >= 0 else -1
+    
+    def check_degree_hierarchy(self, candidate_level: int, required_level: int, exact_match_only: bool = False) -> float:
+        """
+        Calculate degree hierarchy score.
+        """
+        # No requirement - always 100%
+        if required_level <= 0:
+            return 1.0
+        
+        # Candidate has no degree - 0%
+        if candidate_level <= 0:
+            return 0.0
+        
+        # EXACT MATCH MODE (strict)
+        if exact_match_only:
+            return 1.0 if candidate_level == required_level else 0.0
+        
+        # HIERARCHY MODE
+        if candidate_level >= required_level:
+            # Candidate meets or exceeds requirement - ALWAYS 100%
+            return 1.0  # Any degree at or above requirement = 100%
+        else:
+            # Candidate below requirement
+            level_diff = required_level - candidate_level
+            
+            if level_diff == 1:
+                return 0.50  # One level below = 50%
+            elif level_diff == 2:
+                return 0.25  # Two levels below = 25%
+            else:
+                return 0.10  # Three+ levels below = 10%
+    def extract_candidate_qualifications(self, profile_data):
+        result = {
+            "degrees": [], 
+            "fields": [], 
+            "combined": [], 
+            "certifications": [],
+            "highest_degree_level": -1,
+            "highest_degree_raw": None
+        }
+        
+        # Extract from education records
+        for edu in profile_data.get('education', []):
+            degree = edu.get('degree', '')
+            field = edu.get('field_of_study', '')
+            
+            if degree:
+                degree_level = self.get_degree_level(degree)
+                result["degrees"].append({
+                    "raw": degree, 
+                    "cleaned": self.tp.clean(degree),
+                    "level": degree_level
+                })
+                
+                # Track highest degree
+                if degree_level > result["highest_degree_level"]:
+                    result["highest_degree_level"] = degree_level
+                    result["highest_degree_raw"] = degree
+                
+                log_candidate(f"   Degree from DB: {degree} (Level: {degree_level})")
+            
+            if field:
+                result["fields"].append({
+                    "raw": field, 
+                    "cleaned": self.tp.clean(field)
+                })
+                log_candidate(f"   Field from DB: {field}")
+            
+            if degree and field:
+                combined = f"{degree} in {field}"
+                result["combined"].append({
+                    "raw": combined,
+                    "cleaned": self.tp.clean(combined),
+                    "degree_level": degree_level if degree else -1
+                })
+            elif degree:
+                result["combined"].append({
+                    "raw": degree,
+                    "cleaned": self.tp.clean(degree),
+                    "degree_level": degree_level if degree else -1
+                })
+        
+        # Extract from certifications
+        for cert in profile_data.get('certifications', []):
+            cert_name = cert.get('name', '')
+            if cert_name:
+                result["certifications"].append({
+                    "raw": cert_name,
+                    "cleaned": self.tp.clean(cert_name)
+                })
+                log_candidate(f"   Certification from DB: {cert_name}")
+        
+        return result
+    
+    def extract_job_qualifications(self, job):
+        edu_required = job.get('education_required', {})
+        
+        if isinstance(edu_required, str):
+            try:
+                edu_required = json.loads(edu_required)
+            except:
+                edu_required = {}
+        
+        # Get minimum degree requirement
+        min_degree = edu_required.get('minimum_degree', '')
+        min_degree_level = self.get_degree_level(min_degree)
+        
+        # Parse qualification entries (MULTIPLE qualifications allowed)
+        qualification_entries = edu_required.get('qualification_entries', [])
+        processed_entries = []
+        
+        # ✅ COLLECT ALL FIELDS FROM QUALIFICATION ENTRIES
+        all_fields_from_entries = []
+        
+        for entry in qualification_entries:
+            entry_degree = entry.get('degree', '')
+            entry_fields = entry.get('fields_of_study', [])
+            
+            # Handle fields as array or string
+            if isinstance(entry_fields, str):
+                try:
+                    entry_fields = json.loads(entry_fields)
+                except:
+                    entry_fields = [entry_fields] if entry_fields else []
+            elif not isinstance(entry_fields, list):
+                entry_fields = []
+            
+            # ✅ ADD ALL FIELDS TO THE COLLECTION
+            for field in entry_fields:
+                if field and field not in all_fields_from_entries:
+                    all_fields_from_entries.append(field)
+            
+            processed_entries.append({
+                "degree": entry_degree,
+                "degree_level": self.get_degree_level(entry_degree),
+                "fields_of_study": entry_fields,
+                "fields_cleaned": [self.tp.clean(f) for f in entry_fields if f]
+            })
+        
+        # ✅ MERGE root fields_of_study with fields from qualification_entries
+        root_fields = edu_required.get('fields_of_study', [])
+        if isinstance(root_fields, str):
+            try:
+                root_fields = json.loads(root_fields)
+            except:
+                root_fields = []
+        elif not isinstance(root_fields, list):
+            root_fields = []
+        
+        # Combine all fields (root + from entries)
+        all_fields = list(set(root_fields + all_fields_from_entries))
+        
+        # Parse certifications
+        certifications = edu_required.get('certifications', [])
+        if isinstance(certifications, str):
+            try:
+                certifications = json.loads(certifications)
+            except:
+                certifications = []
+        elif not isinstance(certifications, list):
+            certifications = []
+        
+        # Parse age requirement
+        age_requirement = edu_required.get('age_requirement', '')
+        
+        # Parse languages
+        languages = edu_required.get('languages', [])
+        if isinstance(languages, str):
+            try:
+                languages = json.loads(languages)
+            except:
+                languages = []
+        
+        processed_languages = []
+        for lang in languages:
+            if isinstance(lang, dict):
+                lang_name = lang.get('name', '')
+                if lang_name:
+                    processed_languages.append(lang_name)
+            elif isinstance(lang, str):
+                if lang:
+                    processed_languages.append(lang)
+        
+        # Parse experience requirements
+        experience_requirements = edu_required.get('experience_requirements', [])
+        if isinstance(experience_requirements, str):
+            try:
+                experience_requirements = json.loads(experience_requirements)
+            except:
+                experience_requirements = []
+        
+        processed_experience = []
+        for exp in experience_requirements:
+            if isinstance(exp, dict):
+                title = exp.get('title', '')
+                years_str = exp.get('years', '')
+                if title and years_str:
+                    years_num = 0
+                    match = re.search(r'(\d+(?:\.\d+)?)', str(years_str))
+                    if match:
+                        years_num = float(match.group(1))
+                    processed_experience.append({
+                        "title": title,
+                        "years_required": years_num,
+                        "raw_years": years_str
+                    })
+            elif isinstance(exp, str):
+                processed_experience.append({"title": exp, "years_required": 0})
+        
+        # ============================================
+        # ✅ ENHANCED LOGGING - SHOW COMPLETE EDUCATION REQUIREMENTS
+        # ============================================
+        log_job(f"   ============================================")
+        log_job(f"   📚 COMPLETE EDUCATION REQUIREMENTS FROM DB:")
+        log_job(f"   ============================================")
+        log_job(f"   🎓 Minimum Degree: {min_degree} (Level: {min_degree_level})")
+        log_job(f"   🎓 Is Degree Required: {edu_required.get('is_degree_required', False)}")
+        log_job(f"   ")
+        
+        if processed_entries:
+            log_job(f"   📋 QUALIFICATION ENTRIES ({len(processed_entries)}):")
+            for idx, entry in enumerate(processed_entries):
+                log_job(f"      Entry {idx + 1}:")
+                log_job(f"         Degree: {entry['degree']} (Level: {entry['degree_level']})")
+                log_job(f"         Fields of Study: {entry['fields_of_study']}")
+            log_job(f"   ")
+        else:
+            log_job(f"   📋 Qualification Entries: None")
+            log_job(f"   ")
+        
+        if all_fields:
+            log_job(f"   📚 Combined Fields of Study ({len(all_fields)}):")
+            log_job(f"      {all_fields}")
+            log_job(f"   ")
+        else:
+            log_job(f"   📚 Fields of Study: None")
+            log_job(f"   ")
+        
+        if certifications:
+            log_job(f"   ✅ Certifications Required ({len(certifications)}):")
+            for cert in certifications:
+                log_job(f"      - {cert}")
+            log_job(f"   ")
+        else:
+            log_job(f"   ✅ Certifications: None")
+            log_job(f"   ")
+        
+        if processed_experience:
+            log_job(f"   💼 Experience Requirements ({len(processed_experience)}):")
+            for exp in processed_experience:
+                log_job(f"      - {exp.get('title', 'Unknown')}: {exp.get('years_required', 0)}+ years")
+            log_job(f"   ")
+        else:
+            log_job(f"   💼 Experience Requirements: None")
+            log_job(f"   ")
+        
+        if processed_languages:
+            log_job(f"   🌐 Languages Required ({len(processed_languages)}):")
+            for lang in processed_languages:
+                log_job(f"      - {lang}")
+            log_job(f"   ")
+        else:
+            log_job(f"   🌐 Languages: None")
+            log_job(f"   ")
+        
+        log_job(f"   👤 Age Requirement: {age_requirement if age_requirement else 'Not specified'}")
+        log_job(f"   ============================================")
+        
+        return {
+            "minimum_degree": min_degree,
+            "minimum_degree_level": min_degree_level,
+            "qualification_entries": processed_entries,
+            "min_degree_cleaned": self.tp.clean(min_degree),
+            "is_degree_required": edu_required.get('is_degree_required', False),
+            "fields_of_study": all_fields,
+            "fields_cleaned": [self.tp.clean(f) for f in all_fields if f],
+            "certifications": certifications,
+            "certifications_cleaned": [self.tp.clean(c) for c in certifications if c],
+            "additional_requirements": edu_required.get('additional_requirements', []),
+            "languages": processed_languages,
+            "experience_requirements": processed_experience,
+            "age_requirement": age_requirement,
+            # ✅ ADD THESE FOR COMPLETE DATA
+            "raw_education_required": edu_required,
+            "has_qualification_entries": len(processed_entries) > 0,
+            "total_qualification_options": len(processed_entries),
+            "allowed_degrees": [entry['degree'] for entry in processed_entries if entry['degree']],
+            "allowed_fields": all_fields,
+        }
+   
+    def match(self, candidate_quals, job_quals):
+        # Get candidate's highest degree
+        candidate_highest_level = candidate_quals.get("highest_degree_level", -1)
+        candidate_highest_degree = candidate_quals.get("highest_degree_raw", "No degree")
+        
+        job_required_level = job_quals.get("minimum_degree_level", -1)
+        job_required_degree = job_quals.get("minimum_degree", "")
+        
+        # Check if job has multiple qualification entries
+        qualification_entries = job_quals.get("qualification_entries", [])
+        has_qualification_entries = len(qualification_entries) > 0
+        
+        # =====================================================
+        # DEGREE HIERARCHY SCORE
+        # =====================================================
+        exact_match_only = False
+        
+        hierarchy_score = self.check_degree_hierarchy(
+            candidate_highest_level, 
+            job_required_level,
+            exact_match_only
+        )
+        
+        log_match(f"   Degree Hierarchy: Candidate={candidate_highest_level} ({candidate_highest_degree}), Job={job_required_level} ({job_required_degree}) → Score={hierarchy_score:.2f}")
+        
+        # =====================================================
+        # CHECK QUALIFICATION ENTRIES (if job has multiple options)
+        # =====================================================
+        qualification_entry_score = 0.0
+        best_entry_match = None
+        
+        if has_qualification_entries and candidate_highest_level > 0:
+            for entry in qualification_entries:
+                entry_degree = entry.get("degree", "")
+                entry_level = entry.get("degree_level", -1)
+                entry_fields = entry.get("fields_cleaned", [])
+                
+                if entry_level > 0:
+                    entry_hierarchy_score = self.check_degree_hierarchy(
+                        candidate_highest_level, 
+                        entry_level,
+                        exact_match_only
+                    )
+                    
+                    if entry_hierarchy_score > qualification_entry_score:
+                        qualification_entry_score = entry_hierarchy_score
+                        best_entry_match = entry
+        
+        # Use qualification entry score if better than base hierarchy
+        final_hierarchy_score = max(hierarchy_score, qualification_entry_score)
+        
+        # =====================================================
+        # FIELD MATCHING
+        # =====================================================
+        job_fields = job_quals.get("fields_cleaned", [])
+        candidate_fields_list = [f["cleaned"] for f in candidate_quals.get("fields", [])]
+        candidate_combined_list = [c["cleaned"] for c in candidate_quals.get("combined", [])]
+        
+        field_match_score = 0.0
+        best_field_sim = 0.0
+        best_matched_field = None
+        has_field_requirement = len(job_fields) > 0
+        has_candidate_field_data = bool(candidate_fields_list or candidate_combined_list)
+
+        if has_field_requirement:
+            if not has_candidate_field_data:
+                # Job states a field-of-study requirement and the candidate
+                # has zero education entries on file -- no evidence they meet
+                # it, so this scores 0, not a "some credit anyway" floor.
+                field_match_score = 0.0
+                log_match(f"   ❌ Field match: candidate has no field-of-study data on file → 0.00 (job requires: {job_fields})")
+            else:
+                log_match(f"   Job requires field(s): {job_fields}")
+
+                # Calculate best similarity
+                for job_field in job_fields:
+                    for cand_field in candidate_fields_list + candidate_combined_list:
+                        sim = self.tp.semantic_similarity(cand_field, job_field)
+                        log_match(f"      Comparing '{cand_field}' with '{job_field}': similarity={sim:.4f}")
+                        if sim > best_field_sim:
+                            best_field_sim = sim
+                            best_matched_field = cand_field
+
+                # Calculate field match score with stricter thresholds -- no
+                # floor for a weak/poor match: candidate HAS field data, it
+                # just doesn't meaningfully resemble what the job requires,
+                # so below the PARTIAL threshold this is honestly 0, not a
+                # guaranteed 0.2 "something's better than nothing" credit.
+                if best_field_sim >= 0.8:
+                    field_match_score = 1.0
+                    log_match(f"   ✅ Field match: EXCELLENT ({best_field_sim:.2f})")
+                elif best_field_sim >= 0.6:
+                    field_match_score = 0.8
+                    log_match(f"   ✅ Field match: GOOD ({best_field_sim:.2f})")
+                elif best_field_sim >= 0.4:
+                    field_match_score = 0.5
+                    log_match(f"   ️ Field match: PARTIAL ({best_field_sim:.2f})")
+                else:
+                    field_match_score = 0.0
+                    log_match(f"   ❌ Field match: POOR ({best_field_sim:.2f}) → scored 0, no floor credit")
+        
+        # =====================================================
+        # CERTIFICATION MATCHING
+        # =====================================================
+        job_certs = job_quals.get("certifications_cleaned", [])
+        candidate_certs = [c["cleaned"] for c in candidate_quals.get("certifications", [])]
+        
+        cert_match_score = 1.0
+        matched_certs = []
+        has_cert_requirement = len(job_certs) > 0
+        
+        if has_cert_requirement:
+            if candidate_certs:
+                cert_matches = 0
+                log_match(f"   DEBUG - Job Certifications: {job_certs}")
+                log_match(f"   DEBUG - Candidate Certifications: {candidate_certs}")
+
+                for job_cert in job_certs:
+                    for cand_cert in candidate_certs:
+                        sim = self.tp.semantic_similarity(cand_cert, job_cert)
+                        log_match(f"      Comparing cert: '{cand_cert}' vs '{job_cert}' = {sim:.4f}")
+                        if sim >= 0.6:
+                            cert_matches += 1
+                            matched_certs.append({"job": job_cert, "candidate": cand_cert, "similarity": sim})
+                            break
+                
+                cert_match_score = cert_matches / len(job_certs)
+                log_match(f"   Certifications: {cert_matches}/{len(job_certs)} matched → Score={cert_match_score:.2f}")
+            else:
+                # Job requires certification(s) and the candidate has none on
+                # file -- no evidence they meet a stated requirement, so this
+                # scores 0, not a "benefit of the doubt" default.
+                cert_match_score = 0.0
+                log_match(f"   Certifications: Job requires certs, candidate has none on file → 0.00")
+
+        # =====================================================
+        # CALCULATE FINAL QUALIFICATION SCORE
+        # Base weights Degree 15% / Field 70% / Certs 15% apply only to
+        # dimensions the job actually stated a requirement for -- an
+        # unstated dimension is EXCLUDED (not given free 100% credit) and
+        # its weight is redistributed across the dimensions that ARE
+        # applicable (same pattern as HybridWeights.normalized() below).
+        # =====================================================
+        has_degree_requirement = job_required_level > 0 or has_qualification_entries
+        degree_component_score = (
+            qualification_entry_score if (has_qualification_entries and qualification_entry_score > 0)
+            else final_hierarchy_score
+        )
+
+        qual_weights = redistribute_weights({
+            "degree": (has_degree_requirement, 0.15),
+            "field":  (has_field_requirement, 0.70),
+            "certs":  (has_cert_requirement, 0.15),
+        })
+        final_score = (degree_component_score * qual_weights["degree"]
+                       + field_match_score * qual_weights["field"]
+                       + cert_match_score * qual_weights["certs"])
+        excluded_dimensions = [name for name, applicable in
+                               (("degree", has_degree_requirement), ("field", has_field_requirement),
+                                ("certs", has_cert_requirement)) if not applicable]
+        qualifications_applicable = has_degree_requirement or has_field_requirement or has_cert_requirement
+        log_match(f"   Qualification weights after redistribution: degree={qual_weights['degree']:.2f}, "
+                  f"field={qual_weights['field']:.2f}, certs={qual_weights['certs']:.2f} "
+                  f"(excluded: {excluded_dimensions or 'none'})")
+
+        final_score = min(1.0, max(0.0, final_score))
+        
+        # Determine match quality
+        if final_score >= 0.85:
+            match_quality = "Excellent"
+            explanation = f"Your {candidate_highest_degree} perfectly matches the job requirements"
+        elif final_score >= 0.70:
+            match_quality = "Good"
+            explanation = f"Your {candidate_highest_degree} meets the job requirements"
+        elif final_score >= 0.50:
+            match_quality = "Fair"
+            explanation = f"Your {candidate_highest_degree} partially meets the job requirements"
+        elif final_score >= 0.30:
+            match_quality = "Partial"
+            explanation = f"Your {candidate_highest_degree} is below the required {job_required_degree}"
+        else:
+            match_quality = "Poor"
+            explanation = f"Your qualifications do not match the job requirements"
+        
+        log_match(f"   ============================================")
+        log_match(f"   QUALIFICATIONS MATCH SUMMARY:")
+        log_match(f"      Degree Hierarchy Score: {final_hierarchy_score:.2f} ({final_hierarchy_score*100:.0f}%)")
+        log_match(f"      Field Match Score: {field_match_score:.2f} ({field_match_score*100:.0f}%)")
+        log_match(f"      Certification Score: {cert_match_score:.2f} ({cert_match_score*100:.0f}%)")
+        log_match(f"      Has Field Requirement: {has_field_requirement}")
+        log_match(f"      Has Qualification Entries: {has_qualification_entries}")
+        log_match(f"      Has Certification Requirement: {has_cert_requirement}")
+        log_match(f"      Final Score: {final_score:.2f} ({final_score*100:.0f}%)")
+        log_match(f"      Match Quality: {match_quality}")
+        log_match(f"   ============================================")
+        
+        return {
+            "score": round(final_score, 4),
+            "match_percentage": round(final_score * 100, 1),
+            "match_quality": match_quality,
+            "explanation": explanation,
+            "degree_hierarchy_score": round(final_hierarchy_score, 4),
+            "field_match_score": round(field_match_score, 4),
+            "certification_score": round(cert_match_score, 4),
+            "best_field_similarity": round(best_field_sim, 4),
+            "best_matched_field": best_matched_field,
+            "has_field_requirement": has_field_requirement,
+            "has_qualification_entries": has_qualification_entries,
+            "has_certification_requirement": has_cert_requirement,
+            "candidate_highest_degree": candidate_highest_degree,
+            "candidate_degree_level": candidate_highest_level,
+            "job_required_degree": job_required_degree,
+            "job_degree_level": job_required_level,
+            "matched_certifications": matched_certs,
+            "qualification_entry_used": best_entry_match,
+            "applicable": qualifications_applicable,
+            "excluded_dimensions": excluded_dimensions,
+            "redistributed_weights": qual_weights,
+            "weight": 0.25,
+            "weighted_score": round(final_score * 0.25, 4)
+        }
+
+class Factor3_ExperienceMatcher:
+    def __init__(self, tp):
+        self.tp = tp
+    
+    def extract_candidate_work_experience(self, profile_data):
+        experiences = []
+        current_date = datetime.now()
+        
+        for work in profile_data.get('work_experience', []):
+            title = work.get('title', '')
+            start_str = work.get('start_date')
+            end_str = work.get('end_date')
+            is_current = work.get('is_current', False)
+            
+            if not title or not start_str:
+                continue
+            
+            try:
+                if isinstance(start_str, str):
+                    start_str = start_str.replace('Z', '+00:00')
+                start = datetime.fromisoformat(start_str)
+                # Normalize to naive so we never mix tz-aware and naive datetimes
+                # (current jobs use datetime.now(), which is naive)- this was silently
+                # dropping current experiences via a TypeError.
+                if start.tzinfo is not None:
+                    start = start.replace(tzinfo=None)
+
+                if is_current or not end_str:
+                    end = datetime.now()
+                else:
+                    if isinstance(end_str, str):
+                        end_str = end_str.replace('Z', '+00:00')
+                    end = datetime.fromisoformat(end_str)
+                    if end.tzinfo is not None:
+                        end = end.replace(tzinfo=None)
+
+                years = (end - start).days / 365.25
+
+                if years > 0:
+                    # Build the text used for semantic matching from the TITLE plus the
+                    # responsibilities, technologies, and industry- not the title alone-
+                    # so relevant experience is recognised even when the title differs.
+                    parts = [title]
+                    if work.get('description'):
+                        parts.append(str(work.get('description')))
+                    exp_skills = work.get('skills') or []
+                    if isinstance(exp_skills, list) and exp_skills:
+                        parts.append(' '.join(str(s) for s in exp_skills))
+                    elif isinstance(exp_skills, str):
+                        parts.append(exp_skills)
+                    if work.get('industry'):
+                        parts.append(str(work.get('industry')))
+
+                    experiences.append({
+                        "title": title,
+                        "company": work.get('company') or work.get('company_name') or work.get('organization') or '',
+                        "skills": exp_skills if isinstance(exp_skills, list) else ([exp_skills] if exp_skills else []),
+                        "years": round(years, 2),
+                        "is_current": is_current,
+                        # Title alone (high-signal for role-to-role matching) AND the full
+                        # text (title + responsibilities + skills + industry). Matching
+                        # takes the MAX of the two so a clear title match isn't diluted by
+                        # the longer text, while skill-based matches still count.
+                        "cleaned": self.tp.clean(title),
+                        "cleaned_full": self.tp.clean(' '.join(parts)),
+                    })
+                    log_candidate(f"   Work from DB: {title} - {years:.2f} years")
+                    
+            except Exception as e:
+                log_error(f"Error parsing date for {title}: {e}")
+                continue
+        
+        return experiences
+    
+    def extract_job_experience_requirements(self, job):
+        edu_required = job.get('education_required', {})
+        
+        if isinstance(edu_required, str):
+            try:
+                edu_required = json.loads(edu_required)
+            except:
+                edu_required = {}
+        
+        exp_requirements = edu_required.get('experience_requirements', [])
+        
+        if not exp_requirements:
+            exp_requirements = job.get('experience_requirements', [])
+        
+        requirements = []
+        for req in exp_requirements:
+            if isinstance(req, dict):
+                title = req.get('title', '') or req.get('area', '')
+                years_str = req.get('years', '') or req.get('years_required', '')
+                
+                if title and years_str:
+                    years_num = 0
+                    match = re.search(r'(\d+(?:\.\d+)?)', str(years_str))
+                    if match:
+                        years_num = float(match.group(1))
+                    
+                    requirements.append({
+                        "title": title,
+                        "years_required": years_num,
+                        "raw_years": years_str,
+                        "cleaned": self.tp.clean(title)
+                    })
+                    log_job(f"   Specific requirement from DB: {title} - {years_num}+ years")
+        
+        general_min = job.get('experience_min', 0) or 0
+        if general_min > 0 and not requirements:
+            log_job(f"   General requirement from DB: {general_min}+ years")
+        
+        return {
+            "specific_requirements": requirements,
+            "general_min_years": general_min
+        }
+    
+    def _requirement_keyword_overlap(self, exp_text, req_text):
+        """Relevance from the ROLE's responsibilities and SKILLS, not just the title.
+        Returns the fraction of the requirement's significant words that appear in the
+        candidate's full experience text (title + description + skills + industry), so a
+        'Software Engineer' whose role lists 'software development' / 'team leadership'
+        satisfies those requirements even when WordNet title similarity is low. Both
+        sides are cleaned the same way, so the tokens line up."""
+        req_tokens = {t for t in str(req_text).split() if len(t) > 2}
+        if not req_tokens:
+            return 0.0
+        exp_tokens = set(str(exp_text).split())
+        hits = sum(1 for t in req_tokens if t in exp_tokens)
+        return hits / len(req_tokens)
+
+    def match_specific_requirements(self, candidate_experiences, job_requirements):
+        specific_reqs = job_requirements.get("specific_requirements", [])
+        
+        if not specific_reqs:
+            return None
+        
+        total_score = 0.0
+        matches = []
+        
+        for req in specific_reqs:
+            req_title = req["title"]
+            req_years = req["years_required"]
+            req_cleaned = req["cleaned"]
+            
+            best_match = None
+            best_score = 0.0
+            
+            for exp in candidate_experiences:
+                exp_title = exp["title"]
+                exp_years = exp["years"]
+                # Compare BOTH the role title and the full experience text, and take the
+                # stronger of the two (avoids a long description diluting a clear
+                # title-to-role match, e.g. "Software Engineer" ↔ "Software Development").
+                similarity = max(
+                    self.tp.semantic_similarity(exp["cleaned"], req_cleaned),
+                    self.tp.semantic_similarity(exp.get("cleaned_full", exp["cleaned"]), req_cleaned),
+                    # Direct keyword/skill overlap with the role's responsibilities + skills,
+                    # so relevance isn't gated by fuzzy title-only similarity.
+                    self._requirement_keyword_overlap(exp.get("cleaned_full", exp["cleaned"]), req_cleaned),
+                )
+
+                # Score by the BEST relevance the experience has to this requirement-
+                # never a hard zero. Strong matches (>= 50% similarity) are flagged;
+                # weaker ones still earn PARTIAL credit equal to their semantic
+                # relevance, so a related-but-not-exact role isn't 0%.
+                if exp_years >= req_years:
+                    years_score = 1.0
+                else:
+                    # Honest linear scale from 0 -- no floor. An experience
+                    # with near-zero tenure against this requirement should
+                    # score near-zero on the years dimension, not a
+                    # guaranteed 50%+; capped at 0.85 (not 1.0) so "close to
+                    # the requirement" still reads as short of fully meeting it.
+                    ratio = exp_years / req_years if req_years > 0 else 1.0
+                    years_score = min(0.85, ratio)
+
+                # Relevance drives the score; years is a minor factor.
+                combined = (similarity * 0.85) + (years_score * 0.15)
+
+                if combined > best_score:
+                    best_score = combined
+                    best_match = {
+                        "requirement_title": req_title,
+                        "requirement_years": req_years,
+                        "matched_title": exp_title,
+                        "candidate_years": exp_years,
+                        "similarity": round(similarity, 4),
+                        "years_score": round(years_score, 4),
+                        "combined_score": round(combined, 4),
+                        "is_strong": similarity >= 0.5
+                    }
+            
+            if best_match:
+                matches.append(best_match)
+                total_score += best_match["combined_score"]
+                log_match(f"      Requirement '{req_title}' ({req_years}+ yrs) matched with '{best_match['matched_title']}' ({best_match['candidate_years']} yrs) → score: {best_match['combined_score']:.2f}")
+            else:
+                log_match(f"      Requirement '{req_title}' ({req_years}+ yrs) - NO MATCH found")
+        
+        if specific_reqs:
+            final_score = total_score / len(specific_reqs)
+            return {
+                "score": round(final_score, 4),
+                "match_percentage": round(final_score * 100, 1),
+                "type": "specific",
+                "matches": matches,
+                "total_requirements": len(specific_reqs),
+                "matched_count": len(matches),
+                "unmatched_requirements": [r["title"] for r in specific_reqs if not any(m["requirement_title"] == r["title"] for m in matches)]
+            }
+        
+        return None
+    
+    def match_general_requirement(self, candidate_experiences, job_requirements):
+        general_years = job_requirements.get("general_min_years", 0)
+        
+        if general_years == 0:
+            return None
+        
+        total_years = sum(exp["years"] for exp in candidate_experiences)
+        
+        log_candidate(f"   Total experience from DB: {total_years:.2f} years")
+        log_job(f"   General requirement from DB: {general_years}+ years")
+        
+        if total_years >= general_years:
+            score = 1.0
+            log_match(f"   Experience: {total_years:.2f} >= {general_years} → 100%")
+        else:
+            # Honest linear scale from 0 -- a candidate with 0 years toward a
+            # stated requirement scores 0, not a guaranteed 50% floor.
+            ratio = total_years / general_years if general_years > 0 else 1.0
+            score = min(0.85, ratio)
+            log_match(f"   Experience: {total_years:.2f} < {general_years} → {score*100:.1f}%")
+        
+        return {
+            "score": round(score, 4),
+            "match_percentage": round(score * 100, 1),
+            "type": "general",
+            "total_years": round(total_years, 2),
+            "required_years": general_years,
+            "gap": round(max(0, general_years - total_years), 2)
+        }
+    
+    def build_experience_analysis(self, candidate_experiences, job_requirements, job):
+        """For EVERY candidate experience, compute its best semantic similarity to the
+        job's requirements (or to the job role itself when there are no explicit
+        requirements), whether it CONTRIBUTES (>= 50% similarity), the technologies it
+        used, and a human-readable reason. Also returns total vs RELEVANT years so the
+        UI can show 'Total Experience' and 'Relevant Experience' separately."""
+        specific = job_requirements.get("specific_requirements", []) or []
+        ref_texts = [r.get("cleaned", "") for r in specific if r.get("cleaned")]
+        ref_titles = [r.get("title", "") for r in specific if r.get("title")]
+        if not ref_texts:
+            job_text = ' '.join(str(x) for x in [job.get('title', ''), job.get('description', '')] if x)
+            ref_texts = [self.tp.clean(job_text)] if job_text.strip() else []
+            ref_titles = [job.get('title', '') or 'this role']
+
+        analysis = []
+        relevant_years = 0.0
+        for exp in candidate_experiences:
+            best_sim = 0.0
+            best_ref = ref_titles[0] if ref_titles else (job.get('title', '') or 'this role')
+            for idx, ref in enumerate(ref_texts):
+                if not ref:
+                    continue
+                sim = max(
+                    self.tp.semantic_similarity(exp.get("cleaned", ""), ref),
+                    self.tp.semantic_similarity(exp.get("cleaned_full", exp.get("cleaned", "")), ref),
+                )
+                if sim > best_sim:
+                    best_sim = sim
+                    best_ref = ref_titles[idx] if idx < len(ref_titles) else best_ref
+
+            contributes = best_sim >= 0.5
+            if contributes:
+                relevant_years += exp.get("years", 0)
+
+            techs = exp.get("skills") or []
+            if not isinstance(techs, list):
+                techs = [str(techs)]
+
+            if contributes:
+                reason = f"Relevant to \"{best_ref}\"- the role and its skills/responsibilities align with what this position requires."
+            else:
+                reason = "Not relevant to this role (semantic similarity below 50%); excluded from the Experience score."
+
+            analysis.append({
+                "title": exp.get("title", ""),
+                "company": exp.get("company", ""),
+                "years": exp.get("years", 0),
+                "is_current": exp.get("is_current", False),
+                "similarity": round(best_sim, 4),
+                "matched_with": best_ref,
+                "contributes": contributes,
+                "technologies": [str(t) for t in techs][:12],
+                "reason": reason,
+            })
+
+        analysis.sort(key=lambda a: a["similarity"], reverse=True)
+        return {
+            "experience_analysis": analysis,
+            "relevant_years": round(relevant_years, 2),
+        }
+
+    def match(self, profile_data, job):
+        candidate_experiences = self.extract_candidate_work_experience(profile_data)
+        job_requirements = self.extract_job_experience_requirements(job)
+
+        # Candidate's total experience (years)- included in every response so the UI
+        # "Your Total Experience" is correct regardless of which matching path is used.
+        total_years_all = round(sum(e.get("years", 0) for e in candidate_experiences), 2)
+
+        # Per-experience semantic analysis: which experiences are relevant, why, and
+        # how many years are RELEVANT (vs total). Drives the transparent UI.
+        exp_breakdown = self.build_experience_analysis(candidate_experiences, job_requirements, job)
+        relevant_years_all = exp_breakdown["relevant_years"]
+        experience_analysis = exp_breakdown["experience_analysis"]
+
+        log_candidate(f"   Candidate work experiences: {len(candidate_experiences)} positions")
+        log_job(f"   Job specific requirements: {len(job_requirements['specific_requirements'])}")
+        log_job(f"   Job general requirement: {job_requirements['general_min_years']}+ years")
+        
+        specific_result = self.match_specific_requirements(candidate_experiences, job_requirements)
+        
+        if specific_result:
+            log_match(f"   Experience match (specific): {specific_result['match_percentage']}%")
+            return {
+                "score": specific_result["score"],
+                "match_percentage": specific_result["match_percentage"],
+                "match_type": "specific_requirements",
+                "total_years": total_years_all,
+                "relevant_years": relevant_years_all,
+                "experience_analysis": experience_analysis,
+                "specific_matches": specific_result.get("matches", []),
+                "total_requirements": specific_result.get("total_requirements", 0),
+                "matched_requirements": specific_result.get("matched_count", 0),
+                "unmatched_requirements": specific_result.get("unmatched_requirements", []),
+                "weight": 0.20,
+                "weighted_score": round(specific_result["score"] * 0.20, 4)
+            }
+        
+        general_result = self.match_general_requirement(candidate_experiences, job_requirements)
+        
+        if general_result:
+            log_match(f"   Experience match (general): {general_result['match_percentage']}%")
+            return {
+                "score": general_result["score"],
+                "match_percentage": general_result["match_percentage"],
+                "match_type": "general_requirement",
+                "total_years": general_result.get("total_years", 0),
+                "relevant_years": relevant_years_all,
+                "experience_analysis": experience_analysis,
+                "required_years": general_result.get("required_years", 0),
+                "gap": general_result.get("gap", 0),
+                "weight": 0.20,
+                "weighted_score": round(general_result["score"] * 0.20, 4)
+            }
+        
+        # No explicit years/title requirement stated by the job- score from
+        # RELEVANCE instead of a blanket 100%. build_experience_analysis()
+        # already compared every experience against the job's own title +
+        # description (its fallback reference text when there's nothing more
+        # specific), so that similarity IS a real signal, not "nothing to
+        # fail against." A candidate with no work experience, or whose past
+        # roles have nothing in common with this one, should score low here
+        # just like every other factor scores an empty/irrelevant profile
+        # honestly- matches this file's own stated cold-start philosophy.
+        best_similarity = max((a["similarity"] for a in experience_analysis), default=0.0)
+        log_match(f"   Experience: No explicit requirement from DB- scored on relevance to the role ({best_similarity*100:.1f}%)")
+        return {
+            "score": best_similarity,
+            "match_percentage": round(best_similarity * 100, 1),
+            "match_type": "relevance_only",
+            "total_years": total_years_all,
+            "relevant_years": relevant_years_all,
+            "experience_analysis": experience_analysis,
+            "weight": 0.20,
+            "weighted_score": round(best_similarity * 0.20, 4)
+        }
+
+class Factor4_PreferencesMatcher:
+    def __init__(self, tp):
+        self.tp = tp
+    def extract_candidate_age(self, profile_data):
+        """Extract candidate age from profile data"""
+        dob = profile_data.get('profile', {}).get('personal_info', {}).get('date_of_birth')
+        if dob:
+            try:
+                # Handle various date formats
+                if isinstance(dob, str):
+                    # Handle ISO format with Z
+                    dob = dob.replace('Z', '+00:00')
+                birth_date = datetime.fromisoformat(dob)
+                today = datetime.now()
+                age = today.year - birth_date.year
+                # Adjust if birthday hasn't occurred yet this year
+                if (today.month, today.day) < (birth_date.month, birth_date.day):
+                    age -= 1
+                return age
+            except Exception as e:
+                log_error(f"Error parsing date of birth: {e}")
+                return None
+        return None
+    def extract_candidate_home_location(self, profile_data):
+        """Candidate's actual residence (Rwanda province/district/sector/cell/
+        village, or country/city for non-Rwandans) -- distinct from
+        job_preferences.locations (where they'd LIKE to work). Both are
+        folded into the same match pool in extract_candidate_preferences so
+        a candidate who never set a location preference still gets scored
+        against jobs near where they actually live."""
+        personal = profile_data.get('profile', {}).get('personal_info', {})
+        if personal.get('is_rwandan'):
+            parts = [personal.get('sector'), personal.get('district'), personal.get('province'), 'Rwanda']
+        else:
+            parts = [personal.get('city'), personal.get('country')]
+        return self.tp.clean(' '.join(p for p in parts if p))
+
+    def extract_candidate_preferences(self, profile_data):
+        job_prefs = profile_data.get('profile', {}).get('job_preferences', {})
+
+        job_types = job_prefs.get('job_types', []) or job_prefs.get('preferred_job_types', [])
+        locations = job_prefs.get('locations', []) or job_prefs.get('preferred_locations', [])
+        industries = job_prefs.get('industries', []) or job_prefs.get('preferred_industries', [])
+        languages = job_prefs.get('languages', []) or job_prefs.get('preferred_languages', [])
+        
+        salary_min = job_prefs.get('salary_min', 0) or job_prefs.get('expected_salary_min', 0)
+        salary_max = job_prefs.get('salary_max', 0) or job_prefs.get('expected_salary_max', 0)
+        
+        try:
+            salary_min = float(salary_min) if salary_min else 0
+        except (ValueError, TypeError):
+            salary_min = 0
+        
+        try:
+            salary_max = float(salary_max) if salary_max else 0
+        except (ValueError, TypeError):
+            salary_max = 0
+        
+        home_location = self.extract_candidate_home_location(profile_data)
+        pref_locations = [self.tp.clean(loc) for loc in locations]
+
+        prefs = {
+            "job_types": [self.tp.clean(jt) for jt in job_types],
+            # No fallback to 'flexible' -- an unset preference must stay
+            # empty so match() correctly falls into its "candidate has no
+            # stated remote-work preference -> 0" branch, instead of a
+            # fabricated 'flexible' value quietly earning real similarity
+            # points against the job's work_arrangement for a preference
+            # the candidate never actually set.
+            "remote_preference": self.tp.clean(job_prefs.get('remote_work_preference') or ''),
+            # Actual residence is appended (not swapped in), so a stated
+            # preference still wins the "best pair" comparison when both
+            # exist and disagree -- home location only fills the gap when
+            # there's no explicit preference, or adds a second shot at a
+            # match when there is one.
+            "locations": pref_locations + ([home_location] if home_location and home_location not in pref_locations else []),
+            "industries": [self.tp.clean(ind) for ind in industries],
+            "languages": [self.tp.clean(lang) for lang in languages],
+            "salary_min": salary_min,
+            "salary_max": salary_max
+        }
+
+        log_candidate(f"   Preferred job types from DB: {prefs['job_types']}")
+        log_candidate(f"   Remote preference from DB: {prefs['remote_preference']}")
+        log_candidate(f"   Home location (actual residence): {home_location or 'not set'}")
+        log_candidate(f"   Preferred locations from DB: {prefs['locations']}")
+        log_candidate(f"   Preferred industries from DB: {prefs['industries']}")
+        log_candidate(f"   Preferred languages from DB: {prefs['languages']}")
+        log_candidate(f"   Salary expectation from DB: {prefs['salary_min']} - {prefs['salary_max']}")
+        
+        return prefs
+    
+    def parse_age_requirement(self, age_req_str):
+        """Parse age requirement string from job posting."""
+        if not age_req_str or not isinstance(age_req_str, str):
+            return {"min_age": None, "max_age": None, "raw": age_req_str}
+        
+        age_req_clean = age_req_str.strip().lower()
+        
+        # No requirement cases
+        no_requirement_keywords = ['not required', 'any', 'none', 'no requirement', 'n/a', 'any age']
+        if any(keyword in age_req_clean for keyword in no_requirement_keywords):
+            log_match(f"      Age requirement: '{age_req_str}' → No restriction")
+            return {"min_age": None, "max_age": None, "raw": age_req_str}
+        
+        # Pattern 1: "XX+" or "Above XX" or "Over XX"
+        patterns_above = [
+            r'(\d+)\+', r'above\s+(\d+)', r'over\s+(\d+)',
+            r'minimum\s+(\d+)', r'at least\s+(\d+)', r'(\d+)\s+or\s+older'
+        ]
+        
+        for pattern in patterns_above:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                min_age = int(match.group(1))
+                log_match(f"      Age requirement: '{age_req_str}' → Min age: {min_age}")
+                return {"min_age": min_age, "max_age": None, "raw": age_req_str}
+        
+        # Pattern 2: "Under XX" or "Below XX"
+        patterns_below = [
+            r'under\s+(\d+)', r'below\s+(\d+)', r'less than\s+(\d+)',
+            r'maximum\s+(\d+)', r'(\d+)\s+or\s+younger', r'up to\s+(\d+)'
+        ]
+        
+        for pattern in patterns_below:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                max_age = int(match.group(1))
+                log_match(f"      Age requirement: '{age_req_str}' → Max age: {max_age}")
+                return {"min_age": None, "max_age": max_age, "raw": age_req_str}
+        
+        # Pattern 3: "XX-YY" or "XX to YY" (range)
+        patterns_range = [
+            r'(\d+)\s*-\s*(\d+)', r'(\d+)\s+to\s+(\d+)',
+            r'between\s+(\d+)\s+and\s+(\d+)', r'from\s+(\d+)\s+to\s+(\d+)'
+        ]
+        
+        for pattern in patterns_range:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                min_age = int(match.group(1))
+                max_age = int(match.group(2))
+                if min_age <= max_age:
+                    log_match(f"      Age requirement: '{age_req_str}' → Range: {min_age}-{max_age}")
+                    return {"min_age": min_age, "max_age": max_age, "raw": age_req_str}
+        
+        # Pattern 4: Exact age
+        patterns_exact = [r'^(\d+)$', r'exactly\s+(\d+)', r'(\d+)\s+years old', r'age\s+(\d+)']
+        
+        for pattern in patterns_exact:
+            match = re.search(pattern, age_req_clean)
+            if match:
+                exact_age = int(match.group(1))
+                log_match(f"      Age requirement: '{age_req_str}' → Exact age: {exact_age}")
+                return {"min_age": exact_age, "max_age": exact_age, "raw": age_req_str}
+        
+        # Fallback
+        numbers = re.findall(r'(\d+)', age_req_clean)
+        if numbers:
+            min_age = int(numbers[0])
+            max_age = int(numbers[-1]) if len(numbers) > 1 else None
+            log_match(f"      Age requirement: '{age_req_str}' → Parsed as Min: {min_age}, Max: {max_age}")
+            return {"min_age": min_age, "max_age": max_age, "raw": age_req_str}
+        
+        log_match(f"      Age requirement: '{age_req_str}' → Could not parse, treating as no restriction")
+        return {"min_age": None, "max_age": None, "raw": age_req_str}
+    
+    def match_age(self, candidate_age, job_age_requirement):
+        """Calculate age match score between candidate and job requirement."""
+        if not job_age_requirement or job_age_requirement.lower() in ['not required', 'any', '']:
+            log_match(f"   Age: No requirement from DB — excluded from scoring, weight redistributed")
+            return {"score": 0.0, "match_percentage": 0.0, "applicable": False, "details": "No age requirement"}
+
+        if candidate_age is None:
+            log_match(f"   Age: Job requires an age range, candidate age unknown → 0.00 (no evidence of meeting it)")
+            return {"score": 0.0, "match_percentage": 0.0, "applicable": True, "details": "Candidate age not provided"}
+
+        age_rule = self.parse_age_requirement(job_age_requirement)
+        
+        meets_min = True
+        meets_max = True
+        min_age = age_rule.get("min_age")
+        max_age = age_rule.get("max_age")
+        
+        if min_age is not None and candidate_age < min_age:
+            meets_min = False
+            log_match(f"   Age: Candidate {candidate_age} < required min {min_age}")
+        
+        if max_age is not None and candidate_age > max_age:
+            meets_max = False
+            log_match(f"   Age: Candidate {candidate_age} > required max {max_age}")
+        
+        if meets_min and meets_max:
+            if min_age is not None and max_age is not None:
+                center = (min_age + max_age) / 2
+                distance = abs(candidate_age - center)
+                range_half = (max_age - min_age) / 2
+                if range_half > 0:
+                    score = max(0.5, 1.0 - (distance / range_half) * 0.5)
+                else:
+                    score = 1.0
+            else:
+                score = 1.0
+            log_match(f"   Age: Candidate {candidate_age} meets requirement → {score*100:.0f}%")
+            return {"score": round(score, 4), "match_percentage": round(score * 100, 1), "applicable": True, "details": "Age requirement met"}
+        else:
+            penalty = 0.0
+            if min_age is not None and candidate_age < min_age:
+                gap = min_age - candidate_age
+                penalty = min(0.5, gap / min_age * 0.5)
+            elif max_age is not None and candidate_age > max_age:
+                gap = candidate_age - max_age
+                penalty = min(0.5, gap / max_age * 0.5)
+            
+            score = max(0.3, 1.0 - penalty)
+            log_match(f"   Age: Candidate {candidate_age} does NOT meet requirement → {score*100:.0f}%")
+            return {"score": round(score, 4), "match_percentage": round(score * 100, 1), "applicable": True, "details": f"Age {candidate_age} does not meet requirement"}
+    
+    # ============================================
+    # SINGLE MATCH METHOD (NO DUPLICATE)
+    # ============================================
+    def match(self, candidate_prefs, job, candidate_age=None, job_age_requirement=None):
+        missing_job_data = []
+        
+        # ============================================
+        # AGE MATCH
+        # ============================================
+        age_match = self.match_age(candidate_age, job_age_requirement)
+        
+        job_type_raw = job.get('job_type', '')
+        job_type = self.tp.clean(job_type_raw) if job_type_raw else ''
+        if not job_type:
+            missing_job_data.append("job_type")
+            job_type = 'full-time'
+        
+        job_remote_raw = job.get('work_arrangement', '')
+        job_remote = self.tp.clean(job_remote_raw) if job_remote_raw else ''
+        if not job_remote:
+            missing_job_data.append("work_arrangement")
+        
+        job_industry_raw = job.get('company_industry', '')
+        job_industry = self.tp.clean(job_industry_raw) if job_industry_raw else ''
+        if not job_industry:
+            missing_job_data.append("industry")
+        
+        job_locations = []
+        for loc in job.get('locations', []):
+            if isinstance(loc, dict):
+                city = loc.get('city', '')
+                country = loc.get('country', '')
+                if city or country:
+                    job_locations.append(self.tp.clean(f"{city} {country}"))
+        if not job_locations:
+            missing_job_data.append("locations")
+        
+        job_languages = []
+        lang_reqs = job.get('language_requirements', [])
+        if isinstance(lang_reqs, str):
+            try:
+                lang_reqs = json.loads(lang_reqs)
+            except:
+                lang_reqs = []
+        for lang in lang_reqs:
+            if isinstance(lang, dict):
+                lang_name = lang.get('name', '')
+                if lang_name:
+                    job_languages.append(self.tp.clean(lang_name))
+            elif isinstance(lang, str):
+                if lang:
+                    job_languages.append(self.tp.clean(lang))
+        if not job_languages:
+            missing_job_data.append("languages")
+        
+        job_salary_min = 0
+        job_salary_max = 0
+        try:
+            job_salary_min = float(job.get('salary_min', 0)) if job.get('salary_min') else 0
+            job_salary_max = float(job.get('salary_max', 0)) if job.get('salary_max') else 0
+        except (ValueError, TypeError):
+            pass
+        
+        if job_salary_min == 0 and job_salary_max == 0:
+            missing_job_data.append("salary")
+        
+        log_job(f"   Missing job data: {missing_job_data if missing_job_data else 'None'}")
+        
+        # Type match
+        type_match = 0.0
+        type_scores_detail = []
+        type_match_note = None
+        has_type_requirement = bool(job_type_raw)
+
+        if not has_type_requirement:
+            type_match_note = "Job type not specified by employer"
+            log_match(f"   Job type: Not specified by employer — excluded from scoring")
+        else:
+            if candidate_prefs["job_types"]:
+                type_scores = []
+                for pt in candidate_prefs["job_types"]:
+                    sim = self.tp.semantic_similarity(pt, job_type)
+                    type_scores.append(sim)
+                    type_scores_detail.append({"preference": pt, "job_value": job_type, "similarity": round(sim, 4)})
+                    log_match(f"      Job type '{pt}' vs '{job_type}': {sim:.2f}")
+                type_match = max(type_scores) if type_scores else 0.0
+            else:
+                type_match = 0.0
+                type_match_note = "Candidate has no stated job-type preference"
+            log_match(f"   Job type match: {type_match:.2f}")
+        
+        # Remote match
+        remote_match = 0.0
+        remote_match_note = None
+        has_remote_requirement = bool(job_remote_raw)
+
+        if not has_remote_requirement:
+            remote_match_note = "Remote work not specified by employer"
+            log_match(f"   Remote work: Not specified by employer — excluded from scoring")
+        else:
+            if candidate_prefs["remote_preference"]:
+                remote_match = self.tp.semantic_similarity(candidate_prefs["remote_preference"], job_remote)
+                log_match(f"      Remote preference '{candidate_prefs['remote_preference']}' vs '{job_remote}': {remote_match:.2f}")
+            else:
+                remote_match = 0.0
+                remote_match_note = "Candidate has no stated remote-work preference"
+            log_match(f"   Remote work match: {remote_match:.2f}")
+        
+        # Location match
+        location_match = 0.0
+        location_match_detail = None
+        location_match_note = None
+        has_location_requirement = bool(job_locations)
+
+        if not has_location_requirement:
+            location_match_note = "Location not specified by employer"
+            log_match(f"   Location: Not specified by employer — excluded from scoring")
+        else:
+            if candidate_prefs["locations"]:
+                best = 0.0
+                best_pair = None
+                for pl in candidate_prefs["locations"]:
+                    for jl in job_locations:
+                        sim = self.tp.semantic_similarity(pl, jl)
+                        if sim > best:
+                            best = sim
+                            best_pair = (pl, jl)
+                        log_match(f"      Location '{pl}' vs '{jl}': {sim:.2f}")
+                location_match = best
+                if best_pair:
+                    location_match_detail = {"candidate_location": best_pair[0], "job_location": best_pair[1], "similarity": round(location_match, 4)}
+                    log_match(f"      Best location match: '{best_pair[0]}' vs '{best_pair[1]}' = {location_match:.2f}")
+            else:
+                location_match = 0.0
+                location_match_note = "Candidate has no stated location preference or home location on file"
+            log_match(f"   Location match: {location_match:.2f}")
+        
+        # Industry match
+        industry_match = 0.0
+        industry_scores_detail = []
+        industry_match_note = None
+        has_industry_requirement = bool(job_industry_raw)
+
+        if not has_industry_requirement:
+            industry_match_note = "Industry not specified by employer"
+            log_match(f"   Industry: Not specified by employer — excluded from scoring")
+        else:
+            if candidate_prefs["industries"]:
+                ind_scores = []
+                for ind in candidate_prefs["industries"]:
+                    sim = self.tp.semantic_similarity(ind, job_industry)
+                    ind_scores.append(sim)
+                    industry_scores_detail.append({"preference": ind, "job_value": job_industry, "similarity": round(sim, 4)})
+                    log_match(f"      Industry '{ind}' vs '{job_industry}': {sim:.2f}")
+                industry_match = max(ind_scores) if ind_scores else 0.0
+            else:
+                industry_match = 0.0
+                industry_match_note = "Candidate has no stated industry preference"
+            log_match(f"   Industry match: {industry_match:.2f}")
+        
+        # Salary match
+        salary_match = 0.0
+        salary_detail = {}
+        salary_match_note = None
+        has_salary_requirement = not (job_salary_min == 0 and job_salary_max == 0)
+
+        if not has_salary_requirement:
+            salary_match_note = "Salary not specified by employer"
+            log_match(f"   Salary: Not specified by employer — excluded from scoring")
+        else:
+            candidate_salary_max = candidate_prefs.get("salary_max", 0)
+            candidate_salary_min = candidate_prefs.get("salary_min", 0)
+            
+            try:
+                candidate_salary_max = float(candidate_salary_max) if candidate_salary_max else 0
+                candidate_salary_min = float(candidate_salary_min) if candidate_salary_min else 0
+            except (ValueError, TypeError):
+                candidate_salary_max = 0
+                candidate_salary_min = 0
+            
+            log_match(f"      Job salary range: {job_salary_min} - {job_salary_max}")
+            log_match(f"      Candidate salary expectation: {candidate_salary_min} - {candidate_salary_max}")
+            
+            if job_salary_min > 0 and candidate_salary_max > 0:
+                if job_salary_min <= candidate_salary_max:
+                    salary_match = 1.0
+                    log_match(f"      Salary match: Job min <= Candidate max → 1.00")
+                else:
+                    diff = job_salary_min - candidate_salary_max
+                    salary_match = max(0.3, 1.0 - (diff / candidate_salary_max))
+                    log_match(f"      Salary match: Job min > Candidate max by {diff} → {salary_match:.2f}")
+            elif job_salary_max > 0 and candidate_salary_min > 0:
+                if candidate_salary_min <= job_salary_max:
+                    salary_match = 1.0
+                else:
+                    diff = candidate_salary_min - job_salary_max
+                    salary_match = max(0.3, 1.0 - (diff / candidate_salary_min))
+            else:
+                salary_match = 0.0
+                salary_match_note = "Candidate has no comparable salary expectation on file"
+                log_match(f"      Salary match: Job posted a range, candidate has no salary expectation on file → 0.00")
+
+            salary_detail = {
+                "job_min": job_salary_min,
+                "job_max": job_salary_max,
+                "candidate_min": candidate_salary_min,
+                "candidate_max": candidate_salary_max,
+                "match_score": round(salary_match, 4)
+            }
+            log_match(f"   Salary match: {salary_match:.2f}")
+        
+        # Language match
+        language_match = 0.0
+        language_matches_detail = []
+        language_match_note = None
+        has_language_requirement = bool(job_languages)
+
+        if not has_language_requirement:
+            language_match_note = "Languages not specified by employer"
+            log_match(f"   Languages: Not specified by employer — excluded from scoring")
+        else:
+            if candidate_prefs["languages"]:
+                matches = 0
+                for jl in job_languages:
+                    matched = False
+                    for lang in candidate_prefs["languages"]:
+                        sim = self.tp.semantic_similarity(lang, jl)
+                        log_match(f"      Language '{lang}' vs '{jl}': {sim:.2f}")
+                        if sim >= 0.7:
+                            matches += 1
+                            matched = True
+                            language_matches_detail.append({"required": jl, "matched_with": lang, "similarity": round(sim, 4)})
+                            break
+                    if not matched:
+                        language_matches_detail.append({"required": jl, "matched_with": None, "similarity": 0})
+                language_match = matches / len(job_languages) if job_languages else 0.0
+                log_match(f"      Language match: {matches}/{len(job_languages)} languages matched = {language_match:.2f}")
+            else:
+                language_match = 0.0
+                language_match_note = "Candidate has no stated language preference"
+                log_match(f"      No language preferences specified → 0.00")
+            log_match(f"   Language match: {language_match:.2f}")
+        
+        # ============================================
+        # WEIGHTS -- base allocation is age 5%, type 19%, remote 19%,
+        # location/industry/salary/language 14.25% each (i.e. the old
+        # "20/20/15/15/15/15 of the remaining 95%" split, flattened to
+        # fractions of 1.0). Any dimension the job didn't actually specify a
+        # requirement for is EXCLUDED here (not scored, not given free
+        # credit) and its weight is redistributed across the dimensions
+        # that ARE applicable -- same pattern as HybridWeights.normalized().
+        # ============================================
+        has_age_requirement = age_match.get("applicable", False)
+
+        pref_weights = redistribute_weights({
+            "age":      (has_age_requirement, 0.05),
+            "type":     (has_type_requirement, 0.19),
+            "remote":   (has_remote_requirement, 0.19),
+            "location": (has_location_requirement, 0.1425),
+            "industry": (has_industry_requirement, 0.1425),
+            "salary":   (has_salary_requirement, 0.1425),
+            "language": (has_language_requirement, 0.1425),
+        })
+
+        final_score = (type_match * pref_weights["type"]
+                       + remote_match * pref_weights["remote"]
+                       + location_match * pref_weights["location"]
+                       + industry_match * pref_weights["industry"]
+                       + salary_match * pref_weights["salary"]
+                       + language_match * pref_weights["language"]
+                       + age_match["score"] * pref_weights["age"])
+
+        excluded_dimensions = [name for name, applicable in (
+            ("age", has_age_requirement), ("type", has_type_requirement), ("remote", has_remote_requirement),
+            ("location", has_location_requirement), ("industry", has_industry_requirement),
+            ("salary", has_salary_requirement), ("language", has_language_requirement)
+        ) if not applicable]
+        preferences_applicable = len(excluded_dimensions) < 7
+
+        log_match(f"   ============================================")
+        log_match(f"   PREFERENCE SCORES BREAKDOWN (weights after redistribution):")
+        log_match(f"      Type Match:     {type_match:.2f} × {pref_weights['type']:.3f} = {type_match * pref_weights['type']:.3f}")
+        log_match(f"      Remote Match:   {remote_match:.2f} × {pref_weights['remote']:.3f} = {remote_match * pref_weights['remote']:.3f}")
+        log_match(f"      Location Match: {location_match:.2f} × {pref_weights['location']:.3f} = {location_match * pref_weights['location']:.3f}")
+        log_match(f"      Industry Match: {industry_match:.2f} × {pref_weights['industry']:.3f} = {industry_match * pref_weights['industry']:.3f}")
+        log_match(f"      Salary Match:   {salary_match:.2f} × {pref_weights['salary']:.3f} = {salary_match * pref_weights['salary']:.3f}")
+        log_match(f"      Language Match: {language_match:.2f} × {pref_weights['language']:.3f} = {language_match * pref_weights['language']:.3f}")
+        log_match(f"      Age Match:      {age_match['score']:.2f} × {pref_weights['age']:.3f} = {age_match['score'] * pref_weights['age']:.3f}")
+        log_match(f"      Excluded (no job requirement): {excluded_dimensions or 'none'}")
+        log_match(f"   TOTAL: {final_score:.4f} ({final_score*100:.1f}%)")
+
+        return {
+            "score": round(final_score, 4), 
+            "match_percentage": round(final_score * 100, 1),
+            "missing_job_data": missing_job_data,
+            "type_match": round(type_match, 4),
+            "type_match_details": type_scores_detail,
+            "type_match_note": type_match_note,
+            "remote_match": round(remote_match, 4),
+            "remote_match_note": remote_match_note,
+            "location_match": round(location_match, 4),
+            "location_match_details": location_match_detail,
+            "location_match_note": location_match_note,
+            "industry_match": round(industry_match, 4),
+            "industry_match_details": industry_scores_detail,
+            "industry_match_note": industry_match_note,
+            "salary_match": round(salary_match, 4),
+            "salary_match_details": salary_detail,
+            "salary_match_note": salary_match_note,
+            "language_match": round(language_match, 4),
+            "language_match_details": language_matches_detail,
+            "language_match_note": language_match_note,
+            "age_match": round(age_match["score"], 4),
+            "age_match_percentage": round(age_match["score"] * 100, 1),
+            "age_match_details": age_match.get("details", ""),
+            "applicable": preferences_applicable,
+            "excluded_dimensions": excluded_dimensions,
+            "redistributed_weights": pref_weights,
+            "weight": 0.15,
+            "weighted_score": round(final_score * 0.15, 4)
+        }
+
+def extract_all_job_fields(job: Dict) -> Dict:
+    """Extract ALL job fields from the database response - 70+ fields"""
+    
+    # Parse locations
+    locations = job.get('locations', [])
+    if isinstance(locations, str):
+        try:
+            locations = json.loads(locations)
+        except:
+            locations = []
+    
+    location_details = []
+    for loc in locations:
+        if isinstance(loc, dict):
+            location_details.append({
+                "city": loc.get('city', ''),
+                "country": loc.get('country', ''),
+                "state": loc.get('state', ''),
+                "postal_code": loc.get('postal_code', ''),
+                "is_remote": loc.get('is_remote', False),
+            })
+        elif isinstance(loc, str):
+            location_details.append({"city": loc, "country": "", "is_remote": False})
+    
+    # Parse skills arrays
+    skills_required = job.get('skills_required', [])
+    if isinstance(skills_required, str):
+        try:
+            skills_required = json.loads(skills_required)
+        except:
+            skills_required = []
+    
+    skills_preferred = job.get('skills_preferred', [])
+    if isinstance(skills_preferred, str):
+        try:
+            skills_preferred = json.loads(skills_preferred)
+        except:
+            skills_preferred = []
+    
+    # Parse education required with proper handling
+    education_required = job.get('education_required', {})
+    if isinstance(education_required, str):
+        try:
+            education_required = json.loads(education_required)
+        except:
+            education_required = {}
+    
+    # Ensure arrays are properly formatted
+    if 'certifications' not in education_required:
+        education_required['certifications'] = []
+    if 'languages' not in education_required:
+        education_required['languages'] = []
+    if 'experience_requirements' not in education_required:
+        education_required['experience_requirements'] = []
+    if 'additional_requirements' not in education_required:
+        education_required['additional_requirements'] = []
+    if 'fields_of_study' not in education_required:
+        education_required['fields_of_study'] = []
+    
+    # Parse benefits
+    benefits = job.get('benefits', [])
+    if isinstance(benefits, str):
+        try:
+            benefits = json.loads(benefits)
+        except:
+            benefits = []
+    
+    # Parse responsibilities
+    responsibilities = job.get('responsibilities', [])
+    if isinstance(responsibilities, str):
+        try:
+            responsibilities = json.loads(responsibilities)
+        except:
+            responsibilities = []
+    
+    # Parse requirements
+    requirements = job.get('requirements', [])
+    if isinstance(requirements, str):
+        try:
+            requirements = json.loads(requirements)
+        except:
+            requirements = []
+    
+    # Parse screening questions
+    screening_questions = job.get('screening_questions', [])
+    if isinstance(screening_questions, str):
+        try:
+            screening_questions = json.loads(screening_questions)
+        except:
+            screening_questions = []
+    
+    # Parse language requirements
+    language_requirements = job.get('language_requirements', [])
+    if isinstance(language_requirements, str):
+        try:
+            language_requirements = json.loads(language_requirements)
+        except:
+            language_requirements = []
+    
+    # Parse tags
+    tags = job.get('tags', [])
+    if isinstance(tags, str):
+        try:
+            tags = json.loads(tags)
+        except:
+            tags = []
+    
+    # Parse documents
+    documents = job.get('documents', [])
+    if isinstance(documents, str):
+        try:
+            documents = json.loads(documents)
+        except:
+            documents = []
+    
+    # Parse metadata
+    metadata = job.get('metadata', {})
+    if isinstance(metadata, str):
+        try:
+            metadata = json.loads(metadata)
+        except:
+            metadata = {}
+    
+    # Parse experience requirements
+    experience_requirements = job.get('experience_requirements', [])
+    if isinstance(experience_requirements, str):
+        try:
+            experience_requirements = json.loads(experience_requirements)
+        except:
+            experience_requirements = []
+    
+    # Parse education requirements
+    education_requirements = job.get('education_requirements', {})
+    if isinstance(education_requirements, str):
+        try:
+            education_requirements = json.loads(education_requirements)
+        except:
+            education_requirements = {}
+    
+    # Parse skill experience requirements
+    skill_experience_requirements = job.get('skill_experience_requirements', {})
+    if isinstance(skill_experience_requirements, str):
+        try:
+            skill_experience_requirements = json.loads(skill_experience_requirements)
+        except:
+            skill_experience_requirements = {}
+    
+    # Parse company industries
+    company_industries = job.get('company_industries', [])
+    if isinstance(company_industries, str):
+        try:
+            company_industries = json.loads(company_industries)
+        except:
+            company_industries = []
+    
+    # Parse company headquarters
+    headquarters = job.get('company_headquarters_location', {})
+    if isinstance(headquarters, str):
+        try:
+            headquarters = json.loads(headquarters)
+        except:
+            headquarters = {}
+    
+    # Parse company culture
+    company_culture = job.get('company_culture', {})
+    if isinstance(company_culture, str):
+        try:
+            company_culture = json.loads(company_culture)
+        except:
+            company_culture = {}
+    
+    # Parse company values
+    company_values = job.get('company_values', [])
+    if isinstance(company_values, str):
+        try:
+            company_values = json.loads(company_values)
+        except:
+            company_values = []
+    
+    # Parse company social links
+    company_social_links = job.get('company_social_links', {})
+    if isinstance(company_social_links, str):
+        try:
+            company_social_links = json.loads(company_social_links)
+        except:
+            company_social_links = {}
+            
+    education_required = job.get('education_required', {})
+    
+    
+     # ✅ CRITICAL: Extract age requirement
+    age_requirement = education_required.get('age_requirement', '')
+    if not age_requirement:
+        age_requirement = education_required.get('age_requirement_text', '')
+    
+    # Return COMPLETE job object
+    return {
+        "id": job.get('id', ''),
+        "external_id": job.get('external_id', ''),
+        "title": job.get('title', 'Unknown'),
+        "slug": job.get('slug', ''),
+        "department": job.get('department', ''),
+        "team": job.get('team', ''),
+        "job_type": job.get('job_type', 'full-time'),
+        "work_arrangement": job.get('work_arrangement', ''),
+        "locations": location_details,
+        "description": job.get('description', ''),
+        "summary": job.get('summary', ''),
+        "responsibilities": responsibilities,
+        "qualifications": job.get('qualifications', ''),
+        "preferred_qualifications": job.get('preferred_qualifications', ''),
+        "requirements": requirements,
+        "salary_min": float(job.get('salary_min', 0)) if job.get('salary_min') else 0,
+        "salary_max": float(job.get('salary_max', 0)) if job.get('salary_max') else 0,
+        "salary_currency": job.get('salary_currency', 'Rwf'),
+        "salary_period": job.get('salary_period', 'month'),
+        "salary_visible": job.get('salary_visible', True),
+        "benefits": benefits,
+        "skills_required": skills_required,
+        "skills_preferred": skills_preferred,
+        "experience_min": int(job.get('experience_min', 0)) if job.get('experience_min') else 0,
+        "experience_max": int(job.get('experience_max', 0)) if job.get('experience_max') else 0,
+        "experience_level": job.get('experience_level', 'entry'),
+        "experience_requirements": experience_requirements,
+        "education_required": education_required,
+        "education_requirements": education_requirements,
+        "language_requirements": language_requirements,
+        "skill_experience_requirements": skill_experience_requirements,
+        "screening_questions": screening_questions,
+        "application_instructions": job.get('application_instructions', ''),
+        "documents": documents,
+        "department_info": job.get('department_info', ''),
+        "tags": tags,
+        "application_limit": int(job.get('application_limit', 0)) if job.get('application_limit') else 0,
+        "ai_match_required_score": int(job.get('ai_match_required_score', 70)) if job.get('ai_match_required_score') else 70,
+        "ai_score": job.get('ai_score', {}),
+        "status": job.get('status', 'active'),
+        "visibility": job.get('visibility', 'public'),
+        "published_at": job.get('published_at'),
+        "expires_at": job.get('expires_at'),
+        "paused_at": job.get('paused_at'),
+        "closed_at": job.get('closed_at'),
+        "created_at": job.get('created_at'),
+        "updated_at": job.get('updated_at'),
+        "created_by": job.get('created_by'),
+        "approved_by": job.get('approved_by'),
+        "approved_at": job.get('approved_at'),
+        "view_count": int(job.get('view_count', 0)) if job.get('view_count') else 0,
+        "application_count": int(job.get('application_count', 0)) if job.get('application_count') else 0,
+        "metadata": metadata,
+        "deleted_at": job.get('deleted_at'),
+        "education_required": education_required, 
+         "age_requirement": age_requirement,  # ✅ ADD THIS
+        "company": {
+            "id": job.get('company_id', ''),
+            "name": job.get('company_name', 'Unknown'),
+            "legal_name": job.get('company_legal_name', ''),
+            "slug": job.get('company_slug', ''),
+            "industry": job.get('company_industry', ''),
+            "industries": company_industries,
+            "size": job.get('company_size', ''),
+            "founded_year": job.get('company_founded_year'),
+            "headquarters": headquarters,
+            "website": job.get('company_website', ''),
+            "description": job.get('company_description', ''),
+            "short_description": job.get('company_short_description', ''),
+            "mission": job.get('company_mission', ''),
+            "vision": job.get('company_vision', ''),
+            "values": company_values,
+            "culture": company_culture,
+            "logo_url": job.get('company_logo_url', ''),
+            "logo_key": job.get('company_logo_key', ''),
+            "banner_url": job.get('company_banner_url', ''),
+            "banner_key": job.get('company_banner_key', ''),
+            "social_links": company_social_links,
+            "verified": job.get('company_verified', False),
+            "verification_status": job.get('company_verification_status', ''),
+            "verification_level": job.get('company_verification_level', ''),
+            "verified_at": job.get('company_verified_at'),
+            "domain": job.get('company_domain', ''),
+            "tax_id": job.get('company_tax_id', ''),
+            "registration_number": job.get('company_registration_number', '')
+        }
+    }
+
+def extract_complete_candidate_data(profile_data: Dict) -> Dict:
+    """Extract ALL candidate fields for frontend display"""
+    
+    profile = profile_data.get('profile', {})
+    personal_info = profile.get('personal_info', {})
+    links = profile.get('links', {})
+    work_prefs = profile.get('work_preferences', {})
+    statistics = profile_data.get('statistics', {})
+    applications_summary = profile_data.get('applications_summary', {})
+    simulations_summary = profile_data.get('simulations_summary', {})
+    job_prefs = profile.get('job_preferences', {})
+    
+    return {
+        "id": personal_info.get('user_id', ''),
+        "email": personal_info.get('email', ''),
+        "full_name": personal_info.get('full_name', 'Unknown'),
+        "first_name": personal_info.get('first_name', ''),
+        "last_name": personal_info.get('last_name', ''),
+        "headline": personal_info.get('headline', ''),
+        "summary": personal_info.get('summary', ''),
+        "phone": personal_info.get('phone', ''),
+        "date_of_birth": personal_info.get('date_of_birth'),
+        "gender": personal_info.get('gender'),
+        "profile_photo_url": personal_info.get('profile_photo_url', ''),
+        "joined_date": personal_info.get('joined_date'),
+        "last_login": personal_info.get('last_login'),
+        "user_status": personal_info.get('user_status'),
+        "user_type": personal_info.get('user_type'),
+        "two_factor_enabled": personal_info.get('two_factor_enabled'),
+        "terms_accepted_at": personal_info.get('terms_accepted_at'),
+        "terms_version": personal_info.get('terms_version'),
+        "location": {
+            "country": personal_info.get('country', ''),
+            "city": personal_info.get('city', ''),
+            "timezone": personal_info.get('timezone', '')
+        },
+        "social_links": {
+            "linkedin": links.get('linkedin', ''),
+            "github": links.get('github', ''),
+            "portfolio": links.get('portfolio', ''),
+            "website": links.get('website', '')
+        },
+        "work_preferences": {
+            "willing_to_relocate": work_prefs.get('willing_to_relocate', False),
+            "willing_to_travel": work_prefs.get('willing_to_travel', False),
+            "notice_period_days": work_prefs.get('notice_period_days', 0),
+            "expected_salary": work_prefs.get('expected_salary', {}),
+            "current_salary": work_prefs.get('current_salary', {}),
+            "currency": work_prefs.get('currency', 'USD')
+        },
+        "languages": profile.get('languages', []),
+        "privacy_settings": profile.get('privacy_settings', {}),
+        "job_preferences": {
+            "job_types": job_prefs.get('job_types', []) or job_prefs.get('preferred_job_types', []),
+            "preferred_job_types": job_prefs.get('preferred_job_types', []) or job_prefs.get('job_types', []),
+            "locations": job_prefs.get('locations', []) or job_prefs.get('preferred_locations', []),
+            "preferred_locations": job_prefs.get('preferred_locations', []) or job_prefs.get('locations', []),
+            "industries": job_prefs.get('industries', []) or job_prefs.get('preferred_industries', []),
+            "preferred_industries": job_prefs.get('preferred_industries', []) or job_prefs.get('industries', []),
+            "languages": job_prefs.get('languages', []) or job_prefs.get('preferred_languages', []),
+            "preferred_languages": job_prefs.get('preferred_languages', []) or job_prefs.get('languages', []),
+            "remote_work_preference": job_prefs.get('remote_work_preference', 'flexible'),
+            "salary_min": job_prefs.get('salary_min', 0) or job_prefs.get('expected_salary_min', 0),
+            "salary_max": job_prefs.get('salary_max', 0) or job_prefs.get('expected_salary_max', 0),
+            "salary_currency": job_prefs.get('salary_currency', 'Rwf'),
+            "availability_status": job_prefs.get('availability_status', 'actively_looking'),
+            "availability_date": job_prefs.get('availability_date'),
+            "keywords": job_prefs.get('keywords', ''),
+            "job_level": job_prefs.get('job_level', 'entry')
+        },
+        "availability": profile.get('availability', {}),
+        "metadata": profile.get('metadata', {}),
+        "timestamps": {
+            "profile_created": profile.get('created_at'),
+            "profile_updated": profile.get('updated_at')
+        },
+        "statistics": {
+            "total_years_experience": statistics.get('total_years_experience', 0),
+            "current_job_years": statistics.get('current_job_years', 0),
+            "most_recent_job": statistics.get('most_recent_job'),
+            "total_skills": statistics.get('total_skills', 0),
+            "total_education": statistics.get('total_education_entries', 0),
+            "total_work_experience": statistics.get('total_work_experience', 0),
+            "total_certifications": statistics.get('total_certifications', 0),
+            "total_portfolio_links": statistics.get('total_portfolio_links', 0),
+            "total_resumes": statistics.get('total_resumes', 0),
+            "top_skills": statistics.get('top_skills', []),
+            "skill_distribution": statistics.get('skill_distribution', {}),
+            "saved_jobs_count": statistics.get('saved_jobs_count', 0),
+            "profile_completion": statistics.get('profile_completion', {})
+        },
+        "applications_summary": {
+            "total": applications_summary.get('total', 0),
+            "submitted": applications_summary.get('submitted', 0),
+            "under_review": applications_summary.get('under_review', 0),
+            "interviewing": applications_summary.get('interviewing', 0),
+            "offers": applications_summary.get('offers', 0),
+            "hired": applications_summary.get('hired', 0),
+            "rejected": applications_summary.get('rejected', 0)
+        },
+        "simulations_summary": {
+            "total": simulations_summary.get('total', 0),
+            "completed": simulations_summary.get('completed', 0),
+            "in_progress": simulations_summary.get('in_progress', 0),
+            "average_score": simulations_summary.get('average_score', 0)
+        },
+        "education": profile_data.get('education', []),
+        "work_experience": profile_data.get('work_experience', []),
+        "skills": profile_data.get('skills', []),
+        "certifications": profile_data.get('certifications', []),
+        "portfolio_links": profile_data.get('portfolio_links', []),
+        "resumes": profile_data.get('resumes', [])
+    }
+
+class BackendClient:
+    def __init__(self):
+        self.base_url = BASE_URL
+        self.headers = {"Content-Type": "application/json"}
+    
+    def get_profile(self, candidate_id):
+        try:
+            log_info(f"🔍 Calling backend API for candidate: {candidate_id}")
+            log_info(f"   URL: {self.base_url}/candidates/full-profile/{candidate_id}")
+            
+            resp = requests.get(
+                f"{self.base_url}/candidates/full-profile/{candidate_id}", 
+                headers=self.headers, 
+                timeout=BACKEND_REQUEST_TIMEOUT
+            )
+            
+            log_info(f"📊 Response status: {resp.status_code}")
+            log_info(f"📊 Response body: {resp.text[:500] if resp.text else 'Empty'}")
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("success"):
+                    return data
+                else:
+                    log_error(f"❌ API returned success=false: {data.get('message')}")
+                    return None
+            else:
+                log_error(f"❌ HTTP {resp.status_code}: {resp.text}")
+                return None
+                
+        except Exception as e:
+            log_error(f"❌ Profile error: {e}")
+            return None
+    
+    def get_jobs(self):
+        """Fetches every active job, not just the endpoint's default first page.
+        /jobs/candidate/list paginates (default limit=20, max=100) since it's built
+        for candidates browsing the UI- the matcher needs the full set so it scores
+        every job the hybrid recommender sees, not just the 20 most recent."""
+        all_jobs = []
+        page = 1
+        page_size = 100
+        try:
+            while True:
+                resp = requests.get(
+                    f"{self.base_url}/jobs/candidate/list",
+                    params={"page": page, "limit": page_size},
+                    headers=self.headers,
+                    timeout=BACKEND_REQUEST_TIMEOUT,
+                )
+                if resp.status_code != 200:
+                    break
+                data = resp.json()
+                if not (data.get("success") and data.get("data")):
+                    break
+                jobs_data = data["data"]
+                page_jobs = jobs_data.get("data") if isinstance(jobs_data, dict) else jobs_data
+                if not page_jobs:
+                    break
+                all_jobs.extend(page_jobs)
+
+                pagination = jobs_data.get("pagination") if isinstance(jobs_data, dict) else None
+                if not pagination or not pagination.get("has_next_page"):
+                    break
+                page += 1
+            return all_jobs
+        except Exception as e:
+            log_error(f"Jobs error: {e}")
+            return all_jobs
+    
+    def get_job_by_id(self, job_id: str):
+        """Get a single job by ID from the database"""
+        try:
+            resp = requests.get(f"{self.base_url}/jobs/candidate/{job_id}", headers=self.headers, timeout=BACKEND_REQUEST_TIMEOUT)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("success") and data.get("data"):
+                    return data["data"]
+            return None
+        except Exception as e:
+            log_error(f"Get job by ID error: {e}")
+            return None
+
+def _collect_skill_terms(profile_data, jobs):
+    """Gather raw skill names from the candidate and the job(s) to seed the dynamic
+    typo-correction vocabulary (no hardcoded skill list)."""
+    terms = []
+    for s in profile_data.get('skills', []) or []:
+        terms.append(s.get('skill_name') or s.get('name') or '')
+    for w in profile_data.get('work_experience', []) or []:
+        sk = w.get('skills') or []
+        if isinstance(sk, list):
+            terms.extend([str(x) for x in sk])
+    job_list = jobs if isinstance(jobs, list) else [jobs]
+    for j in job_list:
+        if not isinstance(j, dict):
+            continue
+        for key in ('skills_required', 'skills_preferred'):
+            for sk in j.get(key, []) or []:
+                terms.append(sk.get('name') if isinstance(sk, dict) else str(sk))
+    return terms
+
+
+def build_match_narrative(skills, quals, exp, total_score, job):
+    """Compose a transparent 'why this score' explanation and concrete improvement
+    suggestions from the four factor results- so the UI shows reasoning, not just
+    numbers. Returns (explanation_text, improvement_suggestions)."""
+    job_title = job.get('title') or 'this role'
+    matched = skills.get('matched_skills', []) or []
+    missing = skills.get('missing_skills', []) or []
+    parts = []
+
+    sp = skills.get('match_percentage', 0) or 0
+    if sp >= 80 and matched:
+        parts.append(f"The candidate has strong technical alignment, matching {len(matched)} of the required skills ({', '.join(matched[:4])}).")
+    elif matched:
+        parts.append(f"The candidate matches {len(matched)} required skill(s) ({', '.join(matched[:4])}), with room to grow.")
+    else:
+        parts.append("Few of the required technical skills were found in the candidate profile.")
+
+    rel = exp.get('relevant_years', 0) or 0
+    tot = exp.get('total_years', 0) or 0
+    if rel > 0:
+        parts.append(f"Of {tot} year(s) of total experience, about {rel} year(s) are directly relevant to {job_title}, based on semantic matching of past roles.")
+    elif tot > 0:
+        parts.append(f"The candidate has {tot} year(s) of experience, though little of it is directly relevant to {job_title}.")
+
+    if quals.get('explanation'):
+        parts.append(str(quals.get('explanation')))
+    elif quals.get('match_quality'):
+        parts.append(f"Education match is rated {quals.get('match_quality')}.")
+
+    if missing:
+        parts.append(f"The candidate is missing {', '.join(missing[:3])}, which reduced the final score.")
+
+    return ' '.join(parts), list(missing[:6])
+
+async def parse_candidate_id_request(request: Request):
+    body = await request.body()
+    data = json.loads(body.decode('utf-8')) if body else {}
+    forbidden_fields = [field for field in ("username", "email", "password") if data.get(field)]
+
+    if forbidden_fields:
+        return None, {
+            "success": False,
+            "error": "Do not send username, email, or password. Send only candidate_id."
+        }
+
+    return data.get("candidate_id"), None
+
+
+# ==========================================================================
+# END MATCHER SUBSYSTEM (route handlers + instantiation are further below,
+# after `engine` exists, since LocalTextProcessor needs engine.semantic_encoder)
 # ==========================================================================
 
 class SemanticEncoder:
@@ -673,7 +3062,7 @@ class SemanticEncoder:
     def __init__(self, retries: int = 3, retry_delay: float = 3.0):
         self.model = None
         self._cache: Dict[str, np.ndarray] = {}
-        # gateway.py starts every microservice in parallel — ai_job_matcher_og.py
+        # gateway.py starts every microservice in parallel- ai_job_matcher_og.py
         # loads this SAME cached model at roughly the same moment, and on Windows
         # that concurrent access to the HuggingFace cache can transiently fail
         # ("does not appear to have a file named ...") even though the files are
@@ -689,11 +3078,11 @@ class SemanticEncoder:
             except Exception as e:
                 last_error = e
                 if attempt < retries:
-                    log.warning("Semantic encoder load attempt %d/%d failed (%s) — retrying in %.0fs",
+                    log.warning("Semantic encoder load attempt %d/%d failed (%s)- retrying in %.0fs",
                                 attempt, retries, e, retry_delay)
                     time.sleep(retry_delay)
         if self.model is None:
-            log.warning("Semantic encoder unavailable after %d attempts (%s) — falling back to "
+            log.warning("Semantic encoder unavailable after %d attempts (%s)- falling back to "
                         "TF-IDF-only content matching.", retries, last_error)
 
     @property
@@ -734,7 +3123,7 @@ class SemanticEncoder:
 
 
 # ==========================================================================
-# 4. PREPROCESSING — id maps + weighted interaction matrix
+# 4. PREPROCESSING- id maps + weighted interaction matrix
 # ==========================================================================
 
 class Preprocessor:
@@ -801,12 +3190,12 @@ class Preprocessor:
 # ==========================================================================
 
 class ContentBasedModel:
-    """MODEL 1 — content-based recommendation.
+    """MODEL 1- content-based recommendation.
 
     Two similarity signals, blended:
       1. TF-IDF cosine over shared vocabularies (skills/fields/location/title/
-         languages/certifications/experience_text) — exact-ish lexical overlap.
-      2. Sentence embeddings over "skills + title" text (SemanticEncoder) —
+         languages/certifications/experience_text)- exact-ish lexical overlap.
+      2. Sentence embeddings over "skills + title" text (SemanticEncoder)-
          captures relationships TF-IDF can't: a candidate skilled in "Python"
          should surface "Backend Developer" / "Machine Learning Engineer"
          even though neither shares a token with "Python", because those
@@ -814,11 +3203,11 @@ class ContentBasedModel:
 
     Fitting one TF-IDF vectorizer per pair on BOTH sides' text combined is
     what makes a candidate's skills and a job's requirements comparable via
-    cosine similarity at all — separate vocabularies would put them in
+    cosine similarity at all- separate vocabularies would put them in
     different coordinate spaces.
 
     Candidate-side text is deliberately built the SAME WAY ai_job_matcher_og.py's
-    four factors read a candidate's profile — skills include those tagged on
+    four factors read a candidate's profile- skills include those tagged on
     past jobs (work_experience.skills), not just the standalone skills table;
     "fields" includes both degree AND field_of_study (job-side already blends
     minimum_degree + allowed_fields, so this fixes what was an asymmetric
@@ -873,7 +3262,7 @@ class ContentBasedModel:
             if not isinstance(prefs, dict):
                 prefs = {}
             # Skills come from BOTH the standalone skills table AND skills tagged
-            # on past jobs — same as ai_job_matcher_og.py's Factor1, which unions
+            # on past jobs- same as ai_job_matcher_og.py's Factor1, which unions
             # profile_data['skills'] with every work_experience[].skills entry.
             skills_list = list(skills_by_user.get(uid, []))
             work_titles: List[str] = []
@@ -892,15 +3281,23 @@ class ContentBasedModel:
                     ] if p))
             skills_text = " ".join(skills_list)
             # "fields" mirrors the JOB side's job_fields_text(), which blends
-            # minimum_degree + allowed_fields — without the candidate's own
+            # minimum_degree + allowed_fields- without the candidate's own
             # degree here, that comparison was asymmetric (job side had degree
             # text, candidate side didn't).
             fields_text = " ".join(list(fields_by_user.get(uid, [])) + list(degrees_by_user.get(uid, [])))
             certifications_text = " ".join(certs_by_user.get(uid, []))
             languages_text = " ".join(_parse_language_list(cand.get("languages")))
             preferred_locations = prefs.get("locations") or prefs.get("preferred_locations") or []
+            # Rwandan candidates store their actual residence in
+            # province/district/sector/cell/village (city/country stay NULL
+            # for them) -- folded in as bag-of-words tokens alongside city/
+            # country so TF-IDF can pick up shared district/sector names
+            # against the job side's city/country tokens (job_location_text).
+            home_location_parts = [_s(cand.get("sector")), _s(cand.get("district")),
+                                    _s(cand.get("province")), 'Rwanda'] if cand.get("is_rwandan") else []
             location_text = " ".join(p for p in [_s(cand.get("city")), _s(cand.get("country")),
                                                   _s(prefs.get("remote_preference"))] +
+                                      home_location_parts +
                                       [str(l) for l in preferred_locations] if p)
             title_text = " ".join(p for p in [_s(cand.get("headline"))] + work_titles +
                                    list(prefs.get("job_types") or []) +
@@ -962,7 +3359,7 @@ class ContentBasedModel:
                                    token_pattern=r"[A-Za-z0-9]+")
             combined = pd.concat([cvals, jvals])
             if combined.str.strip().eq("").all():
-                # Nothing to vectorize for this pair yet (e.g. no jobs have skills set) —
+                # Nothing to vectorize for this pair yet (e.g. no jobs have skills set)-
                 # use a 1-dim zero block so matrix shapes still line up.
                 cand_blocks.append(sp.csr_matrix((len(cvals), 1)))
                 job_blocks.append(sp.csr_matrix((len(jvals), 1)))
@@ -983,7 +3380,7 @@ class ContentBasedModel:
         self.job_matrix = sk_normalize(sp.hstack(job_blocks).tocsr())
 
         # Semantic embeddings computed once here (fit time), reused for every
-        # score_batch call — encoding is the expensive part, cosine similarity
+        # score_batch call- encoding is the expensive part, cosine similarity
         # on the resulting dense vectors is cheap.
         if self.encoder and self.encoder.available:
             job_vecs = self.encoder.encode_batch(job_text["semantic_text"].tolist())
@@ -1174,13 +3571,13 @@ class ContentBasedModel:
         return self._blend(tfidf_scores, semantic_scores).astype(np.float32)
 
     def explain_match(self, candidate_idx: int, job_col: int) -> dict:
-        """Detailed, per-pair breakdown for ONE candidate/job pair — deliberately
+        """Detailed, per-pair breakdown for ONE candidate/job pair- deliberately
         NOT called during bulk score_batch (would be O(candidates x jobs) at
         real per-skill granularity); only run for the top-N shortlist actually
         shown to a user, where that cost is bounded and worth paying.
 
         Returns matched terms for EVERY pair, plus a genuine standalone TF-IDF
-        cosine score PER PAIR and the standalone semantic score — recomputed
+        cosine score PER PAIR and the standalone semantic score- recomputed
         independently here because score_batch()'s single concatenated
         candidate/job vector is L2-normalized as ONE whole, so it can't be
         sliced back into a per-pair score after the fact. This makes every
@@ -1229,7 +3626,7 @@ class ContentBasedModel:
             "matched_experience_years": round(float(cand["experience_years"]), 1),
             "required_experience_years": round(float(job["experience_years"]), 1),
             # Full breakdown: every pair's matched terms + standalone TF-IDF
-            # cosine, plus the standalone semantic score — independent of how
+            # cosine, plus the standalone semantic score- independent of how
             # score_batch() blends them for ranking.
             "matched_terms_by_pair": matched_terms,
             "tfidf_score_by_pair": tfidf_score_by_pair,
@@ -1279,7 +3676,7 @@ class InteractionDataset(Dataset):
         self.neg_ratio = neg_ratio
         self.rng = np.random.default_rng(seed)
         # A candidate explicitly ignoring a job is a much stronger "not interested"
-        # signal than an unseen job picked at random — without this, ignored_jobs
+        # signal than an unseen job picked at random- without this, ignored_jobs
         # was only ever used to filter results at SCORE time, never to actually
         # train the model that this candidate/job pair is a negative example.
         self.hard_negatives = hard_negatives or {}
@@ -1329,7 +3726,7 @@ class CollaborativeModel:
     def fit(self, interaction_matrix: sp.csr_matrix, n_users: int, n_items: int, max_weight: float,
             hard_negatives: Dict[int, List[int]] = None) -> None:
         if interaction_matrix.nnz < self.cfg.min_interactions_to_train:
-            log.info("Only %d interactions (< %d) — skipping collaborative training, "
+            log.info("Only %d interactions (< %d)- skipping collaborative training, "
                       "weight will be redistributed to content/behavior.",
                       interaction_matrix.nnz, self.cfg.min_interactions_to_train)
             self.trained = False
@@ -1398,7 +3795,7 @@ class CollaborativeModel:
     @torch.no_grad()
     def most_similar_candidates(self, candidate_idx: int, k: int = 5) -> List[Tuple[int, float]]:
         """MODEL 3's explicit output: which OTHER candidates does the learned
-        embedding space consider closest to this one — cosine similarity of
+        embedding space consider closest to this one- cosine similarity of
         their learned user-embedding vectors, which the model fit from
         shared interaction PATTERNS across the whole candidate population
         (not from any single candidate's profile text). Returns
@@ -1418,14 +3815,14 @@ class CollaborativeModel:
 # ==========================================================================
 
 class BehaviorModel:
-    """MODEL 2 — behavior-based recommendation: an evolving interest profile
+    """MODEL 2- behavior-based recommendation: an evolving interest profile
     learned from the COMPLETE textual content of every job a candidate has
     interacted with (viewed/searched/saved/applied/interviewed/offered/
     hired), not just a handful of categorical attributes.
 
-    Architecture mirrors ContentBasedModel — one TfidfVectorizer fitted per
+    Architecture mirrors ContentBasedModel- one TfidfVectorizer fitted per
     pair on the job corpus, all pairs horizontally stacked into one
-    normalized job_matrix, plus a semantic embedding matrix, blended 50/50 —
+    normalized job_matrix, plus a semantic embedding matrix, blended 50/50-
     but over a much richer 17-pair space (skills/fields/title/location/
     languages/certifications/experience_text/education/responsibilities/
     requirements/qualifications/benefits/employment_type/work_arrangement/
@@ -1433,18 +3830,18 @@ class BehaviorModel:
       - "skills" uses character 3-4-gram TF-IDF instead of whole-word
         tokens, so "Phyton"/"Reatc"/"Djanggo" still overlap "Python"/
         "React"/"Django" on shared character shingles without needing
-        exact spelling — semantic embeddings add a second, independent
+        exact spelling- semantic embeddings add a second, independent
         layer of typo/synonym tolerance on top.
       - "company_name" is scaled down before the final normalize so it
         contributes a small share of the match instead of an equal ~1/17
-        share — candidates search skills/title/location, not a specific
+        share- candidates search skills/title/location, not a specific
         employer, though repeatedly interacting with the same company's
         jobs still nudges this pair's own similarity up naturally.
 
     A candidate's behavior profile is a weighted average of the job_matrix
     rows (and semantic vectors) of every job they interacted with, weighted
     by interaction type (TYPE_WEIGHTS) and a 60-day recency half-life. This
-    is the ONLY sub-signal now — no separate categorical-attribute or
+    is the ONLY sub-signal now- no separate categorical-attribute or
     parallel search-TF-IDF systems to blend against, since department/
     job_type/work_arrangement/company_name are themselves pairs in the same
     17-field space, and search queries feed the same weighted profile
@@ -1463,7 +3860,7 @@ class BehaviorModel:
     WORD_MAX_FEATURES = 2000
     CHAR_MAX_FEATURES = 3000
 
-    # Single-argument job-text extractors — "languages"/"certifications" need
+    # Single-argument job-text extractors- "languages"/"certifications" need
     # extra lookups (language_requirements / education_required.certifications)
     # and are built directly in _job_text_frame instead of living here.
     _EXTRACTORS = {
@@ -1484,7 +3881,7 @@ class BehaviorModel:
         "company_name": job_company_name_text,
     }
 
-    # Interaction weights specific to Behavior — deliberately kept separate
+    # Interaction weights specific to Behavior- deliberately kept separate
     # from the shared InteractionWeights dataclass (which collaborative
     # filtering also reads) so this refactor doesn't change Collaborative's
     # training signal. Rejected/withdrawn contribute nothing: they are not a
@@ -1513,7 +3910,7 @@ class BehaviorModel:
         self._event_log: pd.DataFrame = pd.DataFrame(columns=["candidate_idx", "job_idx", "event_date", "weight"])
         self._jobs_ref: Optional[pd.DataFrame] = None
         self._idx_to_job_id_ref: List[str] = []
-        # Informational only ("has_search_history" in explainability output) —
+        # Informational only ("has_search_history" in explainability output)-
         # searches feed the SAME weighted profile as any other interaction
         # (see _search_query_row), they don't score as a separate sub-signal.
         self._search_candidate_indices: Set[int] = set()
@@ -1539,7 +3936,7 @@ class BehaviorModel:
     def fit_job_corpus(self, jobs: pd.DataFrame) -> None:
         """Fit the 17-pair TF-IDF space + semantic embeddings over the active
         job corpus. Call whenever the job set changes (same cadence as
-        ContentBasedModel.fit) — fit_profiles() below builds every
+        ContentBasedModel.fit)- fit_profiles() below builds every
         candidate's profile as a weighted average of THESE job vectors, so
         this must run first."""
         job_text = self._job_text_frame(jobs)
@@ -1555,7 +3952,7 @@ class BehaviorModel:
             vals = job_text[pair].fillna("") if pair in job_text.columns else pd.Series([""] * len(job_text))
             if vals.empty or vals.str.strip().eq("").all():
                 # Nothing to vectorize for this pair in this job corpus (e.g.
-                # no job has benefits filled in yet) — a 1-dim zero block
+                # no job has benefits filled in yet)- a 1-dim zero block
                 # keeps matrix shapes aligned without hardcoding that the
                 # field must exist, per "if some fields do not exist,
                 # automatically ignore them without breaking the code."
@@ -1629,7 +4026,7 @@ class BehaviorModel:
 
     def _job_row_vector(self, job_row: dict) -> Tuple[sp.csr_matrix, Optional[np.ndarray], Dict[str, str]]:
         """Transform ONE job through the ALREADY-FITTED per-pair vectorizers
-        (never re-fits — a realtime job add/update must not shift the
+        (never re-fits- a realtime job add/update must not shift the
         vocabulary/dimensions every other candidate's stored profile was
         built against)."""
         doc_frame = self._job_text_frame(pd.DataFrame([job_row]))
@@ -1666,7 +4063,7 @@ class BehaviorModel:
         change, causing a numpy shape mismatch the next time a candidate is
         scored."""
         if self._tfidf is None or not self._pair_col_ranges:
-            return  # not fitted yet — fit_job_corpus will pick this job up
+            return  # not fitted yet- fit_job_corpus will pick this job up
         job_id = str(job_row.get("id", ""))
         if not job_id:
             return
@@ -1698,7 +4095,7 @@ class BehaviorModel:
         if self._job_text is not None and not self._job_text.empty:
             self._job_text = self._job_text[self._job_text["id"].astype(str) != jid].reset_index(drop=True)
         # Any candidate profile built partly from this job's row_pos is now
-        # stale (row indices shift after a delete) — drop profiles rather
+        # stale (row indices shift after a delete)- drop profiles rather
         # than risk scoring against the wrong job's vector. They rebuild on
         # next full fit_profiles() or the next interaction for that candidate.
         self.behavior_profile = {}
@@ -1706,7 +4103,7 @@ class BehaviorModel:
 
     def _search_query_row(self, text: str) -> Optional[sp.csr_matrix]:
         """A search query has no associated job (job_searches has no
-        clicked-job column) — approximate it as a job-shaped row with
+        clicked-job column)- approximate it as a job-shaped row with
         content only in the skills/title column slices, zero elsewhere, so
         it can still be folded into the same weighted-average accumulation
         as real interacted jobs."""
@@ -1736,7 +4133,7 @@ class BehaviorModel:
     def _build_profile_for_group(self, cand_idx: int, grp: pd.DataFrame, jobs_by_id: Optional[pd.DataFrame]) -> None:
         """Weighted average of the 17-pair job_matrix rows (+ semantic
         vectors) of every job in `grp`, plus any search-query rows for this
-        candidate, weighted by effective_weight — the candidate's implicit
+        candidate, weighted by effective_weight- the candidate's implicit
         profile lives in the exact same feature space as job_matrix, so it
         can be compared to every job via the same cosine similarity."""
         search_rows = self._search_text_by_candidate.get(int(cand_idx), [])
@@ -1793,7 +4190,7 @@ class BehaviorModel:
     def _collect_search_text(self, events: pd.DataFrame) -> None:
         """Search rows arrive in the SAME `events` frame as job interactions
         (entity_type == 'search'), tagged with candidate_idx + query text but
-        no job_idx — pull them into their own weighted map instead of trying
+        no job_idx- pull them into their own weighted map instead of trying
         to merge them against a job that doesn't exist in the data model."""
         self._search_text_by_candidate = {}
         self._search_candidate_indices = set()
@@ -1812,7 +4209,7 @@ class BehaviorModel:
     def _collect_search_text_from_queries(self, search_events: pd.DataFrame, candidate_id_to_idx: Dict[str, int]) -> None:
         """Populates the same _search_text_by_candidate map as
         _collect_search_text, but from the raw job_searches query
-        (user_id/query/searched_at) used at full-fit time — job_searches has
+        (user_id/query/searched_at) used at full-fit time- job_searches has
         no job_idx, so this can't be merged into the main `events` frame the
         way view/save/apply events are; it's fetched and passed separately,
         same as the old fit_search()."""
@@ -1837,7 +4234,7 @@ class BehaviorModel:
                       search_events: Optional[pd.DataFrame] = None,
                       candidate_id_to_idx: Optional[Dict[str, int]] = None) -> None:
         """Full (re)fit of every candidate's behavior profile from their
-        complete interaction history — job views/saves/applications (via
+        complete interaction history- job views/saves/applications (via
         `events`) plus search queries (via `search_events`, fetched
         separately since job_searches has no job_idx to merge on). Call
         fit_job_corpus(jobs) first."""
@@ -1926,7 +4323,7 @@ class BehaviorModel:
         return self.behavior_profile_sources.get(int(candidate_idx), [])
 
     def get_interest_profile(self, candidate_idx: int, top_k: int = 3) -> Dict[str, List[str]]:
-        """The evolving 'Interest Profile' — top skill/title terms drawn from
+        """The evolving 'Interest Profile'- top skill/title terms drawn from
         the jobs that most strongly built this candidate's profile (weighted
         aggregate, not a single job); replaces the old categorical-attribute
         top-K (department/job_type/...) now that the profile is text-based."""
@@ -1953,7 +4350,7 @@ class BehaviorModel:
     @staticmethod
     def _correct_typo(term: str, vocabulary: Set[str], min_score: int = 82) -> Optional[str]:
         """Optional RapidFuzz-based typo correction for the explainability
-        output's corrected_terms — silently a no-op if rapidfuzz isn't
+        output's corrected_terms- silently a no-op if rapidfuzz isn't
         installed. Scoring itself is already typo-tolerant via character
         n-grams + semantic embeddings; this is purely cosmetic/explanatory."""
         try:
@@ -1967,10 +4364,10 @@ class BehaviorModel:
 
     def explain_detail(self, candidate_idx: Optional[int], job_col: int) -> dict:
         """Full per-pair breakdown of the behavior score for ONE candidate/
-        job pair — matched terms + a genuine standalone TF-IDF cosine per
+        job pair- matched terms + a genuine standalone TF-IDF cosine per
         pair, the standalone semantic score, and the final blended
         behavior_score. Deliberately not called during bulk score_batch
-        (would be O(candidates x jobs) at per-term granularity) — only for
+        (would be O(candidates x jobs) at per-term granularity)- only for
         the top-N shortlist actually shown to a user."""
         empty = {
             "matched_terms_by_pair": {}, "tfidf_score_by_pair": {},
@@ -2056,14 +4453,14 @@ class BehaviorModel:
 
     def explain(self, candidate_idx: int, job_row: pd.Series, has_search_history: bool = None) -> List[str]:
         """Human-readable one-line reasons this job matches this candidate's
-        learned behavior — a short summary, not the full per-pair breakdown
+        learned behavior- a short summary, not the full per-pair breakdown
         (see explain_detail for that)."""
         reasons: List[str] = []
         sources = self.behavior_profile_sources.get(int(candidate_idx), [])
         if sources:
             top_titles = ", ".join(s["title"] for s in sources[:2] if s.get("title"))
             if top_titles:
-                reasons.append(f"Similar to jobs you engaged with (e.g. {top_titles}) — skills, title, location, and more.")
+                reasons.append(f"Similar to jobs you engaged with (e.g. {top_titles})- skills, title, location, and more.")
         if has_search_history is None:
             has_search_history = int(candidate_idx) in self._search_candidate_indices
         if has_search_history:
@@ -2130,15 +4527,23 @@ class BehaviorModel:
             self._rebuild_profiles_for(affected_candidates)
 
 
-def freshness_scores(jobs: pd.DataFrame) -> np.ndarray:
+def freshness_scores(jobs: pd.DataFrame) -> Tuple[np.ndarray, bool]:
     """Exponential recency decay: a job posted today scores 1.0, ~0.37 at 30
-    days old, ~0.05 at 90 days — freshly posted jobs get a real but modest
-    boost rather than dominating the ranking."""
+    days old, ~0.05 at 90 days- freshly posted jobs get a real but modest
+    boost rather than dominating the ranking.
+
+    Returns (scores, has_freshness). has_freshness is False only when EVERY
+    job in the batch has no usable created_at- there's no real recency
+    signal to compute, so the caller excludes and redistributes this
+    signal's weight (via HybridWeights.normalized(has_freshness=...))
+    instead of scoring every job as a fabricated uniform "30 days old"."""
     now = pd.Timestamp.now(tz="UTC")
     created = pd.to_datetime(jobs["created_at"], utc=True, errors="coerce")
     days_old = (now - created).dt.total_seconds() / 86400
-    days_old = days_old.fillna(days_old.max() if days_old.notna().any() else 30.0)
-    return np.exp(-np.clip(days_old.values, 0, None) / 30.0).astype(np.float32)
+    has_freshness = bool(days_old.notna().any())
+    days_old = days_old.fillna(days_old.max() if has_freshness else 30.0)
+    scores = np.exp(-np.clip(days_old.values, 0, None) / 30.0).astype(np.float32)
+    return scores, has_freshness
 
 
 def popularity_scores(jobs: pd.DataFrame) -> np.ndarray:
@@ -2168,7 +4573,7 @@ def business_rule_modifier(candidate_row: dict, job_row: pd.Series) -> Tuple[flo
     score: does this job clear concrete business bars for this candidate?
     Currently checks salary fit (candidate's stated expected_salary vs the
     job's posted range) and employer verification. Returns (multiplier,
-    reason_strings) — multiplier stays close to 1.0 (0.85-1.15) so it nudges
+    reason_strings)- multiplier stays close to 1.0 (0.85-1.15) so it nudges
     rather than overrides the other five signals."""
     modifier = 1.0
     reasons: List[str] = []
@@ -2197,7 +4602,7 @@ def business_rule_modifier(candidate_row: dict, job_row: pd.Series) -> Tuple[flo
 
 def _parse_age_requirement(age_req_str: Optional[str]) -> Tuple[Optional[int], Optional[int]]:
     """Compact port of ai_job_matcher_og.py's Factor4 age-requirement parser
-    (X+, under X, X-Y, exact X) — enough pattern coverage to compute an
+    (X+, under X, X-Y, exact X)- enough pattern coverage to compute an
     age-fit score without duplicating its full regex suite."""
     if not age_req_str or not isinstance(age_req_str, str):
         return None, None
@@ -2222,7 +4627,7 @@ def _parse_age_requirement(age_req_str: Optional[str]) -> Tuple[Optional[int], O
 
 
 def age_fit(candidate_row: Optional[dict], job_row: pd.Series) -> Tuple[float, Optional[str], Optional[int], Optional[str]]:
-    """Age-requirement fit — same underlying data ai_job_matcher_og.py's
+    """Age-requirement fit- same underlying data ai_job_matcher_og.py's
     Factor4 uses (candidate date_of_birth vs job.education_required.
     age_requirement). A light nudge (0.85-1.0), not a hard filter, since it's
     a minor factor there too (5% of the 15% Preferences weight). Returns
@@ -2242,7 +4647,11 @@ def age_fit(candidate_row: Optional[dict], job_row: pd.Series) -> Tuple[float, O
     if not age_req:
         return 1.0, None, candidate_age, age_req
     if candidate_age is None:
-        return 0.95, "Age requirement specified but candidate age unknown.", None, age_req
+        # Job states an age requirement but we have no DOB to check it
+        # against -- neutral (no adjustment), same as "no requirement".
+        # A guessed penalty here would itself be an unjustified default;
+        # we genuinely can't tell whether the candidate qualifies or not.
+        return 1.0, "Age requirement specified but candidate age unknown -- not scored either way.", None, age_req
     min_age, max_age = _parse_age_requirement(age_req)
     if min_age is None and max_age is None:
         return 1.0, None, candidate_age, age_req
@@ -2278,7 +4687,7 @@ class HybridRanker:
 
 
 # ==========================================================================
-# 8.5 MODEL PERSISTENCE — save the expensive-to-fit pieces (ContentBasedModel/
+# 8.5 MODEL PERSISTENCE- save the expensive-to-fit pieces (ContentBasedModel/
 # BehaviorModel's vectorizers + matrices, the DataFrames they were fit from)
 # so a restart doesn't have to redo ~25-45s of TF-IDF/semantic-embedding
 # fitting when nothing that would change them actually changed.
@@ -2289,7 +4698,7 @@ class ModelStore:
 
     Uses plain pickle for everything (sklearn vectorizers, scipy sparse
     matrices, numpy arrays, pandas DataFrames, the PyTorch nn.Module all
-    round-trip through it fine) — this is deliberately NOT meant to be
+    round-trip through it fine)- this is deliberately NOT meant to be
     portable across Python/library versions or machines, only across a
     restart of the SAME deployed service, so pickle's simplicity outweighs
     its portability limitations here.
@@ -2299,7 +4708,7 @@ class ModelStore:
     (auto-incrementing), created_at, training_duration_seconds, dataset
     counts, vocabulary sizes per pair, the fingerprints used to decide
     whether this snapshot is still valid, and training_reason (why this
-    particular save happened — full retrain vs. interactions-only refresh)."""
+    particular save happened- full retrain vs. interactions-only refresh)."""
 
     DIR = Path(__file__).parent / "models"
     STATE_FILE = DIR / "state.pkl"
@@ -2309,7 +4718,7 @@ class ModelStore:
     def load(cls) -> Optional[dict]:
         """Returns {"metadata": {...}, "state": {...}} or None if nothing
         persisted yet, or the persisted snapshot is unreadable/corrupt (in
-        which case the caller should fall back to a full fit — never let a
+        which case the caller should fall back to a full fit- never let a
         bad cache file block startup)."""
         if not cls.STATE_FILE.exists() or not cls.METADATA_FILE.exists():
             return None
@@ -2320,7 +4729,7 @@ class ModelStore:
                 state = pickle.load(f)
             return {"metadata": metadata, "state": state}
         except Exception as e:
-            log.warning("ModelStore.load failed (%s) — falling back to full training.", e)
+            log.warning("ModelStore.load failed (%s)- falling back to full training.", e)
             return None
 
     @classmethod
@@ -2341,13 +4750,13 @@ class ModelStore:
             tmp_meta.replace(cls.METADATA_FILE)
             log.info("ModelStore: saved model v%s (%s)", metadata.get("version"), metadata.get("training_reason"))
         except Exception as e:
-            log.warning("ModelStore.save failed (%s) — next restart will retrain from scratch.", e)
+            log.warning("ModelStore.save failed (%s)- next restart will retrain from scratch.", e)
 
     @staticmethod
     def next_version(prev_metadata: Optional[dict]) -> str:
         """Simple semantic-ish counter: a structural change (full retrain)
         bumps the minor version; an interactions-only refresh bumps the
-        patch version. Not full semver — just enough to see at a glance
+        patch version. Not full semver- just enough to see at a glance
         whether the last save was a full retrain or a light refresh."""
         if not prev_metadata or "version" not in prev_metadata:
             return "1.0.0"
@@ -2368,7 +4777,7 @@ class RecommendationEngine:
         self.db = Database(cfg.db)
         self.preprocessor = Preprocessor(cfg)
         # Loaded ONCE (model load is the expensive part) and shared by every
-        # ContentBasedModel refit — encoding itself still only happens per
+        # ContentBasedModel refit- encoding itself still only happens per
         # fit()/cold-start call, cached inside the encoder.
         self.semantic_encoder = SemanticEncoder()
         self.content_model = ContentBasedModel(cfg.content, encoder=self.semantic_encoder)
@@ -2402,7 +4811,7 @@ class RecommendationEngine:
     def prepare(self) -> dict:
         """Decides, via cheap (COUNT, MAX(timestamp)) fingerprints, whether a
         persisted model can be reused as-is, partially refreshed (only
-        interactions changed — the expensive TF-IDF/semantic fitting is
+        interactions changed- the expensive TF-IDF/semantic fitting is
         still valid), or must be fully retrained (jobs/candidates changed,
         or nothing usable is persisted yet). See ModelStore's docstring for
         why pickle, and _persist() for what gets stripped before saving."""
@@ -2422,7 +4831,7 @@ class RecommendationEngine:
         return self._full_fit(fingerprints, t0)
 
     def _restore_cache_hit(self, persisted: dict, t0: float) -> dict:
-        """Nothing changed since the last save at all — skip fetching AND
+        """Nothing changed since the last save at all- skip fetching AND
         fitting entirely."""
         state = persisted["state"]
         with self._lock:
@@ -2456,10 +4865,10 @@ class RecommendationEngine:
     def _refresh_interactions_only(self, persisted: dict, fingerprints: dict, t0: float) -> dict:
         """Jobs/candidates are unchanged, so the expensive per-pair
         vectorizer fitting (ContentBasedModel.fit / BehaviorModel.
-        fit_job_corpus) is still valid — reused as-is. Only what genuinely
+        fit_job_corpus) is still valid- reused as-is. Only what genuinely
         depends on interaction data is rebuilt: collaborative filtering
         (cheap, a few epochs) and behavior_model's candidate PROFILES
-        (fit_profiles — a weighted average of already-fitted vectors, no
+        (fit_profiles- a weighted average of already-fitted vectors, no
         new TF-IDF/semantic computation)."""
         state = persisted["state"]
         candidates, jobs = state["candidates"], state["jobs"]
@@ -2525,7 +4934,7 @@ class RecommendationEngine:
 
     def _full_fit(self, fingerprints: dict, t0: float) -> dict:
         """Structural change (jobs and/or candidates added/updated/removed)
-        or nothing valid persisted yet — the full fit, unchanged from
+        or nothing valid persisted yet- the full fit, unchanged from
         before this feature existed. Always ends by persisting the result,
         so the NEXT restart can potentially skip straight to a cache hit or
         an interactions-only refresh."""
@@ -2542,7 +4951,7 @@ class RecommendationEngine:
         search_events = self.db.fetch_search_events()
 
         if candidates.empty or jobs.empty:
-            log.warning("No candidates or no active jobs — engine left untrained.")
+            log.warning("No candidates or no active jobs- engine left untrained.")
             with self._lock:
                 self.candidates, self.jobs = candidates, jobs
             return {"n_candidates": len(candidates), "n_jobs": len(jobs), "n_interactions": 0, "collaborative_trained": False,
@@ -2607,10 +5016,10 @@ class RecommendationEngine:
                  fingerprints: dict, stats: dict, bump: str) -> None:
         """Shallow-copies content_model/behavior_model with .encoder
         stripped (the SentenceTransformer is loaded once per process and
-        reused — pickling it too would bloat the snapshot for no benefit,
+        reused- pickling it too would bloat the snapshot for no benefit,
         and re-attaching self.semantic_encoder on load is trivial) so saving
         never touches the live in-memory objects still serving concurrent
-        requests. Never raises — a failed save just means the next restart
+        requests. Never raises- a failed save just means the next restart
         does a full retrain, same as today's behavior with no persistence."""
         try:
             cm = copy.copy(content_model)
@@ -2655,7 +5064,7 @@ class RecommendationEngine:
             }
             ModelStore.save(state, metadata)
         except Exception as e:
-            log.warning("Persisting trained model failed (%s) — next restart will retrain from scratch.", e)
+            log.warning("Persisting trained model failed (%s)- next restart will retrain from scratch.", e)
 
     def start_realtime_updates(self) -> None:
         if self._realtime_started:
@@ -2798,7 +5207,7 @@ class RecommendationEngine:
         return frame[frame[column].astype(str) != str(value)].reset_index(drop=True)
 
     def _remove_interaction_row(self, frame: Optional[pd.DataFrame], user_id: str, job_id: str) -> Optional[pd.DataFrame]:
-        """Un-save / un-view / un-ignore a specific job — a DELETE on
+        """Un-save / un-view / un-ignore a specific job- a DELETE on
         saved_jobs/job_views/ignored_jobs means the candidate's interest
         signal for that exact pair should disappear from the cache, not
         just get a duplicate row appended alongside the one already there."""
@@ -2809,7 +5218,7 @@ class RecommendationEngine:
 
     def _upsert_interaction_row(self, frame: Optional[pd.DataFrame], user_id: str, job_id: str, row: dict) -> pd.DataFrame:
         """Views/saves/ignores are UNIQUE (user_id, job_id) relationships in
-        the DB — job_views/saved_jobs/ignored_jobs all upsert (ON CONFLICT DO
+        the DB- job_views/saved_jobs/ignored_jobs all upsert (ON CONFLICT DO
         UPDATE/DO NOTHING) rather than accumulating a new row per repeat
         view/save, since a candidate opening the same job's details five
         times is one relationship with a refreshed timestamp, not five
@@ -2845,7 +5254,7 @@ class RecommendationEngine:
         skills, education, work, certs = self._refresh_candidate_related_data(candidate_id)
         self.content_model.upsert_candidate(cand_row, skills, education, work, certs)
         self.candidates = self._upsert_frame_row(self.candidates, "user_id", candidate_id, cand_row)
-        # The Matcher's cached result is now stale — it's a profile-vs-job
+        # The Matcher's cached result is now stale- it's a profile-vs-job
         # fit, so a profile change invalidates only THIS candidate's entry.
         _invalidate_matcher_cache(candidate_id)
         return True
@@ -2855,7 +5264,7 @@ class RecommendationEngine:
         if job_row is None:
             return False
         self.content_model.upsert_job(job_row)
-        # Keeps behavior_model.job_matrix in lockstep with content_model's —
+        # Keeps behavior_model.job_matrix in lockstep with content_model's-
         # without this it silently falls behind self.jobs' row count after
         # any realtime job add/update, causing a numpy shape mismatch the
         # next time a candidate is scored (score_batch/freshness_scores/
@@ -3016,7 +5425,7 @@ class RecommendationEngine:
                             self.views = self._remove_interaction_row(self.views, candidate_id, job_id)
                         else:
                             # job_views is UNIQUE(user_id, job_id) with an
-                            # ON CONFLICT DO UPDATE upsert — re-viewing the
+                            # ON CONFLICT DO UPDATE upsert- re-viewing the
                             # same job refreshes one row's timestamp in the
                             # DB, not a new row, so mirror that here instead
                             # of appending a duplicate on every repeat view.
@@ -3030,7 +5439,7 @@ class RecommendationEngine:
                             self.saves = self._remove_interaction_row(self.saves, candidate_id, job_id)
                         else:
                             # saved_jobs is also UNIQUE(user_id, job_id)
-                            # (ON CONFLICT DO NOTHING) — upsert defensively
+                            # (ON CONFLICT DO NOTHING)- upsert defensively
                             # in case a duplicate insert notification ever
                             # arrives for an already-saved pair.
                             self.saves = self._upsert_interaction_row(self.saves, candidate_id, job_id, {
@@ -3053,7 +5462,7 @@ class RecommendationEngine:
                             self.ignored = self._remove_interaction_row(self.ignored, candidate_id, job_id)
                         else:
                             # ignored_jobs is also UNIQUE(user_id, job_id)
-                            # (ON CONFLICT DO NOTHING) — same defensive upsert.
+                            # (ON CONFLICT DO NOTHING)- same defensive upsert.
                             self.ignored = self._upsert_interaction_row(self.ignored, candidate_id, job_id, {
                                 "user_id": candidate_id,
                                 "job_id": job_id,
@@ -3076,12 +5485,13 @@ class RecommendationEngine:
         return {"accepted": len(events), "applied": applied, "structural_change": structural_change, "behavior_change": behavior_change, "search_change": search_change}
 
     def _active_weights(self, has_collab: bool = None, has_behavior: bool = None,
-                         exclude_content: bool = False) -> HybridWeights:
+                         exclude_content: bool = False, has_freshness: bool = True) -> HybridWeights:
         if has_collab is None:
             has_collab = self.collaborative_model.trained
         if has_behavior is None:
             has_behavior = bool(self.behavior_model.behavior_profile)
-        return self.cfg.hybrid_weights.normalized(has_collab, has_behavior, exclude_content=exclude_content)
+        return self.cfg.hybrid_weights.normalized(has_collab, has_behavior, exclude_content=exclude_content,
+                                                    has_freshness=has_freshness)
 
     def _similar_candidates_reason(self, candidate_idx: int, job_idx: int) -> Optional[str]:
         """MODEL 3's explainability: did any of this candidate's most-similar
@@ -3130,7 +5540,7 @@ class RecommendationEngine:
             if self.ignored is not None and not self.ignored.empty:
                 ignored_ids = set(self.ignored[self.ignored["user_id"].astype(str) == candidate_id]["job_id"].astype(str))
 
-            fresh = freshness_scores(self.jobs)
+            fresh, has_freshness = freshness_scores(self.jobs)
             pop = popularity_scores(self.jobs)
             candidate_idx: Optional[int] = None
             cand_row: Optional[dict] = None
@@ -3139,22 +5549,22 @@ class RecommendationEngine:
                 candidate_idx = self.preprocessor.candidate_id_to_idx[candidate_id]
                 idx = np.array([candidate_idx])
                 content = self.content_model.score_batch(idx)
-                # PER-CANDIDATE check — matrix factorization only updates a user's
+                # PER-CANDIDATE check- matrix factorization only updates a user's
                 # embedding when they appear in at least one training interaction
                 # (see InteractionDataset: it's built ONLY from the interaction
                 # matrix's non-zero entries). A candidate with zero personal
                 # views/saves/applies never appears in any training batch, so
                 # their embedding sits at its random nn.init.normal_(std=0.05)
-                # initialization forever — score_batch() still runs the dot-product
+                # initialization forever- score_batch() still runs the dot-product
                 # math for them and returns a number, but it's untrained noise, not
                 # a real "candidates like you" signal. `self.collaborative_model.
                 # trained` alone only tells us the MODEL trained on SOMEONE's data,
-                # not that THIS candidate's embedding is meaningful — same class of
+                # not that THIS candidate's embedding is meaningful- same class of
                 # bug as the Behavior fix above.
                 # A job add/remove via realtime updates content_model/behavior_model
                 # SYNCHRONOUSLY (see _upsert_job_snapshot), but collaborative_model
                 # only catches up via a DELAYED retrain (realtime_collaborative_
-                # retrain_delay_seconds, debounced) — so there's a real window where
+                # retrain_delay_seconds, debounced)- so there's a real window where
                 # its fixed-size item embedding table (still the OLD job count) would
                 # broadcast-crash against content/behavior/freshness/popularity's
                 # already-updated (NEW job count) arrays. Treat it the same as
@@ -3169,24 +5579,24 @@ class RecommendationEngine:
                 collab = self.collaborative_model.score_batch(idx) if has_collab_for_candidate else np.zeros_like(content)
                 behavior, behavior_tfidf, behavior_semantic = self.behavior_model.score_batch(idx)
                 # Same staleness class as collaborative above, but for
-                # BehaviorModel.job_matrix specifically — normally kept in
+                # BehaviorModel.job_matrix specifically- normally kept in
                 # lockstep with content_model/self.jobs by _upsert_job_snapshot
                 # calling behavior_model.upsert_job() synchronously, but a full
                 # fit_job_corpus() refit (_refresh_behavior_from_cache, run once
                 # per realtime batch rather than per event) can still leave a
                 # brief window where it hasn't caught up to the very latest
                 # self.jobs size. Never let a stale array reach ranker.combine()
-                # uncaught — fall back to zeros (same as "no behavior profile
+                # uncaught- fall back to zeros (same as "no behavior profile
                 # yet") rather than crashing the whole request.
                 behavior_stale = behavior.shape[1] != len(self.jobs)
                 if behavior_stale:
-                    log.warning("BehaviorModel.job_matrix shape (%d) != current job count (%d) — "
+                    log.warning("BehaviorModel.job_matrix shape (%d) != current job count (%d)- "
                                 "treating behavior as unavailable for this request.",
                                 behavior.shape[1], len(self.jobs))
                     behavior = np.zeros_like(content)
                     behavior_tfidf = np.zeros_like(content)
                     behavior_semantic = np.zeros_like(content)
-                # PER-CANDIDATE check — not "does ANY candidate in the system have
+                # PER-CANDIDATE check- not "does ANY candidate in the system have
                 # behavior data" (that's what _active_weights()'s own default did,
                 # since it only tested the dict for global non-emptiness). A
                 # candidate with zero personal views/saves/applies/searches must
@@ -3195,14 +5605,14 @@ class RecommendationEngine:
                 # score because SOME OTHER candidate elsewhere has history.
                 has_behavior_for_candidate = not behavior_stale and candidate_idx in self.behavior_model.behavior_profile
                 weights = self._active_weights(has_collab=has_collab_for_candidate, has_behavior=has_behavior_for_candidate,
-                                                exclude_content=exclude_content)
+                                                exclude_content=exclude_content, has_freshness=has_freshness)
                 cand_row = self.candidates.iloc[candidate_idx].to_dict()
-                # Computed ONCE per candidate (not per job in the shortlist loop below) —
+                # Computed ONCE per candidate (not per job in the shortlist loop below)-
                 # the previous per-job _similar_candidates_reason() call recomputed this
                 # identical top-5 every time, which was wasted work since candidate_idx
                 # doesn't change across jobs.
                 # Gated on has_collab_for_candidate: cosine similarity against an
-                # untrained (random-init) embedding still returns a ranked list —
+                # untrained (random-init) embedding still returns a ranked list-
                 # it just ranks by coincidental proximity in random space, not real
                 # interaction-pattern similarity. Same "don't report it if it isn't
                 # genuinely calculated" rule as raw_score above.
@@ -3229,12 +5639,13 @@ class RecommendationEngine:
                 similar_idxs = set()
                 has_collab_for_candidate = False
                 has_behavior_for_candidate = False
-                weights = self._active_weights(has_collab=False, has_behavior=False, exclude_content=exclude_content)
+                weights = self._active_weights(has_collab=False, has_behavior=False, exclude_content=exclude_content,
+                                                has_freshness=has_freshness)
                 cold_start = True
 
             # Last-resort net: content_model.upsert_job() and self.jobs are always
             # updated together in the SAME call (_upsert_job_snapshot), so content
-            # should never itself drift from len(self.jobs) — but every array here
+            # should never itself drift from len(self.jobs)- but every array here
             # gets checked against it regardless, so any future staleness in any
             # sub-model degrades to "signal unavailable" instead of a 500.
             n_jobs = len(self.jobs)
@@ -3287,7 +5698,7 @@ class RecommendationEngine:
                         "age_fit_score": round(age_modifier, 3),
                         # Every pair's matched terms + standalone TF-IDF cosine, the
                         # standalone semantic score, and the final blended score
-                        # actually used for ranking — see ContentBasedModel.explain_match.
+                        # actually used for ranking- see ContentBasedModel.explain_match.
                         "matched_terms_by_pair": content_match.get("matched_terms_by_pair", {}),
                         "tfidf_score_by_pair": content_match.get("tfidf_score_by_pair", {}),
                         "semantic_score": content_match.get("semantic_score"),
@@ -3298,7 +5709,7 @@ class RecommendationEngine:
                         # (skills/fields/title/location/languages/certifications/
                         # experience_text/education/responsibilities/requirements/
                         # qualifications/benefits/employment_type/work_arrangement/
-                        # department/industry/company_name) — see BehaviorModel.
+                        # department/industry/company_name)- see BehaviorModel.
                         "content_similarity_score": round(float(behavior[0, job_col]), 4) if candidate_idx is not None else None,
                         "content_similarity_tfidf": round(float(behavior_tfidf[0, job_col]), 4) if candidate_idx is not None else None,
                         "content_similarity_semantic": round(float(behavior_semantic[0, job_col]), 4) if candidate_idx is not None else None,
@@ -3362,7 +5773,7 @@ class RecommendationEngine:
                                   "popularity": weights.popularity},
                 # Exposed so combined_score_candidate() can tell how much of hybrid's
                 # score is genuinely PERSONALIZED (Behavior/Collaborative) vs generic
-                # job attributes (Freshness/Popularity) — used to shift the outer
+                # job attributes (Freshness/Popularity)- used to shift the outer
                 # matcher/hybrid split itself when personalization is absent.
                 "has_behavior": has_behavior_for_candidate,
                 "has_collaborative": has_collab_for_candidate,
@@ -3371,30 +5782,288 @@ class RecommendationEngine:
 
 engine = RecommendationEngine(CFG)
 
+# Matcher subsystem singletons -- created here (not up in the "MATCHER
+# SUBSYSTEM" section above) because LocalTextProcessor needs
+# engine.semantic_encoder, which only exists once `engine` is constructed.
+backend = BackendClient()
+tp = LocalTextProcessor(semantic_encoder=engine.semantic_encoder)
+factor1 = Factor1_SkillsMatcher(tp)
+factor2 = Factor2_QualificationsMatcher(tp)
+factor3 = Factor3_ExperienceMatcher(tp)
+factor4 = Factor4_PreferencesMatcher(tp)
+
 
 # ==========================================================================
-# 9.5 COMBINED FEED — ai_job_matcher_og.py (4-factor profile match: skills/
+# 9.5 COMBINED FEED- ai_job_matcher_og.py (4-factor profile match: skills/
 # qualifications/experience/preferences) blended with THIS service's own
 # hybrid score (content+behavior+collaborative+freshness+popularity).
 #
-# Default split: matcher 70% / hybrid 30% (configurable per-request — see
+# Default split: matcher 70% / hybrid 30% (configurable per-request- see
 # ScoreRequest below). Graceful by design: if the matcher service can't
 # return a score for a job (service down, candidate has no jobs matched,
-# etc.), that job falls back to 100% hybrid — never a fabricated 0 for the
+# etc.), that job falls back to 100% hybrid- never a fabricated 0 for the
 # missing signal, and vice versa.
 # ==========================================================================
 
-MATCHER_URL = os.getenv("MATCHER_URL", "http://localhost:8000")
+def score_candidate_against_jobs(candidate_id: str) -> dict:
+    """Scores one candidate against every active job using the Matcher's 4
+    factors. Used both by POST /matcher/match and directly, in-process, by
+    fetch_matcher_scores() below (no HTTP hop) for combined_score_candidate()'s
+    matcher-side contribution to the blended /score/combined feed."""
+    request_start = time.time()
+
+    try:
+        if not candidate_id:
+            return {"success": False, "error": "Missing candidate_id"}
+        
+        profile_resp = backend.get_profile(candidate_id)
+        if not profile_resp or not profile_resp.get('data'):
+            return {"success": False, "error": "Candidate not found"}
+        
+        profile_data = profile_resp.get('data', {})
+
+        # Build a DYNAMIC correction vocabulary from the candidate's + all jobs' OWN
+        # skills (replaces the previous hardcoded skill list) so typo correction is
+        # data-driven, e.g. a misspelled job skill aligns to the candidate's real skill.
+        jobs = backend.get_jobs()
+        tp.dynamic_vocab = set()
+        tp.add_to_vocab(_collect_skill_terms(profile_data, jobs))
+
+        log_candidate("="*60)
+        log_candidate("CANDIDATE DATA FROM DATABASE")
+        log_candidate("="*60)
+
+        candidate_skills = factor1.extract_candidate_skills(profile_data)
+        candidate_quals = factor2.extract_candidate_qualifications(profile_data)
+        candidate_prefs = factor4.extract_candidate_preferences(profile_data)
+        
+        personal = profile_data.get('profile', {}).get('personal_info', {})
+        candidate_name = personal.get('full_name', 'Unknown')
+        
+        log_candidate(f"Name: {candidate_name}")
+        log_candidate(f"Skills from DB ({len(candidate_skills)}): {', '.join(candidate_skills[:10])}")
+        log_candidate(f"Education entries: {len(profile_data.get('education', []))}")
+        log_candidate(f"Work experience: {len(profile_data.get('work_experience', []))}")
+        log_candidate(f"Certifications: {len(profile_data.get('certifications', []))}")
+        
+        log_candidate(f"Job types from DB: {candidate_prefs.get('job_types', [])}")
+        log_candidate(f"Locations from DB: {candidate_prefs.get('locations', [])}")
+        log_candidate(f"Industries from DB: {candidate_prefs.get('industries', [])}")
+        log_candidate(f"Languages from DB: {candidate_prefs.get('languages', [])}")
+        
+        log_info(f"📊 Jobs from database: {len(jobs)}")
+
+        results = []
+        
+        for idx, job in enumerate(jobs):
+            job_title = job.get('title', 'Unknown')
+            
+            log_job("="*60)
+            log_job(f"JOB {idx+1}: {job_title}")
+            log_job("="*60)
+            
+            job_details = extract_all_job_fields(job)
+            job_skills = factor1.extract_job_skills(job)
+            job_quals = factor2.extract_job_qualifications(job)
+            
+            log_job(f"Company from DB: {job.get('company_name', 'Unknown')}")
+            log_job(f"Required Skills from DB ({len(job_skills)}): {', '.join(job_skills[:10])}")
+            log_job(f"Required Degree from DB: {job_quals.get('minimum_degree', 'None')}")
+            
+            log_match("="*60)
+            log_match(f"MATCHING: {candidate_name} vs {job_title}")
+            log_match("="*60)
+            
+            log_match("FACTOR 1: SKILLS (40%) - FROM DATABASE")
+            s = factor1.match(candidate_skills, job_skills)
+            
+            log_match("FACTOR 2: QUALIFICATIONS (25%) - FROM DATABASE")
+            q = factor2.match(candidate_quals, job_quals)
+            
+            log_match("FACTOR 3: EXPERIENCE (20%) - FROM DATABASE")
+            e = factor3.match(profile_data, job)
+            
+            log_match("FACTOR 4: PREFERENCES (15%) - FROM DATABASE")
+            p = factor4.match(candidate_prefs, job)
+
+            # Top-level redistribution: a factor with nothing to evaluate
+            # (e.g. the job lists no required skills at all, or no
+            # degree/field/cert requirement of any kind) is excluded rather
+            # than defaulted to 100%, and its base weight (Skills 40% /
+            # Qualifications 25% / Experience 20% / Preferences 15%) is
+            # redistributed across whichever factors ARE applicable.
+            # Experience is always applicable -- it's relevance-scored
+            # against the job's own title/description even with no explicit
+            # requirement, so there's always a real comparison happening.
+            factor_weights = redistribute_weights({
+                "skills": (s.get("applicable", True), 0.40),
+                "qualifications": (q.get("applicable", True), 0.25),
+                "experience": (True, 0.20),
+                "preferences": (p.get("applicable", True), 0.15),
+            })
+            total_raw = (s["score"] * factor_weights["skills"] + q["score"] * factor_weights["qualifications"]
+                        + e["score"] * factor_weights["experience"] + p["score"] * factor_weights["preferences"])
+            total_score = round(total_raw * 100, 1)
+            excluded_factors = [name for name, w in factor_weights.items() if w == 0.0]
+
+            log_match("="*60)
+            log_match(f"TOTAL MATCH SCORE: {total_score}% (factor weights: {factor_weights}, excluded: {excluded_factors or 'none'})")
+            log_match("="*60)
+
+            if total_raw >= 0.80:
+                match_level = "Excellent Match"
+            elif total_raw >= 0.65:
+                match_level = "Strong Match"
+            elif total_raw >= 0.50:
+                match_level = "Good Match"
+            elif total_raw >= 0.35:
+                match_level = "Partial Match ️"
+            else:
+                match_level = "Poor Match"
+            
+            candidate_job_types = candidate_prefs.get("job_types", [])
+            candidate_locations = candidate_prefs.get("locations", [])
+            candidate_industries = candidate_prefs.get("industries", [])
+            candidate_languages = candidate_prefs.get("languages", [])
+            candidate_salary_min = candidate_prefs.get("salary_min", 0)
+            candidate_salary_max = candidate_prefs.get("salary_max", 0)
+
+            _match_explanation, _match_suggestions = build_match_narrative(s, q, e, total_score, job)
+
+            results.append({
+                "match_score": total_score,
+                "match_level": match_level,
+                "criteria_scores": {
+                    "skills_match": s["match_percentage"],
+                    "qualifications_match": q["match_percentage"],
+                    "experience_match": e["match_percentage"],
+                    "preferences_match": p["match_percentage"]
+                },
+                "factor_weights_used": factor_weights,
+                "excluded_factors": excluded_factors,
+                "skills_breakdown": {
+                    "matched_skills": s.get("matched_skills", []),
+                    "missing_skills": s.get("missing_skills", []),
+                    "total_required": len(job_skills),
+                    "total_matched": s.get("matched_count", 0),
+                    "individual_scores": s.get("individual_scores", []),
+                    "applicable": s.get("applicable", True),
+                    "note": s.get("note")
+                },
+                "qualifications_breakdown": {
+                    "candidate_degrees": [d["raw"] for d in candidate_quals["degrees"]],
+                    "candidate_fields": [f["raw"] for f in candidate_quals["fields"]],
+                    "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
+                    "job_degree_required": job_quals.get("minimum_degree", ""),
+                    "job_allowed_fields": job_quals.get("fields_of_study", []),
+                    "qualification_entries": job_quals.get("qualification_entries", []),  # ✅ ADD THIS
+                    "best_similarity": q.get("best_similarity", 0),
+                    "best_matched_field": q.get("best_matched_field", None),
+                    "match_type": q.get("match_type", "none"),
+                    "match_quality": q.get("match_quality", ""),  # ✅ ADD THIS
+                    "explanation": q.get("explanation", ""),      # ✅ ADD THIS
+                    "applicable": q.get("applicable", True),
+                    "excluded_dimensions": q.get("excluded_dimensions", []),
+                    "redistributed_weights": q.get("redistributed_weights", {})
+                },
+                "experience_breakdown": {
+                    "match_type": e.get("match_type", "unknown"),
+                    "total_requirements": e.get("total_requirements", 0),
+                    "matched_requirements": e.get("matched_requirements", 0),
+                    "specific_matches": e.get("specific_matches", []),
+                    "unmatched_requirements": e.get("unmatched_requirements", []),
+                    "total_years": e.get("total_years", 0),
+                    "relevant_years": e.get("relevant_years", 0),
+                    "experience_analysis": e.get("experience_analysis", []),
+                    "required_years": e.get("required_years", 0),
+                    "gap_years": e.get("gap", 0)
+                },
+                "preferences_breakdown": {
+                    "applicable": p.get("applicable", True),
+                    "excluded_dimensions": p.get("excluded_dimensions", []),
+                    "redistributed_weights": p.get("redistributed_weights", {}),
+                    "missing_job_data": p.get("missing_job_data", []),
+                    "type_match": p.get("type_match", 0),
+                    "type_match_details": p.get("type_match_details", []),
+                    "type_match_note": p.get("type_match_note"),
+                    "remote_match": p.get("remote_match", 0),
+                    "remote_match_note": p.get("remote_match_note"),
+                    "location_match": p.get("location_match", 0),
+                    "location_match_details": p.get("location_match_details"),
+                    "location_match_note": p.get("location_match_note"),
+                    "industry_match": p.get("industry_match", 0),
+                    "industry_match_details": p.get("industry_match_details", []),
+                    "industry_match_note": p.get("industry_match_note"),
+                    "salary_match": p.get("salary_match", 0),
+                    "salary_match_details": p.get("salary_match_details", {}),
+                    "salary_match_note": p.get("salary_match_note"),
+                    "language_match": p.get("language_match", 0),
+                    "language_match_details": p.get("language_match_details", []),
+                    "language_match_note": p.get("language_match_note"),
+                    "candidate_job_types": candidate_job_types,
+                    "candidate_locations": candidate_locations,
+                    "candidate_industries": candidate_industries,
+                    "candidate_languages": candidate_languages,
+                    "candidate_salary_min": candidate_salary_min,
+                    "candidate_salary_max": candidate_salary_max,
+                    "candidate_remote_preference": candidate_prefs.get("remote_preference", "flexible")
+                },
+                "explanation": _match_explanation,
+                "improvement_suggestions": _match_suggestions,
+                "job": job_details
+            })
+
+            log_info(f"   ✓ Score: {total_score}% - {match_level}")
+        
+        results.sort(key=lambda x: x['match_score'], reverse=True)
+        
+        total_duration = (time.time() - request_start) * 1000
+        log_info(f"⏱️ Total time: {total_duration:.2f}ms")
+        
+        cache_stats = tp.get_cache_stats()
+        complete_candidate_data = extract_complete_candidate_data(profile_data)
+        
+        return {
+            "success": True,
+            "candidate": {
+                "id": candidate_id,
+                "name": candidate_name,
+                "email": complete_candidate_data.get('email'),
+                "skills_count": len(candidate_skills),
+                "skills": candidate_skills[:20],
+                "degrees": [d["raw"] for d in candidate_quals["degrees"]],
+                "fields": [f["raw"] for f in candidate_quals["fields"]],
+                "combined_qualifications": [c["raw"] for c in candidate_quals["combined"]],
+                "complete_profile": complete_candidate_data
+            },
+            "total_jobs_matched": len(results),
+            "matches": results,
+            "timestamp": datetime.now().isoformat(),
+            "performance": {
+                "total_ms": round(total_duration, 2),
+                "jobs_processed": len(results),
+                "cache_hits": cache_stats['hits'],
+                "cache_misses": cache_stats['misses']
+            }
+        }
+        
+    except Exception as e:
+        import traceback
+        log_error(f"ERROR: {e}")
+        log_error(traceback.format_exc())
+        return {"success": False, "error": str(e)}
+
+
 DEFAULT_MATCHER_WEIGHT = 0.70
 DEFAULT_HYBRID_WEIGHT = 0.30
 
 
 # ai_job_matcher_og.py is a per-job rule-based scorer with no caching of its
-# own (see RECOMMENDATION_ENGINE.md §1) — it re-scores every active job from
+# own (see RECOMMENDATION_ENGINE.md §1)- it re-scores every active job from
 # scratch on every /match call, ~40-45s for a full job set. Since its
 # inputs (candidate profile, job list) rarely change between two requests a
-# few seconds/minutes apart — e.g. a user changing top_n and resubmitting,
-# or reloading the page — a short-lived cache here avoids paying that cost
+# few seconds/minutes apart- e.g. a user changing top_n and resubmitting,
+# or reloading the page- a short-lived cache here avoids paying that cost
 # again for the SAME candidate against the SAME job set, without touching
 # the matcher's own scoring logic at all ("don't rewrite the recommender").
 # Invalidated explicitly (not just left to expire) whenever this candidate's
@@ -3413,19 +6082,23 @@ def _invalidate_matcher_cache(candidate_id: Optional[str] = None) -> None:
 
 
 def fetch_matcher_scores(candidate_id: str, timeout: float = 60.0) -> Optional[Dict[str, dict]]:
-    """Calls ai_job_matcher_og.py's own /match endpoint directly (same-machine
-    microservice call, same pattern the gateway itself proxies) and returns
-    {job_id: full_match_object} — the *entire* per-job result (match_score,
-    criteria_scores, skills_breakdown, qualifications_breakdown,
-    experience_breakdown, preferences_breakdown, match_level, explanation),
-    not just the final percentage, so the frontend's 4-factor breakdown UI
-    has real data instead of the total score sitting next to all-zero factors.
-    Returns None (not {}) on any failure — callers must be able to tell
+    """Runs the Matcher's score_candidate_against_jobs() in-process (used to
+    be a same-machine HTTP call to a separate ai_job_matcher_og.py service on
+    port 8000 -- now one merged process, so this is a direct function call
+    instead) and returns {job_id: full_match_object}- the *entire* per-job
+    result (match_score, criteria_scores, skills_breakdown,
+    qualifications_breakdown, experience_breakdown, preferences_breakdown,
+    match_level, explanation), not just the final percentage, so the
+    frontend's 4-factor breakdown UI has real data instead of the total
+    score sitting next to all-zero factors.
+    Returns None (not {}) on any failure- callers must be able to tell
     "matcher unavailable" apart from "matcher ran and found zero jobs," since
     only the former should fall back to 100% hybrid weight.
 
     Cached for _MATCHER_CACHE_TTL_SECONDS per candidate (see module comment
-    above) — a cache hit returns in microseconds instead of ~40-45s."""
+    above)- a cache hit returns in microseconds instead of ~40-45s. The
+    `timeout` parameter is now vestigial (no network call to bound) but kept
+    for call-site compatibility."""
     now = time.time()
     with _matcher_cache_lock:
         cached = _matcher_cache.get(candidate_id)
@@ -3433,19 +6106,17 @@ def fetch_matcher_scores(candidate_id: str, timeout: float = 60.0) -> Optional[D
             return cached[1]
 
     try:
-        resp = requests.post(f"{MATCHER_URL}/match", json={"candidate_id": candidate_id}, timeout=timeout)
-        resp.raise_for_status()
-        data = resp.json()
+        data = score_candidate_against_jobs(candidate_id)
         if not data.get("success"):
             log.warning("Matcher returned success=false for %s: %s", candidate_id, data.get("error"))
             result = None
         else:
             result = {m["job"]["id"]: m for m in data.get("matches", []) if m.get("job", {}).get("id")}
     except Exception as e:
-        log.warning("Matcher unavailable (%s) — combined feed falls back to 100%% hybrid.", e)
+        log.warning("Matcher unavailable (%s)- combined feed falls back to 100%% hybrid.", e)
         result = None
 
-    # Never cache a failure — a transient matcher hiccup shouldn't force
+    # Never cache a failure- a transient matcher hiccup shouldn't force
     # every candidate to fall back to 100% hybrid for the next 3 minutes.
     if result is not None:
         with _matcher_cache_lock:
@@ -3463,15 +6134,45 @@ def combined_score_candidate(candidate_id: str, top_n: int,
     matcher_weight, hybrid_weight = matcher_weight / total_w, hybrid_weight / total_w
 
     # Pull the FULL ranked hybrid list (every active job), not just a shortlist,
-    # so every job has a hybrid score to blend against a matcher score.
-    # exclude_content=True: the matcher score below is ALSO a profile-vs-job fit
-    # (structured factors instead of TF-IDF/semantic cosine) — without this,
-    # Content would be counted twice under two different names, understating
-    # how much of the final blend is genuinely new signal. See HybridWeights.
-    # normalized()'s docstring for the full rationale.
+    # so every job has a hybrid score to blend against a matcher score. This
+    # is a SINGLE pass (exclude_content=False, Content included)- it already
+    # computes per-job explain-detail for every job (expensive: O(all jobs),
+    # deliberately not the O(candidates x jobs) shortlist-only cost, see
+    # ContentBasedModel.explain_match's docstring), so a second full
+    # engine.score_candidate() call here would double that cost and roughly
+    # double how long score_candidate()'s internal lock is held- exactly
+    # what caused a real request-pileup regression when this was first
+    # tried as two full passes. Instead, the content-EXCLUDED total_score
+    # (needed for jobs the matcher also scored- see below) is reconstructed
+    # algebraically from this one pass's own per-job "detail" breakdown,
+    # which already exposes every raw signal (content/behavior/
+    # collaborative/freshness/popularity) before weighting.
     n_jobs = len(engine.jobs) if engine.jobs is not None else top_n
-    hybrid_result = engine.score_candidate(candidate_id, top_n=max(n_jobs, top_n), exclude_content=True)
-    hybrid_by_job = {j["job_id"]: j for j in hybrid_result["scored_jobs"]}
+    hybrid_result = engine.score_candidate(candidate_id, top_n=max(n_jobs, top_n), exclude_content=False)
+    hybrid_by_job_full = {j["job_id"]: j for j in hybrid_result["scored_jobs"]}
+
+    has_behavior = hybrid_result.get("has_behavior", False)
+    has_collaborative = hybrid_result.get("has_collaborative", False)
+    # freshness_scores() only ever returns has_freshness=False when literally
+    # every active job is missing created_at- doesn't happen in practice with
+    # real seeded data, and score_candidate() doesn't expose the batch-level
+    # flag at the top level to recompute this without a second DB round trip.
+    weights_excl_content = CFG.hybrid_weights.normalized(
+        has_collab=has_collaborative, has_behavior=has_behavior, exclude_content=True, has_freshness=True)
+
+    def _content_excluded_score(entry: dict) -> float:
+        """Re-derive total_score as if exclude_content=True had been passed-
+        same math score_candidate() itself does (weighted sum * business-rule
+        modifier * age-fit modifier), using this entry's own already-computed
+        raw per-signal values instead of a second scoring pass."""
+        d = entry.get("detail") or {}
+        raw = (weights_excl_content.behavior * d.get("behavior", {}).get("final_score", 0.0)
+               + weights_excl_content.collaborative * d.get("collaborative", {}).get("raw_score", 0.0)
+               + weights_excl_content.freshness * d.get("freshness", {}).get("score", 0.0)
+               + weights_excl_content.popularity * d.get("popularity", {}).get("score", 0.0))
+        biz_modifier = d.get("business_rules", {}).get("modifier", 1.0)
+        age_modifier = d.get("content", {}).get("age_fit_score", 1.0)
+        return round(raw * biz_modifier * age_modifier * 100, 2)
 
     matcher_matches = fetch_matcher_scores(candidate_id)  # None => matcher unavailable
     matcher_used = matcher_matches is not None
@@ -3481,44 +6182,50 @@ def combined_score_candidate(candidate_id: str, top_n: int,
     # genuinely PERSONALIZED (Behavior/Collaborative) for THIS candidate, vs
     # generic job attributes (Freshness/Popularity). A candidate with neither
     # Behavior nor Collaborative data has a hybrid score built almost entirely
-    # from Freshness/Popularity — real, calculated numbers, but not "does this
-    # job fit YOU" — so keeping hybrid's full fixed share would dilute the
+    # from Freshness/Popularity- real, calculated numbers, but not "does this
+    # job fit YOU"- so keeping hybrid's full fixed share would dilute the
     # matcher's always-genuine profile-fit score with mostly-generic signal.
     # Content is already excluded above, so the budget here is
     # Behavior+Collaborative+Freshness+Popularity. Only applies when the matcher
-    # actually responded — if it didn't, hybrid already covers scoring alone via
+    # actually responded- if it didn't, hybrid already covers scoring alone via
     # the hybrid-only fallback below, so there's nothing to shift weight toward.
     if matcher_used:
         hw = CFG.hybrid_weights
         base_total = hw.behavior + hw.collaborative + hw.freshness + hw.popularity
-        has_behavior = hybrid_result.get("has_behavior", False)
-        has_collab = hybrid_result.get("has_collaborative", False)
         present_total = hw.freshness + hw.popularity
         if has_behavior:
             present_total += hw.behavior
-        if has_collab:
+        if has_collaborative:
             present_total += hw.collaborative
         personalization_ratio = present_total / base_total if base_total > 0 else 1.0
         adjusted_hybrid_weight = hybrid_weight * personalization_ratio
         matcher_weight = matcher_weight + (hybrid_weight - adjusted_hybrid_weight)
         hybrid_weight = adjusted_hybrid_weight
 
-    all_job_ids = set(hybrid_by_job) | set(matcher_matches or {})
+    all_job_ids = set(hybrid_by_job_full) | set(matcher_matches or {})
     combined = []
     for job_id in all_job_ids:
-        hybrid_entry = hybrid_by_job.get(job_id)
-        hybrid_pct = hybrid_entry["total_score"] if hybrid_entry else 0.0
         matcher_entry = matcher_matches.get(job_id) if matcher_matches else None
         matcher_pct = float(matcher_entry["match_score"]) if matcher_entry else None
+
+        hybrid_entry = hybrid_by_job_full.get(job_id)
+        # Content-excluded score ONLY when the matcher actually scored THIS
+        # job too (a real blend is about to happen, and Content would
+        # otherwise double-count the matcher's own profile-vs-job fit);
+        # otherwise the content-INCLUDED score, since hybrid is carrying
+        # this job alone and needs its full weight.
+        content_included_for_job = matcher_pct is None
+        hybrid_pct = (hybrid_entry["total_score"] if content_included_for_job
+                      else _content_excluded_score(hybrid_entry)) if hybrid_entry else 0.0
 
         if matcher_pct is not None and hybrid_entry is not None:
             final = matcher_weight * matcher_pct + hybrid_weight * hybrid_pct
             source = "matcher+hybrid"
         elif matcher_pct is not None:
-            final = matcher_pct  # hybrid had nothing for this job — don't invent a 0
+            final = matcher_pct  # hybrid had nothing for this job- don't invent a 0
             source = "matcher-only"
         elif hybrid_entry is not None:
-            final = hybrid_pct  # matcher unavailable/had nothing — use hybrid alone
+            final = hybrid_pct  # matcher unavailable/had nothing- use hybrid alone
             source = "hybrid-only"
         else:
             continue
@@ -3538,8 +6245,14 @@ def combined_score_candidate(candidate_id: str, top_n: int,
             "matcher_score": round(matcher_pct, 2) if matcher_pct is not None else None,
             "hybrid_score": round(hybrid_pct, 2) if hybrid_entry else None,
             "score_source": source,
+            # True when this job's hybrid_score includes Content (source is
+            # "hybrid-only", so Content isn't double-counted with anything);
+            # False when the matcher also scored this job and Content was
+            # excluded from hybrid_score to avoid double-counting it against
+            # the matcher's own profile-vs-job fit (source "matcher+hybrid").
+            "hybrid_content_included": bool(hybrid_entry is not None and content_included_for_job),
             "reasons": hybrid_entry["reasons"] if hybrid_entry else [],
-            # Full 4-factor breakdown from the matcher — None when the matcher
+            # Full 4-factor breakdown from the matcher- None when the matcher
             # had no data for this job (hybrid-only), so the UI can tell
             # "no data" apart from "scored 0".
             "matcher_breakdown": {
@@ -3553,7 +6266,7 @@ def combined_score_candidate(candidate_id: str, top_n: int,
                 "improvement_suggestions": matcher_entry.get("improvement_suggestions"),
             } if matcher_entry else None,
             # Full behavior/collaborative/freshness/popularity/business-rule
-            # breakdown from THIS service — None when hybrid had nothing for
+            # breakdown from THIS service- None when hybrid had nothing for
             # this job (matcher-only), same "no data" vs "scored 0" contract
             # as matcher_breakdown above.
             "hybrid_detail": hybrid_entry.get("detail") if hybrid_entry else None,
@@ -3698,7 +6411,7 @@ async def realtime_status():
 @app.post("/score/combined/job/{job_id}")
 async def score_combined_job(job_id: str, req: CombinedJobScoreRequest):
     """Single-job variant of /score/combined, for job-detail pages (View
-    Details) — same 70% matcher + 30% hybrid blend as the feed, so a
+    Details)- same 70% matcher + 30% hybrid blend as the feed, so a
     candidate sees one consistent score everywhere instead of the feed
     showing the blended score while the detail page shows matcher-only."""
     try:
@@ -3744,6 +6457,321 @@ async def health():
         "semantic_encoder_available": engine.semantic_encoder.available,
         "device": str(engine.collaborative_model.device),
     }
+
+
+# ==========================================================================
+# MATCHER ROUTES -- mounted at /matcher (was its own service on port 8000;
+# gateway.py now proxies /matcher/* to this same merged process/port
+# without stripping the prefix, so these paths match exactly).
+# ==========================================================================
+matcher_router = APIRouter(prefix="/matcher")
+
+@matcher_router.post("/match")
+async def match_candidate(request: Request):
+    candidate_id, request_error = await parse_candidate_id_request(request)
+    if request_error:
+        return request_error
+    log_info(f"\n{'='*70}")
+    log_info(f"👤 Candidate ID: {candidate_id}")
+    log_info(f"{'='*70}")
+    return score_candidate_against_jobs(candidate_id)
+
+
+@matcher_router.post("/match/job/{job_id}")
+async def match_candidate_for_job(job_id: str, request: Request):
+    """
+    Match a specific candidate against a specific job
+    POST /match/job/{job_id}
+    Body: {"candidate_id": "..."}
+    """
+    request_start = time.time()
+    
+    try:
+        candidate_id, request_error = await parse_candidate_id_request(request)
+        if request_error:
+            return request_error
+        
+        log_info(f"\n{'='*70}")
+        log_info(f"👤 Candidate ID: {candidate_id}")
+        log_info(f"💼 Job ID: {job_id}")
+        log_info(f"{'='*70}")
+        
+        if not candidate_id:
+            return {"success": False, "error": "Missing candidate_id"}
+        
+        profile_resp = backend.get_profile(candidate_id)
+        if not profile_resp or not profile_resp.get('data'):
+            return {"success": False, "error": "Candidate not found"}
+        
+        profile_data = profile_resp.get('data', {})
+         
+        candidate_age = factor4.extract_candidate_age(profile_data)
+        
+        job = backend.get_job_by_id(job_id)
+        
+        if not job:
+            return {"success": False, "error": f"Job not found: {job_id}"}
+        job_age_requirement = job.get('education_required', {}).get('age_requirement', '')
+
+        # Dynamic correction vocabulary from the candidate's + this job's own skills.
+        tp.dynamic_vocab = set()
+        tp.add_to_vocab(_collect_skill_terms(profile_data, job))
+
+        candidate_skills = factor1.extract_candidate_skills(profile_data)
+        candidate_quals = factor2.extract_candidate_qualifications(profile_data)
+        candidate_prefs = factor4.extract_candidate_preferences(profile_data)
+        
+        personal = profile_data.get('profile', {}).get('personal_info', {})
+        candidate_name = personal.get('full_name', 'Unknown')
+        
+        log_candidate(f"Name: {candidate_name}")
+        log_candidate(f"Skills from DB ({len(candidate_skills)}): {', '.join(candidate_skills[:10])}")
+        
+        job_title = job.get('title', 'Unknown')
+        job_details = extract_all_job_fields(job)
+        job_skills = factor1.extract_job_skills(job)
+        job_quals = factor2.extract_job_qualifications(job)
+        
+        log_job(f"Job: {job_title}")
+        log_job(f"Required Skills from DB ({len(job_skills)}): {', '.join(job_skills[:10])}")
+        
+        log_match("="*60)
+        log_match(f"MATCHING: {candidate_name} vs {job_title}")
+        log_match("="*60)
+        
+        log_match("FACTOR 1: SKILLS (40%)")
+        s = factor1.match(candidate_skills, job_skills)
+        
+        log_match("FACTOR 2: QUALIFICATIONS (25%)")
+        q = factor2.match(candidate_quals, job_quals)
+        
+        log_match("FACTOR 3: EXPERIENCE (20%)")
+        e = factor3.match(profile_data, job)
+        
+        log_match("FACTOR 4: PREFERENCES (15%)")
+        p = factor4.match(candidate_prefs, job, candidate_age, job_age_requirement)
+
+        # Same top-level redistribution as the batch path in
+        # score_candidate_against_jobs -- see the comment there.
+        factor_weights = redistribute_weights({
+            "skills": (s.get("applicable", True), 0.40),
+            "qualifications": (q.get("applicable", True), 0.25),
+            "experience": (True, 0.20),
+            "preferences": (p.get("applicable", True), 0.15),
+        })
+        total_raw = (s["score"] * factor_weights["skills"] + q["score"] * factor_weights["qualifications"]
+                    + e["score"] * factor_weights["experience"] + p["score"] * factor_weights["preferences"])
+        total_score = round(total_raw * 100, 1)
+        excluded_factors = [name for name, w in factor_weights.items() if w == 0.0]
+
+        log_match("="*60)
+        log_match(f"TOTAL MATCH SCORE: {total_score}% (factor weights: {factor_weights}, excluded: {excluded_factors or 'none'})")
+        log_match("="*60)
+        
+        if total_raw >= 0.80:
+            match_level = "Excellent Match 🌟"
+        elif total_raw >= 0.65:
+            match_level = "Strong Match ✅"
+        elif total_raw >= 0.50:
+            match_level = "Good Match 👍"
+        elif total_raw >= 0.35:
+            match_level = "Partial Match ️"
+        else:
+            match_level = "Poor Match ❌"
+        
+        candidate_job_types = candidate_prefs.get("job_types", [])
+        candidate_locations = candidate_prefs.get("locations", [])
+        candidate_industries = candidate_prefs.get("industries", [])
+        candidate_languages = candidate_prefs.get("languages", [])
+        candidate_salary_min = candidate_prefs.get("salary_min", 0)
+        candidate_salary_max = candidate_prefs.get("salary_max", 0)
+        
+        result = {
+            "match_score": total_score,
+            "match_level": match_level,
+            "criteria_scores": {
+                "skills_match": s["match_percentage"],
+                "qualifications_match": q["match_percentage"],
+                "experience_match": e["match_percentage"],
+                "preferences_match": p["match_percentage"]
+            },
+            "factor_weights_used": factor_weights,
+            "excluded_factors": excluded_factors,
+            "skills_breakdown": {
+                "matched_skills": s.get("matched_skills", []),
+                "missing_skills": s.get("missing_skills", []),
+                "total_required": len(job_skills),
+                "total_matched": s.get("matched_count", 0),
+                "individual_scores": s.get("individual_scores", []),
+                "applicable": s.get("applicable", True),
+                "note": s.get("note")
+            },
+            "qualifications_breakdown": {
+                "candidate_degrees": [d["raw"] for d in candidate_quals["degrees"]],
+                "candidate_fields": [f["raw"] for f in candidate_quals["fields"]],
+                "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
+                "job_degree_required": job_quals.get("minimum_degree", ""),
+                "job_allowed_fields": job_quals.get("fields_of_study", []),
+                "qualification_entries": job_quals.get("qualification_entries", []),  # ✅ ADD THIS
+                "best_similarity": q.get("best_similarity", 0),
+                "best_matched_field": q.get("best_matched_field", None),
+                "match_type": q.get("match_type", "none"),
+                "match_quality": q.get("match_quality", ""),  # ✅ ADD THIS
+                "explanation": q.get("explanation", ""),      # ✅ ADD THIS
+                "applicable": q.get("applicable", True),
+                "excluded_dimensions": q.get("excluded_dimensions", []),
+                "redistributed_weights": q.get("redistributed_weights", {})
+            },
+            "experience_breakdown": {
+                "match_type": e.get("match_type", "unknown"),
+                "total_requirements": e.get("total_requirements", 0),
+                "matched_requirements": e.get("matched_requirements", 0),
+                "specific_matches": e.get("specific_matches", []),
+                "unmatched_requirements": e.get("unmatched_requirements", []),
+                "total_years": e.get("total_years", 0),
+                "relevant_years": e.get("relevant_years", 0),
+                "experience_analysis": e.get("experience_analysis", []),
+                "required_years": e.get("required_years", 0),
+                "gap_years": e.get("gap", 0)
+            },
+            "preferences_breakdown": {
+                "applicable": p.get("applicable", True),
+                "excluded_dimensions": p.get("excluded_dimensions", []),
+                "redistributed_weights": p.get("redistributed_weights", {}),
+                "missing_job_data": p.get("missing_job_data", []),
+                "type_match": p.get("type_match", 0),
+                "type_match_details": p.get("type_match_details", []),
+                "type_match_note": p.get("type_match_note"),
+                "remote_match": p.get("remote_match", 0),
+                "remote_match_note": p.get("remote_match_note"),
+                "location_match": p.get("location_match", 0),
+                "location_match_details": p.get("location_match_details"),
+                "location_match_note": p.get("location_match_note"),
+                "industry_match": p.get("industry_match", 0),
+                "industry_match_details": p.get("industry_match_details", []),
+                "industry_match_note": p.get("industry_match_note"),
+                "salary_match": p.get("salary_match", 0),
+                "salary_match_details": p.get("salary_match_details", {}),
+                "salary_match_note": p.get("salary_match_note"),
+                "language_match": p.get("language_match", 0),
+                "language_match_details": p.get("language_match_details", []),
+                "language_match_note": p.get("language_match_note"),
+                "candidate_job_types": candidate_job_types,
+                "candidate_locations": candidate_locations,
+                "candidate_industries": candidate_industries,
+                "candidate_languages": candidate_languages,
+                "candidate_salary_min": candidate_salary_min,
+                "candidate_salary_max": candidate_salary_max,
+                "candidate_remote_preference": candidate_prefs.get("remote_preference", "flexible")
+            },
+            "explanation": build_match_narrative(s, q, e, total_score, job)[0],
+            "improvement_suggestions": build_match_narrative(s, q, e, total_score, job)[1],
+            "job": job_details
+        }
+
+        total_duration = (time.time() - request_start) * 1000
+        log_info(f"⏱️ Total time: {total_duration:.2f}ms")
+        
+        cache_stats = tp.get_cache_stats()
+        complete_candidate_data = extract_complete_candidate_data(profile_data)
+        
+        return {
+            "success": True,
+            "candidate": {
+                "id": candidate_id,
+                "name": candidate_name,
+                "email": complete_candidate_data.get('email'),
+                "skills_count": len(candidate_skills),
+                "skills": candidate_skills[:20],
+                "degrees": [d["raw"] for d in candidate_quals["degrees"]],
+                "fields": [f["raw"] for f in candidate_quals["fields"]],
+                "combined_qualifications": [c["raw"] for c in candidate_quals["combined"]],
+                "complete_profile": complete_candidate_data
+            },
+            "match": result,
+            "timestamp": datetime.now().isoformat(),
+            "performance": {
+                "total_ms": round(total_duration, 2),
+                "cache_hits": cache_stats['hits'],
+                "cache_misses": cache_stats['misses']
+            }
+        }
+        
+    except Exception as e:
+        import traceback
+        log_error(f"ERROR: {e}")
+        log_error(traceback.format_exc())
+        return {"success": False, "error": str(e)}
+
+
+@matcher_router.get("/")
+async def matcher_root():
+    return {
+        "api": "Complete Database-Driven Job Matching API",
+        "version": "19.0.0",
+        "status": "running",
+        "matching_type": "100% database-driven - NO hardcoded values",
+        "fixed_issues": [
+            "Languages field now properly handles dictionary objects",
+            "Experience requirements correctly parsed from JSONB",
+            "Certifications properly extracted from education_required",
+            "Added proper type checking for all fields"
+        ],
+        "factors": {
+            "skills": {"weight": "40%", "source": "skills table + user_skills table"},
+            "qualifications": {"weight": "25%", "source": "education table + job education_required"},
+            "experience": {"weight": "20%", "source": "work_experience table + job education_required.experience_requirements"},
+            "preferences": {"weight": "15%", "source": "job_preferences JSONB"}
+        },
+        "endpoints": {
+            "POST /matcher/match": "Match candidate against ALL jobs",
+            "POST /matcher/match/job/{job_id}": "Match candidate against specific job",
+            "GET /matcher/health": "Health check",
+            "GET /matcher/stats": "Cache statistics",
+            "GET /matcher/logs/{log_type}": "View logs"
+        }
+    }
+
+
+@matcher_router.get("/health")
+async def matcher_health():
+    return {"status": "healthy", "ml_ready": True}
+
+
+@matcher_router.get("/stats")
+async def matcher_stats():
+    cache_stats = tp.get_cache_stats()
+    return {
+        "success": True,
+        "cache_stats": cache_stats,
+        "log_directory": str(LOG_DIR),
+        "note": "100% database-driven - ALL fields extracted from database"
+    }
+
+
+@matcher_router.get("/logs/{log_type}")
+async def matcher_view_log(log_type: str, lines: int = 100):
+    log_map = {
+        "main": MAIN_LOG,
+        "error": ERROR_LOG,
+        "performance": PERFORMANCE_LOG,
+        "candidate": CANDIDATE_LOG,
+        "job": JOB_LOG,
+        "match": MATCH_LOG
+    }
+    log_file = log_map.get(log_type)
+    if not log_file or not log_file.exists():
+        return {"success": False, "error": f"Log {log_type} not found"}
+    try:
+        with open(log_file, "r", encoding="utf-8") as f:
+            all_lines = f.readlines()
+            last_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+        return {"success": True, "log_type": log_type, "lines": len(last_lines), "content": "".join(last_lines)}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+app.include_router(matcher_router)
 
 
 def _background_refresh_loop(interval_minutes: int):

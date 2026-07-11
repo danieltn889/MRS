@@ -111,16 +111,15 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
     <>
       {/* Mobile Sidebar */}
       <div
-        className={`fixed md:hidden left-0 top-0 h-screen w-64 bg-gradient-to-b ${theme.primary} text-white flex flex-col shadow-lg transform transition-transform duration-300 ease-in-out z-40 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className={`fixed md:hidden left-0 top-0 h-screen w-64 bg-gradient-to-b ${theme.primary} text-white flex flex-col shadow-lg transform transition-transform duration-300 ease-in-out z-40 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
       >
         <div className={`px-4 sm:px-6 py-3 sm:py-4 border-b ${theme.border} flex items-center justify-between`}>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center font-bold text-lg text-white">
-              V
+              M
             </div>
-            <div className="text-xl font-bold">V-REC</div>
+            <div className="text-xl font-bold"> MRS</div>
           </div>
           <button onClick={onClose} className={`md:hidden p-1 rounded-lg transition-colors ${theme.hover}`}>
             <X size={24} />
@@ -139,11 +138,10 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
                   onViewChange(item.id);
                   onClose();
                 }}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-xs ${
-                  isActive
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-xs ${isActive
                     ? `${activeBg} text-white shadow-md`
                     : `${theme.text} ${theme.hover} hover:text-white`
-                }`}
+                  }`}
               >
                 <Icon size={16} className="flex-shrink-0" />
                 <span className="font-medium leading-tight text-left">{item.label}</span>
@@ -167,13 +165,15 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
       </div>
 
       {/* Desktop Sidebar */}
-      <div className={`hidden md:flex md:w-64 h-screen bg-gradient-to-b ${theme.primary} text-white flex-col shadow-lg z-20`}>
+      <div
+        className={`hidden md:flex md:w-65 h-screen bg-gradient-to-b ${theme.primary} text-white flex-col shadow-lg z-20 mr-1`}
+      >
         <div className={`px-4 sm:px-6 py-3 sm:py-4 border-b ${theme.border} flex items-center justify-between`}>
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center font-bold text-lg text-white">
-              V
+              M
             </div>
-            <div className="text-lg sm:text-xl font-bold">V-REC</div>
+            <div className="text-lg sm:text-xl font-bold"> MRS</div>
           </div>
         </div>
 
@@ -188,11 +188,10 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
                   console.log('[Sidebar] Desktop nav clicked:', item.id);
                   onViewChange(item.id);
                 }}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-xs ${
-                  isActive
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-xs ${isActive
                     ? `${activeBg} text-white shadow-md`
                     : `${theme.text} ${theme.hover} hover:text-white`
-                }`}
+                  }`}
               >
                 <Icon size={16} className="flex-shrink-0" />
                 <span className="font-medium leading-tight text-left">{item.label}</span>

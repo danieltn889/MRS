@@ -1,13 +1,13 @@
-"""
+"
 validators.py
 ==============
 Step 12: validates the fully-assembled dataset against the REAL parsed
-schema (schema_parser.TableSchema) — foreign keys, primary/unique key
+schema (schema_parser.TableSchema)   foreign keys, primary/unique key
 uniqueness, NOT NULL columns, CHECK-constraint enum values, and date
 sanity (applications/views inside their job's active window, education/
 job date ordering). Returns a list of human-readable issues; an empty
 list means the dataset is clean.
-"""
+"
 
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ def _check_varchar_lengths(name: str, df: pd.DataFrame, schema: TableSchema, iss
         lengths = df[col.name].dropna().astype(str).str.len()
         over = (lengths > limit).sum()
         if over:
-            issues.append(f"[{name}] column '{col.name}' (varchar({limit})) has {over} value(s) "
-                           f"exceeding the limit (max length {lengths.max()}) — will be truncated on export")
+            issues.append(f"[{name}] column '{col.name}'(varchar({limit})) has {over} value(s) "
+                           f"exceeding the limit (max length {lengths.max()})   will be truncated on export")
 
 
 def _check_required_columns(name: str, df: pd.DataFrame, schema: TableSchema, issues: List[str]) -> None:
@@ -43,11 +43,11 @@ def _check_required_columns(name: str, df: pd.DataFrame, schema: TableSchema, is
         return
     for col in schema.required_columns:
         if col not in df.columns:
-            issues.append(f"[{name}] required column '{col}' missing from generated table")
+            issues.append(f"[{name}] required column '{col}'missing from generated table")
             continue
         n_null = df[col].isna().sum()
         if n_null:
-            issues.append(f"[{name}] required column '{col}' has {n_null} null value(s)")
+            issues.append(f"[{name}] required column '{col}'has {n_null} null value(s)")
 
 
 def _check_enum(name: str, df: pd.DataFrame, schema: TableSchema, issues: List[str]) -> None:
@@ -58,7 +58,7 @@ def _check_enum(name: str, df: pd.DataFrame, schema: TableSchema, issues: List[s
             continue
         bad = set(df[col.name].dropna().unique()) - set(col.enum_values)
         if bad:
-            issues.append(f"[{name}] column '{col.name}' has values outside CHECK enum {col.enum_values}: {bad}")
+            issues.append(f"[{name}] column '{col.name}'has values outside CHECK enum {col.enum_values}: {bad}")
 
 
 def _check_pk_unique(name: str, df: pd.DataFrame, schema: TableSchema, issues: List[str]) -> None:
@@ -99,13 +99,13 @@ def _check_foreign_keys(name: str, df: pd.DataFrame, schema: TableSchema,
             continue
         ref_df = tables.get(fk.ref_table)
         if ref_df is None or ref_df.empty:
-            issues.append(f"[{name}] FK '{col}' -> {fk.ref_table} but referenced table is empty/missing")
+            issues.append(f"[{name}] FK '{col}'-> {fk.ref_table} but referenced table is empty/missing")
             continue
         ref_col = fk.ref_columns[0]
         ref_values = set(ref_df[ref_col].dropna())
         orphans = set(values) - ref_values
         if orphans:
-            issues.append(f"[{name}] {len(orphans)} orphan FK value(s) in '{col}' not found in "
+            issues.append(f"[{name}] {len(orphans)} orphan FK value(s) in '{col}'not found in "
                            f"{fk.ref_table}.{ref_col} (e.g. {list(orphans)[:3]})")
 
 
@@ -166,16 +166,16 @@ def validate_dataset(tables: Dict[str, pd.DataFrame], schemas: Dict[str, TableSc
 
 
 def render_validation_report(issues: List[str], tables: Dict[str, pd.DataFrame]) -> str:
-    lines = ["# Validation Report", "", "## Row counts", ""]
+    lines = ["# Validation Report", , "## Row counts", ]
     for name, df in tables.items():
         lines.append(f"- `{name}`: {len(df)} rows")
-    lines.append("")
+    lines.append()
     if not issues:
-        lines.append("## Result: ALL CHECKS PASSED — no orphan FKs, no PK/unique violations, "
+        lines.append("## Result: ALL CHECKS PASSED   no orphan FKs, no PK/unique violations, "
                       "no enum violations, no date-order violations.")
     else:
         lines.append(f"## Result: {len(issues)} ISSUE(S) FOUND")
-        lines.append("")
+        lines.append()
         for issue in issues:
             lines.append(f"- {issue}")
     return "\n".join(lines)

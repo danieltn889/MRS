@@ -7,7 +7,7 @@ import { getCompanyLocations, addCompanyLocation, updateCompanyLocation, deleteC
 interface Location {
   id: string;
   name?: string;
-  type: 'headquarters' | 'branch' | 'remote_hub' | 'coworking' | 'office';
+  type: 'headquarters'| 'branch'| 'remote_hub'| 'coworking'| 'office';
   addressLine1: string;
   addressLine2?: string;
   city: string;
@@ -156,7 +156,7 @@ const CompanyLocations: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
         );
         const res = await fetch(
           `https://nominatim.openstreetmap.org/search?q=${q}&format=json&limit=1`,
-          { headers: { 'User-Agent': 'RecruitmentPlatform/1.0' } }
+          { headers: { 'User-Agent': 'RecruitmentPlatform/1.0'} }
         );
         const data = await res.json();
         if (data?.[0]) {
@@ -327,12 +327,12 @@ const CompanyLocations: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
         <motion.div
           key={editingLocation?.id || 'new'}
           initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
+          animate={{ opacity: 1, height: 'auto'}}
           exit={{ opacity: 0, height: 0 }}
           className="mb-8 bg-gray-50 rounded-lg p-6"
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            {editingLocation ? 'Edit Location' : 'Add New Location'}
+            {editingLocation ? 'Edit Location': 'Add New Location'}
           </h3>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -532,7 +532,7 @@ const CompanyLocations: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors min-w-[140px] justify-center">
                 {saving
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving…</>
-                  : editingLocation ? 'Update Location' : 'Add Location'}
+                  : editingLocation ? 'Update Location': 'Add Location'}
               </button>
             </div>
           </form>
@@ -573,7 +573,7 @@ const CompanyLocations: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                           {location.name || `${typeInfo.label} - ${location.city}`}
                         </h3>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          location.type === 'headquarters' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                          location.type === 'headquarters'? 'bg-purple-100 text-purple-800': 'bg-blue-100 text-blue-800'
                         }`}>
                           {typeInfo.label}
                         </span>

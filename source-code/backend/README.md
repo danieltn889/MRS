@@ -1,9 +1,9 @@
-# V-WES Backend
+# MRS Backend
 
-Node.js + Express + TypeScript API for the V-WES recruitment and culture-fit evaluation
+Node.js + Express + TypeScript API for the MRS recruitment and culture-fit evaluation
 platform. Handles authentication, profiles, jobs/applications, simulations, AI evaluation,
 GitHub analysis, notifications, email, and blockchain verification. Part of the
-[V-WES platform](../README.md).
+[MRS platform](../README.md).
 
 ## Company Information
 

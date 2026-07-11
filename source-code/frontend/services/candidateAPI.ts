@@ -139,6 +139,53 @@ export const uploadCandidateDocument = async (documentFile: File, documentType: 
 };
 
 /**
+ * Fetch a side (front/back) of the candidate's identity document as a blob,
+ * for previewing/opening a document already on file   see
+ * GET /api/v1/candidates/documents/:documentId/file/:side.
+ */
+export const getIdentityDocumentFile = async (documentId: string, side: 'front'| 'back'): Promise<Blob> => {
+  const response = await fetch(`${API_BASE_URL}/candidates/documents/${documentId}/file/${side}`, {
+    method: 'GET',
+    headers: getFormDataHeaders(),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+  }
+  return await response.blob();
+};
+
+/**
+ * Add or replace the candidate's identity document (National ID / passport).
+ * Re-submitting resets verification_status to 'pending'for review.
+ */
+export const updateIdentityDocument = async (
+  documentType: 'national_id'| 'passport',
+  documentNumber: string,
+  documentFront?: File | null,
+  documentBack?: File | null
+) => {
+  try {
+    const formData = new FormData();
+    formData.append('documentType', documentType);
+    formData.append('documentNumber', documentNumber);
+    if (documentFront) formData.append('documentFront', documentFront);
+    if (documentBack) formData.append('documentBack', documentBack);
+
+    const response = await fetch(`${API_BASE_URL}/candidates/documents/identity`, {
+      method: 'PUT',
+      headers: getFormDataHeaders(),
+      body: formData,
+    });
+
+    return await handleResponse(response);
+  } catch (error: any) {
+    console.error('Error updating identity document:', error);
+    throw error;
+  }
+};
+
+/**
  * Complete profile (mark as complete)
  * @returns {Promise<Object>} Profile completion result
  */
@@ -576,51 +623,22 @@ export const uploadResume = async (resumeFile: File, isPrimary: boolean = false,
  * @param {string} id - Resume ID
  * @returns {Promise<Blob>} Resume file blob
  */
-export const downloadResume = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+export const downloadResume = async (id: string): Promise<Blob> => {
   try {
-    const { id } = req.params;
-    
-    // Log to debug
-    console.log('Downloading resume with ID:', id);
-    console.log('User ID:', req.user!.id);
-    
-    const result = await query(
-      'SELECT file_key, file_name, mime_type FROM resumes WHERE id = $1 AND user_id = $2',
-      [id, req.user!.id]
-    );
-    
-    console.log('Query result:', result.rows);
-    
-    if (result.rows.length === 0) {
-      res.status(404).json({
-        success: false,
-        message: 'Resume not found'
-      });
-      return;
-    }
-    
-    const resume = result.rows[0];
-    const uploadPath = process.env.UPLOAD_PATH || './uploads';
-    const filePath = path.join(uploadPath, resume.file_key);
-    
-    console.log('Looking for file at:', filePath);
-    
-    if (!fs.existsSync(filePath)) {
-      console.log('File not found at:', filePath);
-      res.status(404).json({
-        success: false,
-        message: 'File not found on server'
-      });
-      return;
-    }
-    
-    res.download(filePath, resume.file_name);
-  } catch (error) {
-    logger.error('Error downloading resume:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to download resume'
+    const response = await fetch(`${API_BASE_URL}/candidates/resume/${id}/download`, {
+      method: 'GET',
+      headers: getFormDataHeaders(),
     });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.blob();
+  } catch (error: any) {
+    console.error('Error downloading resume:', error);
+    throw error;
   }
 };
 
@@ -762,6 +780,8 @@ export default {
   updateCandidateProfile,
   uploadProfilePhoto,
   uploadCandidateDocument,
+  updateIdentityDocument,
+  getIdentityDocumentFile,
   completeProfile,
   getProfileCompletionStatus,
   

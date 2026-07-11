@@ -6,7 +6,7 @@ import githubAPI from '../services/githubAPI';
 export interface FileNode {
   name: string;
   path: string;
-  type: 'file' | 'folder';
+  type: 'file'| 'folder';
   content?: string;
   language?: string;
   children?: FileNode[];
@@ -119,8 +119,8 @@ const convertToFileNode = (files: Record<string, string>): FileNode[] => {
   // Sort children (folders first, then files)
   const sortChildren = (nodes: FileNode[]) => {
     nodes.sort((a, b) => {
-      if (a.type === 'folder' && b.type === 'file') return -1;
-      if (a.type === 'file' && b.type === 'folder') return 1;
+      if (a.type === 'folder'&& b.type === 'file') return -1;
+      if (a.type === 'file'&& b.type === 'folder') return 1;
       return a.name.localeCompare(b.name);
     });
     nodes.forEach(node => {
@@ -190,7 +190,7 @@ export const useGitHubRepoStore = create<GitHubRepoStore>()(
               
               if (file.content) {
                 content = file.content;
-              } else if (file.encoding === 'base64' && file.content) {
+              } else if (file.encoding === 'base64'&& file.content) {
                 content = safeBase64Decode(file.content);
               } else {
                 const contentResponse = await githubAPI.getFileContent(owner, repo, file.path);
@@ -242,7 +242,7 @@ export const useGitHubRepoStore = create<GitHubRepoStore>()(
       loadRepositoryFromUrl: async (url: string) => {
         const parsed = parseGitHubUrl(url);
         if (!parsed) {
-          set({ error: 'Invalid GitHub URL. Use: https://github.com/owner/repo' });
+          set({ error: 'Invalid GitHub URL. Use: https://github.com/owner/repo'});
           return;
         }
         await get().loadRepository(parsed.owner, parsed.repo, url);

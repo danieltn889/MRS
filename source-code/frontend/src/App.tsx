@@ -37,12 +37,12 @@ function AppRoutes() {
   const navigate = useNavigate();
 
   const handleSignupSuccess = (result) => {
-    console.log('✅ Signup successful:', result);
+    console.log('Signup successful:', result);
     alert(`Account created! Check email: ${result.email}`);
   };
 
   const handleCompanySignupSuccess = (result) => {
-    console.log('✅ Company registration successful:', result);
+    console.log('Company registration successful:', result);
     alert(`Company registered! Check admin email: ${result.data.user.email}`);
   };
 

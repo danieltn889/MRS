@@ -27,7 +27,7 @@ export interface CreateNotificationInput {
   title: string;
   content?: string;
   data?: Record<string, any>;   // e.g. { sessionId, simulationId, url }
-  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  priority?: 'low'| 'normal'| 'high'| 'urgent';
 }
 
 const VALID_CATEGORIES: NotificationCategory[] = [
@@ -51,14 +51,14 @@ const pushToUser = (userId: string, event: string, payload: any): void => {
       sendToUser(userId, event, payload);
     }
   } catch (err) {
-    logger.warn(`Failed to push '${event}' to user ${userId}: ${(err as Error).message}`);
+    logger.warn(`Failed to push '${event}'to user ${userId}: ${(err as Error).message}`);
   }
 };
 
 class NotificationService {
   /**
    * Create a single notification, persist it, and push it to the recipient.
-   * Never throws — notification failures must not break the triggering action.
+   * Never throws   notification failures must not break the triggering action.
    */
   static async create(input: CreateNotificationInput): Promise<any | null> {
     const {
@@ -128,7 +128,7 @@ class NotificationService {
       conditions.push(`status <> 'read'`);
     }
 
-    const where = conditions.join(' AND ');
+    const where = conditions.join('AND ');
 
     const countResult = await query(
       `SELECT COUNT(*)::int AS total FROM notifications WHERE ${where}`,

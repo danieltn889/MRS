@@ -25,9 +25,9 @@ const TOOLS = [
 ];
 
 const OPTIONS = [
-  { key: 'allowPause',     label: 'Allow candidates to pause and resume' },
-  { key: 'showTimer',      label: 'Display countdown timer' },
-  { key: 'randomizeTasks', label: 'Randomize task order' },
+  { key: 'allowPause',     label: 'Allow candidates to pause and resume'},
+  { key: 'showTimer',      label: 'Display countdown timer'},
+  { key: 'randomizeTasks', label: 'Randomize task order'},
 ];
 
 const Step6Settings: React.FC<Props> = ({ simulation, setSimulation }) => {
@@ -52,10 +52,10 @@ const Step6Settings: React.FC<Props> = ({ simulation, setSimulation }) => {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Work Environment</label>
           <select
-            value={isCustomEnv ? 'custom' : simulation.settings.environment}
+            value={isCustomEnv ? 'custom': simulation.settings.environment}
             onChange={e => {
               if (e.target.value !== 'custom') setSettings({ environment: e.target.value as any });
-              else setSettings({ environment: '' });
+              else setSettings({ environment: ''});
             }}
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           >

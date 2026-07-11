@@ -73,7 +73,7 @@ const TaskTitleInput: React.FC<{
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(i + 1, matches.length - 1)); }
     if (e.key === 'ArrowUp')   { e.preventDefault(); setSelIdx(i => Math.max(i - 1, -1)); }
     if (e.key === 'Escape')    { setOpen(false); }
-    if (e.key === 'Enter' && selIdx >= 0 && matches[selIdx]) { e.preventDefault(); pick(matches[selIdx]); }
+    if (e.key === 'Enter'&& selIdx >= 0 && matches[selIdx]) { e.preventDefault(); pick(matches[selIdx]); }
   };
 
   return (
@@ -87,7 +87,7 @@ const TaskTitleInput: React.FC<{
           onFocus={() => { if (value.trim() && matches.length) setOpen(true); }}
           onKeyDown={onKey}
           className={`w-full pl-8 pr-3 py-2 border rounded-lg text-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent ${
-            hasError ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white'
+            hasError ? 'border-red-300 bg-red-50': 'border-gray-200 bg-white'
           }`}
           placeholder="Task title…"
         />
@@ -103,7 +103,7 @@ const TaskTitleInput: React.FC<{
               key={m}
               onMouseDown={() => pick(m)}
               className={`px-3 py-2 text-sm cursor-pointer transition-colors ${
-                selIdx === i ? 'bg-purple-50 text-purple-800' : 'text-gray-700 hover:bg-purple-50'
+                selIdx === i ? 'bg-purple-50 text-purple-800': 'text-gray-700 hover:bg-purple-50'
               }`}
             >
               {m}
@@ -318,7 +318,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                     onChange={e => updateTask(task.id, { description: e.target.value })}
                     rows={2}
                     className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none ${
-                      !task.description?.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                      !task.description?.trim() ? 'border-red-300 bg-red-50': 'border-gray-200'
                     }`}
                     placeholder="What does the candidate need to accomplish?"
                   />
@@ -347,7 +347,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                   </div>
                   {!task.evaluation?.criteria || task.evaluation.criteria.length === 0 ? (
                     <div className="p-6 text-center bg-purple-50">
-                      <p className="text-xs text-purple-400">No criteria yet — add one to define how this task is scored.</p>
+                      <p className="text-xs text-purple-400">No criteria yet   add one to define how this task is scored.</p>
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-100">
@@ -366,7 +366,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                                     type="text"
                                     value={criterion.name || ''}
                                     onChange={e => updateCriterion(task.id, criterion.id, { name: e.target.value })}
-                                    className={`col-span-1 md:col-span-2 px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent ${!criterion.name?.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200'}`}
+                                    className={`col-span-1 md:col-span-2 px-3 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent ${!criterion.name?.trim() ? 'border-red-300 bg-red-50': 'border-gray-200'}`}
                                     placeholder="Criterion name (e.g. Code quality)…"
                                   />
                                   <select
@@ -423,7 +423,7 @@ const Step3Tasks: React.FC<Props> = ({ simulation, setSimulation, taskSuggestion
                   {task.evaluation?.criteria && task.evaluation.criteria.length > 0 && (() => {
                     const total = task.evaluation.criteria.reduce((s, c) => s + (c.weight || 0), 0);
                     return (
-                      <div className={`px-4 py-2 text-xs font-semibold flex items-center justify-between ${total === 100 ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                      <div className={`px-4 py-2 text-xs font-semibold flex items-center justify-between ${total === 100 ? 'bg-green-50 text-green-700': 'bg-amber-50 text-amber-700'}`}>
                         <span>Total weight: {total}%</span>
                         {total !== 100 && <span>Adjust weights to reach 100%</span>}
                         {total === 100 && <span>✓ Balanced</span>}

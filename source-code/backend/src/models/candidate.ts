@@ -55,19 +55,19 @@ export interface CandidateProfile extends BaseEntity {
 interface CandidateSalary {
   amount: number;
   currency?: string;
-  period?: 'hour' | 'month' | 'year';
+  period?: 'hour'| 'month'| 'year';
   is_negotiable?: boolean;
 }
 
 export interface Language {
   language: string;
-  proficiency: 'basic' | 'conversational' | 'professional' | 'native' | 'fluent';
+  proficiency: 'basic'| 'conversational'| 'professional'| 'native'| 'fluent';
   is_primary?: boolean;
   certification?: string;
 }
 
 export interface PrivacySettings {
-  profile_visibility: 'public' | 'private' | 'connections_only' | 'recruiters_only';
+  profile_visibility: 'public'| 'private'| 'connections_only'| 'recruiters_only';
   show_contact_info: boolean;
   show_current_employer: boolean;
   data_sharing_consent: boolean;
@@ -78,7 +78,7 @@ export interface PrivacySettings {
 export interface JobPreferences {
   job_types: JobType[];
   locations: string[];
-  remote_preference: 'any' | 'remote' | 'hybrid' | 'onsite';
+  remote_preference: 'any'| 'remote'| 'hybrid'| 'onsite';
   industries: string[];
   company_sizes: string[];
   employment_types: EmploymentType[];
@@ -87,10 +87,10 @@ export interface JobPreferences {
   open_to_remote_worldwide?: boolean;
 }
 
-type CandidateEmploymentType = 'full-time' | 'part-time' | 'contract' | 'internship' | 'freelance' | 'temporary';
+type CandidateEmploymentType = 'full-time'| 'part-time'| 'contract'| 'internship'| 'freelance'| 'temporary';
 
 export interface Availability {
-  status: 'not_looking' | 'actively_looking' | 'open_to_offers' | 'passive' | 'interviewing';
+  status: 'not_looking'| 'actively_looking'| 'open_to_offers'| 'passive'| 'interviewing';
   available_from?: DATE;
   notice_period?: number; // in days
   open_to_opportunities: boolean;
@@ -149,7 +149,7 @@ export interface WorkExperience extends BaseEntity {
   title: string;
   employment_type: CandidateEmploymentType;
   location?: string;
-  location_type?: 'onsite' | 'hybrid' | 'remote';
+  location_type?: 'onsite'| 'hybrid'| 'remote';
   start_date: DATE;
   end_date?: DATE;
   is_current: boolean;
@@ -183,7 +183,7 @@ export interface Skill extends BaseEntity {
   name: string;
   category?: string;
   subcategory?: string;
-  skill_type: 'technical' | 'soft' | 'language' | 'certification' | 'tool';
+  skill_type: 'technical'| 'soft'| 'language'| 'certification'| 'tool';
   is_verified: boolean;
   verification_source?: string;
   metadata: Record<string, any>;
@@ -217,7 +217,7 @@ export interface UserSkill {
 
 export type ProficiencyLevel = 1 | 2 | 3 | 4 | 5;
 
-export type ProficiencyLabel = 'Beginner' | 'Intermediate' | 'Advanced' | 'Expert' | 'Master';
+export type ProficiencyLabel = 'Beginner'| 'Intermediate'| 'Advanced'| 'Expert'| 'Master';
 
 export interface VerificationEvidence {
   certificate_url?: string;
@@ -344,8 +344,8 @@ export interface CandidateSearchFilters {
 }
 
 export interface CandidateSortOptions {
-  field: 'relevance' | 'experience' | 'profile_completion' | 'recent_activity';
-  direction: 'asc' | 'desc';
+  field: 'relevance'| 'experience'| 'profile_completion'| 'recent_activity';
+  direction: 'asc'| 'desc';
 }
 
 // =====================================================
@@ -357,7 +357,7 @@ export function isProfileComplete(profile: CandidateProfile): boolean {
 }
 
 export function isActivelyLooking(profile: CandidateProfile): boolean {
-  return profile.availability.status === 'actively_looking' || 
+  return profile.availability.status === 'actively_looking'|| 
          profile.availability.open_to_opportunities === true;
 }
 

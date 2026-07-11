@@ -35,7 +35,7 @@ function isValidUrl(url: string): boolean {
   if (!url) return true;
   try {
     const u = new URL(url.startsWith('http') ? url : `https://${url}`);
-    return u.protocol === 'http:' || u.protocol === 'https:';
+    return u.protocol === 'http:'|| u.protocol === 'https:';
   } catch {
     return false;
   }
@@ -89,7 +89,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success'| 'error'; message: string } | null>(null);
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -140,9 +140,9 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleFileSelect = (type: 'logo' | 'banner', file: File) => {
-    if (file.size > 5 * 1024 * 1024) { setNotification({ type: 'error', message: 'File must be under 5 MB' }); return; }
-    if (!file.type.startsWith('image/')) { setNotification({ type: 'error', message: 'Please select an image file' }); return; }
+  const handleFileSelect = (type: 'logo'| 'banner', file: File) => {
+    if (file.size > 5 * 1024 * 1024) { setNotification({ type: 'error', message: 'File must be under 5 MB'}); return; }
+    if (!file.type.startsWith('image/')) { setNotification({ type: 'error', message: 'Please select an image file'}); return; }
     if (type === 'logo') { setLogoFile(file); setLogoPreview(URL.createObjectURL(file)); }
     else { setBannerFile(file); setBannerPreview(URL.createObjectURL(file)); }
   };
@@ -188,7 +188,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
       if (Object.keys(socialLinksObj).length > 0) updateData.socialLinks = socialLinksObj;
 
       await updateCompanyProfile(updateData);
-      setNotification({ type: 'success', message: 'Company profile updated successfully!' });
+      setNotification({ type: 'success', message: 'Company profile updated successfully!'});
       onNotify?.('success', 'Profile Saved', 'Company profile updated successfully.', `Fields saved: ${Object.keys(updateData).join(', ')}`);
       setLogoFile(null);
       setBannerFile(null);
@@ -256,7 +256,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
                 <input ref={logoInputRef} type="file" accept="image/*" onChange={e => e.target.files?.[0] && handleFileSelect('logo', e.target.files[0])} className="hidden" />
                 <button onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}
                   className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50 flex items-center gap-1">
-                  <Upload className="h-4 w-4" /> {uploadingLogo ? 'Uploading…' : logoPreview ? 'Change Logo' : 'Upload Logo'}
+                  <Upload className="h-4 w-4" /> {uploadingLogo ? 'Uploading…': logoPreview ? 'Change Logo': 'Upload Logo'}
                 </button>
                 <p className="text-xs text-gray-400 mt-1">PNG, JPG up to 5 MB</p>
               </div>
@@ -285,7 +285,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
               <input ref={bannerInputRef} type="file" accept="image/*" onChange={e => e.target.files?.[0] && handleFileSelect('banner', e.target.files[0])} className="hidden" />
               <button onClick={() => bannerInputRef.current?.click()} disabled={uploadingBanner}
                 className="text-sm text-blue-600 hover:text-blue-800 font-medium disabled:opacity-50 flex items-center gap-1">
-                <Upload className="h-4 w-4" /> {uploadingBanner ? 'Uploading…' : bannerPreview ? 'Change Banner' : 'Upload Banner'}
+                <Upload className="h-4 w-4" /> {uploadingBanner ? 'Uploading…': bannerPreview ? 'Change Banner': 'Upload Banner'}
               </button>
               <p className="text-xs text-gray-400">Recommended: 1200 × 300 px</p>
             </div>
@@ -299,7 +299,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <InputField label="Company Name" required error={errors.name}>
             <input type="text" value={formData.name} onChange={e => set('name', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${errors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${errors.name ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
               placeholder="Acme Corp" />
           </InputField>
 
@@ -327,7 +327,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
 
           <InputField label="Founded Year" error={errors.foundedYear}>
             <input type="number" value={formData.foundedYear} onChange={e => set('foundedYear', e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.foundedYear ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.foundedYear ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
               placeholder={String(CURRENT_YEAR)} min="1800" max={CURRENT_YEAR} />
           </InputField>
 
@@ -335,7 +335,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
             <div className="relative">
               <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
               <input type="text" value={formData.website} onChange={e => set('website', e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.website ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.website ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
                 placeholder="https://company.com" />
             </div>
           </InputField>
@@ -349,9 +349,9 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
           <InputField label="Short Description" error={errors.shortDescription}>
             <textarea value={formData.shortDescription} onChange={e => set('shortDescription', e.target.value)}
               rows={2} maxLength={300}
-              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${errors.shortDescription ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+              className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${errors.shortDescription ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
               placeholder="One-line summary shown on job listings and search results" />
-            <p className={`text-xs mt-1 text-right ${formData.shortDescription.length > 270 ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
+            <p className={`text-xs mt-1 text-right ${formData.shortDescription.length > 270 ? 'text-orange-500 font-medium': 'text-gray-400'}`}>
               {formData.shortDescription.length}/300
             </p>
           </InputField>
@@ -390,7 +390,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
             <div className="relative">
               <Linkedin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#0077B5]" />
               <input type="text" value={formData.socialLinks.linkedin} onChange={e => setSocial('linkedin', e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.linkedinUrl ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.linkedinUrl ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
                 placeholder="https://linkedin.com/company/acme" />
             </div>
           </InputField>
@@ -399,7 +399,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
             <div className="relative">
               <Twitter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
               <input type="text" value={formData.socialLinks.twitter} onChange={e => setSocial('twitter', e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.twitterUrl ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.twitterUrl ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
                 placeholder="https://twitter.com/acmecorp" />
             </div>
           </InputField>
@@ -408,7 +408,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
             <div className="relative">
               <Github className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-700" />
               <input type="text" value={formData.socialLinks.github} onChange={e => setSocial('github', e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.githubUrl ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.githubUrl ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
                 placeholder="https://github.com/acmecorp" />
             </div>
           </InputField>
@@ -417,7 +417,7 @@ const CompanyProfileForm: React.FC<CompanyProfileFormProps> = ({ companyData, on
             <div className="relative">
               <Facebook className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#1877F2]" />
               <input type="text" value={formData.socialLinks.facebook} onChange={e => setSocial('facebook', e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.facebookUrl ? 'border-red-400 bg-red-50' : 'border-gray-300'}`}
+                className={`w-full pl-9 pr-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent ${errors.facebookUrl ? 'border-red-400 bg-red-50': 'border-gray-300'}`}
                 placeholder="https://facebook.com/acmecorp" />
             </div>
           </InputField>

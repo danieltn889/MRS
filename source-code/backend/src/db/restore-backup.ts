@@ -1,5 +1,5 @@
 // Initializes a database (schema + real data) directly from the newest dump
-// in db_backups/, using `psql` (required — the dump uses COPY FROM stdin
+// in db_backups/, using `psql` (required   the dump uses COPY FROM stdin
 // blocks, which migrate.ts's hand-rolled statement parser can't execute).
 // Usage: npm run db:restore-backup
 import { Client } from 'pg';
@@ -19,7 +19,7 @@ const DB_PASSWORD = process.env.DB_PASSWORD;
 const DB_NAME = process.env.DB_NAME || 'SVWR-CFE_DB';
 
 if (!DB_PASSWORD) {
-  console.error('❌ DB_PASSWORD is not set. Add it to your .env file.');
+  console.error(' DB_PASSWORD is not set. Add it to your .env file.');
   process.exit(1);
 }
 
@@ -37,14 +37,14 @@ const findLatestBackup = (): string => {
 };
 
 const createDatabaseIfNotExists = async (): Promise<void> => {
-  const client = new Client({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASSWORD, database: 'postgres' });
+  const client = new Client({ host: DB_HOST, port: DB_PORT, user: DB_USER, password: DB_PASSWORD, database: 'postgres'});
   await client.connect();
   const result = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [DB_NAME]);
   if (result.rows.length === 0) {
-    console.log(`Database '${DB_NAME}' does not exist — creating...`);
+    console.log(`Database '${DB_NAME}'does not exist   creating...`);
     await client.query(`CREATE DATABASE "${DB_NAME}"`);
   } else {
-    console.log(`Database '${DB_NAME}' already exists.`);
+    console.log(`Database '${DB_NAME}'already exists.`);
   }
   await client.end();
 };
@@ -83,10 +83,10 @@ const restore = async (): Promise<void> => {
   if (result.status !== 0) {
     throw new Error(`psql restore exited with status ${result.status}`);
   }
-  console.log('✅ Database restored from backup successfully.');
+  console.log('Database restored from backup successfully.');
 };
 
 restore().catch((error) => {
-  console.error('❌ Restore failed:', error);
+  console.error(' Restore failed:', error);
   process.exit(1);
 });

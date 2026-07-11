@@ -54,7 +54,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
   const [showScoreModal, setShowScoreModal] = useState<number | null>(null);
   const [tempScore, setTempScore] = useState<number>(0);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'report' | 'submission' | 'raw'>('report');
+  const [activeTab, setActiveTab] = useState<'report'| 'submission'| 'raw'>('report');
   const [expandedSubmissionSection, setExpandedSubmissionSection] = useState<string | null>(null);
 
   // Get current user from localStorage on component mount
@@ -64,7 +64,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
       if (userStr) {
         const user = JSON.parse(userStr);
         setCurrentUser(user);
-        console.log('👤 Current user from localStorage:', user);
+        console.log(' Current user from localStorage:', user);
       }
     } catch (e) {
       console.error('Error parsing user from localStorage:', e);
@@ -75,13 +75,13 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
   const canGrade = (() => {
     if (currentUser) {
       const userType = currentUser.user_type || currentUser.role || currentUser.type;
-      if (userType === 'recruiter' || userType === 'company_admin' || userType === 'Company Admin' || userType === 'admin') {
+      if (userType === 'recruiter'|| userType === 'company_admin'|| userType === 'Company Admin'|| userType === 'admin') {
         return true;
       }
     }
     if (sessionData?.session?.user_type) {
       const userType = sessionData.session.user_type;
-      if (userType === 'recruiter' || userType === 'company_admin' || userType === 'Company Admin') {
+      if (userType === 'recruiter'|| userType === 'company_admin'|| userType === 'Company Admin') {
         return true;
       }
     }
@@ -141,14 +141,14 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
 
   const handleSaveScore = async (taskIndex: number, taskId: string, score: number) => {
     if (!canGrade) {
-      setCopySuccess('❌ You do not have permission to grade');
+      setCopySuccess(' You do not have permission to grade');
       setTimeout(() => setCopySuccess(null), 3000);
       return;
     }
     
     try {
       setSaving(true);
-      console.log('📝 Saving score:', { sessionId, taskIndex, taskId, score });
+      console.log(' Saving score:', { sessionId, taskIndex, taskId, score });
       
       await simulationAPI.updateTaskScore(sessionId!, taskIndex, score);
       
@@ -156,14 +156,14 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
         task.task_index === taskIndex ? { ...task, score: score } : task
       ));
       setShowScoreModal(null);
-      setCopySuccess(`✅ Score ${score}% saved for Task ${taskIndex}`);
+      setCopySuccess(`''Score ${score}% saved for Task ${taskIndex}`);
       setTimeout(() => setCopySuccess(null), 3000);
       
       await fetchSubmissionResults();
     } catch (err: unknown) {
       console.error('Error saving score:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setCopySuccess(`❌ Failed to save score: ${errorMessage}`);
+      setCopySuccess(` Failed to save score: ${errorMessage}`);
       setTimeout(() => setCopySuccess(null), 3000);
     } finally {
       setSaving(false);
@@ -181,12 +181,12 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
         task.task_index === taskIndex ? { ...task, feedback: feedback } : task
       ));
       setEditingFeedback(null);
-      setCopySuccess(`✅ Feedback saved for Task ${taskIndex}`);
+      setCopySuccess(`''Feedback saved for Task ${taskIndex}`);
       setTimeout(() => setCopySuccess(null), 3000);
     } catch (err: unknown) {
       console.error('Error saving feedback:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-      setCopySuccess(`❌ Failed to save feedback: ${errorMessage}`);
+      setCopySuccess(` Failed to save feedback: ${errorMessage}`);
       setTimeout(() => setCopySuccess(null), 3000);
     } finally {
       setSaving(false);
@@ -261,7 +261,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
       passed: sessionData?.passed,
       submission_results: submissionResults
     };
-    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -287,7 +287,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
   const copyRawDataToClipboard = () => {
     if (submissionResults) {
       navigator.clipboard.writeText(JSON.stringify(submissionResults, null, 2));
-      setCopySuccess('✅ Full JSON data copied to clipboard!');
+      setCopySuccess('Full JSON data copied to clipboard!');
       setTimeout(() => setCopySuccess(null), 3000);
     }
   };
@@ -458,7 +458,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 <button
                   onClick={() => setActiveTab('report')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'report' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'
+                    activeTab === 'report'? 'bg-white shadow-sm text-purple-600': 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   <FileText size={14} className="inline mr-2" />
@@ -467,7 +467,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 <button
                   onClick={() => setActiveTab('submission')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'submission' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'
+                    activeTab === 'submission'? 'bg-white shadow-sm text-purple-600': 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   <Award size={14} className="inline mr-2" />
@@ -476,7 +476,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 <button
                   onClick={() => setActiveTab('raw')}
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    activeTab === 'raw' ? 'bg-white shadow-sm text-purple-600' : 'text-gray-500 hover:text-gray-700'
+                    activeTab === 'raw'? 'bg-white shadow-sm text-purple-600': 'text-gray-500 hover:text-gray-700'
                   }`}
                 >
                   <Code size={14} className="inline mr-2" />
@@ -497,7 +497,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
 
       {copySuccess && (
         <div className={`fixed bottom-4 right-4 text-white px-4 py-2 rounded-lg shadow-lg z-50 animate-fade-in ${
-          copySuccess.includes('Failed') ? 'bg-red-600' : 'bg-green-600'
+          copySuccess.includes('Failed') ? 'bg-red-600': 'bg-green-600'
         }`}>
           {copySuccess}
         </div>
@@ -508,12 +508,12 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
         {/* ============================================ */}
         {/* SUBMISSION RESULTS TAB - ENHANCED WITH FULL DATA */}
         {/* ============================================ */}
-        {activeTab === 'submission' && submissionResults && (
+        {activeTab === 'submission'&& submissionResults && (
           <div className="space-y-6">
             
             {/* 1. SUBMISSION HEADER CARD */}
             <div className={`rounded-xl p-6 border-2 ${
-              passed ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+              passed ? 'bg-green-50 border-green-200': 'bg-red-50 border-red-200'
             }`}>
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-3">
@@ -523,8 +523,8 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                     <AlertTriangle size={48} className="text-red-600" />
                   )}
                   <div>
-                    <h2 className={`text-2xl font-bold ${passed ? 'text-green-700' : 'text-red-700'}`}>
-                      {passed ? '✓ Practical Assessment Passed!' : '✗ Practical Assessment Not Passed'}
+                    <h2 className={`text-2xl font-bold ${passed ? 'text-green-700': 'text-red-700'}`}>
+                      {passed ? '✓ Practical Assessment Passed!': '✗ Practical Assessment Not Passed'}
                     </h2>
                     <p className="text-gray-600 mt-1 max-w-2xl">{submissionResults.message}</p>
                     <div className="flex gap-3 mt-2 text-sm text-gray-500">
@@ -610,15 +610,15 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               {submissionResults.scoreBreakdown?.quality_breakdown && (
                 <div className="border-t pt-4 mt-2">
                   <button
-                    onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'quality' ? null : 'quality')}
+                    onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'quality'? null : 'quality')}
                     className="flex items-center justify-between w-full text-left"
                   >
                     <h4 className="font-medium text-gray-700 flex items-center gap-2">
                       <Activity size={16} /> Quality Breakdown
                     </h4>
-                    {expandedSubmissionSection === 'quality' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    {expandedSubmissionSection === 'quality'? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </button>
-                  {expandedSubmissionSection === 'quality' && (
+                  {expandedSubmissionSection === 'quality'&& (
                     <div className="mt-3 space-y-2 pl-4">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Technical</span>
@@ -641,15 +641,15 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
               {submissionResults.scoreBreakdown?.weighted_breakdown && (
                 <div className="border-t pt-4 mt-2">
                   <button
-                    onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'weighted' ? null : 'weighted')}
+                    onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'weighted'? null : 'weighted')}
                     className="flex items-center justify-between w-full text-left"
                   >
                     <h4 className="font-medium text-gray-700 flex items-center gap-2">
                       <TrendingUpIcon size={16} /> Weighted Contribution
                     </h4>
-                    {expandedSubmissionSection === 'weighted' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    {expandedSubmissionSection === 'weighted'? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </button>
-                  {expandedSubmissionSection === 'weighted' && (
+                  {expandedSubmissionSection === 'weighted'&& (
                     <div className="mt-3 space-y-2 pl-4">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Quality (60%)</span>
@@ -698,7 +698,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                   
                   {submissionResults.feedback.improvements?.length > 0 && (
                     <div className="bg-yellow-50 rounded-lg p-4">
-                      <p className="text-sm font-medium text-yellow-700 mb-2">⚠ Areas for Improvement</p>
+                      <p className="text-sm font-medium text-yellow-700 mb-2"> Areas for Improvement</p>
                       <ul className="list-disc list-inside space-y-1">
                         {submissionResults.feedback.improvements.map((improvement: string, idx: number) => (
                           <li key={idx} className="text-sm text-yellow-600">{improvement}</li>
@@ -724,8 +724,8 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 </h3>
                 <div className="flex items-center gap-4 mb-4">
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold ${
-                    submissionResults.dataQuality.grade === 'A' ? 'bg-green-100 text-green-700' :
-                    submissionResults.dataQuality.grade === 'B' ? 'bg-blue-100 text-blue-700' :
+                    submissionResults.dataQuality.grade === 'A'? 'bg-green-100 text-green-700':
+                    submissionResults.dataQuality.grade === 'B'? 'bg-blue-100 text-blue-700':
                     'bg-yellow-100 text-yellow-700'
                   }`}>
                     {submissionResults.dataQuality.grade}
@@ -737,13 +737,13 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 </div>
                 
                 <button
-                  onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'perTask' ? null : 'perTask')}
+                  onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'perTask'? null : 'perTask')}
                   className="flex items-center justify-between w-full text-left border-t pt-3"
                 >
                   <span className="text-sm text-gray-600">Per Task Quality Details</span>
-                  {expandedSubmissionSection === 'perTask' ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {expandedSubmissionSection === 'perTask'? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
-                {expandedSubmissionSection === 'perTask' && (
+                {expandedSubmissionSection === 'perTask'&& (
                   <div className="mt-3 space-y-2">
                     {submissionResults.dataQuality.per_task_quality?.map((task: any, idx: number) => (
                       <div key={idx} className="bg-gray-50 rounded-lg p-3 flex justify-between items-center">
@@ -754,7 +754,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                         <div className="text-right">
                           <p className="text-lg font-bold text-purple-600">{task.answer_quality_score}%</p>
                           <p className="text-xs text-gray-400">
-                            {task.has_code ? '✓ Code' : '✗ Code'} • {task.has_essay ? '✓ Essay' : '✗ Essay'}
+                            {task.has_code ? '✓ Code': '✗ Code'} • {task.has_essay ? '✓ Essay': '✗ Essay'}
                           </p>
                         </div>
                       </div>
@@ -792,18 +792,18 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 <div className="mt-4">
                   <div className="flex justify-between text-sm mb-1">
                     <span className="text-gray-600">Time Used</span>
-                    <span className={`font-medium ${submissionResults.timeTracking.timeUsedPercent > 100 ? 'text-red-600' : 'text-green-600'}`}>
+                    <span className={`font-medium ${submissionResults.timeTracking.timeUsedPercent > 100 ? 'text-red-600': 'text-green-600'}`}>
                       {submissionResults.timeTracking.timeUsedPercent}%
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div 
-                      className={`h-2 rounded-full ${submissionResults.timeTracking.timeUsedPercent > 100 ? 'bg-red-500' : 'bg-green-500'}`}
+                      className={`h-2 rounded-full ${submissionResults.timeTracking.timeUsedPercent > 100 ? 'bg-red-500': 'bg-green-500'}`}
                       style={{ width: `${Math.min(100, submissionResults.timeTracking.timeUsedPercent)}%` }}
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    {submissionResults.timeTracking.submittedOnTime ? '✓ Submitted on time' : '⚠ Submitted after time limit'}
+                    {submissionResults.timeTracking.submittedOnTime ? '✓ Submitted on time': ' Submitted after time limit'}
                   </p>
                 </div>
               </div>
@@ -843,7 +843,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                 <div className="flex items-center justify-between flex-wrap gap-4">
                   <div>
                     <p className="text-sm text-gray-600">
-                      {submissionResults.participation.qualifies ? '✓ Qualifies for participation' : '✗ Does not qualify'}
+                      {submissionResults.participation.qualifies ? '✓ Qualifies for participation': '✗ Does not qualify'}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">Minimum required: {submissionResults.participation.min_time_required}</p>
                   </div>
@@ -878,16 +878,16 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
             {submissionResults.scoring_config && (
               <div className="bg-white rounded-xl shadow-sm border p-6">
                 <button
-                  onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'config' ? null : 'config')}
+                  onClick={() => setExpandedSubmissionSection(expandedSubmissionSection === 'config'? null : 'config')}
                   className="flex items-center justify-between w-full text-left"
                 >
                   <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                     <Settings size={18} className="text-purple-500" />
                     Scoring Configuration
                   </h3>
-                  {expandedSubmissionSection === 'config' ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  {expandedSubmissionSection === 'config'? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                 </button>
-                {expandedSubmissionSection === 'config' && (
+                {expandedSubmissionSection === 'config'&& (
                   <div className="mt-4 space-y-2">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Passing Score</span>
@@ -916,7 +916,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
         {/* ============================================ */}
         {/* RAW DATA TAB - Show Complete Submission Results JSON */}
         {/* ============================================ */}
-        {activeTab === 'raw' && submissionResults && (
+        {activeTab === 'raw'&& submissionResults && (
           <div className="bg-gray-900 rounded-xl shadow-lg overflow-hidden">
             <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800">
               <div>
@@ -948,7 +948,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
         {/* ============================================ */}
         {/* REPORT TAB CONTENT - Keep existing */}
         {/* ============================================ */}
-        {activeTab === 'report' && (
+        {activeTab === 'report'&& (
           <>
             {/* Candidate Info Card */}
             <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -1068,7 +1068,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                             {task.time_spent > 0 && (task.template_task?.duration || task.task_duration > 0) && (
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${
                                 (task.time_spent / 60) <= (task.template_task?.duration || task.task_duration || 999) 
-                                  ? 'bg-green-100 text-green-700' 
+                                  ? 'bg-green-100 text-green-700'
                                   : 'bg-red-100 text-red-700'
                               }`}>
                                 <Clock size={10} />
@@ -1081,7 +1081,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                                 Score: {Math.round(task.score)}%
                               </span>
                             )}
-                            {task.score === null && task.status === 'completed' && (
+                            {task.score === null && task.status === 'completed'&& (
                               <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-medium">
                                 Pending Grade
                               </span>
@@ -1092,14 +1092,14 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`text-xs px-2 py-1 rounded-full capitalize ${
-                          task.task_type === 'technical' ? 'bg-blue-100 text-blue-700' :
-                          task.task_type === 'behavioral' ? 'bg-purple-100 text-purple-700' :
+                          task.task_type === 'technical'? 'bg-blue-100 text-blue-700':
+                          task.task_type === 'behavioral'? 'bg-purple-100 text-purple-700':
                           'bg-green-100 text-green-700'
                         }`}>
                           {task.task_type}
                         </span>
                         
-                        {task.status === 'completed' && canGrade && (
+                        {task.status === 'completed'&& canGrade && (
                           <button
                             onClick={() => {
                               setTempScore(task.score || 70);
@@ -1124,7 +1124,7 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                     {/* Status indicators */}
                     <div className="mt-3 pt-3 border-t border-gray-200">
                       <div className="flex items-center gap-4 text-sm flex-wrap">
-                        {task.status === 'completed' && (
+                        {task.status === 'completed'&& (
                           <span className="flex items-center gap-1 text-green-600">
                             <CheckCircle size={14} /> Completed
                           </span>
@@ -1168,8 +1168,8 @@ const SessionReport: React.FC<SessionReportProps> = ({ sessionId: propSessionId,
                             </div>
                             <div className="bg-white rounded-lg p-3">
                               <p className="text-xs text-gray-500">Completed Within Limit?</p>
-                              <p className={`font-medium ${(task.time_spent / 60) <= (task.template_task?.duration || task.task_duration || 999) ? 'text-green-600' : 'text-red-600'}`}>
-                                {(task.time_spent / 60) <= (task.template_task?.duration || task.task_duration || 999) ? 'Yes ✓' : 'No ✗'}
+                              <p className={`font-medium ${(task.time_spent / 60) <= (task.template_task?.duration || task.task_duration || 999) ? 'text-green-600': 'text-red-600'}`}>
+                                {(task.time_spent / 60) <= (task.template_task?.duration || task.task_duration || 999) ? 'Yes ✓': 'No ✗'}
                               </p>
                             </div>
                           </div>

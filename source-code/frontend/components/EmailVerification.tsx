@@ -20,7 +20,7 @@ interface VerificationResponse {
 }
 
 interface VerificationState {
-  status: 'pending' | 'loading' | 'success' | 'error' | 'expired' | 'already_verified';
+  status: 'pending'| 'loading'| 'success'| 'error'| 'expired'| 'already_verified';
   message: string;
   email?: string;
   error?: {
@@ -332,7 +332,7 @@ const EmailVerification: React.FC = () => {
       const data: VerificationResponse = await response.json();
 
       if (data.success) {
-        setResendMessage('✓ ' + data.message);
+        setResendMessage('✓ '+ data.message);
         setResendEmail('');
 
         // Start 5-minute cooldown
@@ -370,7 +370,7 @@ const EmailVerification: React.FC = () => {
       >
         {/* Success State */}
         <AnimatePresence mode="wait">
-          {verificationState.status === 'success' && (
+          {verificationState.status === 'success'&& (
             <motion.div
               key="success"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -394,7 +394,7 @@ const EmailVerification: React.FC = () => {
           )}
 
           {/* Already Verified State */}
-          {verificationState.status === 'already_verified' && (
+          {verificationState.status === 'already_verified'&& (
             <motion.div
               key="already-verified"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -417,7 +417,7 @@ const EmailVerification: React.FC = () => {
           )}
 
           {/* Loading State */}
-          {verificationState.status === 'loading' && (
+          {verificationState.status === 'loading'&& (
             <motion.div
               key="loading"
               initial={{ opacity: 0 }}
@@ -431,7 +431,7 @@ const EmailVerification: React.FC = () => {
           )}
 
           {/* Error States */}
-          {verificationState.status === 'error' && (
+          {verificationState.status === 'error'&& (
             <motion.div
               key="error"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -479,7 +479,7 @@ const EmailVerification: React.FC = () => {
           )}
 
           {/* Expired Token State */}
-          {verificationState.status === 'expired' && (
+          {verificationState.status === 'expired'&& (
             <motion.div
               key="expired"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -566,7 +566,7 @@ const EmailVerification: React.FC = () => {
                   className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-2 rounded-lg transition flex items-center justify-center gap-2"
                 >
                   {codeLoading && <Loader className="w-4 h-4 animate-spin" />}
-                  {codeLoading ? 'Verifying...' : 'Verify Code'}
+                  {codeLoading ? 'Verifying...': 'Verify Code'}
                 </button>
               </form>
 
@@ -584,7 +584,7 @@ const EmailVerification: React.FC = () => {
           )}
 
           {/* Resend Email Form - shown when verification fails with canResend */}
-          {showManualCode === false && verificationState.error?.canResend && verificationState.status === 'error' && (
+          {showManualCode === false && verificationState.error?.canResend && verificationState.status === 'error'&& (
             <motion.div
               key="resend-email"
               initial={{ opacity: 0, x: -20 }}

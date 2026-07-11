@@ -13,14 +13,14 @@ interface CardConfig {
   badge: string;
   barPct: number | null;
   icon: React.ReactNode;
-  colorKey: 'blue' | 'green' | 'amber' | 'purple';
+  colorKey: 'blue'| 'green'| 'amber'| 'purple';
 }
 
 const colorMap = {
-  blue:   { icon: 'bg-blue-50 text-blue-700',   val: 'text-blue-700',   badge: 'bg-blue-50 text-blue-900',   bar: 'bg-blue-500' },
-  green:  { icon: 'bg-green-50 text-green-700',  val: 'text-green-700',  badge: 'bg-green-50 text-green-900',  bar: 'bg-green-500' },
-  amber:  { icon: 'bg-amber-50 text-amber-700',  val: 'text-amber-700',  badge: 'bg-amber-50 text-amber-900',  bar: 'bg-amber-500' },
-  purple: { icon: 'bg-violet-50 text-violet-700', val: 'text-violet-700', badge: 'bg-violet-50 text-violet-900', bar: 'bg-violet-500' },
+  blue:   { icon: 'bg-blue-50 text-blue-700',   val: 'text-blue-700',   badge: 'bg-blue-50 text-blue-900',   bar: 'bg-blue-500'},
+  green:  { icon: 'bg-green-50 text-green-700',  val: 'text-green-700',  badge: 'bg-green-50 text-green-900',  bar: 'bg-green-500'},
+  amber:  { icon: 'bg-amber-50 text-amber-700',  val: 'text-amber-700',  badge: 'bg-amber-50 text-amber-900',  bar: 'bg-amber-500'},
+  purple: { icon: 'bg-violet-50 text-violet-700', val: 'text-violet-700', badge: 'bg-violet-50 text-violet-900', bar: 'bg-violet-500'},
 };
 
 const StatsCards: React.FC<StatsCardsProps> = ({ aiMatches }) => {
@@ -54,7 +54,7 @@ const StatsCards: React.FC<StatsCardsProps> = ({ aiMatches }) => {
       label: 'Average match score',
       value: `${avg}%`,
       sub: 'across all candidates',
-      badge: avg >= 80 ? 'strong' : 'moderate',
+      badge: avg >= 80 ? 'strong': 'moderate',
       barPct: avg,
       icon: <TrendingUp className="w-[17px] h-[17px]" />,
       colorKey: 'amber',

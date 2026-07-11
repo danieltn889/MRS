@@ -1,9 +1,50 @@
-import express, { Router, Request, Response } from 'express';
-import { body } from 'express-validator';
+import express, { Router, Request, Response, NextFunction } from 'express';
+import { body, validationResult } from 'express-validator';
 import rateLimit from 'express-rate-limit';
+import multer from 'multer';
+import path from 'path';
 import { query } from '../../config/database.js';
 import { customValidators } from '../../middleware/validation.middleware.js';
+import { IDENTITY_DOCUMENTS_STAGING_DIR, deleteStagedFile } from '../../utils/identityDocumentStorage.js';
 const router: Router = express.Router();
+
+// =====================================================
+// IDENTITY DOCUMENT STAGING UPLOAD (candidate signup)
+// =====================================================
+// The candidate has no user id yet at registration time, so uploaded
+// documents land in a shared staging dir first; register() moves them into
+// their final per-user location (see finalizeIdentityDocumentFile) only
+// after the account is successfully created, and deletes the staged file on
+// any validation/registration failure.
+const identityDocumentStaging = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, IDENTITY_DOCUMENTS_STAGING_DIR),
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-'+ Math.round(Math.random() * 1e9);
+    cb(null, `identity-${uniqueSuffix}${path.extname(file.originalname)}`);
+  }
+});
+
+const identityDocumentUpload = multer({
+  storage: identityDocumentStaging,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    cb(null, allowed.includes(file.mimetype));
+  }
+});
+
+// If field-level validation fails (e.g. bad email), delete any files multer
+// already staged to disk before validateRequest sends the 400 response  
+// otherwise they'd sit orphaned in the staging dir forever.
+const cleanupStagedFilesOnValidationError = (req: Request, _res: Response, next: NextFunction): void => {
+  if (!validationResult(req).isEmpty()) {
+    const files = req.files as { [field: string]: Express.Multer.File[] } | undefined;
+    if (files) {
+      Object.values(files).flat().forEach(f => deleteStagedFile(f.path));
+    }
+  }
+  next();
+};
 
 // Import controllers
 import {
@@ -72,15 +113,72 @@ router.post('/test-email', [
 ], validateRequest, testEmail);
 
 // @route   POST /api/v1/auth/register
-// @desc    Register user
+// @desc    Register user. For userType=candidate, sent as multipart/form-data
+//          with the identity document file(s) attached (documentFront /
+//          documentBack); other user types may send plain JSON.
 // @access  Public
-router.post('/register', [
-  body('email').isEmail().normalizeEmail(),
-  body('password').isLength({ min: 8 }),
-  body('userType').isIn(['candidate', 'recruiter', 'company_admin']),
-  body('firstName').trim().isLength({ min: 1 }),
-  body('lastName').trim().isLength({ min: 1 })
-], validateRequest, register);
+router.post('/register',
+  identityDocumentUpload.fields([
+    { name: 'documentFront', maxCount: 1 },
+    { name: 'documentBack', maxCount: 1 }
+  ]),
+  [
+    body('email').isEmail().normalizeEmail(),
+    body('password').isLength({ min: 8 }),
+    body('userType').isIn(['candidate', 'recruiter', 'company_admin']),
+    body('firstName').trim().isLength({ min: 1 }),
+    body('lastName').trim().isLength({ min: 1 }),
+
+    // Candidate-only personal info
+    body('gender')
+      .if(body('userType').equals('candidate'))
+      .isIn(['male', 'female', 'other']).withMessage('Gender is required'),
+    body('dateOfBirth')
+      .if(body('userType').equals('candidate'))
+      .isISO8601().withMessage('A valid Date of Birth is required')
+      .bail()
+      .custom((value: string) => new Date(value).getTime() <= Date.now())
+      .withMessage('Date of Birth cannot be in the future'),
+    body('phone')
+      .if(body('userType').equals('candidate'))
+      .custom(customValidators.isValidPhone).withMessage('A valid phone number is required'),
+    body('isRwandan')
+      .if(body('userType').equals('candidate'))
+      .isIn(['true', 'false']).withMessage('isRwandan is required'),
+
+    // Rwanda location hierarchy (only required when isRwandan = true)
+    body('province')
+      .if(body('userType').equals('candidate')).if(body('isRwandan').equals('true'))
+      .trim().notEmpty().withMessage('Province is required'),
+    body('district')
+      .if(body('userType').equals('candidate')).if(body('isRwandan').equals('true'))
+      .trim().notEmpty().withMessage('District is required'),
+    body('sector')
+      .if(body('userType').equals('candidate')).if(body('isRwandan').equals('true'))
+      .trim().notEmpty().withMessage('Sector is required'),
+    body('cell')
+      .if(body('userType').equals('candidate')).if(body('isRwandan').equals('true'))
+      .trim().notEmpty().withMessage('Cell is required'),
+    body('village')
+      .if(body('userType').equals('candidate')).if(body('isRwandan').equals('true'))
+      .trim().notEmpty().withMessage('Village is required'),
+
+    // Country/city (only required when isRwandan = false)
+    body('country')
+      .if(body('userType').equals('candidate')).if(body('isRwandan').equals('false'))
+      .trim().notEmpty().withMessage('Country is required'),
+    body('city')
+      .if(body('userType').equals('candidate')).if(body('isRwandan').equals('false'))
+      .trim().notEmpty().withMessage('City is required'),
+
+    // Identity document
+    body('documentType')
+      .if(body('userType').equals('candidate'))
+      .isIn(['national_id', 'passport']).withMessage('Document type is required'),
+    body('documentNumber')
+      .if(body('userType').equals('candidate'))
+      .trim().notEmpty().withMessage('Document number is required')
+  ], cleanupStagedFilesOnValidationError, validateRequest, register);
 
 // @route   POST /api/v1/auth/login
 // @desc    Login user

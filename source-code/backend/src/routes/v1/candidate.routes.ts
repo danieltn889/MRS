@@ -39,12 +39,15 @@ import {
   getFullCandidateProfileById,
   downloadProofFile,
   uploadProofFile,
-  viewProofFile  // ✅ Add this import
+  viewProofFile,  // ''Add this import
+  getIdentityDocumentFile,
+  updateIdentityDocument
 } from '../../controllers/candidate.controller.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { IDENTITY_DOCUMENTS_DIR } from '../../utils/identityDocumentStorage.js';
 
 // =====================================================
 // FIX: Create __dirname for ES modules
@@ -72,7 +75,7 @@ const documentsDir = path.join(uploadDir, 'candidate-documents');
 const resumeStorage = multer.diskStorage({
   destination: (req: any, file, cb) => cb(null, resumesDir),
   filename: (req: any, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-'+ Math.round(Math.random() * 1E9);
     cb(null, `resume-${(req as AuthenticatedRequest).user?.id}-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
@@ -80,7 +83,7 @@ const resumeStorage = multer.diskStorage({
 const photoStorage = multer.diskStorage({
   destination: (req: any, file, cb) => cb(null, photosDir),
   filename: (req: any, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-'+ Math.round(Math.random() * 1E9);
     cb(null, `photo-${(req as AuthenticatedRequest).user?.id}-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
@@ -88,7 +91,7 @@ const photoStorage = multer.diskStorage({
 const documentStorage = multer.diskStorage({
   destination: (_req: any, _file, cb) => cb(null, documentsDir),
   filename: (req: any, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-'+ Math.round(Math.random() * 1E9);
     cb(null, `document-${(req as AuthenticatedRequest).user?.id}-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
@@ -124,6 +127,33 @@ const documentUpload = multer({
   }
 });
 
+// Identity document (National ID / passport) uploads made from Profile
+// Management, after signup. Unlike the register() flow, the candidate is
+// already authenticated here, so the user id is known up front   files can
+// be written straight into their private-uploads/identity-documents/<userId>/
+// folder (never the publicly-served uploads/ tree) without a staging step.
+const identityDocumentUpdateStorage = multer.diskStorage({
+  destination: (req, _file, cb) => {
+    const userId = (req as AuthenticatedRequest).user!.id;
+    const dir = path.join(IDENTITY_DOCUMENTS_DIR, userId);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const side = file.fieldname === 'documentBack'? 'back': 'front';
+    cb(null, `${side}-${Date.now()}${path.extname(file.originalname)}`);
+  }
+});
+
+const identityDocumentUpdateUpload = multer({
+  storage: identityDocumentUpdateStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+    cb(null, allowed.includes(file.mimetype));
+  }
+});
+
 // =====================================================
 // PROFILE ROUTES
 // =====================================================
@@ -136,7 +166,7 @@ router.post('/profile/photo', protect, authorize('candidate'), photoUpload.singl
   const authReq = req as AuthenticatedRequest;
   try {
     if (!req.file) {
-      res.status(400).json({ success: false, message: 'No photo file provided' });
+      res.status(400).json({ success: false, message: 'No photo file provided'});
       return;
     }
     const photoKey = `photos/${req.file.filename}`;
@@ -145,10 +175,10 @@ router.post('/profile/photo', protect, authorize('candidate'), photoUpload.singl
       `UPDATE candidate_profiles SET profile_photo_url = $1, profile_photo_key = $2, updated_at = NOW() WHERE user_id = $3`,
       [photoUrl, photoKey, authReq.user!.id]
     );
-    res.json({ success: true, data: { photoUrl, photoKey }, message: 'Profile photo uploaded successfully' });
+    res.json({ success: true, data: { photoUrl, photoKey }, message: 'Profile photo uploaded successfully'});
   } catch (error) {
     logger.error('Upload profile photo error:', error);
-    res.status(500).json({ success: false, message: 'Failed to upload profile photo' });
+    res.status(500).json({ success: false, message: 'Failed to upload profile photo'});
   }
 });
 
@@ -174,17 +204,17 @@ router.delete('/profile/photo', protect, authorize('candidate'), async (req: Req
       }
     }
 
-    res.json({ success: true, message: 'Profile photo removed' });
+    res.json({ success: true, message: 'Profile photo removed'});
   } catch (error) {
     logger.error('Delete profile photo error:', error);
-    res.status(500).json({ success: false, message: 'Failed to remove profile photo' });
+    res.status(500).json({ success: false, message: 'Failed to remove profile photo'});
   }
 });
 
 router.post('/documents', protect, authorize('candidate'), documentUpload.single('document'), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
-      res.status(400).json({ success: false, message: 'No document file provided' });
+      res.status(400).json({ success: false, message: 'No document file provided'});
       return;
     }
 
@@ -206,7 +236,7 @@ router.post('/documents', protect, authorize('candidate'), documentUpload.single
     });
   } catch (error) {
     logger.error('Upload candidate document error:', error);
-    res.status(500).json({ success: false, message: 'Failed to upload document' });
+    res.status(500).json({ success: false, message: 'Failed to upload document'});
   }
 });
 
@@ -241,7 +271,11 @@ router.post('/education', protect, authorize('candidate'), [
   body('degree').trim().notEmpty(),
   body('fieldOfStudy').trim().notEmpty(),
   body('startDate').isISO8601(),
-  body('endDate').optional().isISO8601(),
+  // nullable: true -- the frontend sends endDate: null for an ongoing
+  // education (isCurrent: true), and express-validator's .optional() by
+  // itself only skips validation when the field is absent/undefined, not
+  // when it's explicitly null, so that null was failing isISO8601().
+  body('endDate').optional({ nullable: true }).isISO8601(),
   body('isCurrent').optional().isBoolean(),
   validateRequest
 ], withAuth(addEducation));
@@ -265,7 +299,9 @@ router.post('/experience', protect, authorize('candidate'), [
   body('title').trim().notEmpty(),
   body('employmentType').isIn(['full-time', 'part-time', 'contract', 'internship', 'freelance', 'self-employed']),
   body('startDate').isISO8601(),
-  body('endDate').optional().isISO8601(),
+  // Same null-vs-undefined fix as /education above -- ongoing roles send
+  // endDate: null, not an omitted field.
+  body('endDate').optional({ nullable: true }).isISO8601(),
   body('isCurrent').optional().isBoolean(),
   validateRequest
 ], withAuth(addWorkExperience));
@@ -410,7 +446,7 @@ router.get('/search', protect, authorize('recruiter', 'company_admin'), [
     }
 
     if (availability) {
-      whereConditions.push(`cp.availability->>'status' = $${paramIndex}`);
+      whereConditions.push(`cp.availability->>'status'= $${paramIndex}`);
       params.push(availability);
       paramIndex++;
     }
@@ -428,7 +464,7 @@ router.get('/search', protect, authorize('recruiter', 'company_admin'), [
       paramIndex += 2;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
 
     const countQuery = `SELECT COUNT(*) as total FROM candidate_profiles cp ${whereClause}`;
     const countResult = await dbQuery(countQuery, params);
@@ -470,7 +506,7 @@ router.get('/search', protect, authorize('recruiter', 'company_admin'), [
     });
   } catch (error) {
     logger.error('Search candidates error:', error);
-    res.status(500).json({ success: false, message: 'Failed to search candidates' });
+    res.status(500).json({ success: false, message: 'Failed to search candidates'});
   }
 });
 
@@ -501,7 +537,7 @@ router.get(
   '/proof/view/:fileName',
   protect,
   authorize('candidate'),
-  withAuth(viewProofFile)  // ✅ Added view endpoint
+  withAuth(viewProofFile)  // ''Added view endpoint
 );
 
 // Download proof file (forces download)
@@ -510,6 +546,28 @@ router.get(
   protect,
   authorize('candidate'),
   withAuth(downloadProofFile)
+);
+
+// =====================================================
+// IDENTITY DOCUMENT ROUTES (Signup Verification)
+// =====================================================
+// Ownership is checked inside the controller against candidate_documents,
+// not by client-supplied path   see getIdentityDocumentFile.
+router.put(
+  '/documents/identity',
+  protect,
+  authorize('candidate'),
+  identityDocumentUpdateUpload.fields([
+    { name: 'documentFront', maxCount: 1 },
+    { name: 'documentBack', maxCount: 1 }
+  ]),
+  withAuth(updateIdentityDocument)
+);
+
+router.get(
+  '/documents/:documentId/file/:side',
+  protect,
+  withAuth(getIdentityDocumentFile)
 );
 
 export default router;

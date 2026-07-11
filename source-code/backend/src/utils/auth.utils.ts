@@ -17,7 +17,7 @@ export const withAuth = (handler: (req: AuthenticatedRequest, res: Response) => 
       if (!token) {
         return res.status(401).json({ 
           success: false, 
-          message: 'No authentication token provided' 
+          message: 'No authentication token provided'
         });
       }
       
@@ -33,7 +33,7 @@ export const withAuth = (handler: (req: AuthenticatedRequest, res: Response) => 
       console.error('Auth error:', error);
       return res.status(401).json({ 
         success: false, 
-        message: 'Invalid or expired token' 
+        message: 'Invalid or expired token'
       });
     }
   };

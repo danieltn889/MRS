@@ -39,10 +39,10 @@ const FactorBar = ({ label, score, colour, weight }: { label: string; score: num
   </div>
 );
 
-const scoreSourceLabel = (source?: string) => {
-  if (source === 'matcher-only') return 'Profile match only — hybrid signal unavailable for this job';
-  if (source === 'hybrid-only') return 'Hybrid recommender only — profile matcher unavailable';
-  return 'Profile matcher (70%) + hybrid recommender (30%)';
+const scoreSourceLabel = (source: string | undefined, matcherPct: number, hybridPct: number) => {
+  if (source === 'matcher-only') return 'Profile match only   hybrid signal unavailable for this job';
+  if (source === 'hybrid-only') return 'Hybrid recommender only (all 5 signals, Content included)   profile matcher unavailable for this job';
+  return `Profile matcher (${matcherPct}%) + hybrid recommender (${hybridPct}%)`;
 };
 
 const JobCard: React.FC<JobCardProps> = ({
@@ -77,8 +77,21 @@ const JobCard: React.FC<JobCardProps> = ({
   const matchScore   = job.matchScore    || 0;
   const matcherScore = job.matcherScore;   // null when matcher had no data for this job
   const hybridScore  = job.hybridScore;    // null when hybrid had no data for this job
-  const scoreSource  = job.scoreSource;    // 'matcher+hybrid' | 'matcher-only' | 'hybrid-only'
+  const scoreSource  = job.scoreSource;    // 'matcher+hybrid'| 'matcher-only'| 'hybrid-only'
   const reasons: string[] = job.reasons || [];
+
+  // Real weights actually used (post-redistribution), not nominal defaults.
+  const outerWeightsUsed = job.outerWeightsUsed || null;
+  const outerMatcherPct = outerWeightsUsed ? Math.round(outerWeightsUsed.matcher * 100) : 70;
+  const outerHybridPct = outerWeightsUsed ? Math.round(outerWeightsUsed.hybrid * 100) : 30;
+  const factorWeightsUsed = job.factorWeightsUsed || null;
+  const excludedFactorsList: string[] = job.excludedFactors || [];
+  const criteria = job.criteriaScores || {};
+  const hasFactorBreakdown = criteria.skills_match != null || criteria.qualifications_match != null;
+  const hybridContentIncluded = job.hybridContentIncluded;
+  const contentDetail = job.hybridDetail?.content || null;
+  const behaviorDetail = job.hybridDetail?.behavior || null;
+  const collabDetail = job.hybridDetail?.collaborative || null;
 
   // Extract ALL job details from the response
   const rawJob = job.rawJob || job.job || job;
@@ -98,7 +111,7 @@ const JobCard: React.FC<JobCardProps> = ({
   const workArrangement = rawJob.work_arrangement || job.workArrangement || 'Onsite';
   const locations = rawJob.locations || [];
   const locationDisplay = locations.map((l: any) => 
-    typeof l === 'string' ? l : `${l.city || ''} ${l.country || ''}`.trim()
+    typeof l === 'string'? l : `${l.city || ''} ${l.country || ''}`.trim()
   ).filter(Boolean).join(', ') || job.location || 'Location not specified';
   
   // Salary details
@@ -108,9 +121,9 @@ const JobCard: React.FC<JobCardProps> = ({
   const salaryPeriod = rawJob.salary_period || 'month';
   let salaryDisplay = job.salary;
   if (!salaryDisplay && salaryMin && salaryMax) {
-    salaryDisplay = `${salaryCurrency} ${salaryMin.toLocaleString()} - ${salaryMax.toLocaleString()} ${salaryPeriod === 'year' ? '/year' : salaryPeriod === 'month' ? '/month' : ''}`;
+    salaryDisplay = `${salaryCurrency} ${salaryMin.toLocaleString()} - ${salaryMax.toLocaleString()} ${salaryPeriod === 'year'? '/year': salaryPeriod === 'month'? '/month': ''}`;
   } else if (!salaryDisplay && salaryMin) {
-    salaryDisplay = `${salaryCurrency} ${salaryMin.toLocaleString()}+ ${salaryPeriod === 'year' ? '/year' : '/month'}`;
+    salaryDisplay = `${salaryCurrency} ${salaryMin.toLocaleString()}+ ${salaryPeriod === 'year'? '/year': '/month'}`;
   }
   
   // Experience details
@@ -149,7 +162,7 @@ const JobCard: React.FC<JobCardProps> = ({
   const now = new Date();
   const isScheduled = !!publishedAt && new Date(publishedAt) > now;
   const daysRemaining = job.daysRemaining || getDaysRemainingProp(expiresAt);
-  const isExpired = daysRemaining === 'Expired' || (expiresAt ? new Date(expiresAt) < now : false);
+  const isExpired = daysRemaining === 'Expired'|| (expiresAt ? new Date(expiresAt) < now : false);
   
 
   return (
@@ -186,9 +199,9 @@ const JobCard: React.FC<JobCardProps> = ({
                   <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold border ${getMatchColor(matchScore)}`}>
                     <Star size={13} fill="currentColor" />{matchScore.toFixed(1)}% Match
                   </span>
-                  {scoreSource && scoreSource !== 'matcher+hybrid' && (
+                  {scoreSource && scoreSource !== 'matcher+hybrid'&& (
                     <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-700 border-gray-200">
-                      {scoreSource === 'matcher-only' ? 'Profile match only' : 'Hybrid recommender only'}
+                      {scoreSource === 'matcher-only'? 'Profile match only': 'Hybrid recommender only'}
                     </span>
                   )}
                 </div>
@@ -208,7 +221,7 @@ const JobCard: React.FC<JobCardProps> = ({
               {viewCount > 0 && <span className="flex items-center gap-1"><Eye size={12} />{viewCount} views</span>}
             </div>
 
-            {/* Scheduled banner — not yet open */}
+            {/* Scheduled banner   not yet open */}
             {isScheduled && (
               <div className="mb-3 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 bg-blue-50 text-blue-700">
                 <Calendar size={13} />
@@ -218,7 +231,7 @@ const JobCard: React.FC<JobCardProps> = ({
 
             {/* Expiry banner */}
             {!isScheduled && expiresAt && (
-              <div className={`mb-3 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${isExpired ? 'bg-red-50 text-red-700' : 'bg-yellow-50 text-yellow-700'}`}>
+              <div className={`mb-3 px-3 py-1.5 rounded-lg text-xs flex items-center gap-2 ${isExpired ? 'bg-red-50 text-red-700': 'bg-yellow-50 text-yellow-700'}`}>
                 <Timer size={13} />
                 {isExpired
                   ? `Closed on ${formatFullDate(expiresAt)}`
@@ -254,10 +267,40 @@ const JobCard: React.FC<JobCardProps> = ({
                 {expanded && (
                   <div className="mt-2 px-3 py-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl space-y-1">
                     {matcherScore !== null && matcherScore !== undefined && (
-                      <FactorBar label="🎯 Profile Match"    score={matcherScore} colour="bg-blue-500"   weight="70%" />
+                      <FactorBar label="''Profile Match"    score={matcherScore} colour="bg-blue-500"   weight={`${outerMatcherPct}%`} />
                     )}
                     {hybridScore !== null && hybridScore !== undefined && (
-                      <FactorBar label="🧠 Hybrid Recommender" score={hybridScore} colour="bg-purple-500" weight="30%" />
+                      <FactorBar label="🧠 Hybrid Recommender" score={hybridScore} colour="bg-purple-500" weight={`${outerHybridPct}%`} />
+                    )}
+
+                    {/* Matcher's 4 factors, actual post-redistribution weights */}
+                    {hasFactorBreakdown && (
+                      <div className="pt-2 mt-2 border-t border-blue-200">
+                        <p className="text-[10px] font-semibold text-blue-900 mb-1">Profile Match -- 4 factors:</p>
+                        {excludedFactorsList.length > 0 && (
+                          <p className="text-[9px] text-gray-500 mb-1">{excludedFactorsList.join(', ')} not required by this job -- excluded, weight redistributed.</p>
+                        )}
+                        <FactorBar label="Skills"          score={criteria.skills_match ?? 0}          colour="bg-green-500"  weight={`${Math.round((factorWeightsUsed?.skills ?? 0.40) * 100)}%`} />
+                        <FactorBar label="Qualifications"  score={criteria.qualifications_match ?? 0}  colour="bg-blue-400"   weight={`${Math.round((factorWeightsUsed?.qualifications ?? 0.25) * 100)}%`} />
+                        <FactorBar label="Experience"      score={criteria.experience_match ?? 0}      colour="bg-purple-400" weight={`${Math.round((factorWeightsUsed?.experience ?? 0.20) * 100)}%`} />
+                        <FactorBar label="Preferences"     score={criteria.preferences_match ?? 0}     colour="bg-yellow-500" weight={`${Math.round((factorWeightsUsed?.preferences ?? 0.15) * 100)}%`} />
+                      </div>
+                    )}
+
+                    {/* Hybrid's 5 signals */}
+                    {job.hybridDetail && (
+                      <div className="pt-2 mt-2 border-t border-blue-200">
+                        <p className="text-[10px] font-semibold text-blue-900 mb-1">
+                          Hybrid Recommender -- 5 signals{hybridContentIncluded === false ? ' (Content excluded here, already in Profile Match)' : ''}:
+                        </p>
+                        {contentDetail && (
+                          <FactorBar label="Content" score={(contentDetail.final_score ?? 0) * 100} colour="bg-fuchsia-500" weight="35%" />
+                        )}
+                        <FactorBar label="Behavior" score={(behaviorDetail?.content_similarity_score ?? 0) * 100} colour="bg-indigo-500" weight="30%" />
+                        <FactorBar label="Collaborative" score={(collabDetail?.raw_score ?? 0) * 100} colour="bg-pink-500" weight="20%" />
+                        <FactorBar label="Freshness" score={(job.hybridDetail.freshness?.score ?? 0) * 100} colour="bg-teal-500" weight="10%" />
+                        <FactorBar label="Popularity" score={(job.hybridDetail.popularity?.score ?? 0) * 100} colour="bg-orange-500" weight="5%" />
+                      </div>
                     )}
 
                     <div className="pt-2 mt-2 border-t border-blue-200">
@@ -268,7 +311,7 @@ const JobCard: React.FC<JobCardProps> = ({
                       <div className="w-full bg-blue-200 rounded-full h-2">
                         <div className={`h-2 rounded-full ${getScoreColor(matchScore)}`} style={{ width: `${matchScore}%` }} />
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-1">{scoreSourceLabel(scoreSource)}</p>
+                      <p className="text-[10px] text-gray-500 mt-1">{scoreSourceLabel(scoreSource, outerMatcherPct, outerHybridPct)}</p>
                     </div>
 
                     {/* Why this job was recommended (explainable AI) */}
@@ -298,7 +341,7 @@ const JobCard: React.FC<JobCardProps> = ({
                 className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
               >
                 {showAllSkills ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                {showAllSkills ? 'Hide' : 'Show'} All Job Details
+                {showAllSkills ? 'Hide': 'Show'} All Job Details
               </button>
 
               {showAllSkills && (
@@ -337,7 +380,7 @@ const JobCard: React.FC<JobCardProps> = ({
                       <div className="flex flex-wrap gap-1">
                         {skillsRequired.slice(0, 10).map((s: any, i: number) => (
                           <span key={i} className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded-full text-[10px]">
-                            {typeof s === 'string' ? s : s.name}
+                            {typeof s === 'string'? s : s.name}
                           </span>
                         ))}
                         {skillsRequired.length > 10 && (
@@ -356,7 +399,7 @@ const JobCard: React.FC<JobCardProps> = ({
                       <div className="flex flex-wrap gap-1">
                         {skillsPreferred.slice(0, 8).map((s: any, i: number) => (
                           <span key={i} className="px-1.5 py-0.5 bg-gray-50 text-gray-600 rounded-full text-[10px]">
-                            {typeof s === 'string' ? s : s.name}
+                            {typeof s === 'string'? s : s.name}
                           </span>
                         ))}
                       </div>
@@ -395,7 +438,7 @@ const JobCard: React.FC<JobCardProps> = ({
                       <div className="flex flex-wrap gap-1">
                         {languageRequirements.map((l: any, i: number) => (
                           <span key={i} className="px-1.5 py-0.5 bg-purple-50 text-purple-700 rounded-full text-[10px]">
-                            {typeof l === 'string' ? l : l.name}
+                            {typeof l === 'string'? l : l.name}
                           </span>
                         ))}
                       </div>
@@ -463,8 +506,8 @@ const JobCard: React.FC<JobCardProps> = ({
 
             <button type="button" onClick={() => onSaveJob(job.id, isSaved)}
               className="w-full px-4 py-2 border border-blue-200 text-blue-600 rounded-xl hover:bg-blue-50 text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
-              <Bookmark size={15} fill={isSaved ? 'currentColor' : 'none'} />
-              {isSaved ? 'Saved' : 'Save Job'}
+              <Bookmark size={15} fill={isSaved ? 'currentColor': 'none'} />
+              {isSaved ? 'Saved': 'Save Job'}
             </button>
 
             {isApplied ? (
@@ -484,7 +527,7 @@ const JobCard: React.FC<JobCardProps> = ({
                         <Shield size={14} /> Withdraw Locked
                       </button>
                       <div className="absolute bottom-full left-0 right-0 mb-1 bg-gray-800 text-white text-xs rounded-lg p-2 hidden group-hover:block z-10 text-center leading-snug pointer-events-none">
-                        Cannot withdraw — a practical assessment has been started for this position.
+                        Cannot withdraw   a practical assessment has been started for this position.
                       </div>
                     </div>
                   ) : (
@@ -498,7 +541,7 @@ const JobCard: React.FC<JobCardProps> = ({
             ) : (
               <button type="button" onClick={() => onApplyNow(job)} disabled={isExpired || isScheduled}
                 className="w-full px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                {isExpired ? 'Expired' : isScheduled ? 'Not Open Yet' : <><CheckCircle size={15} /> Apply Now</>}
+                {isExpired ? 'Expired': isScheduled ? 'Not Open Yet': <><CheckCircle size={15} /> Apply Now</>}
               </button>
             )}
           </div>

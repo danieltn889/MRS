@@ -468,7 +468,7 @@ export class NotificationController extends BaseController {
       const results: Partial<NotificationStats> = {};
       for (const [key, query] of Object.entries(queries)) {
         const result = await this.dbService.query(query);
-        (results as any)[key] = key === 'notificationsByType' ? result.rows : result.rows[0].count;
+        (results as any)[key] = key === 'notificationsByType'? result.rows : result.rows[0].count;
       }
 
       const response: StatsResponse = {

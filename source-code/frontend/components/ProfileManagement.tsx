@@ -18,10 +18,14 @@ import {
   Camera,
   Trash2,
   Loader,
+  MapPin,
+  CreditCard,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { getCandidateProfile, completeProfile, getProfileCompletionStatus, updateCandidateProfile, uploadProfilePhoto, deleteProfilePhoto } from '../services/candidateAPI';
+import { getCandidateProfile, completeProfile, getProfileCompletionStatus, updateCandidateProfile, uploadProfilePhoto, deleteProfilePhoto, updateIdentityDocument, getIdentityDocumentFile } from '../services/candidateAPI';
 import { updateProfile } from '../services/authAPI';
+import { getCountries, getProvinces, getDistricts, getSectors, getCells, getVillages, Country } from '../services/locationsAPI';
+import { resolveFileUrl } from '../utils/fileUrl';
 import { useAuth } from '../context/AuthContext';
 import EducationSection from './profile/EducationSection';
 import WorkExperienceSection from './profile/WorkExperienceSection';
@@ -30,6 +34,8 @@ import PortfolioSection from './profile/PortfolioSection';
 import ResumeSection from './profile/ResumeSection';
 import PreferencesSection from './profile/PreferencesSection';
 import PrivacySection from './profile/PrivacySection';
+import Combobox, { ComboboxOption } from './common/Combobox';
+import IdentityDocumentUpload from './common/IdentityDocumentUpload';
 
 interface User {
   id: string;
@@ -46,6 +52,15 @@ interface ProfileData {
     email: string;
     phone?: string;
     city?: string;
+    country?: string;
+    is_rwandan?: boolean | null;
+    province?: string;
+    district?: string;
+    sector?: string;
+    cell?: string;
+    village?: string;
+    date_of_birth?: string;
+    gender?: string;
     summary?: string;
     metadata?: { years_experience?: number };
     location?: string;
@@ -85,6 +100,15 @@ interface ProfileData {
   skills: any[];
   resumes: any[];
   portfolioLinks?: any[];
+  documents?: Array<{
+    id: string;
+    document_type: 'national_id'| 'passport';
+    document_number: string;
+    verification_status: 'pending'| 'verified'| 'rejected';
+    has_back: boolean;
+    created_at: string;
+    updated_at: string;
+  }>;
 }
 
 interface CompletionStatus {
@@ -325,13 +349,13 @@ const ProfileManagement = ({ onNavigate }: ProfileManagementProps) => {
 
 // ── Shared inline feedback banner ──────────────────────────────────────────────
 
-const SaveBanner = ({ status, message }: { status: 'success' | 'error'; message: string }) => (
+const SaveBanner = ({ status, message }: { status: 'success'| 'error'; message: string }) => (
   <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium ${
     status === 'success'
       ? 'bg-green-50 border border-green-200 text-green-800'
       : 'bg-red-50 border border-red-200 text-red-800'
   }`}>
-    {status === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+    {status === 'success'? <CheckCircle size={16} /> : <AlertCircle size={16} />}
     {message}
   </div>
 );
@@ -405,7 +429,7 @@ const RecruiterBasicInfoForm = ({ user }: RecruiterBasicInfoFormProps): JSX.Elem
   });
   const [errors,      setErrors]      = useState<Partial<Record<keyof RecruiterProfile, string>>>({});
   const [saving,      setSaving]      = useState(false);
-  const [saveStatus,  setSaveStatus]  = useState<'idle' | 'error'>('idle');
+  const [saveStatus,  setSaveStatus]  = useState<'idle'| 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
   const [showModal,   setShowModal]   = useState(false);
 
@@ -413,7 +437,7 @@ const RecruiterBasicInfoForm = ({ user }: RecruiterBasicInfoFormProps): JSX.Elem
     switch (name) {
       case 'firstName':
       case 'lastName': {
-        const label = name === 'firstName' ? 'First name' : 'Last name';
+        const label = name === 'firstName'? 'First name': 'Last name';
         if (!value.trim()) return `${label} is required`;
         if (value.trim().length < 2) return 'Must be at least 2 characters';
         if (value.trim().length > 50) return 'Must be 50 characters or fewer';
@@ -473,7 +497,7 @@ const RecruiterBasicInfoForm = ({ user }: RecruiterBasicInfoFormProps): JSX.Elem
 
   const inputClass = (field: keyof RecruiterProfile) =>
     `w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-      errors[field] ? 'border-red-400 bg-red-50' : 'border-gray-300'
+      errors[field] ? 'border-red-400 bg-red-50': 'border-gray-300'
     }`;
 
   return (
@@ -485,7 +509,7 @@ const RecruiterBasicInfoForm = ({ user }: RecruiterBasicInfoFormProps): JSX.Elem
             { label: 'First Name', value: formData.firstName },
             { label: 'Last Name',  value: formData.lastName  },
             { label: 'Phone',      value: formData.phone     },
-            { label: 'Bio',        value: formData.bio.length > 60 ? formData.bio.slice(0, 60) + '…' : formData.bio },
+            { label: 'Bio',        value: formData.bio.length > 60 ? formData.bio.slice(0, 60) + '…': formData.bio },
           ]}
         />
       )}
@@ -534,7 +558,7 @@ const RecruiterBasicInfoForm = ({ user }: RecruiterBasicInfoFormProps): JSX.Elem
             </div>
           </div>
 
-          {saveStatus === 'error' && <SaveBanner status="error" message={saveMessage} />}
+          {saveStatus === 'error'&& <SaveBanner status="error" message={saveMessage} />}
 
           <div className="flex justify-end">
             <button type="submit" disabled={saving || hasErrors}
@@ -561,25 +585,133 @@ interface CandidateBasicInfoFormData {
   lastName: string;
   email: string;
   phone: string;
-  location: string;
   headline: string;
   yearsExperience: string;
   bio: string;
   dateOfBirth: string;
   gender: string;
+  // Location   same fields captured at signup (see CandidateSignUp.tsx)
+  isRwandan: ''| 'yes'| 'no';
+  province: string;
+  district: string;
+  sector: string;
+  cell: string;
+  village: string;
+  country: string;
+  city: string;
 }
+
+const toLocationOptions = (values: string[]): ComboboxOption[] => values.map(v => ({ label: v, value: v }));
 
 const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSectionProps): JSX.Element => {
   const [saving, setSaving] = useState<boolean>(false);
   const [formData, setFormData] = useState<CandidateBasicInfoFormData>({
     firstName: '', lastName: '', email: '', phone: '',
-    location: '', headline: '', yearsExperience: '', bio: '',
+    headline: '', yearsExperience: '', bio: '',
     dateOfBirth: '', gender: '',
+    isRwandan: '', province: '', district: '', sector: '', cell: '', village: '',
+    country: '', city: '',
   });
   const [errors,      setErrors]      = useState<Partial<Record<keyof CandidateBasicInfoFormData, string>>>({});
-  const [saveStatus,  setSaveStatus]  = useState<'idle' | 'error'>('idle');
+  const [saveStatus,  setSaveStatus]  = useState<'idle'| 'error'>('idle');
   const [saveMessage, setSaveMessage] = useState('');
   const [showModal,   setShowModal]   = useState(false);
+
+  // Cascading Rwanda location dropdown data (same pattern as CandidateSignUp.tsx)
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [sectors,   setSectors]   = useState<string[]>([]);
+  const [cells,     setCells]     = useState<string[]>([]);
+  const [villages,  setVillages]  = useState<string[]>([]);
+  const [loadingLevel, setLoadingLevel] = useState<Record<string, boolean>>({});
+
+  // Identity verification (National ID / passport)   same fields as signup,
+  // editable afterward from here since signup only lets a candidate submit one.
+  const [docType,    setDocType]    = useState<''| 'national_id'| 'passport'>('');
+  const [docNumber,  setDocNumber]  = useState('');
+  const [docFront,   setDocFront]   = useState<File | null>(null);
+  const [docBack,    setDocBack]    = useState<File | null>(null);
+  const [docSaving,  setDocSaving]  = useState(false);
+  const [docError,   setDocError]   = useState('');
+  const [docSuccess, setDocSuccess] = useState('');
+  const existingDocument = profile?.documents?.[0] || null;
+
+  // Per-entry duration shown under the read-only Years of Experience field,
+  // so the auto-calculated total isn't a black box- matches the same
+  // duration math as the backend's recalculateYearsExperience, just not
+  // merged across entries (each row shown individually, even if overlapping).
+  const experienceBreakdown = ((profile as any)?.experience || (profile as any)?.workExperience || [])
+    .filter((exp: any) => exp?.start_date)
+    .map((exp: any) => {
+      const start = new Date(exp.start_date);
+      const end = exp.is_current || !exp.end_date ? new Date() : new Date(exp.end_date);
+      const years = Math.max(0, (end.getTime() - start.getTime()) / (365.25 * 24 * 3600 * 1000));
+      return {
+        title: exp.title || 'Role',
+        company: exp.company || '',
+        years: years.toFixed(1),
+        start: exp.start_date,
+      };
+    })
+    .sort((a: any, b: any) => (a.start < b.start ? 1 : -1));
+
+  useEffect(() => {
+    if (existingDocument) {
+      setDocType(existingDocument.document_type);
+      setDocNumber(existingDocument.document_number);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [existingDocument?.id]);
+
+  const [docViewingLoading, setDocViewingLoading] = useState<'front'| 'back'| null>(null);
+  const [docViewError, setDocViewError] = useState('');
+
+  const handleViewDocument = async (side: 'front'| 'back') => {
+    if (!existingDocument) return;
+    setDocViewError('');
+    setDocViewingLoading(side);
+    try {
+      const blob = await getIdentityDocumentFile(existingDocument.id, side);
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank', 'noopener,noreferrer');
+      // Object URLs are only needed long enough for the new tab to load them.
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error: unknown) {
+      setDocViewError(error instanceof Error ? error.message : 'Failed to load document');
+    } finally {
+      setDocViewingLoading(null);
+    }
+  };
+
+  const handleSaveDocument = async () => {
+    setDocError('');
+    setDocSuccess('');
+    if (!docType) { setDocError('Select a document type.'); return; }
+    if (!docNumber.trim()) { setDocError('Enter the document number.'); return; }
+    if (docType === 'passport'&& !/^[A-Za-z0-9]{6,9}$/.test(docNumber.trim())) {
+      setDocError('Passport number must be 6-9 letters/numbers only (no spaces or symbols).');
+      return;
+    }
+    if (docType === 'national_id'&& formData.isRwandan === 'yes'&& !/^\d{16}$/.test(docNumber.trim())) {
+      setDocError('Rwanda National ID must be exactly 16 digits.');
+      return;
+    }
+    if (!existingDocument && !docFront) { setDocError('Upload the document to continue.'); return; }
+
+    try {
+      setDocSaving(true);
+      await updateIdentityDocument(docType, docNumber.trim(), docFront, docBack);
+      setDocFront(null);
+      setDocBack(null);
+      setDocSuccess('Document saved   pending review.');
+      await onUpdate();
+    } catch (error: unknown) {
+      setDocError(error instanceof Error ? error.message : 'Failed to save document');
+    } finally {
+      setDocSaving(false);
+    }
+  };
 
   // Profile picture
   const [photoUrl,     setPhotoUrl]     = useState<string | null>(null);
@@ -649,12 +781,12 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
 
   useEffect(() => {
     if (profile?.profile) {
+      const isRwandan = profile.profile.is_rwandan === true ? 'yes': profile.profile.is_rwandan === false ? 'no': '';
       setFormData({
         firstName:       profile.profile.first_name || '',
         lastName:        profile.profile.last_name  || '',
         email:           profile.profile.email      || '',
         phone:           profile.profile.phone      || '',
-        location:        profile.profile.location   || profile.profile.city || '',
         headline:        profile.profile.headline   || '',
         yearsExperience: profile.profile.years_experience?.toString()
                          || profile.profile.metadata?.years_experience?.toString()
@@ -662,16 +794,85 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
         bio:             profile.profile.bio || profile.profile.summary || '',
         dateOfBirth:     profile.profile.date_of_birth ? String(profile.profile.date_of_birth).split('T')[0] : '',
         gender:          profile.profile.gender || '',
+        isRwandan,
+        province: profile.profile.province || '',
+        district: profile.profile.district || '',
+        sector:   profile.profile.sector   || '',
+        cell:     profile.profile.cell     || '',
+        village:  profile.profile.village  || '',
+        country:  isRwandan === 'yes'? '': (profile.profile.country || ''),
+        city:     profile.profile.city || '',
       });
       setPhotoUrl((profile.profile as any).profile_photo_url || null);
     }
   }, [profile]);
 
+  // ---- Cascading Rwanda location data (same pattern as CandidateSignUp.tsx) ----
+  useEffect(() => {
+    if (formData.isRwandan === 'yes'&& provinces.length === 0) {
+      setLoadingLevel(s => ({ ...s, provinces: true }));
+      getProvinces().then(setProvinces).catch(() => {}).finally(() => setLoadingLevel(s => ({ ...s, provinces: false })));
+    }
+    if (formData.isRwandan === 'no'&& countries.length === 0) {
+      getCountries().then(setCountries).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.isRwandan]);
+
+  useEffect(() => {
+    if (!formData.province) { setDistricts([]); return; }
+    setLoadingLevel(s => ({ ...s, districts: true }));
+    getDistricts(formData.province).then(setDistricts).catch(() => setDistricts([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, districts: false })));
+  }, [formData.province]);
+
+  useEffect(() => {
+    if (!formData.district) { setSectors([]); return; }
+    setLoadingLevel(s => ({ ...s, sectors: true }));
+    getSectors(formData.district).then(setSectors).catch(() => setSectors([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, sectors: false })));
+  }, [formData.district]);
+
+  useEffect(() => {
+    if (!formData.district || !formData.sector) { setCells([]); return; }
+    setLoadingLevel(s => ({ ...s, cells: true }));
+    getCells(formData.district, formData.sector).then(setCells).catch(() => setCells([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, cells: false })));
+  }, [formData.district, formData.sector]);
+
+  useEffect(() => {
+    if (!formData.district || !formData.sector || !formData.cell) { setVillages([]); return; }
+    setLoadingLevel(s => ({ ...s, villages: true }));
+    getVillages(formData.district, formData.sector, formData.cell).then(setVillages).catch(() => setVillages([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, villages: false })));
+  }, [formData.district, formData.sector, formData.cell]);
+
+  const handleIsRwandanChange = (value: 'yes'| 'no') => {
+    setFormData(prev => ({
+      ...prev,
+      isRwandan: value,
+      province: '', district: '', sector: '', cell: '', village: '',
+      country: '', city: '',
+    }));
+    setErrors(prev => ({ ...prev, province: '', district: '', sector: '', cell: '', village: '', country: '', city: ''}));
+  };
+
+  const handleProvinceChange = (value: string) =>
+    setFormData(prev => ({ ...prev, province: value, district: '', sector: '', cell: '', village: ''}));
+  const handleDistrictChange = (value: string) =>
+    setFormData(prev => ({ ...prev, district: value, sector: '', cell: '', village: ''}));
+  const handleSectorChange = (value: string) =>
+    setFormData(prev => ({ ...prev, sector: value, cell: '', village: ''}));
+  const handleCellChange = (value: string) =>
+    setFormData(prev => ({ ...prev, cell: value, village: ''}));
+  const handleVillageChange = (value: string) =>
+    setFormData(prev => ({ ...prev, village: value }));
+
   const validate = (name: keyof CandidateBasicInfoFormData, value: string): string => {
     switch (name) {
       case 'firstName':
       case 'lastName': {
-        const label = name === 'firstName' ? 'First name' : 'Last name';
+        const label = name === 'firstName'? 'First name': 'Last name';
         if (!value.trim()) return `${label} is required`;
         if (value.trim().length < 2) return 'Must be at least 2 characters';
         if (value.trim().length > 50) return 'Must be 50 characters or fewer';
@@ -682,17 +883,9 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
         if (value && !/^[+]?[\d\s\-().]{7,20}$/.test(value.trim()))
           return 'Enter a valid phone number (e.g. +250 788 000 000)';
         return '';
-      case 'location':
+      case 'city':
+      case 'country':
         if (value.length > 100) return 'Must be 100 characters or fewer';
-        return '';
-      case 'headline':
-        if (value.length > 120) return 'Must be 120 characters or fewer';
-        return '';
-      case 'yearsExperience':
-        if (value) {
-          const n = Number(value);
-          if (!Number.isInteger(n) || n < 0 || n > 50) return 'Enter a whole number between 0 and 50';
-        }
         return '';
       case 'bio':
         if (value.length > 600) return 'Must be 600 characters or fewer';
@@ -727,6 +920,18 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
       const err = validate(k, formData[k]);
       if (err) next[k] = err;
     });
+    // Location is only required once the candidate has answered the
+    // Rwandan-citizen question   matches the signup form's rule.
+    if (formData.isRwandan === 'yes') {
+      if (!formData.province) next.province = 'Province is required';
+      if (!formData.district) next.district = 'District is required';
+      if (!formData.sector)   next.sector   = 'Sector is required';
+      if (!formData.cell)     next.cell     = 'Cell is required';
+      if (!formData.village)  next.village  = 'Village is required';
+    } else if (formData.isRwandan === 'no') {
+      if (!formData.country) next.country = 'Country is required';
+      if (!formData.city)    next.city    = 'City is required';
+    }
     setErrors(next);
     if (Object.keys(next).length > 0) {
       setSaveStatus('error');
@@ -736,16 +941,34 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
     try {
       setSaving(true);
       setSaveStatus('idle');
+
+      // Only send location fields once the candidate has actually answered
+      // the Rwandan-citizen question   leaves existing data untouched
+      // otherwise, and avoids the backend's "all 5 fields required" rule
+      // firing on an unrelated save (e.g. just editing the bio).
+      const locationPayload: Record<string, any> = {};
+      if (formData.isRwandan === 'yes') {
+        locationPayload.isRwandan = true;
+        locationPayload.province = formData.province;
+        locationPayload.district = formData.district;
+        locationPayload.sector = formData.sector;
+        locationPayload.cell = formData.cell;
+        locationPayload.village = formData.village;
+      } else if (formData.isRwandan === 'no') {
+        locationPayload.isRwandan = false;
+        locationPayload.country = formData.country.trim();
+        locationPayload.city = formData.city.trim();
+      }
+
       await updateCandidateProfile({
         firstName:       formData.firstName.trim(),
         lastName:        formData.lastName.trim(),
         phone:           formData.phone.trim()    || undefined,
-        location:        formData.location.trim() || undefined,
-        headline:        formData.headline.trim() || undefined,
-        yearsExperience: formData.yearsExperience ? parseInt(formData.yearsExperience, 10) : undefined,
+        // headline and yearsExperience are both derived server-side from Work Experience entries- not sent here.
         bio:             formData.bio.trim()      || undefined,
         dateOfBirth:     formData.dateOfBirth     || undefined,
         gender:          formData.gender          || undefined,
+        ...locationPayload,
       });
       await onUpdate();
       setShowModal(true);
@@ -761,7 +984,7 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
 
   const inputClass = (field: keyof CandidateBasicInfoFormData) =>
     `w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-      errors[field] ? 'border-red-400 bg-red-50' : 'border-gray-300'
+      errors[field] ? 'border-red-400 bg-red-50': 'border-gray-300'
     }`;
 
   return (
@@ -773,12 +996,14 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
             { label: 'First Name',   value: formData.firstName },
             { label: 'Last Name',    value: formData.lastName  },
             { label: 'Phone',        value: formData.phone     },
-            { label: 'Location',     value: formData.location  },
+            { label: 'Location',     value: formData.isRwandan === 'yes'
+                ? [formData.village, formData.cell, formData.sector, formData.district, formData.province].filter(Boolean).join(', ')
+                : [formData.city, formData.country].filter(Boolean).join(', ') },
             { label: 'Date of Birth', value: formData.dateOfBirth },
             { label: 'Gender',       value: formData.gender    },
             { label: 'Headline',     value: formData.headline  },
-            { label: 'Experience',   value: formData.yearsExperience ? `${formData.yearsExperience} yrs` : '' },
-            { label: 'Bio',          value: formData.bio.length > 60 ? formData.bio.slice(0, 60) + '…' : formData.bio },
+            { label: 'Experience',   value: formData.yearsExperience ? `${formData.yearsExperience} yrs` : ''},
+            { label: 'Bio',          value: formData.bio.length > 60 ? formData.bio.slice(0, 60) + '…': formData.bio },
           ]}
         />
       )}
@@ -789,7 +1014,7 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
       <div className="flex items-center gap-5 mb-8">
         <div className="relative">
           {photoUrl ? (
-            <img src={photoUrl} alt="Profile" className="w-20 h-20 rounded-full object-cover border border-gray-200" />
+            <img src={resolveFileUrl(photoUrl)} alt="Profile" className="w-20 h-20 rounded-full object-cover border border-gray-200" />
           ) : (
             <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-2xl font-bold">
               {`${formData.firstName.charAt(0) || ''}${formData.lastName.charAt(0) || ''}`.toUpperCase() || <User size={28} />}
@@ -817,7 +1042,7 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
               disabled={photoBusy}
               className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
             >
-              <Camera size={15} /> {photoUrl ? 'Change Photo' : 'Upload Photo'}
+              <Camera size={15} /> {photoUrl ? 'Change Photo': 'Upload Photo'}
             </button>
             {photoUrl && (
               <button
@@ -856,7 +1081,7 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
           </div>
         </div>
 
-        {/* Email — read-only */}
+        {/* Email   read-only */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Email (read-only)</label>
           <div className="relative">
@@ -866,24 +1091,232 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
           </div>
         </div>
 
-        {/* Phone + Location */}
+        {/* Phone */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+          <div className="relative">
+            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input type="tel" name="phone" value={formData.phone} onChange={handleChange}
+              className={`pl-10 ${inputClass('phone')}`} placeholder="+250 788 000 000" />
+          </div>
+          <FieldError msg={errors.phone} />
+        </div>
+
+        {/* Headline + Years of Experience */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input type="tel" name="phone" value={formData.phone} onChange={handleChange}
-                className={`pl-10 ${inputClass('phone')}`} placeholder="+250 788 000 000" />
-            </div>
-            <FieldError msg={errors.phone} />
+            <label className="block text-sm font-medium text-gray-700 mb-2">Headline</label>
+            <input type="text" value={formData.headline || 'Add entries in the Experience tab'} disabled readOnly
+              className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg cursor-not-allowed" />
+            <p className="mt-1 text-xs text-gray-500">
+              Built automatically from your Work Experience job titles and their duration.
+            </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-            <input type="text" name="location" value={formData.location} onChange={handleChange}
-              className={inputClass('location')} placeholder="e.g. Kigali, Rwanda" maxLength={100} />
-            <FieldError msg={errors.location} />
+            <label className="block text-sm font-medium text-gray-700 mb-2">Years of Experience</label>
+            <input type="text" value={formData.yearsExperience ? `${formData.yearsExperience} years` : 'Add entries in the Experience tab'} disabled readOnly
+              className="w-full px-3 py-2 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg cursor-not-allowed" />
+            <p className="mt-1 text-xs text-gray-500">
+              Calculated automatically from your Work Experience entries- overlapping roles aren't double-counted.
+            </p>
+            {experienceBreakdown.length > 0 && (
+              <div className="mt-2 border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {experienceBreakdown.map((row, i) => (
+                  <div key={i} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                    <span className="text-gray-600 truncate pr-2">{row.title}{row.company ? ` at ${row.company}` : ''}</span>
+                    <span className="text-gray-500 whitespace-nowrap">{row.years} yrs</span>
+                  </div>
+                ))}
+                <p className="px-3 py-1.5 text-[11px] text-gray-400">
+                  Individual durations may not sum exactly to the total above if any roles overlapped in time.
+                </p>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Location Information   same fields captured at signup */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+            <MapPin className="w-4 h-4" /> Location Information
+          </h3>
+          <div className="mb-4">
+            <p className="block text-sm font-medium text-gray-700 mb-2">Are you a Rwandan citizen?</p>
+            <div className="flex gap-3">
+              {(['yes', 'no'] as const).map(opt => (
+                <button
+                  key={opt} type="button"
+                  onClick={() => handleIsRwandanChange(opt)}
+                  className={`px-4 py-2 rounded-md border text-sm font-medium ${
+                    formData.isRwandan === opt ? 'bg-blue-600 text-white border-blue-600': 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {opt === 'yes'? 'Yes': 'No'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {formData.isRwandan === 'yes'&& (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Province</label>
+                <Combobox
+                  value={formData.province} onChange={handleProvinceChange}
+                  options={toLocationOptions(provinces)} placeholder="Select province"
+                  loading={loadingLevel.provinces} allowFreeText={false}
+                />
+                <FieldError msg={errors.province} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                <Combobox
+                  value={formData.district} onChange={handleDistrictChange}
+                  options={toLocationOptions(districts)} placeholder="Select district"
+                  disabled={!formData.province} loading={loadingLevel.districts} allowFreeText={false}
+                />
+                <FieldError msg={errors.district} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+                <Combobox
+                  value={formData.sector} onChange={handleSectorChange}
+                  options={toLocationOptions(sectors)} placeholder="Select sector"
+                  disabled={!formData.district} loading={loadingLevel.sectors} allowFreeText={false}
+                />
+                <FieldError msg={errors.sector} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cell</label>
+                <Combobox
+                  value={formData.cell} onChange={handleCellChange}
+                  options={toLocationOptions(cells)} placeholder="Select cell"
+                  disabled={!formData.sector} loading={loadingLevel.cells} allowFreeText={false}
+                />
+                <FieldError msg={errors.cell} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Village (Umudugudu)</label>
+                <Combobox
+                  value={formData.village} onChange={handleVillageChange}
+                  options={toLocationOptions(villages)} placeholder="Select village"
+                  disabled={!formData.cell} loading={loadingLevel.villages} allowFreeText={false}
+                />
+                <FieldError msg={errors.village} />
+              </div>
+            </div>
+          )}
+
+          {formData.isRwandan === 'no'&& (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                <Combobox
+                  value={formData.country} onChange={(v) => setFormData(prev => ({ ...prev, country: v }))}
+                  options={countries.map(c => ({ label: c.name, value: c.name }))}
+                  placeholder="Search or type your country" allowFreeText
+                />
+                <FieldError msg={errors.country} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <input type="text" name="city" value={formData.city} onChange={handleChange}
+                  className={inputClass('city')} placeholder="e.g. Nairobi" maxLength={100} />
+                <FieldError msg={errors.city} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Identity Verification   same fields captured at signup, editable
+            here since signup only lets a candidate submit a document once. */}
+        <div className="border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+              <CreditCard className="w-4 h-4" /> Identity Verification
+            </h3>
+            {existingDocument && (
+              <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                existingDocument.verification_status === 'verified'? 'bg-green-100 text-green-700'
+                  : existingDocument.verification_status === 'rejected'? 'bg-red-100 text-red-700'
+                  : 'bg-yellow-100 text-yellow-700'
+              }`}>
+                {existingDocument.verification_status === 'verified'? 'Verified'
+                  : existingDocument.verification_status === 'rejected'? 'Rejected'
+                  : 'Pending review'}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Document Type</label>
+              <select value={docType} onChange={(e) => setDocType(e.target.value as any)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                <option value="">Select document type</option>
+                <option value="national_id">National ID</option>
+                <option value="passport">Passport</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Document Number</label>
+              <input type="text" value={docNumber} onChange={(e) => setDocNumber(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder={docType === 'national_id'? '16-digit National ID': 'Passport number'} />
+              {docType && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {docType === 'national_id'
+                    ? (formData.isRwandan === 'yes'
+                        ? 'Rwanda National ID: exactly 16 digits, starting with 1 or 2 (e.g. 1199012345678901)'
+                        : 'Letters and/or numbers, 6-20 characters')
+                    : 'Passport number: 6-9 letters/numbers only, no spaces (e.g. PC1234567)'}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {docType && (
+            <IdentityDocumentUpload
+              documentType={docType}
+              documentFront={docFront}
+              documentBack={docBack}
+              onFrontChange={setDocFront}
+              onBackChange={setDocBack}
+            />
+          )}
+          {existingDocument && !docFront && (
+            <div className="mt-2">
+              <p className="text-xs text-gray-500">
+                A document is already on file. Upload a new one only if you want to replace it.
+              </p>
+              <div className="flex items-center gap-3 mt-1.5">
+                <button type="button" onClick={() => handleViewDocument('front')} disabled={docViewingLoading === 'front'}
+                  className="text-xs text-blue-600 hover:underline disabled:opacity-50">
+                  {docViewingLoading === 'front'? 'Loading…': 'View current front'}
+                </button>
+                {existingDocument.has_back && (
+                  <button type="button" onClick={() => handleViewDocument('back')} disabled={docViewingLoading === 'back'}
+                    className="text-xs text-blue-600 hover:underline disabled:opacity-50">
+                    {docViewingLoading === 'back'? 'Loading…': 'View current back'}
+                  </button>
+                )}
+              </div>
+              {docViewError && <p className="text-xs text-red-600 mt-1">{docViewError}</p>}
+            </div>
+          )}
+
+          {docError && <p className="text-sm text-red-600 mt-3">{docError}</p>}
+          {docSuccess && <p className="text-sm text-green-600 mt-3">{docSuccess}</p>}
+
+          <div className="flex justify-end mt-4">
+            <button type="button" onClick={handleSaveDocument} disabled={docSaving}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+              {docSaving ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="w-4 h-4" />}
+              {existingDocument ? 'Update Document': 'Save Document'}
+            </button>
+          </div>
+        </div>
+
         {/* Date of Birth + Gender */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
@@ -917,7 +1350,7 @@ const CandidateBasicInfoSection = ({ profile, onUpdate }: CandidateBasicInfoSect
           </div>
         </div>
 
-        {saveStatus === 'error' && <SaveBanner status="error" message={saveMessage} />}
+        {saveStatus === 'error'&& <SaveBanner status="error" message={saveMessage} />}
 
         <div className="flex justify-end">
           <button type="submit" disabled={saving || hasErrors}
@@ -962,12 +1395,12 @@ const ProfileOverview = ({ profile, completionStatus, onCompleteProfile, complet
               : <AlertCircle className="text-orange-600" size={24} />}
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
-                {isProfileComplete ? 'Profile Complete!' : 'Complete Your Profile'}
+                {isProfileComplete ? 'Profile Complete!': 'Complete Your Profile'}
               </h3>
               <p className="text-sm text-gray-600">
                 {isProfileComplete
                   ? 'Your profile is ready for job applications'
-                  : `Profile is ${completionPercentage}% complete — fill in all sections`}
+                  : `Profile is ${completionPercentage}% complete   fill in all sections`}
               </p>
             </div>
           </div>
@@ -1005,18 +1438,18 @@ const ProfileOverview = ({ profile, completionStatus, onCompleteProfile, complet
             return (
               <button key={key} onClick={() => onNavigateToTab(tab)}
                 className={`group p-4 rounded-xl border-2 text-left transition-all hover:shadow-md hover:-translate-y-0.5 ${
-                  done ? 'border-green-200 bg-green-50 hover:border-green-400' : 'border-dashed border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50'
+                  done ? 'border-green-200 bg-green-50 hover:border-green-400': 'border-dashed border-gray-300 bg-white hover:border-blue-400 hover:bg-blue-50'
                 }`}>
                 <div className="flex items-start justify-between mb-2">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${done ? 'bg-green-100' : 'bg-gray-100 group-hover:bg-blue-100'}`}>
-                    <Icon size={16} className={done ? 'text-green-600' : 'text-gray-400 group-hover:text-blue-600'} />
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${done ? 'bg-green-100': 'bg-gray-100 group-hover:bg-blue-100'}`}>
+                    <Icon size={16} className={done ? 'text-green-600': 'text-gray-400 group-hover:text-blue-600'} />
                   </div>
                   {done
                     ? <CheckCircle size={14} className="text-green-500 mt-1" />
                     : <span className="text-xs font-semibold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">Fill in →</span>}
                 </div>
                 <p className="text-sm font-semibold text-gray-800">{label}</p>
-                {count !== null && <p className="text-xs text-gray-500 mt-0.5">{count} {count === 1 ? 'entry' : 'entries'}</p>}
+                {count !== null && <p className="text-xs text-gray-500 mt-0.5">{count} {count === 1 ? 'entry': 'entries'}</p>}
                 {!done && <p className="text-xs text-orange-500 font-medium mt-1">Incomplete</p>}
               </button>
             );
@@ -1035,16 +1468,19 @@ const ProfileOverview = ({ profile, completionStatus, onCompleteProfile, complet
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
           {[
-            { label: 'Full Name',  value: `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() || 'Not set' },
-            { label: 'Email',      value: profileData.email || 'Not set' },
-            { label: 'Phone',      value: profileData.phone || 'Not set' },
-            { label: 'Location',   value: profileData.location || profileData.city || 'Not set' },
-            { label: 'Headline',   value: profileData.headline || 'Not set' },
-            { label: 'Experience', value: profileData.years_experience != null ? `${profileData.years_experience} years` : 'Not set' },
+            { label: 'Full Name',  value: `${profileData.first_name || ''} ${profileData.last_name || ''}`.trim() || 'Not set'},
+            { label: 'Email',      value: profileData.email || 'Not set'},
+            { label: 'Phone',      value: profileData.phone || 'Not set'},
+            { label: 'Location',   value: (profileData.is_rwandan
+                ? [profileData.village, profileData.cell, profileData.sector, profileData.district, profileData.province].filter(Boolean).join(', ')
+                : [profileData.city, profileData.country].filter(Boolean).join(', '))
+              || profileData.location || 'Not set'},
+            { label: 'Headline',   value: profileData.headline || 'Not set'},
+            { label: 'Experience', value: profileData.years_experience != null ? `${profileData.years_experience} years` : 'Not set'},
           ].map(({ label, value }) => (
             <div key={label} className="flex items-start justify-between py-1.5 border-b border-gray-50 last:border-0">
               <span className="text-xs text-gray-500 w-28 shrink-0">{label}</span>
-              <span className={`text-sm font-medium text-right ${value === 'Not set' ? 'text-gray-400 italic' : 'text-gray-800'}`}>{value}</span>
+              <span className={`text-sm font-medium text-right ${value === 'Not set'? 'text-gray-400 italic': 'text-gray-800'}`}>{value}</span>
             </div>
           ))}
         </div>
@@ -1053,10 +1489,10 @@ const ProfileOverview = ({ profile, completionStatus, onCompleteProfile, complet
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {([
-          { tab: 'education',  count: education.length,  label: 'Education',  icon: GraduationCap, color: 'blue'   },
-          { tab: 'experience', count: experience.length, label: 'Experience', icon: Briefcase,     color: 'green'  },
-          { tab: 'skills',     count: skills.length,     label: 'Skills',     icon: Code,          color: 'purple' },
-          { tab: 'resume',     count: resumes.length,    label: 'Resumes',    icon: FileText,      color: 'orange' },
+          { tab: 'education',  count: education.length,  label: 'Education',  icon: GraduationCap, color: 'blue'  },
+          { tab: 'experience', count: experience.length, label: 'Experience', icon: Briefcase,     color: 'green' },
+          { tab: 'skills',     count: skills.length,     label: 'Skills',     icon: Code,          color: 'purple'},
+          { tab: 'resume',     count: resumes.length,    label: 'Resumes',    icon: FileText,      color: 'orange'},
         ] as const).map(({ tab, count, label, icon: Icon, color }) => (
           <button key={tab} onClick={() => onNavigateToTab(tab)}
             className={`p-4 rounded-xl text-left bg-${color}-50 hover:bg-${color}-100 border border-${color}-100 hover:border-${color}-300 transition-all hover:shadow-sm group`}>
@@ -1065,7 +1501,7 @@ const ProfileOverview = ({ profile, completionStatus, onCompleteProfile, complet
               <Icon size={16} className={`text-${color}-400 group-hover:text-${color}-600 transition-colors`} />
             </div>
             <div className={`text-sm font-medium text-${color}-700`}>{label}</div>
-            <div className={`text-xs text-${color}-500 mt-0.5`}>{count === 0 ? 'Click to add' : 'Click to edit'}</div>
+            <div className={`text-xs text-${color}-500 mt-0.5`}>{count === 0 ? 'Click to add': 'Click to edit'}</div>
           </button>
         ))}
       </div>

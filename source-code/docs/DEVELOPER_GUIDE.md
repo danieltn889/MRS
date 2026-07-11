@@ -1,17 +1,17 @@
 # Developer Guide
 
-How to work in the V-WES codebase: architecture, conventions, and common tasks.
+How to work in the MRS codebase: architecture, conventions, and common tasks.
 
 ---
 
 ## Architecture
 
-- **Frontend** (`frontend/`) — React 18 + Vite SPA. Talks to the backend over REST
+- **Frontend** (`frontend/`)   React 18 + Vite SPA. Talks to the backend over REST
   (`/api/v1`) and Socket.IO. Auth state in a React context; protected routes redirect to login.
-- **Backend** (`backend/`) — Express + TypeScript (ESM). Layered:
+- **Backend** (`backend/`)   Express + TypeScript (ESM). Layered:
   `routes/v1` → `controllers` → `services` → PostgreSQL (`pg`). Middleware handles auth,
   validation, and uploads. Socket.IO is initialized in `src/server.ts`.
-- **Blockchain** (`blockchain/`) — Hardhat project; the backend also keeps an app-level
+- **Blockchain** (`blockchain/`)   Hardhat project; the backend also keeps an app-level
   audit chain in PostgreSQL.
 
 ```
@@ -84,7 +84,7 @@ npm run dev               # Vite on :3000
 npx tsc --noEmit          # type-check
 ```
 
-> The frontend build (`vite build`) uses esbuild and does **not** fail on type errors —
+> The frontend build (`vite build`) uses esbuild and does **not** fail on type errors  
 > always run `tsc --noEmit` to catch them. Several pre-existing unused-import warnings exist
 > in older files; avoid adding new ones in files you touch.
 

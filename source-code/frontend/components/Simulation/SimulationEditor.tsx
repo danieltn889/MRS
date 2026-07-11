@@ -15,7 +15,7 @@ interface SimulationTask {
   id: string;
   title: string;
   description: string;
-  type: 'technical' | 'behavioral' | 'situational' | 'collaborative' | 'creative' | 'communication' | 'prioritization' | 'emergency' | 'change_request';
+  type: 'technical'| 'behavioral'| 'situational'| 'collaborative'| 'creative'| 'communication'| 'prioritization'| 'emergency'| 'change_request';
   duration: number;
   instructions: string;
   resources: any[];
@@ -37,7 +37,7 @@ interface Simulation {
   jobId?: string;
   description: string;
   duration: number;
-  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  difficulty: 'beginner'| 'intermediate'| 'advanced'| 'expert';
   objectives: string[];
   tasks: SimulationTask[];
   scoring: {
@@ -62,7 +62,7 @@ interface Simulation {
     tools: string[];
     constraints: string[];
   };
-  status: 'draft' | 'active' | 'archived';
+  status: 'draft'| 'active'| 'archived';
   createdAt: string;
   updatedAt: string;
   compliance: any[];
@@ -95,16 +95,16 @@ const defaultAvailability = {
 // STEPS
 // ============================================
 const STEPS = [
-  { id: 1, title: 'Basics', description: 'Define practical assessment fundamentals' },
-  { id: 2, title: 'Objectives', description: 'Set learning and assessment goals' },
-  { id: 3, title: 'Tasks', description: 'Design individual tasks and scenarios' },
-  { id: 4, title: 'Scoring', description: 'Configure evaluation criteria' },
-  { id: 5, title: 'Pass/Fail', description: 'Set passing standards and criteria' },
-  { id: 6, title: 'Settings', description: 'Environment and technical settings' },
-  { id: 7, title: 'Availability', description: 'Configure scheduling and access' },
-  { id: 8, title: 'Practice', description: 'Set up practice round options' },
-  { id: 9, title: 'Testing', description: 'Validate and test practical assessment' },
-  { id: 10, title: 'Publish', description: 'Review and publish practical assessment' },
+  { id: 1, title: 'Basics', description: 'Define practical assessment fundamentals'},
+  { id: 2, title: 'Objectives', description: 'Set learning and assessment goals'},
+  { id: 3, title: 'Tasks', description: 'Design individual tasks and scenarios'},
+  { id: 4, title: 'Scoring', description: 'Configure evaluation criteria'},
+  { id: 5, title: 'Pass/Fail', description: 'Set passing standards and criteria'},
+  { id: 6, title: 'Settings', description: 'Environment and technical settings'},
+  { id: 7, title: 'Availability', description: 'Configure scheduling and access'},
+  { id: 8, title: 'Practice', description: 'Set up practice round options'},
+  { id: 9, title: 'Testing', description: 'Validate and test practical assessment'},
+  { id: 10, title: 'Publish', description: 'Review and publish practical assessment'},
 ];
 
 // ============================================
@@ -147,7 +147,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
   // ---------- FETCH JOBS ----------
   const fetchJobs = async () => {
     try {
-      const response = await jobAPI.getCompanyJobs({ limit: 100, status: 'active,published,draft', sort: '-created_at' });
+      const response = await jobAPI.getCompanyJobs({ limit: 100, status: 'active,published,draft', sort: '-created_at'});
       let jobsArray = [];
       if (response?.data?.data && Array.isArray(response.data.data)) jobsArray = response.data.data;
       else if (response?.data && Array.isArray(response.data)) jobsArray = response.data;
@@ -175,8 +175,8 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
         duration: d.duration || d.duration_minutes || 60,
         difficulty: d.difficulty || 'intermediate',
         objectives: d.objectives || d.tasks_structure?.objectives || [],
-        tasks: typeof d.tasks === 'string' ? JSON.parse(d.tasks) : (d.tasks || []),
-        scoring: typeof d.scoring === 'string' ? JSON.parse(d.scoring) : (d.scoring || d.scoring_rubric || { totalPoints: 100, passingScore: 70, timeBonus: false, qualityWeight: 70, speedWeight: 20, behavioralWeight: 10, autoFailConditions: [] }),
+        tasks: typeof d.tasks === 'string'? JSON.parse(d.tasks) : (d.tasks || []),
+        scoring: typeof d.scoring === 'string'? JSON.parse(d.scoring) : (d.scoring || d.scoring_rubric || { totalPoints: 100, passingScore: 70, timeBonus: false, qualityWeight: 70, speedWeight: 20, behavioralWeight: 10, autoFailConditions: [] }),
         settings: d.settings || d.tasks_structure?.settings || { allowPause: true, showTimer: true, randomizeTasks: false, allowHints: true, recordScreen: false, recordAudio: false, maxAttempts: 1, timeLimit: 60, environment: 'office', tools: [], constraints: [] },
         status: d.status || 'draft',
         createdAt: d.createdAt || d.created_at || new Date().toISOString(),
@@ -313,7 +313,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
     if (forPublish && simulation.objectives.length === 0) missing.push('At least one Objective');
     if (missing.length) {
       setValidationErrors(missing);
-      alert(`Cannot ${forPublish ? 'publish' : 'save'}:\n• ${missing.join('\n• ')}`);
+      alert(`Cannot ${forPublish ? 'publish': 'save'}:\n• ${missing.join('\n• ')}`);
       if (!simulation.title.trim() || !simulation.jobRole.trim()) setCurrentStep(1);
       else if (forPublish && simulation.objectives.length === 0) setCurrentStep(2);
       else if (simulation.tasks.length === 0) setCurrentStep(3);
@@ -345,7 +345,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
       
       const savedId = result?.data?.id || result?.id;
       if (savedId) {
-        setSimulation(prev => prev ? { ...prev, id: savedId, status: 'draft' } : null);
+        setSimulation(prev => prev ? { ...prev, id: savedId, status: 'draft'} : null);
         alert('Practical Assessment saved successfully!');
         onSaved?.();
       }
@@ -385,7 +385,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
         result = await simulationAPI.publishSimulation({ id: simulation.id });
       }
       
-      setSimulation(prev => prev ? { ...prev, id: newId, status: 'active' } : null);
+      setSimulation(prev => prev ? { ...prev, id: newId, status: 'active'} : null);
       alert('Practical Assessment published successfully!');
       onSaved?.();
     } catch (e: any) {
@@ -425,7 +425,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
             <div className="flex items-center gap-3">
               <button onClick={onBack} className="text-gray-500 hover:text-gray-700 text-sm">← Back</button>
               <div>
-                <h1 className="text-lg font-bold text-gray-900">{simulationId ? 'Edit Practical Assessment' : 'Create Practical Assessment'}</h1>
+                <h1 className="text-lg font-bold text-gray-900">{simulationId ? 'Edit Practical Assessment': 'Create Practical Assessment'}</h1>
                 <p className="text-xs text-gray-500">{simulation.jobRole || 'Configure your assessment'}</p>
               </div>
             </div>
@@ -448,15 +448,15 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                 <div key={step.id} className="flex items-center">
                   <button onClick={() => setCurrentStep(step.id)} className="flex items-center gap-2">
                     <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
-                      currentStep > step.id ? 'bg-green-500 text-white' :
-                      currentStep === step.id ? 'bg-blue-600 text-white ring-2 ring-blue-200' :
+                      currentStep > step.id ? 'bg-green-500 text-white':
+                      currentStep === step.id ? 'bg-blue-600 text-white ring-2 ring-blue-200':
                       'bg-gray-200 text-gray-500'
                     }`}>
                       {currentStep > step.id ? <CheckCircle size={15} /> : <span className="text-xs font-bold">{step.id}</span>}
                     </div>
-                    <span className={`text-xs hidden sm:inline ${currentStep === step.id ? 'text-blue-700 font-medium' : 'text-gray-500'}`}>{step.title}</span>
+                    <span className={`text-xs hidden sm:inline ${currentStep === step.id ? 'text-blue-700 font-medium': 'text-gray-500'}`}>{step.title}</span>
                   </button>
-                  {idx < STEPS.length - 1 && <div className={`w-6 h-0.5 mx-1 ${currentStep > step.id ? 'bg-green-400' : 'bg-gray-200'}`} />}
+                  {idx < STEPS.length - 1 && <div className={`w-6 h-0.5 mx-1 ${currentStep > step.id ? 'bg-green-400': 'bg-gray-200'}`} />}
                 </div>
               ))}
             </div>
@@ -984,10 +984,10 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                   <h4 className="font-medium mb-4">Available Tools</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
-                      { id: 'email', label: 'Email Client' }, { id: 'calendar', label: 'Calendar' },
-                      { id: 'documents', label: 'Documents' }, { id: 'code_editor', label: 'Code Editor' },
-                      { id: 'browser', label: 'Web Browser' }, { id: 'terminal', label: 'Terminal' },
-                      { id: 'spreadsheet', label: 'Spreadsheet' }, { id: 'presentation', label: 'Presentation' },
+                      { id: 'email', label: 'Email Client'}, { id: 'calendar', label: 'Calendar'},
+                      { id: 'documents', label: 'Documents'}, { id: 'code_editor', label: 'Code Editor'},
+                      { id: 'browser', label: 'Web Browser'}, { id: 'terminal', label: 'Terminal'},
+                      { id: 'spreadsheet', label: 'Spreadsheet'}, { id: 'presentation', label: 'Presentation'},
                     ].map(tool => (
                       <label key={tool.id} className="flex items-center gap-2 cursor-pointer">
                         <input 
@@ -1008,12 +1008,12 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                   <h4 className="font-medium mb-4">Practical Assessment Options</h4>
                   <div className="space-y-3">
                     {[
-                      { key: 'allowPause', label: 'Allow candidates to pause and resume' },
-                      { key: 'showTimer', label: 'Display countdown timer' },
-                      { key: 'randomizeTasks', label: 'Randomize task order' },
-                      { key: 'allowHints', label: 'Provide hints during tasks' },
-                      { key: 'recordScreen', label: 'Record screen activity' },
-                      { key: 'recordAudio', label: 'Record audio during practical assessment' },
+                      { key: 'allowPause', label: 'Allow candidates to pause and resume'},
+                      { key: 'showTimer', label: 'Display countdown timer'},
+                      { key: 'randomizeTasks', label: 'Randomize task order'},
+                      { key: 'allowHints', label: 'Provide hints during tasks'},
+                      { key: 'recordScreen', label: 'Record screen activity'},
+                      { key: 'recordAudio', label: 'Record audio during practical assessment'},
                     ].map(opt => (
                       <div key={opt.key} className="flex items-center gap-3">
                         <input 
@@ -1238,8 +1238,8 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                         <div className="flex items-center justify-between mb-2">
                           <h5 className="font-medium text-gray-900 capitalize">{check.category} Check</h5>
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            check.status === 'passed' ? 'bg-green-100 text-green-800' : 
-                            check.status === 'warning' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                            check.status === 'passed'? 'bg-green-100 text-green-800': 
+                            check.status === 'warning'? 'bg-yellow-100 text-yellow-800': 'bg-red-100 text-red-800'
                           }`}>
                             {check.status}
                           </span>
@@ -1291,7 +1291,7 @@ const SimulationEditor: React.FC<SimulationEditorProps> = ({ simulationId, onBac
                     {checklistItems.map((item, i) => (
                       <div key={i} className="flex items-center gap-3">
                         {item.ok ? <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" /> : <X className="w-5 h-5 text-red-500 flex-shrink-0" />}
-                        <span className={`text-sm ${item.ok ? 'text-gray-900' : 'text-red-700'}`}>{item.label}</span>
+                        <span className={`text-sm ${item.ok ? 'text-gray-900': 'text-red-700'}`}>{item.label}</span>
                       </div>
                     ))}
                   </div>

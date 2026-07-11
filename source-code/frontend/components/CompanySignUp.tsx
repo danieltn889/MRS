@@ -82,7 +82,7 @@ const CompanySignUp = ({ onSignupSuccess }) => {
   // Handle input changes with real-time validation
   const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
+    const newValue = type === 'checkbox'? checked : value;
     const newFormData = { ...formData, [name]: newValue };
     setFormData(newFormData);
 
@@ -251,11 +251,11 @@ const CompanySignUp = ({ onSignupSuccess }) => {
           });
         }, 1000);
       } else if (error.response?.data?.code === 'EMAIL_EXISTS') {
-        setErrors(prev => ({ ...prev, email: 'This email is already registered' }));
+        setErrors(prev => ({ ...prev, email: 'This email is already registered'}));
       } else if (error.response?.data?.code === 'DOMAIN_EXISTS') {
-        setErrors(prev => ({ ...prev, domain: 'A company with this domain already exists' }));
+        setErrors(prev => ({ ...prev, domain: 'A company with this domain already exists'}));
       } else if (error.response?.data?.code === 'DOMAIN_MISMATCH') {
-        setErrors(prev => ({ ...prev, email: 'Admin email domain must match company domain' }));
+        setErrors(prev => ({ ...prev, email: 'Admin email domain must match company domain'}));
       } else if (error.response?.data?.code === 'INVALID_PASSWORD') {
         setErrors(prev => ({ ...prev, password: error.response.data.message }));
       } else {
@@ -268,11 +268,11 @@ const CompanySignUp = ({ onSignupSuccess }) => {
 
   // Get password strength label and color
   const getPasswordStrengthInfo = () => {
-    if (passwordStrength === 0) return { label: '', color: '' };
-    if (passwordStrength <= 40) return { label: 'Weak', color: 'bg-red-500' };
-    if (passwordStrength <= 60) return { label: 'Fair', color: 'bg-yellow-500' };
-    if (passwordStrength <= 80) return { label: 'Good', color: 'bg-blue-500' };
-    return { label: 'Strong', color: 'bg-green-500' };
+    if (passwordStrength === 0) return { label: '', color: ''};
+    if (passwordStrength <= 40) return { label: 'Weak', color: 'bg-red-500'};
+    if (passwordStrength <= 60) return { label: 'Fair', color: 'bg-yellow-500'};
+    if (passwordStrength <= 80) return { label: 'Good', color: 'bg-blue-500'};
+    return { label: 'Strong', color: 'bg-green-500'};
   };
 
   const { label: strengthLabel, color: strengthColor } = getPasswordStrengthInfo();
@@ -355,7 +355,7 @@ const CompanySignUp = ({ onSignupSuccess }) => {
                     value={formData.companyName}
                     onChange={handleInputChange}
                     className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                      errors.companyName ? 'border-red-300' : 'border-gray-300'
+                      errors.companyName ? 'border-red-300': 'border-gray-300'
                     }`}
                     placeholder="Enter company name"
                   />
@@ -434,7 +434,7 @@ const CompanySignUp = ({ onSignupSuccess }) => {
                       value={formData.domain}
                       onChange={handleInputChange}
                       className={`block w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.domain ? 'border-red-300' : 'border-gray-300'
+                        errors.domain ? 'border-red-300': 'border-gray-300'
                       }`}
                       placeholder="company.com"
                     />
@@ -508,7 +508,7 @@ const CompanySignUp = ({ onSignupSuccess }) => {
                       value={formData.email}
                       onChange={handleInputChange}
                       className={`block w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                        errors.email ? 'border-red-300' : 'border-gray-300'
+                        errors.email ? 'border-red-300': 'border-gray-300'
                       }`}
                       placeholder="admin@company.com"
                     />
@@ -550,12 +550,12 @@ const CompanySignUp = ({ onSignupSuccess }) => {
                 <input
                   id="password"
                   name="password"
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? 'text': 'password'}
                   required
                   value={formData.password}
                   onChange={handleInputChange}
                   className={`block w-full pr-10 px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.password ? 'border-red-300' : 'border-gray-300'
+                    errors.password ? 'border-red-300': 'border-gray-300'
                   }`}
                   placeholder="Create a strong password"
                 />
@@ -578,9 +578,9 @@ const CompanySignUp = ({ onSignupSuccess }) => {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-600">Password strength:</span>
                     <span className={`font-medium ${
-                      strengthLabel === 'Weak' ? 'text-red-600' :
-                      strengthLabel === 'Fair' ? 'text-yellow-600' :
-                      strengthLabel === 'Good' ? 'text-blue-600' : 'text-green-600'
+                      strengthLabel === 'Weak'? 'text-red-600':
+                      strengthLabel === 'Fair'? 'text-yellow-600':
+                      strengthLabel === 'Good'? 'text-blue-600': 'text-green-600'
                     }`}>
                       {strengthLabel}
                     </span>
@@ -613,12 +613,12 @@ const CompanySignUp = ({ onSignupSuccess }) => {
                 <input
                   id="passwordConfirm"
                   name="passwordConfirm"
-                  type={showPasswordConfirm ? 'text' : 'password'}
+                  type={showPasswordConfirm ? 'text': 'password'}
                   required
                   value={formData.passwordConfirm}
                   onChange={handleInputChange}
                   className={`block w-full pr-10 px-3 py-2 border rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
-                    errors.passwordConfirm ? 'border-red-300' : 'border-gray-300'
+                    errors.passwordConfirm ? 'border-red-300': 'border-gray-300'
                   }`}
                   placeholder="Confirm your password"
                 />
@@ -656,11 +656,11 @@ const CompanySignUp = ({ onSignupSuccess }) => {
               </div>
               <div className="ml-3 text-sm">
                 <label htmlFor="agreeTerms" className="text-gray-700">
-                  I agree to the{' '}
+                  I agree to the{''}
                   <a href="#" className="text-blue-600 hover:text-blue-500">
                     Terms & Conditions
-                  </a>{' '}
-                  and{' '}
+                  </a>{''}
+                  and{''}
                   <a href="#" className="text-blue-600 hover:text-blue-500">
                     Privacy Policy
                   </a>

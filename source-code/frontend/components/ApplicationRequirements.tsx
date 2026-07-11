@@ -35,7 +35,7 @@ interface Application {
   company_name?: string;
   company_logo?: string;
   applied_at: string;
-  status: 'submitted' | 'under_review' | 'shortlisted' | 'interview' | 'assessment' | 'reference_check' | 'offer' | 'hired' | 'rejected' | 'withdrawn' | 'on_hold';
+  status: 'submitted'| 'under_review'| 'shortlisted'| 'interview'| 'assessment'| 'reference_check'| 'offer'| 'hired'| 'rejected'| 'withdrawn'| 'on_hold';
   cover_letter?: string;
   expected_salary?: number;
   notice_period?: string;
@@ -111,7 +111,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
         setApplications(prev =>
           prev.map(app =>
             app.id === applicationId
-              ? { ...app, status: 'withdrawn' as const, updated_at: new Date().toISOString() }
+              ? { ...app, status: 'withdrawn'as const, updated_at: new Date().toISOString() }
               : app
           )
         );
@@ -167,7 +167,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
       case 'shortlisted':     return 'Shortlisted';
       case 'reference_check': return 'Reference Check';
       case 'on_hold':         return 'On Hold';
-      default: return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
+      default: return status.charAt(0).toUpperCase() + status.slice(1).replace('_', '');
     }
   };
 
@@ -192,33 +192,33 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
     return [
       {
         title: 'Application Submitted',
-        status: application.application_number ? 'met' : 'not_met',
+        status: application.application_number ? 'met': 'not_met',
         description: application.application_number
           ? `Application #${application.application_number}`
           : 'Application not properly submitted',
       },
       {
         title: 'Application Status',
-        status: !['rejected', 'withdrawn'].includes(application.status) ? 'met' : 'not_met',
+        status: !['rejected', 'withdrawn'].includes(application.status) ? 'met': 'not_met',
         description: `Current status: ${getStatusLabel(application.status)}`,
       },
       {
         title: 'Cover Letter',
-        status: application.cover_letter ? 'met' : 'partial',
+        status: application.cover_letter ? 'met': 'partial',
         description: application.cover_letter
           ? 'Cover letter provided'
           : 'Cover letter not provided (optional but recommended)',
       },
       {
         title: 'Salary Expectations',
-        status: application.expected_salary ? 'met' : 'partial',
+        status: application.expected_salary ? 'met': 'partial',
         description: application.expected_salary
           ? `Expected: ${application.salary_currency || 'Rwf'} ${application.expected_salary.toLocaleString()}`
           : 'Salary expectations not specified',
       },
       {
         title: 'Contact Information',
-        status: application.candidate_email || application.phone ? 'met' : 'not_met',
+        status: application.candidate_email || application.phone ? 'met': 'not_met',
         description: application.candidate_email
           ? `Email: ${application.candidate_email}`
           : 'No contact information on file',
@@ -237,10 +237,10 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
 
   const getRequirementStatusLabel = (status: string): { text: string; className: string } => {
     switch (status) {
-      case 'met':     return { text: 'Met',     className: 'bg-green-100 text-green-800' };
-      case 'not_met': return { text: 'Not Met', className: 'bg-red-100 text-red-800' };
-      case 'partial': return { text: 'Partial', className: 'bg-yellow-100 text-yellow-800' };
-      default:        return { text: 'Unknown', className: 'bg-gray-100 text-gray-800' };
+      case 'met':     return { text: 'Met',     className: 'bg-green-100 text-green-800'};
+      case 'not_met': return { text: 'Not Met', className: 'bg-red-100 text-red-800'};
+      case 'partial': return { text: 'Partial', className: 'bg-yellow-100 text-yellow-800'};
+      default:        return { text: 'Unknown', className: 'bg-gray-100 text-gray-800'};
     }
   };
 
@@ -319,7 +319,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                {applications.length} application{applications.length !== 1 ? 's' : ''}
+                {applications.length} application{applications.length !== 1 ? 's': ''}
               </span>
             </div>
           </div>
@@ -348,10 +348,10 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
         {applications.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
             {[
-              { label: 'Total',      value: applications.length,                                          color: 'bg-blue-500' },
-              { label: 'Active',     value: applications.filter(a => !['rejected','withdrawn'].includes(a.status)).length, color: 'bg-green-500' },
-              { label: 'Interviews', value: applications.filter(a => a.status === 'interview').length,    color: 'bg-purple-500' },
-              { label: 'Offers',     value: applications.filter(a => ['offer','hired'].includes(a.status)).length, color: 'bg-emerald-500' },
+              { label: 'Total',      value: applications.length,                                          color: 'bg-blue-500'},
+              { label: 'Active',     value: applications.filter(a => !['rejected','withdrawn'].includes(a.status)).length, color: 'bg-green-500'},
+              { label: 'Interviews', value: applications.filter(a => a.status === 'interview').length,    color: 'bg-purple-500'},
+              { label: 'Offers',     value: applications.filter(a => ['offer','hired'].includes(a.status)).length, color: 'bg-emerald-500'},
             ].map(card => (
               <div key={card.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
                 <div className={`w-10 h-10 ${card.color} bg-opacity-10 rounded-lg flex items-center justify-center`}>
@@ -415,7 +415,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {filteredApplications.map(application => {
               const salaryDisplay = formatSalary(application);
-              const candidateName = [application.first_name, application.last_name].filter(Boolean).join(' ');
+              const candidateName = [application.first_name, application.last_name].filter(Boolean).join('');
               const requirements = checkUserRequirements(application);
               const metCount = requirements.filter(r => r.status === 'met').length;
 
@@ -463,7 +463,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
                       )}
                       {application.job_type && (
                         <span className="flex items-center gap-1">
-                          <Briefcase size={12} />{application.job_type.replace('-', ' ')}
+                          <Briefcase size={12} />{application.job_type.replace('-', '')}
                         </span>
                       )}
                       {application.experience_level && (
@@ -501,11 +501,11 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
                           <div className="flex justify-between text-xs mb-1">
                             <span className="text-gray-600 font-medium">Profile Match</span>
                             <span className={`font-bold ${
-                              application.match_score >= 80 ? 'text-green-600' :
-                              application.match_score >= 60 ? 'text-yellow-600' :
+                              application.match_score >= 80 ? 'text-green-600':
+                              application.match_score >= 60 ? 'text-yellow-600':
                               'text-red-600'
                             }`}>
-                              {application.match_score}% — {getMatchScoreLabel(application.match_score)}
+                              {application.match_score}%   {getMatchScoreLabel(application.match_score)}
                             </span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-1.5">
@@ -597,7 +597,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
                     )}
 
                     {/* ── Rejection reason ── */}
-                    {application.status === 'rejected' && application.rejection_reason && (
+                    {application.status === 'rejected'&& application.rejection_reason && (
                       <div className="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
                         <div className="flex items-start gap-2">
                           <XCircle size={15} className="text-red-600 mt-0.5 shrink-0" />

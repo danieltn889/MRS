@@ -20,4 +20,4 @@
 - `job_searches`: 2500 rows
 - `feed_scores`: 5499 rows
 
-## Result: ALL CHECKS PASSED — no orphan FKs, no PK/unique violations, no enum violations, no date-order violations.
+## Result: ALL CHECKS PASSED   no orphan FKs, no PK/unique violations, no enum violations, no date-order violations.

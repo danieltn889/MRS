@@ -24,7 +24,7 @@ export interface CredentialAccess extends BaseEntity {
   credential_id: UUID;
   granted_to?: UUID;
   company_id?: UUID;
-  access_level: 'view' | 'verify' | 'download' | 'share';
+  access_level: 'view'| 'verify'| 'download'| 'share';
   granted_at: TIMESTAMP;
   granted_by?: UUID;
   expires_at?: TIMESTAMP;
@@ -40,7 +40,7 @@ export interface AccessAudit extends BaseEntity {
   accessed_at: TIMESTAMP;
   ip_address?: string;
   user_agent?: string;
-  action: 'viewed' | 'verified' | 'downloaded' | 'shared' | 'revoked';
+  action: 'viewed'| 'verified'| 'downloaded'| 'shared'| 'revoked';
   resource_type?: string;
   resource_id?: string;
   success: boolean;
@@ -51,7 +51,7 @@ export interface AccessAudit extends BaseEntity {
 export interface BlockchainNetworkStatus extends BaseEntity {
   network: string;
   network_name?: string;
-  status: 'operational' | 'degraded' | 'outage' | 'maintenance';
+  status: 'operational'| 'degraded'| 'outage'| 'maintenance';
   block_height?: number;
   avg_block_time?: number;
   tx_success_rate?: number;

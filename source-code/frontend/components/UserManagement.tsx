@@ -8,13 +8,13 @@ import {
   AdminCompany, AdminCompanyUser,
 } from '../services/adminAPI';
 
-interface Alert { id: number; type: 'success' | 'error'; message: string; }
+interface Alert { id: number; type: 'success'| 'error'; message: string; }
 
-const TEAM_ROLES: Array<{ value: 'admin' | 'recruiter' | 'reviewer' | 'viewer'; label: string }> = [
-  { value: 'admin', label: 'Company Admin' },
-  { value: 'recruiter', label: 'Recruiter' },
-  { value: 'reviewer', label: 'Reviewer' },
-  { value: 'viewer', label: 'Viewer' },
+const TEAM_ROLES: Array<{ value: 'admin'| 'recruiter'| 'reviewer'| 'viewer'; label: string }> = [
+  { value: 'admin', label: 'Company Admin'},
+  { value: 'recruiter', label: 'Recruiter'},
+  { value: 'reviewer', label: 'Reviewer'},
+  { value: 'viewer', label: 'Viewer'},
 ];
 
 const USER_STATUSES = ['active', 'suspended', 'locked'];
@@ -30,11 +30,11 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
   const [alerts, setAlerts] = useState<Alert[]>([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', title: '', teamRole: 'recruiter' as typeof TEAM_ROLES[number]['value'] });
+  const [form, setForm] = useState({ name: '', email: '', title: '', teamRole: 'recruiter'as typeof TEAM_ROLES[number]['value'] });
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const addAlert = (type: 'success' | 'error', message: string) => {
+  const addAlert = (type: 'success'| 'error', message: string) => {
     const id = Date.now();
     setAlerts(prev => [...prev, { id, type, message }]);
     setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== id)), 6000);
@@ -72,9 +72,9 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
     try {
       setSaving(true);
       await createAdminCompanyUser(selectedCompany.id, form);
-      addAlert('success', `User created — login details emailed to ${form.email}`);
+      addAlert('success', `User created   login details emailed to ${form.email}`);
       setShowAddForm(false);
-      setForm({ name: '', email: '', title: '', teamRole: 'recruiter' });
+      setForm({ name: '', email: '', title: '', teamRole: 'recruiter'});
       loadUsers(selectedCompany.id);
     } catch (err: any) {
       addAlert('error', err.message || 'Failed to create user');
@@ -112,11 +112,11 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
 
   const statusBadge = (status: string) => {
     const map: Record<string, { bg: string; text: string }> = {
-      active: { bg: '#f0fdf4', text: '#16a34a' },
-      suspended: { bg: '#fef2f2', text: '#dc2626' },
-      locked: { bg: '#fffbeb', text: '#d97706' },
-      unverified: { bg: '#f1f5f9', text: '#475569' },
-      verified: { bg: '#eff6ff', text: '#2563eb' },
+      active: { bg: '#f0fdf4', text: '#16a34a'},
+      suspended: { bg: '#fef2f2', text: '#dc2626'},
+      locked: { bg: '#fffbeb', text: '#d97706'},
+      unverified: { bg: '#f1f5f9', text: '#475569'},
+      verified: { bg: '#eff6ff', text: '#2563eb'},
     };
     const s = map[status] || map.unverified;
     return <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: s.bg, color: s.text }}>{status}</span>;
@@ -128,7 +128,7 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
     <div className="max-w-7xl mx-auto p-6">
       <div className="fixed top-4 right-4 z-50 w-96">
         {alerts.map(a => (
-          <div key={a.id} className={`mb-2 p-3 rounded-lg shadow-lg text-sm font-medium ${a.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div key={a.id} className={`mb-2 p-3 rounded-lg shadow-lg text-sm font-medium ${a.type === 'success'? 'bg-green-50 text-green-800 border border-green-200': 'bg-red-50 text-red-800 border border-red-200'}`}>
             {a.message}
           </div>
         ))}
@@ -155,7 +155,7 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
               <span className="text-gray-500">Select a company...</span>
             )}
           </div>
-          <ChevronDown size={16} className={`text-gray-400 transition-transform ${showCompanyPicker ? 'rotate-180' : ''}`} />
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${showCompanyPicker ? 'rotate-180': ''}`} />
         </button>
 
         {showCompanyPicker && (
@@ -234,13 +234,13 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
                       <td className="px-4 py-3 text-gray-500 text-xs">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 flex-wrap">
-                          {u.status !== 'active' && (
+                          {u.status !== 'active'&& (
                             <button onClick={() => changeStatus(u, 'active')} disabled={busyId === u.user_id} title="Activate"
                               className="p-1.5 rounded border border-green-200 text-green-600 hover:bg-green-50 disabled:opacity-50">
                               <CheckCircle size={14} />
                             </button>
                           )}
-                          {u.status !== 'suspended' && (
+                          {u.status !== 'suspended'&& (
                             <button onClick={() => changeStatus(u, 'suspended')} disabled={busyId === u.user_id} title="Suspend"
                               className="p-1.5 rounded border border-amber-200 text-amber-600 hover:bg-amber-50 disabled:opacity-50">
                               <Lock size={14} />
@@ -297,7 +297,7 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowAddForm(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
                 <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
-                  {saving ? 'Creating...' : 'Create & send login email'}
+                  {saving ? 'Creating...': 'Create & send login email'}
                 </button>
               </div>
             </form>

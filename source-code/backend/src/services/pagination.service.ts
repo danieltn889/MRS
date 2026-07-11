@@ -169,15 +169,15 @@ class PaginationService {
     options: {
       cursor?: string;
       limit?: number;
-      direction?: 'next' | 'prev';
+      direction?: 'next'| 'prev';
       sortField?: string;
-      sortOrder?: 'ASC' | 'DESC';
+      sortOrder?: 'ASC'| 'DESC';
     } = {}
   ): Promise<CursorPaginationResult<T>> {
     const {
       cursor,
       limit = 20,
-      direction = 'next', // 'next' or 'prev'
+      direction = 'next', // 'next'or 'prev'
       sortField = 'created_at',
       sortOrder = 'DESC'
     } = options;
@@ -186,7 +186,7 @@ class PaginationService {
     let params: any[] = [limit];
 
     if (cursor) {
-      const operator = direction === 'next' ? '>' : '<';
+      const operator = direction === 'next'? '>': '<';
       whereClause = `WHERE ${sortField} ${operator} $2`;
       params.push(cursor);
     }
@@ -314,7 +314,7 @@ class PaginationService {
     const end = Math.min(text.length, start + maxLength);
 
     let snippet = text.substring(start, end);
-    if (start > 0) snippet = '...' + snippet;
+    if (start > 0) snippet = '...'+ snippet;
     if (end < text.length) snippet = snippet + '...';
 
     return snippet;

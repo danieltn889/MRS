@@ -93,6 +93,7 @@ temp/
 
 # Uploads
 uploads/
+private-uploads/
 
 # Database
 *.db

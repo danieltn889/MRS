@@ -32,7 +32,7 @@ interface QualityInput {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPER — paginate every GitHub list endpoint to get ALL records
+// HELPER   paginate every GitHub list endpoint to get ALL records
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Replace the existing paginateAll function (around line 35-55)
@@ -82,7 +82,7 @@ async function paginateAll<T>(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HELPER — retry for async-computed GitHub stats (202 → retry)
+// HELPER   retry for async-computed GitHub stats (202 → retry)
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function retryStats(
@@ -311,7 +311,7 @@ async createSimulationRepoInternal(
             owner: existingRepo.data.owner.login, 
             repo: uniqueRepoName, 
             username: candidateGitHubUsername, 
-            permission: 'push' 
+            permission: 'push'
           }); 
         } catch { /* ignore */ }
 
@@ -352,7 +352,7 @@ async createSimulationRepoInternal(
     const personalOwner = authUser.data.login;
     
     let useOrg = false;
-    if (orgName && orgName !== '' && orgName !== personalOwner) {
+    if (orgName && orgName !== ''&& orgName !== personalOwner) {
       try {
         await this.octokit.orgs.get({ org: orgName });
         useOrg = true;
@@ -403,20 +403,20 @@ async createSimulationRepoInternal(
     // ── detect default branch ─────────────────────────────────────────────
     // The repository is created EMPTY (auto_init=false): no initial commit, no
     // README, no branches. The default branch (main) is created when the candidate
-    // makes their first push, so a missing branch here is EXPECTED — do not throw.
+    // makes their first push, so a missing branch here is EXPECTED   do not throw.
     let defaultBranch = repo.data.default_branch || 'main';
 
     try {
-      await this.octokit.git.getRef({ owner: finalOwner, repo: finalRepoName, ref: 'heads/main' });
+      await this.octokit.git.getRef({ owner: finalOwner, repo: finalRepoName, ref: 'heads/main'});
       defaultBranch = 'main';
     } catch {
       try {
-        await this.octokit.git.getRef({ owner: finalOwner, repo: finalRepoName, ref: 'heads/master' });
+        await this.octokit.git.getRef({ owner: finalOwner, repo: finalRepoName, ref: 'heads/master'});
         defaultBranch = 'master';
       } catch {
-        // Empty repo — no commit/branch yet. The candidate creates the first commit.
+        // Empty repo   no commit/branch yet. The candidate creates the first commit.
         defaultBranch = repo.data.default_branch || 'main';
-        console.log('ℹ️ Empty repository created — first commit/branch will be the candidate\'s');
+        console.log('ℹ️ Empty repository created   first commit/branch will be the candidate\'s');
       }
     }
 
@@ -452,9 +452,9 @@ async createSimulationRepoInternal(
         }
 
         await this.octokit.repos.createOrUpdateFileContents(params);
-        console.log(`✅ File updated: ${path}`);
+        console.log(`''File updated: ${path}`);
       } catch (error: any) {
-        console.error(`❌ Failed to update ${path}:`, error.message);
+        console.error(` Failed to update ${path}:`, error.message);
       }
     };
 
@@ -462,9 +462,9 @@ async createSimulationRepoInternal(
     // CREATE README ONLY (NO .gitignore, NO workflows)
     // ═══════════════════════════════════════════════════════════════════════
     
-    // const readmeContent = `# 🎯 Recruitment Simulation Repository
+    // const readmeContent = `# ''Recruitment Simulation Repository
 
-    //   ## 🚀 Getting Started
+    //   ##  Getting Started
 
     //   \`\`\`bash
     //   git clone ${repoUrl}
@@ -472,25 +472,25 @@ async createSimulationRepoInternal(
     //   git checkout ${branchName}
     //   \`\`\`
 
-    //   ## 🎯 Your Tasks
+    //   ## ''Your Tasks
 
     //   ${tasks.map((task, idx) => `
     //   ### Task ${idx + 1}: ${task.title || task.task_name || `Task ${idx + 1}`}
     //   ${task.description || 'Complete this task as described'}
     //   `).join('\n')}
 
-    //   ## ✅ How to Submit
+    //   ## ''How to Submit
 
     //   1. Complete the tasks
     //   2. Commit and push to the \`${branchName}\` branch
     //   3. Notify your recruiter when done
 
-    //   Good luck! 🚀
+    //   Good luck! 
     //   `;
 
     // await updateFile('README.md', readmeContent, 'Update README');
 
-    // console.log(`✅ README created in ${finalRepoName}`);
+    // console.log(`''README created in ${finalRepoName}`);
 
     // ── ADD COLLABORATOR - SENDS INVITATION ───────────────────────────────
     let invitationSent = false;
@@ -502,16 +502,16 @@ async createSimulationRepoInternal(
         owner: finalOwner, 
         repo: finalRepoName, 
         username: candidateGitHubUsername, 
-        permission: 'push' 
+        permission: 'push'
       });
       
-      console.log(`✅ GitHub invitation sent to ${candidateGitHubUsername}`);
+      console.log(`''GitHub invitation sent to ${candidateGitHubUsername}`);
       invitationSent = true;
       
       await new Promise(r => setTimeout(r, 2000));
       
     } catch (e: any) {
-      console.error(`❌ Failed to add collaborator:`, e.message);
+      console.error(` Failed to add collaborator:`, e.message);
     }
 
     // ── create candidate branch ───────────────────────────────────────────
@@ -527,7 +527,7 @@ async createSimulationRepoInternal(
         ref: `refs/heads/${branchName}`, 
         sha: mainRef.data.object.sha 
       });
-      console.log(`✅ Branch created: ${branchName}`);
+      console.log(`''Branch created: ${branchName}`);
     } catch (e: any) { 
       console.warn('Create branch warning:', e.message); 
     }
@@ -552,7 +552,7 @@ async createSimulationRepoInternal(
             issueNumber: issue.data.number, 
             issueUrl: issue.data.html_url 
           });
-          console.log(`✅ Issue created: Task ${idx + 1}`);
+          console.log(`''Issue created: Task ${idx + 1}`);
         } catch (e: any) { 
           console.warn(`Issue ${idx + 1} warning:`, e.message); 
         }
@@ -595,12 +595,12 @@ async createSimulationRepoInternal(
     ]);
 
     console.log(`═══════════════════════════════════════════════════════════════`);
-    console.log(`✅ REPOSITORY CREATED SUCCESSFULLY:`);
+    console.log(`''REPOSITORY CREATED SUCCESSFULLY:`);
     console.log(`   Repo: ${finalRepoName}`);
     console.log(`   URL: ${repoUrl}`);
     console.log(`   Owner: ${finalOwner}`);
     console.log(`   Branch: ${branchName}`);
-    console.log(`   Invitation sent: ${invitationSent ? 'YES ✅' : 'NO ❌'}`);
+    console.log(`   Invitation sent: ${invitationSent ? 'YES ': 'NO '}`);
     console.log(`   Issues created: ${issuesCreated.length}`);
     console.log(`═══════════════════════════════════════════════════════════════`);
 
@@ -655,19 +655,19 @@ async createSimulationRepoInternal(
         });
       }
 
-      await this.octokit.repos.addCollaborator({ owner: this.organizationName, repo: repoName, username: candidateGitHubUsername, permission: 'push' });
+      await this.octokit.repos.addCollaborator({ owner: this.organizationName, repo: repoName, username: candidateGitHubUsername, permission: 'push'});
 
       const repoData = await this.octokit.repos.get({ owner: this.organizationName, repo: repoName });
       const defaultBranch = repoData.data.default_branch || 'main';
       const branchName = `candidate-${candidateId.substring(0, 8)}`;
       // Only create the candidate branch if the repo already has a commit. For an
       // EMPTY repository (no initial commit), the candidate creates the first commit
-      // and branch themselves — so a missing default branch here is expected.
+      // and branch themselves   so a missing default branch here is expected.
       try {
         const mainBranch = await this.octokit.git.getRef({ owner: this.organizationName, repo: repoName, ref: `heads/${defaultBranch}` });
         await this.octokit.git.createRef({ owner: this.organizationName, repo: repoName, ref: `refs/heads/${branchName}`, sha: mainBranch.data.object.sha });
       } catch (branchErr: any) {
-        console.log('ℹ️ Empty repository — candidate will create the first commit/branch:', branchErr?.message);
+        console.log('ℹ️ Empty repository   candidate will create the first commit/branch:', branchErr?.message);
       }
 
       let issues: any[] = [];
@@ -680,7 +680,7 @@ async createSimulationRepoInternal(
         VALUES ($1,$2,$3,$4,$5,$6,'active',NOW())
       `, [simulationId || null, candidateId, repoName, repo.data.html_url, branchName, recruiterId]);
 
-      ResponseService.success(res, { repoName, repoUrl: repo.data.html_url, cloneUrl: repo.data.clone_url, branchName, issuesCreated: issues.length, issues, status: 'created' }, 'Simulation repository created successfully');
+      ResponseService.success(res, { repoName, repoUrl: repo.data.html_url, cloneUrl: repo.data.clone_url, branchName, issuesCreated: issues.length, issues, status: 'created'}, 'Simulation repository created successfully');
     } catch (error: any) {
       logger.error('Create simulation repo error:', error);
       ResponseService.error(res, error.message || 'Failed to create repository', 500);
@@ -773,7 +773,7 @@ async createSimulationRepoInternal(
             const parentTask = sorted.find(t => (t.order || t.task_index) === task.depends_on);
             await this.octokit.issues.createComment({
               owner, repo: repoName, issue_number: current.number,
-              body: `## ⚠️ This task depends on:\n\n- #${parent.number}: ${parentTask?.title || parentTask?.task_name}\n\nPlease complete that task first.`
+              body: `## This task depends on:\n\n- #${parent.number}: ${parentTask?.title || parentTask?.task_name}\n\nPlease complete that task first.`
             });
           }
         }
@@ -788,7 +788,7 @@ async createSimulationRepoInternal(
 
   addCollaborator = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { repoName, candidateGitHubUsername, permission = 'push' } = req.body;
+      const { repoName, candidateGitHubUsername, permission = 'push'} = req.body;
       if (!repoName || !candidateGitHubUsername) { ResponseService.error(res, 'Repository name and candidate username are required', 400); return; }
       await this.octokit.repos.addCollaborator({ owner: this.organizationName, repo: repoName, username: candidateGitHubUsername, permission });
       ResponseService.success(res, { repoName, candidateGitHubUsername, permission }, 'Collaborator added successfully');
@@ -814,7 +814,7 @@ async createSimulationRepoInternal(
       const [repoData, commits, pullRequests, languages, branches, contributors] = await Promise.all([
         this.octokit.repos.get({ owner, repo }).catch(() => null),
         paginateAll(this.octokit, (p) => this.octokit.repos.listCommits(p), { owner, repo }, 'commits'),
-        paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all' }, 'prs'),
+        paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all'}, 'prs'),
         this.octokit.repos.listLanguages({ owner, repo }).catch(() => ({ data: {} })),
         paginateAll(this.octokit, (p) => this.octokit.repos.listBranches(p), { owner, repo }, 'branches'),
         paginateAll(this.octokit, (p) => this.octokit.repos.listContributors(p), { owner, repo }, 'contributors')
@@ -879,7 +879,7 @@ async createSimulationRepoInternal(
       const { author } = req.query;
       if (!owner || !repo) { ResponseService.error(res, 'Owner and repository name are required', 400); return; }
 
-      const allPRs = await paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all' }, 'prs');
+      const allPRs = await paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all'}, 'prs');
       const filteredPRs = author ? allPRs.filter((pr: any) => pr.user?.login === author) : allPRs;
       const prStats = this.calculateDetailedPRStats(filteredPRs);
 
@@ -955,7 +955,7 @@ async createSimulationRepoInternal(
 
       this.analyzeSubmission(submission.rows[0].id, owner, repo, candidateId).catch(err => logger.error('Async analysis error:', err));
 
-      ResponseService.success(res, { submissionId: submission.rows[0].id, repoUrl, status: 'pending', message: 'Repository submitted for review. Analysis will begin shortly.' });
+      ResponseService.success(res, { submissionId: submission.rows[0].id, repoUrl, status: 'pending', message: 'Repository submitted for review. Analysis will begin shortly.'});
     } catch (error: any) {
       logger.error('Submit repo error:', error);
       ResponseService.error(res, error.message || 'Failed to submit repository', 500);
@@ -989,7 +989,7 @@ async createSimulationRepoInternal(
       const { githubUsername } = req.query;
       if (!githubUsername) { ResponseService.error(res, 'GitHub username is required', 400); return; }
 
-      const repos = await paginateAll(this.octokit, (p) => this.octokit.repos.listForUser(p), { username: githubUsername as string, sort: 'updated' }, 'repos');
+      const repos = await paginateAll(this.octokit, (p) => this.octokit.repos.listForUser(p), { username: githubUsername as string, sort: 'updated'}, 'repos');
 
       ResponseService.success(res, repos.map((r: any) => ({
         name: r.name, fullName: r.full_name, url: r.html_url,
@@ -1041,8 +1041,8 @@ getFullRepoStats = async (req: AuthenticatedRequest, res: Response): Promise<voi
     ] = await Promise.all([
       this.octokit.repos.get({ owner, repo }).catch(() => null),
       paginateAll(this.octokit, (p) => this.octokit.repos.listCommits(p), { owner, repo }, 'commits'),
-      paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all' }, 'prs'),
-      paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all' }, 'issues'),
+      paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all'}, 'prs'),
+      paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all'}, 'issues'),
       paginateAll(this.octokit, (p) => this.octokit.repos.listContributors(p), { owner, repo }, 'contributors'),
       paginateAll(this.octokit, (p) => this.octokit.repos.listReleases(p), { owner, repo }, 'releases'),
       paginateAll(this.octokit, (p) => this.octokit.repos.listBranches(p), { owner, repo }, 'branches'),
@@ -1121,7 +1121,7 @@ getFullRepoStats = async (req: AuthenticatedRequest, res: Response): Promise<voi
       pullRequests: {
         total: typedPullRequests.length,
         open: typedPullRequests.filter((p: any) => p.state === 'open').length,
-        closed: typedPullRequests.filter((p: any) => p.state === 'closed' && !p.merged_at).length,
+        closed: typedPullRequests.filter((p: any) => p.state === 'closed'&& !p.merged_at).length,
         merged: typedPullRequests.filter((p: any) => p.merged_at).length,
         mergeRate: this.calculateMergeRate(typedPullRequests),
         averageTimeToMergeHours: this.calculateAvgTimeToMerge(typedPullRequests),
@@ -1393,7 +1393,7 @@ getPunchCardStats = async (req: AuthenticatedRequest, res: Response): Promise<vo
         mostActiveDay,
         mostActiveHour,
         peakSlot: peakSlotData,
-        workingPattern: weekdayCommits > weekendCommits * 2 ? 'weekday_focused' : weekendCommits > weekdayCommits ? 'weekend_active' : 'balanced'
+        workingPattern: weekdayCommits > weekendCommits * 2 ? 'weekday_focused': weekendCommits > weekdayCommits ? 'weekend_active': 'balanced'
       },
       weekdayVsWeekend: {
         weekdayCommits, weekendCommits,
@@ -1506,8 +1506,8 @@ getCommitActivityStats = async (req: AuthenticatedRequest, res: Response): Promi
       if (!owner || !repo) { ResponseService.error(res, 'Owner and repository name are required', 400); return; }
 
       const [views, clones, popularPaths, popularReferrers] = await Promise.all([
-        this.octokit.repos.getViews({ owner, repo, per: 'day' }).catch(() => null),
-        this.octokit.repos.getClones({ owner, repo, per: 'day' }).catch(() => null),
+        this.octokit.repos.getViews({ owner, repo, per: 'day'}).catch(() => null),
+        this.octokit.repos.getClones({ owner, repo, per: 'day'}).catch(() => null),
         this.octokit.repos.getTopPaths({ owner, repo }).catch(() => ({ data: [] })),
         this.octokit.repos.getTopReferrers({ owner, repo }).catch(() => ({ data: [] }))
       ]);
@@ -1688,15 +1688,15 @@ getCommitActivityStats = async (req: AuthenticatedRequest, res: Response): Promi
       if (!owner || !repo) { ResponseService.error(res, 'Owner and repository name are required', 400); return; }
 
       const [openMilestones, closedMilestones] = await Promise.all([
-        paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'open' }, 'milestones-open'),
-        paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'closed' }, 'milestones-closed')
+        paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'open'}, 'milestones-open'),
+        paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'closed'}, 'milestones-closed')
       ]);
 
       const allMilestones = [...openMilestones, ...closedMilestones];
       const milestoneStats = allMilestones.map((ms: any) => {
         const total = (ms.open_issues || 0) + (ms.closed_issues || 0);
         const completionRate = total > 0 ? parseFloat(((ms.closed_issues / total) * 100).toFixed(2)) : 0;
-        const isOverdue = ms.due_on && ms.state === 'open' && new Date(ms.due_on) < new Date();
+        const isOverdue = ms.due_on && ms.state === 'open'&& new Date(ms.due_on) < new Date();
         return { id: ms.number, title: ms.title, description: ms.description, state: ms.state, openIssues: ms.open_issues, closedIssues: ms.closed_issues, totalIssues: total, completionRate, dueDate: ms.due_on, isOverdue, createdAt: ms.created_at, updatedAt: ms.updated_at, closedAt: ms.closed_at, creator: ms.creator?.login };
       });
 
@@ -1766,7 +1766,7 @@ getCommitActivityStats = async (req: AuthenticatedRequest, res: Response): Promi
 
       const [user, repos, events] = await Promise.all([
         this.octokit.users.getByUsername({ username }),
-        paginateAll(this.octokit, (p) => this.octokit.repos.listForUser(p), { username, sort: 'updated' }, 'repos'),
+        paginateAll(this.octokit, (p) => this.octokit.repos.listForUser(p), { username, sort: 'updated'}, 'repos'),
         paginateAll(this.octokit, (p) => this.octokit.activity.listPublicEventsForUser(p), { username }, 'events')
       ]);
 
@@ -1882,7 +1882,7 @@ getCommitActivityStats = async (req: AuthenticatedRequest, res: Response): Promi
     try {
       const { owner, repo } = req.params;
       if (!owner || !repo) { ResponseService.error(res, 'Owner and repository name are required', 400); return; }
-      const issues = await paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all' }, 'issues');
+      const issues = await paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all'}, 'issues');
       ResponseService.success(res, this.calculateDetailedIssueStats(issues));
     } catch (error: any) {
       logger.error('Get issue stats error:', error);
@@ -2071,7 +2071,7 @@ getCommitActivityStats = async (req: AuthenticatedRequest, res: Response): Promi
 
   searchCode = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { q, per_page = '100', page = '1' } = req.query;
+      const { q, per_page = '100', page = '1'} = req.query;
       if (!q) { ResponseService.error(res, 'Search query is required', 400); return; }
       const results = await this.octokit.search.code({ q: q as string, per_page: parseInt(per_page as string), page: parseInt(page as string) });
       ResponseService.success(res, {
@@ -2103,7 +2103,7 @@ getCommitActivityStats = async (req: AuthenticatedRequest, res: Response): Promi
   };
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 21. GET EVERYTHING — full repo + ALL commits paginated + full stats
+  // 21. GET EVERYTHING   full repo + ALL commits paginated + full stats
   // ═══════════════════════════════════════════════════════════════════════════
 
 // In GitHubController.ts
@@ -2124,7 +2124,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
     const { 
       includeContent = 'true', 
       maxFiles = '200',
-      branch: queryBranch  // ✅ ADD branch parameter
+      branch: queryBranch  // ''ADD branch parameter
     } = req.query;
 
     if (!owner || !repo) { 
@@ -2152,8 +2152,8 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
     ] = await Promise.all([
       this.octokit.repos.get({ owner, repo }).catch(() => null),
       paginateAll(this.octokit, (p) => this.octokit.repos.listCommits(p), { owner, repo }, 'all-commits'),
-      paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all' }, 'prs'),
-      paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all' }, 'issues'),
+      paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all'}, 'prs'),
+      paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all'}, 'issues'),
       paginateAll(this.octokit, (p) => this.octokit.repos.listContributors(p), { owner, repo }, 'contributors'),
       paginateAll(this.octokit, (p) => this.octokit.repos.listReleases(p), { owner, repo }, 'releases'),
       paginateAll(this.octokit, (p) => this.octokit.repos.listBranches(p), { owner, repo }, 'branches'),
@@ -2168,7 +2168,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
       return; 
     }
 
-    // ✅ Determine which branch to use
+    // ''Determine which branch to use
     const defaultBranch = repoData.data.default_branch;
     const targetBranch = requestedBranch || defaultBranch;
     
@@ -2188,16 +2188,16 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
     try {
       branchData = await this.octokit.repos.getBranch({ owner, repo, branch: targetBranch });
       branchExists = true;
-      console.log(`✅ Branch '${targetBranch}' exists`);
+      console.log(`''Branch '${targetBranch}'exists`);
     } catch (branchError: any) {
       if (branchError.status === 404) {
-        console.warn(`⚠️ Branch '${targetBranch}' not found, falling back to default branch '${defaultBranch}'`);
+        console.warn(`Branch '${targetBranch}'not found, falling back to default branch '${defaultBranch}'`);
         actualBranch = defaultBranch;
         try {
           branchData = await this.octokit.repos.getBranch({ owner, repo, branch: defaultBranch });
           branchExists = true;
         } catch (fallbackError) {
-          console.error(`❌ Neither branch '${targetBranch}' nor default branch '${defaultBranch}' found`);
+          console.error(` Neither branch '${targetBranch}'nor default branch '${defaultBranch}'found`);
         }
       }
     }
@@ -2223,7 +2223,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         owner, 
         repo, 
         tree_sha: commitSha, 
-        recursive: 'true' 
+        recursive: 'true'
       }).catch(() => null);
       
       if (fullTree) {
@@ -2240,7 +2240,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
                   owner, 
                   repo, 
                   path: item.path, 
-                  ref: actualBranch  // ✅ Use the actual branch
+                  ref: actualBranch  // ''Use the actual branch
                 }).catch(() => null);
                 
                 if (!cr || Array.isArray(cr.data) || cr.data.type !== 'file') return null;
@@ -2262,7 +2262,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
                   size: item.size, 
                   sha: item.sha, 
                   content: null, 
-                  error: 'Could not fetch content' 
+                  error: 'Could not fetch content'
                 }; 
               }
             })
@@ -2348,7 +2348,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         description: repoData.data.description,
         homepage: repoData.data.homepage,
         defaultBranch: repoData.data.default_branch,
-        currentBranch: actualBranch,  // ✅ Add the actual branch used
+        currentBranch: actualBranch,  // ''Add the actual branch used
         isPrivate: repoData.data.private,
         isFork: repoData.data.fork,
         isArchived: repoData.data.archived,
@@ -2404,7 +2404,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
       pullRequests: {
         total: typedPullRequests.length,
         open: typedPullRequests.filter((p: any) => p.state === 'open').length,
-        closed: typedPullRequests.filter((p: any) => p.state === 'closed' && !p.merged_at).length,
+        closed: typedPullRequests.filter((p: any) => p.state === 'closed'&& !p.merged_at).length,
         merged: typedPullRequests.filter((p: any) => p.merged_at).length,
         mergeRate: this.calculateMergeRate(typedPullRequests),
         averageTimeToMergeHours: this.calculateAvgTimeToMerge(typedPullRequests),
@@ -2418,8 +2418,8 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
           merged_at: pr.merged_at,
           closed_at: pr.closed_at,
           comments: pr.comments || 0,
-          head: { ref: pr.head?.ref || 'unknown' },
-          base: { ref: pr.base?.ref || 'main' },
+          head: { ref: pr.head?.ref || 'unknown'},
+          base: { ref: pr.base?.ref || 'main'},
           url: pr.html_url
         }))
       },
@@ -2463,7 +2463,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
       // Branches
       branches: {
         total: typedBranches.length,
-        current: actualBranch,  // ✅ Add current branch
+        current: actualBranch,  // ''Add current branch
         list: typedBranches.map((b: any) => ({ name: b.name, protected: b.protected }))
       },
       
@@ -2531,7 +2531,7 @@ getEverything = async (req: AuthenticatedRequest, res: Response): Promise<void> 
         includedContent: shouldIncludeContent,
         filesFetched: filesWithContent.length,
         totalFilesAvailable: tree.filter((i: any) => i.type === 'blob').length,
-        branchUsed: actualBranch  // ✅ Add branch used
+        branchUsed: actualBranch  // ''Add branch used
       }
     };
 
@@ -2556,8 +2556,8 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
   const [repoData, commits, prs, issues, contributors, releases, branches, languages, topics, community, readme] = await Promise.all([
     this.octokit.repos.get({ owner, repo }),
     paginateAll(this.octokit, (p) => this.octokit.repos.listCommits(p), { owner, repo }, 'commits'),
-    paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all' }, 'prs'),
-    paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all' }, 'issues'),
+    paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all'}, 'prs'),
+    paginateAll(this.octokit, (p) => this.octokit.issues.listForRepo(p), { owner, repo, state: 'all'}, 'issues'),
     paginateAll(this.octokit, (p) => this.octokit.repos.listContributors(p), { owner, repo }, 'contributors'),
     paginateAll(this.octokit, (p) => this.octokit.repos.listReleases(p), { owner, repo }, 'releases'),
     paginateAll(this.octokit, (p) => this.octokit.repos.listBranches(p), { owner, repo }, 'branches'),
@@ -2688,8 +2688,8 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
 
   private async buildMilestoneData(owner: string, repo: string): Promise<any> {
     const [open, closed] = await Promise.all([
-      paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'open' }, 'ms-open'),
-      paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'closed' }, 'ms-closed')
+      paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'open'}, 'ms-open'),
+      paginateAll(this.octokit, (p) => this.octokit.issues.listMilestones(p), { owner, repo, state: 'closed'}, 'ms-closed')
     ]);
     return { open, closed };
   }
@@ -2715,7 +2715,7 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
     logger.info(`Push event: ${repository?.full_name} by ${pusher?.name}, ref: ${ref}`);
     const result = await DatabaseService.query(`
       UPDATE github_simulation_repos SET last_activity_at=NOW(), commit_count=commit_count+$1
-      WHERE repo_name=$2 AND status='active' RETURNING simulation_id, candidate_id
+      WHERE repo_name=$2 AND status='active'RETURNING simulation_id, candidate_id
     `, [commits?.length || 1, repository?.name]);
     for (const row of result.rows) logger.info(`Updated simulation ${row.simulation_id}`);
   }
@@ -2723,7 +2723,7 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
   private async handlePullRequestEvent(payload: any): Promise<void> {
     const { repository, pull_request, action } = payload;
     logger.info(`PR event: ${action} on ${repository?.full_name} - #${pull_request?.number}`);
-    if (action === 'opened' || action === 'ready_for_review') {
+    if (action === 'opened'|| action === 'ready_for_review') {
       await DatabaseService.query(`UPDATE github_simulation_repos SET pr_opened_at=NOW(), pr_url=$1 WHERE repo_name=$2`, [pull_request?.html_url, repository?.name]);
     }
   }
@@ -2744,11 +2744,11 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
 
   private async analyzeSubmission(submissionId: string, owner: string, repo: string, candidateId: string): Promise<void> {
     try {
-      await DatabaseService.query(`UPDATE github_submissions SET status='analyzing' WHERE id=$1`, [submissionId]);
+      await DatabaseService.query(`UPDATE github_submissions SET status='analyzing'WHERE id=$1`, [submissionId]);
 
       const [commits, prs, languages] = await Promise.all([
         paginateAll(this.octokit, (p) => this.octokit.repos.listCommits(p), { owner, repo }, 'commits'),
-        paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all' }, 'prs'),
+        paginateAll(this.octokit, (p) => this.octokit.pulls.list(p), { owner, repo, state: 'all'}, 'prs'),
         this.octokit.repos.listLanguages({ owner, repo })
       ]);
 
@@ -2817,14 +2817,14 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
     const description  = task.description || '';
     const instructions = task.instructions || '';
 
-    let body = `## 📌 Task ${taskNumber}: ${taskName}\n\n`;
+    let body = `## ''Task ${taskNumber}: ${taskName}\n\n`;
     body += `### Type: ${taskType}\n`;
     body += `### Duration: ${task.duration || 'Flexible'} minutes\n\n`;
     body += `## 📖 Description\n\n${description}\n\n`;
-    if (instructions) body += `## 📝 Instructions\n\n${instructions}\n\n`;
-    if (task.depends_on) body += `## ⚠️ Dependencies\n\nThis task depends on **Task ${task.depends_on}**.\nPlease complete Task ${task.depends_on} before starting this one.\n\n`;
+    if (instructions) body += `##  Instructions\n\n${instructions}\n\n`;
+    if (task.depends_on) body += `##  Dependencies\n\nThis task depends on **Task ${task.depends_on}**.\nPlease complete Task ${task.depends_on} before starting this one.\n\n`;
 
-    body += `## ✅ Requirements\n\n`;
+    body += `## ''Requirements\n\n`;
     if (task.min_commits)                                    body += `- [ ] Make at least **${task.min_commits} commit(s)**\n`;
     if (task.requires_pr)                                    body += `- [ ] Create a **Pull Request**\n`;
     if (task.requires_github_repo)                           body += `- [ ] Use your forked GitHub repository\n`;
@@ -2833,17 +2833,17 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
     if (task.evaluation?.criteria?.length) {
       body += `\n## 📊 Evaluation Criteria\n\n| Criteria | Weight | Rating |\n|----------|--------|--------|\n`;
       for (const c of task.evaluation.criteria) {
-        body += `| ${c.name} | ${c.weight}% | ${c.options?.join(' | ') || 'Poor | Fair | Good | Excellent'} |\n`;
+        body += `| ${c.name} | ${c.weight}% | ${c.options?.join('| ') || 'Poor | Fair | Good | Excellent'} |\n`;
       }
     }
 
     if (task.resources?.length) {
-      body += `\n## 📚 Resources\n\n`;
+      body += `\n##  Resources\n\n`;
       for (const r of task.resources) body += `- ${r}\n`;
     }
 
-    body += `\n## 🚀 Submission\n\n1. Complete the task requirements\n2. Push your code to your GitHub repository\n3. Comment \`/ready\` on this issue when done\n4. The system will automatically evaluate your submission\n\n`;
-    body += `---\n*This issue was automatically created by the V-WES Recruitment Platform*\n*Task ID: ${task.id || taskNumber}*\n`;
+    body += `\n##  Submission\n\n1. Complete the task requirements\n2. Push your code to your GitHub repository\n3. Comment \`/ready\` on this issue when done\n4. The system will automatically evaluate your submission\n\n`;
+    body += `---\n*This issue was automatically created by the MRS Recruitment Platform*\n*Task ID: ${task.id || taskNumber}*\n`;
     return body;
   }
 
@@ -2883,7 +2883,7 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
     for (const c of commits) {
       const date = new Date(c.commit?.author?.date);
       const hour = date.getHours();
-      const day  = date.toLocaleDateString('en-US', { weekday: 'long' });
+      const day  = date.toLocaleDateString('en-US', { weekday: 'long'});
       const auth = c.author?.login || c.commit?.author?.name;
       byHour[hour] = (byHour[hour] || 0) + 1;
       byDay[day]   = (byDay[day] || 0) + 1;
@@ -2921,7 +2921,7 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
     for (const issue of issues) {
       totalComments += issue.comments || 0;
       for (const label of issue.labels || []) {
-        const n = typeof label === 'string' ? label : label.name;
+        const n = typeof label === 'string'? label : label.name;
         if (n && priorityLabels.includes(n.toLowerCase())) byPriority[n.toLowerCase()] = (byPriority[n.toLowerCase()] || 0) + 1;
       }
     }
@@ -2937,7 +2937,7 @@ private async buildFullStats(owner: string, repo: string): Promise<any> {
     const labels: Record<string, number> = {};
     for (const issue of issues) {
       for (const label of issue.labels || []) {
-        const n = typeof label === 'string' ? label : label.name;
+        const n = typeof label === 'string'? label : label.name;
         if (n) labels[n] = (labels[n] || 0) + 1;
       }
     }
@@ -2996,7 +2996,7 @@ private calculateWeeklyCommits(commits: any[]): Array<{ week: string; startDate:
       byWeek[key] = { 
         count: 0, 
         startDate: ws.toISOString().split('T')[0] || '', 
-        endDate: we.toISOString().split('T')[0] || '' 
+        endDate: we.toISOString().split('T')[0] || ''
       };
     }
     byWeek[key].count++;
@@ -3238,7 +3238,7 @@ private calculateMonthlyCommits(commits: any[]): Array<{ month: string; year: nu
 
   private calculateCommitsByDayOfWeek(commits: any[]): Record<string, number> {
     const r: Record<string, number> = { Monday: 0, Tuesday: 0, Wednesday: 0, Thursday: 0, Friday: 0, Saturday: 0, Sunday: 0 };
-    for (const c of commits) { const d = new Date(c.commit?.author?.date).toLocaleDateString('en-US', { weekday: 'long' }); r[d] = (r[d] || 0) + 1; }
+    for (const c of commits) { const d = new Date(c.commit?.author?.date).toLocaleDateString('en-US', { weekday: 'long'}); r[d] = (r[d] || 0) + 1; }
     return r;
   }
 
@@ -3301,13 +3301,13 @@ private calculateMonthlyCommits(commits: any[]): Array<{ month: string; year: nu
   }
 
   private calculateIssueStats(issues: any[]): IssueStats {
-    const closed = issues.filter((i: any) => i.state === 'closed' && i.closed_at);
+    const closed = issues.filter((i: any) => i.state === 'closed'&& i.closed_at);
     const times  = closed.map((i: any) => (new Date(i.closed_at).getTime() - new Date(i.created_at).getTime()) / 3600000).sort((a, b) => a - b);
     const issuesByLabel: Record<string, number> = {};
     const creatorCount:  Record<string, number> = {};
     for (const i of issues) {
       const c = i.user?.login; if (c) creatorCount[c] = (creatorCount[c] || 0) + 1;
-      for (const label of i.labels || []) { const n = typeof label === 'string' ? label : label.name; if (n) issuesByLabel[n] = (issuesByLabel[n] || 0) + 1; }
+      for (const label of i.labels || []) { const n = typeof label === 'string'? label : label.name; if (n) issuesByLabel[n] = (issuesByLabel[n] || 0) + 1; }
     }
     return {
       avgResolutionTime:    times.length > 0 ? parseFloat((times.reduce((s, v) => s + v, 0) / times.length).toFixed(2)) : 0,

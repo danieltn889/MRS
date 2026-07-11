@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { addEducation, updateEducation, deleteEducation, uploadCandidateDocument } from '../../services/candidateAPI';
 import { extractTextFromFile } from '../../utils/documentTextExtractor';
+import { resolveFileUrl } from '../../utils/fileUrl';
 import ConfirmDialog from './ConfirmDialog';
 
 interface EducationItem {
@@ -27,7 +28,7 @@ interface EducationItem {
     extracted_text?: string;
     modules?: string[];
     skills?: string[];
-    extraction_method?: 'ocr' | 'text' | 'mixed';
+    extraction_method?: 'ocr'| 'text'| 'mixed';
     page_count?: number;
   } | null;
   attachments?: Array<{
@@ -40,7 +41,7 @@ interface EducationItem {
     extracted_text?: string;
     modules?: string[];
     skills?: string[];
-    extraction_method?: 'ocr' | 'text' | 'mixed';
+    extraction_method?: 'ocr'| 'text'| 'mixed';
     page_count?: number;
   }> | null;
 }
@@ -66,7 +67,7 @@ interface EducationFormData {
   extractedModules: string[];
   extractedSkills: string[];
   extractedText: string;
-  extractionMethod: 'ocr' | 'text' | 'mixed' | 'none';
+  extractionMethod: 'ocr'| 'text'| 'mixed'| 'none';
 }
 
 // Degree options
@@ -216,7 +217,7 @@ const Combobox: React.FC<ComboboxProps> = ({ value, onChange, options, placehold
 
 // Text Extraction Utility
 class TranscriptExtractor {
-  static async extractTextFromFile(file: File): Promise<{ text: string; method: 'text' | 'ocr' | 'mixed'; pageCount?: number }> {
+  static async extractTextFromFile(file: File): Promise<{ text: string; method: 'text'| 'ocr'| 'mixed'; pageCount?: number }> {
     try {
       return await extractTextFromFile(file, file.name);
     } catch (error) {
@@ -342,8 +343,8 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
   const [loading, setLoading] = useState(false);
   const [dateError, setDateError] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState<number>(0);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'success' | 'error'>('idle');
-  const [extractionStatus, setExtractionStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [uploadStatus, setUploadStatus] = useState<'idle'| 'uploading'| 'processing'| 'success'| 'error'>('idle');
+  const [extractionStatus, setExtractionStatus] = useState<'idle'| 'processing'| 'success'| 'error'>('idle');
   const [showExtractedData, setShowExtractedData] = useState(false);
   const [showExtractedText, setShowExtractedText] = useState(false);
   const [expandedTranscriptTextId, setExpandedTranscriptTextId] = useState<string | number | null>(null);
@@ -460,11 +461,11 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
       setUploadProgress(100);
 
       // Even if text extraction returned nothing (heavily compressed or image-only PDF),
-      // still accept the file — the user can fill details manually.
+      // still accept the file   the user can fill details manually.
       if (!result.text) {
         setUploadStatus('success');
         setExtractionStatus('error');
-        setProcessingMessage('File uploaded — text could not be auto-read');
+        setProcessingMessage('File uploaded   text could not be auto-read');
         setFormData(prev => ({
           ...prev,
           transcriptFile: file,
@@ -503,7 +504,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
       // Still accept the file even if extraction failed completely
       setUploadStatus('success');
       setExtractionStatus('error');
-      setProcessingMessage('File uploaded — text could not be auto-read');
+      setProcessingMessage('File uploaded   text could not be auto-read');
       setFormData(prev => ({
         ...prev,
         transcriptFile: file,
@@ -615,7 +616,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
       resetForm();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert('Error saving education: ' + errorMessage);
+      alert('Error saving education: '+ errorMessage);
     } finally {
       setLoading(false);
     }
@@ -640,7 +641,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
       extractedText: transcript?.extracted_text || '',
       extractedModules: transcript?.modules || [],
       extractedSkills: transcript?.skills || [],
-      extractionMethod: (transcript?.extraction_method as 'ocr' | 'text' | 'mixed' | 'none') || 'none'
+      extractionMethod: (transcript?.extraction_method as 'ocr'| 'text'| 'mixed'| 'none') || 'none'
     });
     setEditingId(String(edu.id));
     setIsAdding(true);
@@ -659,7 +660,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
       onUpdate();
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert('Error deleting education: ' + errorMessage);
+      alert('Error deleting education: '+ errorMessage);
     } finally {
       setDeleting(false);
     }
@@ -674,7 +675,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
   const getYear = (dateValue?: string | null): string => {
     if (!dateValue) return 'N/A';
     const date = new Date(dateValue);
-    return Number.isNaN(date.getTime()) ? 'N/A' : String(date.getFullYear());
+    return Number.isNaN(date.getTime()) ? 'N/A': String(date.getFullYear());
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -682,7 +683,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ''+ sizes[i];
   };
 
   const getExtractionMethodLabel = (method: string): string => {
@@ -753,7 +754,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
       {isAdding && (
         <div className="bg-gray-50 p-6 rounded-lg border">
           <h3 className="text-lg font-medium mb-4">
-            {editingId ? 'Edit Education' : 'Add Education'}
+            {editingId ? 'Edit Education': 'Add Education'}
           </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -838,7 +839,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                 type="checkbox"
                 id="isCurrent"
                 checked={formData.isCurrent}
-                onChange={(e) => setFormData({...formData, isCurrent: e.target.checked, endDate: e.target.checked ? '' : formData.endDate})}
+                onChange={(e) => setFormData({...formData, isCurrent: e.target.checked, endDate: e.target.checked ? '': formData.endDate})}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <label htmlFor="isCurrent" className="text-sm text-gray-700">
@@ -916,7 +917,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                       className="hidden"
                       accept=".pdf,.jpg,.jpeg,.png"
                       onChange={handleFileSelect}
-                      disabled={uploadStatus === 'uploading' || uploadStatus === 'processing'}
+                      disabled={uploadStatus === 'uploading'|| uploadStatus === 'processing'}
                     />
                   </label>
                 </div>
@@ -935,7 +936,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {(uploadStatus === 'uploading' || extractionStatus === 'processing') && (
+                      {(uploadStatus === 'uploading'|| extractionStatus === 'processing') && (
                         <div className="flex items-center gap-2">
                           <Loader size={18} className="text-blue-600 animate-spin" />
                           <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
@@ -947,24 +948,24 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                           <span className="text-xs text-gray-500">{uploadProgress}%</span>
                         </div>
                       )}
-                      {uploadStatus === 'success' && extractionStatus === 'success' && (
+                      {uploadStatus === 'success'&& extractionStatus === 'success'&& (
                         <CheckCircle size={20} className="text-green-600" />
                       )}
-                      {uploadStatus === 'error' && (
+                      {uploadStatus === 'error'&& (
                         <AlertCircle size={20} className="text-red-600" />
                       )}
                       <button
                         type="button"
                         onClick={removeFile}
                         className="text-gray-400 hover:text-red-600 transition-colors"
-                        disabled={uploadStatus === 'uploading' || extractionStatus === 'processing'}
+                        disabled={uploadStatus === 'uploading'|| extractionStatus === 'processing'}
                       >
                         <X size={18} />
                       </button>
                     </div>
                   </div>
 
-                  {processingMessage && uploadStatus !== 'success' && (
+                  {processingMessage && uploadStatus !== 'success'&& (
                     <div className="text-sm text-gray-600 flex items-center gap-2">
                       <Loader size={14} className="animate-spin" />
                       {processingMessage}
@@ -976,7 +977,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                       <div className="flex items-center gap-2 text-sm text-green-600">
                         <Sparkles size={16} />
                         <span>Successfully extracted content from transcript</span>
-                        {formData.extractionMethod !== 'none' && (
+                        {formData.extractionMethod !== 'none'&& (
                           <span className="text-xs text-gray-500 ml-2 flex items-center gap-1">
                             {getExtractionMethodIcon(formData.extractionMethod)}
                             {getExtractionMethodLabel(formData.extractionMethod)}
@@ -1023,7 +1024,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                         className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                       >
                         <Eye size={14} />
-                        {showExtractedText ? 'Hide extracted text' : 'View full extracted text'}
+                        {showExtractedText ? 'Hide extracted text': 'View full extracted text'}
                       </button>
 
                       {showExtractedText && formData.extractedText && (
@@ -1045,7 +1046,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 <Save size={18} />
-                {loading ? 'Saving...' : 'Save'}
+                {loading ? 'Saving...': 'Save'}
               </button>
               <button
                 type="button"
@@ -1089,7 +1090,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                     <div className="flex items-center gap-1">
                       <Calendar size={16} />
                       {getYear(edu.start_date)} - {
-                        edu.is_current ? 'Present' : getYear(edu.end_date)
+                        edu.is_current ? 'Present': getYear(edu.end_date)
                       }
                     </div>
                     {edu.grade && (
@@ -1134,7 +1135,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                           <span className="text-xs text-gray-400">({formatFileSize(transcript.file_size)})</span>
                           {transcript.file_url && !/\.(docx?|xlsx?|pptx?)$/i.test(transcript.file_name || '') && (
                             <a
-                              href={transcript.file_url}
+                              href={resolveFileUrl(transcript.file_url)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="ml-auto text-sm text-blue-600 hover:text-blue-800 hover:underline"
@@ -1143,8 +1144,10 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                             </a>
                           )}
                           <a
-                            href={transcript.file_url}
+                            href={resolveFileUrl(transcript.file_url)}
                             download={transcript.file_name}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="ml-auto text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                           >
                             <Download size={14} />
@@ -1159,7 +1162,7 @@ const EducationSection = ({ profile, onUpdate }: EducationSectionProps) => {
                               className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
                             >
                               <Eye size={14} />
-                              {expandedTranscriptTextId === edu.id ? 'Hide Text' : 'View Text'}
+                              {expandedTranscriptTextId === edu.id ? 'Hide Text': 'View Text'}
                             </button>
                           )}
                         </div>

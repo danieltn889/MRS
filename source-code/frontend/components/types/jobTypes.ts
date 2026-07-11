@@ -10,7 +10,7 @@ export interface Skill {
 
 export interface ScreeningQuestion {
   question: string;
-  type: 'text' | 'yes_no' | 'number' | 'date' | 'multiple_choice';
+  type: 'text'| 'yes_no'| 'number'| 'date'| 'multiple_choice';
   required: boolean;
   options?: string[];
   scoring_weight?: number;
@@ -20,7 +20,7 @@ export interface ScreeningQuestion {
 export interface Language {
   id: string;
   name: string;
-  proficiency: 'basic' | 'conversational' | 'professional' | 'native';
+  proficiency: 'basic'| 'conversational'| 'professional'| 'native';
   is_required: boolean;
 }
 
@@ -51,19 +51,19 @@ export interface LocationObject {
   is_remote: boolean;
 }
 
-// Structured qualification entry — one degree with multiple fields of study
+// Structured qualification entry   one degree with multiple fields of study
 export interface QualificationEntry {
   id: string;
   degree: string;        // e.g. "Bachelor's Degree" or custom
   fields: string[];      // e.g. ["Computer Science", "Information Technology"]
 }
 
-export type JobStatus = 'active' | 'draft' | 'closed' | 'pending';
-export type WorkArrangement = 'onsite' | 'remote' | 'hybrid' | 'flexible';
-export type JobType = 'full-time' | 'part-time' | 'contract' | 'internship' | 'freelance' | 'temporary';
-export type ExperienceLevel = 'entry' | 'mid' | 'senior' | 'lead' | 'executive';
-export type Visibility = 'public' | 'internal' | 'confidential' | 'unlisted';
-export type SalaryType = 'range' | 'above' | 'under' | 'negotiable';
+export type JobStatus = 'active'| 'draft'| 'closed'| 'pending';
+export type WorkArrangement = 'onsite'| 'remote'| 'hybrid'| 'flexible';
+export type JobType = 'full-time'| 'part-time'| 'contract'| 'internship'| 'freelance'| 'temporary';
+export type ExperienceLevel = 'entry'| 'mid'| 'senior'| 'lead'| 'executive';
+export type Visibility = 'public'| 'internal'| 'confidential'| 'unlisted';
+export type SalaryType = 'range'| 'above'| 'under'| 'negotiable';
 
 export interface Job {
   id: string;
@@ -100,7 +100,7 @@ export interface JobFormData {
   salaryMin: string;
   salaryMax: string;
   salaryCurrency: string;
-  salaryPeriod: 'hour' | 'month' | 'year';
+  salaryPeriod: 'hour'| 'month'| 'year';
   salaryVisible: boolean;
   benefits: string[];
 
@@ -207,12 +207,12 @@ export const DEFAULT_FORM_DATA: JobFormData = {
 };
 
 export const STEPS = [
-  { id: 1, title: 'Job Information',         shortTitle: 'Job Information' },
-  { id: 2, title: 'Salary & Benefits',       shortTitle: 'Salary & Benefits' },
-  { id: 3, title: 'Skills & Experience',     shortTitle: 'Skills & Experience' },
-  { id: 4, title: 'Languages & Documents',   shortTitle: 'Languages & Documents' },
-  { id: 5, title: 'Screening & Application', shortTitle: 'Screening & Application' },
-  { id: 6, title: 'Posting Settings',        shortTitle: 'Posting Settings' },
+  { id: 1, title: 'Job Information',         shortTitle: 'Job Information'},
+  { id: 2, title: 'Salary & Benefits',       shortTitle: 'Salary & Benefits'},
+  { id: 3, title: 'Skills & Experience',     shortTitle: 'Skills & Experience'},
+  { id: 4, title: 'Languages & Documents',   shortTitle: 'Languages & Documents'},
+  { id: 5, title: 'Screening & Application', shortTitle: 'Screening & Application'},
+  { id: 6, title: 'Posting Settings',        shortTitle: 'Posting Settings'},
 ];
 
 export const JOB_TYPE_LABELS: Record<JobType, string> = {

@@ -79,7 +79,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const audioChunksRef = useRef<Blob[]>([]);
 
   const scrollToBottom = useCallback(() => {
-    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth'}), 100);
   }, []);
 
   useEffect(() => {
@@ -96,7 +96,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   const handleSend = async () => {
     if (!newMessage.trim() && attachments.length === 0) return;
     if (isSessionClosed) {
-      setSendError('This session has ended — messaging is closed.');
+      setSendError('This session has ended   messaging is closed.');
       return;
     }
     try {
@@ -110,7 +110,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       const message = error?.message || '';
       setSendError(
         /completed session/i.test(message)
-          ? 'This session has ended — messaging is closed.'
+          ? 'This session has ended   messaging is closed.'
           : 'Failed to send message. Please try again.'
       );
     }
@@ -182,8 +182,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         if (e.data.size > 0) audioChunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav' });
-        const file = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav' });
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/wav'});
+        const file = new File([blob], `voice-${Date.now()}.wav`, { type: 'audio/wav'});
         const reader = new FileReader();
         reader.onload = () => {
           setAttachments(prev => [...prev, {
@@ -251,7 +251,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           </button>
         </div>
         <p className="text-xs text-gray-300 line-clamp-2 break-words pl-1">
-          {text.substring(0, 120)}{text.length > 120 ? '…' : ''}
+          {text.substring(0, 120)}{text.length > 120 ? '…': ''}
         </p>
       </div>
     );
@@ -273,7 +273,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           </button>
         </div>
         <p className="text-xs text-gray-400 line-clamp-2 break-words pl-1">
-          {originalText.substring(0, 100)}{originalText.length > 100 ? '…' : ''}
+          {originalText.substring(0, 100)}{originalText.length > 100 ? '…': ''}
         </p>
       </div>
     );
@@ -292,12 +292,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
           )}
         </h3>
         <div className="flex items-center gap-1.5">
-          <span className={`h-2 w-2 rounded-full ${socketConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-          <span className="text-xs text-gray-400">{socketConnected ? 'Live' : 'Offline'}</span>
+          <span className={`h-2 w-2 rounded-full ${socketConnected ? 'bg-green-500 animate-pulse': 'bg-gray-500'}`} />
+          <span className="text-xs text-gray-400">{socketConnected ? 'Live': 'Offline'}</span>
         </div>
       </div>
 
-      {/* Message list — threaded: replies rendered indented under their parent */}
+      {/* Message list   threaded: replies rendered indented under their parent */}
       <div
         className="flex-1 min-h-0 overflow-y-auto p-2 flex flex-col"
         tabIndex={0}
@@ -311,7 +311,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
               disabled={loadingMore}
               className="text-xs px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 disabled:opacity-50"
             >
-              {loadingMore ? 'Loading…' : '↑ Load older messages'}
+              {loadingMore ? 'Loading…': '↑ Load older messages'}
             </button>
           </div>
         )}
@@ -412,12 +412,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         <p className="text-xs text-red-400 px-3 flex-shrink-0">{fileError}</p>
       )}
 
-      {/* Input area — hidden while editing (edit happens inline in ChatMessage) */}
+      {/* Input area   hidden while editing (edit happens inline in ChatMessage) */}
       {!editingMessage && (
         <div className="border-t border-gray-700 p-3 space-y-2 flex-shrink-0">
           {isSessionClosed ? (
             <p className="text-sm text-gray-400 text-center py-2">
-              This session has ended — messaging is closed.
+              This session has ended   messaging is closed.
             </p>
           ) : (
             <>
@@ -430,7 +430,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter'&& !e.shiftKey) {
                       e.preventDefault();
                       handleSend();
                     }
@@ -480,7 +480,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     : 'Voice'}
                 </button>
 
-                <span className={`ml-auto text-xs ${attachments.length === MAX_CHAT_ATTACHMENTS ? 'text-yellow-500' : 'text-gray-600'}`}>
+                <span className={`ml-auto text-xs ${attachments.length === MAX_CHAT_ATTACHMENTS ? 'text-yellow-500': 'text-gray-600'}`}>
                   {attachments.length}/{MAX_CHAT_ATTACHMENTS}
                 </span>
 
@@ -496,11 +496,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
         </div>
       )}
 
-      {/* Delete confirmation — rendered at document body level via portal-style fixed overlay */}
+      {/* Delete confirmation   rendered at document body level via portal-style fixed overlay */}
       {showDeleteConfirm && (
         <div
           className="fixed inset-0 flex items-center justify-center p-4"
-          style={{ zIndex: 9999, background: 'rgba(0,0,0,0.75)' }}
+          style={{ zIndex: 9999, background: 'rgba(0,0,0,0.75)'}}
         >
           <div className="bg-gray-800 rounded-lg shadow-2xl max-w-sm w-full p-6 border border-gray-600 text-center">
             <Trash2 className="mx-auto h-12 w-12 text-red-500 mb-4" />

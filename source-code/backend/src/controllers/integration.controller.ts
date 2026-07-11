@@ -38,7 +38,7 @@ interface IntegrationLog {
   id?: number;
   user_id: number;
   type: string;
-  status: 'success' | 'error' | 'warning';
+  status: 'success'| 'error'| 'warning';
   details: any;
   api_key_id?: number;
   webhook_id?: number;
@@ -562,7 +562,7 @@ export class IntegrationController extends BaseController {
   /**
    * Helper method to log integration activity
    */
-  async logActivity(userId: number, type: string, status: 'success' | 'error' | 'warning', details: any = {}, apiKeyId?: number, webhookId?: number): Promise<void> {
+  async logActivity(userId: number, type: string, status: 'success'| 'error'| 'warning', details: any = {}, apiKeyId?: number, webhookId?: number): Promise<void> {
     try {
       await this.dbService.query(`
         INSERT INTO integration_logs (user_id, type, status, details, api_key_id, webhook_id, created_at)

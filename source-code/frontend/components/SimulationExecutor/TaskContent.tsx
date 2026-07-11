@@ -53,7 +53,7 @@ interface TaskContentProps {
   currentRepo?: any;
   taskRepositories?: Record<number, any>;
   onRefreshRepo?: () => Promise<void>;
-  // ✅ NEW PROPS
+  // ''NEW PROPS
   onOpenChat?: () => void;
   onOpenGitHubAnalytics?: (taskIndex: number) => void;
   unreadCount?: number;
@@ -100,7 +100,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
   currentRepo,
   taskRepositories = {},
   onRefreshRepo,
-  // ✅ NEW PROPS
+  // ''NEW PROPS
   onOpenChat,
   onOpenGitHubAnalytics,
   unreadCount = 0,
@@ -185,34 +185,34 @@ const TaskContent: React.FC<TaskContentProps> = ({
     
     try {
       await onRefreshTaskProgress();
-      console.log('✅ Manual refresh completed successfully');
+      console.log('Manual refresh completed successfully');
       setTimeout(() => setIsRefreshing(false), 500);
     } catch (error) {
-      console.error('❌ Manual refresh failed:', error);
+      console.error(' Manual refresh failed:', error);
       setIsRefreshing(false);
     }
   };
 
   const handleStartTask = async () => {
     if (!onStartTask || taskIndex === undefined) {
-      console.error('❌ Cannot start task: missing onStartTask or taskIndex');
+      console.error(' Cannot start task: missing onStartTask or taskIndex');
       return;
     }
     
-    console.log(`🚀 Manually starting task ${taskIndex}...`);
+    console.log(` Manually starting task ${taskIndex}...`);
     setIsStarting(true);
     setStartError(null);
     
     try {
       await onStartTask(taskIndex);
       setHideStartModal(true);
-      console.log(`✅ Task ${taskIndex} started successfully`);
+      console.log(`''Task ${taskIndex} started successfully`);
       
       if (onRefreshTaskProgress) {
         await onRefreshTaskProgress();
       }
     } catch (err: any) {
-      console.error(`❌ Failed to start task ${taskIndex}:`, err);
+      console.error(` Failed to start task ${taskIndex}:`, err);
       setStartError(err.message || 'Failed to start task');
       setTimeout(() => setStartError(null), 3000);
     } finally {
@@ -221,7 +221,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
   };
 
   const handleOpenCompletionDialog = () => {
-    console.log(`📝 Opening completion dialog for task ${taskNumber}`);
+    console.log(` Opening completion dialog for task ${taskNumber}`);
     setCompletionDraft({
       completed: true,
       comment: '',
@@ -234,11 +234,11 @@ const TaskContent: React.FC<TaskContentProps> = ({
 
   const handleSaveCompletion = async () => {
     if (taskIndex === undefined || !onUpdateTaskProgress) {
-      console.error('❌ Cannot complete task: missing taskIndex or onUpdateTaskProgress');
+      console.error(' Cannot complete task: missing taskIndex or onUpdateTaskProgress');
       return;
     }
     
-    console.log(`✅ Completing task ${taskNumber}...`);
+    console.log(`''Completing task ${taskNumber}...`);
     console.log('📊 Completion data:', completionDraft);
     
     try {
@@ -262,7 +262,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
           mcqAnswers: mcqAnswers,
         }
       });
-      console.log(`✅ Task ${taskNumber} completed successfully`);
+      console.log(`''Task ${taskNumber} completed successfully`);
       
       setShowCompletionDialog(false);
       
@@ -270,11 +270,11 @@ const TaskContent: React.FC<TaskContentProps> = ({
         await onRefreshTaskProgress();
       }
     } catch (error) {
-      console.error(`❌ Failed to complete task ${taskNumber}:`, error);
+      console.error(` Failed to complete task ${taskNumber}:`, error);
     }
   };
 
-  // ✅ Handle Chat button click
+  // ''Handle Chat button click
   const handleChatClick = () => {
     console.log('💬 Opening chat for task:', taskNumber);
     if (onOpenChat) {
@@ -282,7 +282,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
     }
   };
 
-  // ✅ Handle GitHub Analytics button click
+  // ''Handle GitHub Analytics button click
   const handleGitHubAnalyticsClick = () => {
     console.log('📊 Opening GitHub Analytics for task:', taskNumber);
     if (onOpenGitHubAnalytics && taskIndex !== undefined) {
@@ -334,8 +334,8 @@ const TaskContent: React.FC<TaskContentProps> = ({
                 <p className="text-gray-400 text-sm mb-2">📋 Task Type</p>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className={`text-xs px-3 py-1.5 rounded-full ${
-                    task.type === 'technical' ? 'bg-blue-900/50 text-blue-300' :
-                    task.type === 'code_editor' ? 'bg-purple-900/50 text-purple-300' :
+                    task.type === 'technical'? 'bg-blue-900/50 text-blue-300':
+                    task.type === 'code_editor'? 'bg-purple-900/50 text-purple-300':
                     'bg-gray-700 text-gray-300'
                   }`}>
                     {task.type || 'Generic'}
@@ -350,7 +350,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
               </div>
               
               <div className="bg-gray-900 rounded-lg p-4 mb-5">
-                <p className="text-gray-400 text-sm mb-2">📝 What you'll build</p>
+                <p className="text-gray-400 text-sm mb-2"> What you'll build</p>
                 <p className="text-gray-300 text-sm leading-relaxed">
                   {task.description || 'Complete the requirements for this task.'}
                 </p>
@@ -442,7 +442,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
               </div>
               
               <div className="flex items-center gap-2 flex-wrap">
-                {/* ✅ CHAT BUTTON */}
+                {/* ''CHAT BUTTON */}
                 <div className="relative">
                   <button
                     onClick={handleChatClick}
@@ -455,7 +455,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                     Chat
                     {unreadCount > 0 && (
                       <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full animate-pulse">
-                        {unreadCount > 99 ? '99+' : unreadCount}
+                        {unreadCount > 99 ? '99+': unreadCount}
                       </span>
                     )}
                   </button>
@@ -467,7 +467,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                   )}
                 </div>
 
-                {/* ✅ GITHUB ANALYTICS BUTTON */}
+                {/* ''GITHUB ANALYTICS BUTTON */}
                 <div className="relative">
                   <button
                     onClick={handleGitHubAnalyticsClick}
@@ -487,15 +487,15 @@ const TaskContent: React.FC<TaskContentProps> = ({
                   )}
                 </div>
 
-                {/* ✅ REFRESH BUTTON */}
+                {/* ''REFRESH BUTTON */}
                 <button
                   onClick={handleManualRefresh}
                   disabled={isRefreshing}
                   className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-md"
                   title="Refresh task progress"
                 >
-                  <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-                  {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                  <RefreshCw size={14} className={isRefreshing ? 'animate-spin': ''} />
+                  {isRefreshing ? 'Refreshing...': 'Refresh'}
                 </button>
 
                 {/* STATUS BADGE */}
@@ -522,7 +522,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                         <button
                           onClick={async () => {
                             const next = currentIdx + 1;
-                            if (nextProgress?.status === 'not_started' || !nextProgress) {
+                            if (nextProgress?.status === 'not_started'|| !nextProgress) {
                               await onStartTask?.(next);
                             }
                             onSelectTask?.(next);
@@ -595,7 +595,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
               </div>
             </div>
             
-            {/* Helpful Info Bar — each item is a shortcut to its action */}
+            {/* Helpful Info Bar   each item is a shortcut to its action */}
             <div className="px-4 py-2 bg-gray-900/50 border-b border-gray-700 flex items-center gap-4 flex-wrap text-xs text-gray-400">
               <button
                 type="button"
@@ -622,8 +622,8 @@ const TaskContent: React.FC<TaskContentProps> = ({
                 className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-gray-700/50 hover:text-gray-200 transition-colors cursor-pointer disabled:opacity-50"
                 title="Refresh task progress"
               >
-                <RefreshCw size={12} className={`text-gray-400 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span>🔄 <strong className="text-gray-300">Refresh</strong> - {isRefreshing ? 'Refreshing…' : 'Update task progress'}</span>
+                <RefreshCw size={12} className={`text-gray-400 ${isRefreshing ? 'animate-spin': ''}`} />
+                <span>🔄 <strong className="text-gray-300">Refresh</strong> - {isRefreshing ? 'Refreshing…': 'Update task progress'}</span>
               </button>
             </div>
             
@@ -701,7 +701,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
           )}
 
           {/* CODE EDITOR */}
-          {(task.type === 'technical' || task.type === 'code_editor' || task.type === 'code_execution') && (
+          {(task.type === 'technical'|| task.type === 'code_editor'|| task.type === 'code_execution') && (
             <div className="space-y-4">
               {task.data?.starterCode && (
                 <div className="bg-gray-800 rounded p-3 border border-gray-700">
@@ -709,7 +709,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                   <pre className="text-xs text-gray-400 bg-gray-900 p-2 rounded overflow-x-auto">{task.data.starterCode}</pre>
                 </div>
               )}
-              <div className="rounded-lg overflow-hidden border border-gray-700" style={{ height: '60vh', minHeight: '400px' }}>
+              <div className="rounded-lg overflow-hidden border border-gray-700" style={{ height: '60vh', minHeight: '400px'}}>
                 <Editor
                   height="100%"
                   width="100%"
@@ -719,7 +719,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                     setCurrentFileContent(v || ''); 
                     setCode(v || '');
                     if (onUpdateTaskProgress && taskIndex !== undefined) {
-                      onUpdateTaskProgress(taskIndex, { code: v || '' });
+                      onUpdateTaskProgress(taskIndex, { code: v || ''});
                     }
                   }}
                   theme={editorTheme}
@@ -738,7 +738,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
           )}
 
           {/* ESSAY */}
-          {task.type === 'essay' && (
+          {task.type === 'essay'&& (
             <div className="bg-gray-800 rounded border border-gray-700">
               <div className="border-b border-gray-700 px-3 py-2">
                 <span className="text-xs text-gray-400">Word count: {essay.split(/\s+/).filter(w => w.length > 0).length}</span>
@@ -754,13 +754,13 @@ const TaskContent: React.FC<TaskContentProps> = ({
                 placeholder="Write your response here…" 
                 rows={20}
                 className="w-full p-4 resize-none focus:outline-none bg-gray-800 text-white text-sm" 
-                style={{ minHeight: '300px' }} 
+                style={{ minHeight: '300px'}} 
               />
             </div>
           )}
 
           {/* MCQ */}
-          {task.type === 'mcq' && task.data?.questions && (
+          {task.type === 'mcq'&& task.data?.questions && (
             <div className="space-y-4">
               {task.data.questions.map((q: any, qi: number) => (
                 <div key={q.id} className="bg-gray-800 rounded p-4 border border-gray-700">
@@ -769,7 +769,7 @@ const TaskContent: React.FC<TaskContentProps> = ({
                     {q.options.map((opt: string, oi: number) => (
                       <label key={oi} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-gray-700 rounded">
                         <input
-                          type={q.allowMultiple ? 'checkbox' : 'radio'}
+                          type={q.allowMultiple ? 'checkbox': 'radio'}
                           name={`q-${q.id}`}
                           checked={mcqAnswers[q.id]?.includes(oi) ?? false}
                           onChange={() => {
@@ -794,14 +794,14 @@ const TaskContent: React.FC<TaskContentProps> = ({
           )}
 
           {/* FILE VIEWER: shows selected file from the sidebar explorer */}
-          {currentFilePath && !(task.type === 'technical' || task.type === 'code_editor' || task.type === 'code_execution') && (
+          {currentFilePath && !(task.type === 'technical'|| task.type === 'code_editor'|| task.type === 'code_execution') && (
             <div className="space-y-0">
               <div className="flex items-center gap-2 px-3 py-2 bg-gray-800 rounded-t-lg border border-gray-700">
                 <Code size={12} className="text-blue-400 flex-shrink-0" />
                 <span className="text-xs text-gray-300 font-mono truncate flex-1">{currentFilePath}</span>
                 <span className="text-xs text-gray-500 whitespace-nowrap">View only</span>
               </div>
-              <div className="rounded-b-lg overflow-hidden border border-t-0 border-gray-700" style={{ height: '55vh', minHeight: '280px' }}>
+              <div className="rounded-b-lg overflow-hidden border border-t-0 border-gray-700" style={{ height: '55vh', minHeight: '280px'}}>
                 <Editor
                   height="100%"
                   width="100%"

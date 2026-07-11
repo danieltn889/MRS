@@ -1,8 +1,8 @@
-# V-WES Capstone Project
+# MRS Capstone Project
 
 ## Rwanda Polytechnic Capstone Project
 
-**Project title:** A Simulated Virtual Workspace for Recruitment and Culture-Fit Evaluation (V-WES)
+**Project title:** A Simulated Virtual Workspace for Recruitment and Culture-Fit Evaluation (MRS)
 
 **Student name:** TURIKUMWENIMANA Daniel  
 **Registration number:** 25RP19824  
@@ -23,7 +23,7 @@
 
 ## Project Overview
 
-V-WES is a multi-tenant virtual work simulation platform for recruitment and culture-fit evaluation. The platform helps companies assess candidates for remote and hybrid roles by combining realistic work tasks, AI-based behavior analysis, recruiter dashboards, and blockchain-backed verification of assessment results.
+MRS is a multi-tenant virtual work simulation platform for recruitment and culture-fit evaluation. The platform helps companies assess candidates for remote and hybrid roles by combining realistic work tasks, AI-based behavior analysis, recruiter dashboards, and blockchain-backed verification of assessment results.
 
 ## Main Aim
 
@@ -80,15 +80,15 @@ weekly-reports/
 The full technical documentation for installing, configuring, running, testing, and extending
 the application lives under `source-code/`:
 
-- [`source-code/README.md`](source-code/README.md) — main technical README (overview, install, env, run, tests)
-- [`source-code/frontend/README.md`](source-code/frontend/README.md) — frontend guide
-- [`source-code/backend/README.md`](source-code/backend/README.md) — backend guide
-- [`source-code/docs/API_DOCUMENTATION.md`](source-code/docs/API_DOCUMENTATION.md) — API reference
-- [`source-code/docs/DATABASE.md`](source-code/docs/DATABASE.md) — database schema & migrations
-- [`source-code/docs/AI_EVALUATION.md`](source-code/docs/AI_EVALUATION.md) — AI evaluation flow
-- [`source-code/docs/BLOCKCHAIN.md`](source-code/docs/BLOCKCHAIN.md) — blockchain & audit chain
-- [`source-code/docs/DEPLOYMENT.md`](source-code/docs/DEPLOYMENT.md) — deployment guide
-- [`source-code/docs/DEVELOPER_GUIDE.md`](source-code/docs/DEVELOPER_GUIDE.md) — developer/contribution guide
+- [`source-code/README.md`](source-code/README.md)   main technical README (overview, install, env, run, tests)
+- [`source-code/frontend/README.md`](source-code/frontend/README.md)   frontend guide
+- [`source-code/backend/README.md`](source-code/backend/README.md)   backend guide
+- [`source-code/docs/API_DOCUMENTATION.md`](source-code/docs/API_DOCUMENTATION.md)   API reference
+- [`source-code/docs/DATABASE.md`](source-code/docs/DATABASE.md)   database schema & migrations
+- [`source-code/docs/AI_EVALUATION.md`](source-code/docs/AI_EVALUATION.md)   AI evaluation flow
+- [`source-code/docs/BLOCKCHAIN.md`](source-code/docs/BLOCKCHAIN.md)   blockchain & audit chain
+- [`source-code/docs/DEPLOYMENT.md`](source-code/docs/DEPLOYMENT.md)   deployment guide
+- [`source-code/docs/DEVELOPER_GUIDE.md`](source-code/docs/DEVELOPER_GUIDE.md)   developer/contribution guide
 
 ## Documentation Notes
 

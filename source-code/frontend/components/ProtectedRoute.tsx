@@ -35,7 +35,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     return <Navigate to="/login" state={{ from: returnUrl }} replace />;
   }
 
-  // ✅ Clear any stale redirect URL if user is already authenticated
+  // ''Clear any stale redirect URL if user is already authenticated
   if (sessionStorage.getItem('redirectAfterLogin')) {
     sessionStorage.removeItem('redirectAfterLogin');
   }

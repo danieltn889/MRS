@@ -32,7 +32,7 @@ interface ScoringRubric {
 // Helper to convert score to number
 const toNumber = (value: number | string | undefined | null): number | undefined => {
   if (value === undefined || value === null) return undefined;
-  const num = typeof value === 'string' ? parseFloat(value) : value;
+  const num = typeof value === 'string'? parseFloat(value) : value;
   return isNaN(num) ? undefined : num;
 };
 
@@ -127,7 +127,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
       availableMessage: availability.message
     });
     
-    console.log('🎯 Button render decision:', {
+    console.log('Button render decision:', {
       id: simulation.id,
       isTemplateMissing,
       isInProgress,
@@ -198,7 +198,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
           <div className="flex items-center gap-2">
             <Clock className="w-3 h-3 text-gray-500" />
             <span className="text-gray-600">
-              Current ({simulation.metadata?.availability?.timezone ?? 'local'}):{' '}
+              Current ({simulation.metadata?.availability?.timezone ?? 'local'}):{''}
               {getCurrentDayInTz(simulation)} {getCurrentTimeInTz(simulation)}
             </span>
           </div>
@@ -233,7 +233,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
                   const local = nowInTimezone(tz);
                   const isToday = local.getDay() === w.dayOfWeek;
                   return (
-                    <div key={idx} className={isToday ? 'text-blue-600 font-medium' : 'text-gray-600'}>
+                    <div key={idx} className={isToday ? 'text-blue-600 font-medium': 'text-gray-600'}>
                       {dayNames[w.dayOfWeek]}: {w.startTime}–{w.endTime}
                       {isToday && <span className="ml-1 text-green-500">●</span>}
                     </div>
@@ -301,7 +301,7 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
                   {showTasks ? (
                     <>Show less <ChevronUp className="w-3 h-3" /></>
                   ) : (
-                    <>Show {tasks.length - 1} more task{tasks.length - 1 > 1 ? 's' : ''} <ChevronDown className="w-3 h-3" /></>
+                    <>Show {tasks.length - 1} more task{tasks.length - 1 > 1 ? 's': ''} <ChevronDown className="w-3 h-3" /></>
                   )}
                 </button>
               )}
@@ -344,8 +344,8 @@ const SimulationCard: React.FC<SimulationCardProps> = ({
           }`}>
             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
             {attemptsExhausted
-              ? `All ${attemptsLimit} attempt${attemptsLimit !== 1 ? 's' : ''} used — no more retakes allowed`
-              : `Attempt ${usedAttempts + 1} of ${attemptsLimit} — ${remainingAttempts} remaining`
+              ? `All ${attemptsLimit} attempt${attemptsLimit !== 1 ? 's': ''} used   no more retakes allowed`
+              : `Attempt ${usedAttempts + 1} of ${attemptsLimit}   ${remainingAttempts} remaining`
             }
           </div>
         )}

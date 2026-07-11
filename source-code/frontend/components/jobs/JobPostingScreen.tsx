@@ -92,7 +92,7 @@ const Input = ({ value, onChange, placeholder, type = 'text', hasError, maxLengt
 }) => (
   <input type={type} value={value} onChange={e => onChange(e.target.value)}
     placeholder={placeholder} maxLength={maxLength} min={min} max={max} disabled={disabled}
-    style={{ ...inputBase, border: `1px solid ${hasError ? C.danger : C.border}`, background: disabled ? '#f8fafc' : '#fff' }} />
+    style={{ ...inputBase, border: `1px solid ${hasError ? C.danger : C.border}`, background: disabled ? '#f8fafc': '#fff'}} />
 );
 
 const Textarea = ({ value, onChange, rows = 4, placeholder, hasError }: {
@@ -105,10 +105,10 @@ const Textarea = ({ value, onChange, rows = 4, placeholder, hasError }: {
 
 const Sel = ({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) => (
   <select value={value} onChange={e => onChange(e.target.value)}
-    style={{ ...inputBase, cursor: 'pointer', appearance: 'auto' }}>{children}</select>
+    style={{ ...inputBase, cursor: 'pointer', appearance: 'auto'}}>{children}</select>
 );
 
-const Divider = () => <div style={{ height: 1, background: C.border, margin: '8px 0' }} />;
+const Divider = () => <div style={{ height: 1, background: C.border, margin: '8px 0'}} />;
 
 const SectionCard = ({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) => (
   <div style={{ background: '#f8fafc', border: `1px solid ${C.border}`, borderRadius: C.radius, padding: 20, marginBottom: 8, ...style }}>
@@ -162,14 +162,14 @@ const ComboBox = ({ value, onChange, options, placeholder, hasError }: {
   }, []);
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <div style={{ position: 'relative' }}>
+    <div ref={ref} style={{ position: 'relative'}}>
+      <div style={{ position: 'relative'}}>
         <input value={value}
           onChange={e => { onChange(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           placeholder={placeholder}
           style={{ ...inputBase, border: `1px solid ${hasError ? C.danger : C.border}`, paddingRight: 36 }} />
-        <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.textLight, pointerEvents: 'none' }} />
+        <ChevronDown size={14} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.textLight, pointerEvents: 'none'}} />
       </div>
       {open && filtered.length > 0 && (
         <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radiusSm, boxShadow: C.shadowMd, maxHeight: 220, overflowY: 'auto', marginTop: 4 }}>
@@ -182,7 +182,7 @@ const ComboBox = ({ value, onChange, options, placeholder, hasError }: {
           ))}
           {value.trim() && !options.includes(value.trim()) && (
             <div onMouseDown={() => setOpen(false)}
-              style={{ padding: '9px 14px', fontSize: 13, color: C.primary, cursor: 'default', borderTop: `1px solid ${C.border}`, fontStyle: 'italic' }}>
+              style={{ padding: '9px 14px', fontSize: 13, color: C.primary, cursor: 'default', borderTop: `1px solid ${C.border}`, fontStyle: 'italic'}}>
               Using custom: "{value}"
             </div>
           )}
@@ -251,7 +251,7 @@ const AutoSuggestListField = ({
     if (!q.trim()) return <span>{text}</span>;
     const i = text.toLowerCase().indexOf(q.toLowerCase());
     if (i === -1) return <span>{text}</span>;
-    return <span>{text.slice(0, i)}<mark style={{ background: '#fef08a', color: C.text, borderRadius: 2, padding: '0 1px' }}>{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</span>;
+    return <span>{text.slice(0, i)}<mark style={{ background: '#fef08a', color: C.text, borderRadius: 2, padding: '0 1px'}}>{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</span>;
   };
 
   const dbRows = dropRows.filter(r => !r.ai);
@@ -262,7 +262,7 @@ const AutoSuggestListField = ({
       {items.length > 0 && (
         <div style={{ marginBottom: 10 }}>
           {items.map((item, i) => (
-            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+            <div key={i} style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center'}}>
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: C.primaryGhost, border: `1px solid ${C.primary}20`, borderRadius: 8 }}>
                 <span style={{ minWidth: 20, height: 20, borderRadius: '50%', background: C.primary, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
                 <input value={item} onChange={e => onUpdate(i, e.target.value)}
@@ -277,18 +277,18 @@ const AutoSuggestListField = ({
         </div>
       )}
 
-      <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div ref={wrapRef} style={{ position: 'relative'}}>
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: isSearching ? C.primary : C.textLight, pointerEvents: 'none', transition: 'color .2s' }} />
+            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: isSearching ? C.primary : C.textLight, pointerEvents: 'none', transition: 'color .2s'}} />
             {isSearching && (
-              <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.primary, animation: 'spin .6s linear infinite' }} />
+              <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.primary, animation: 'spin .6s linear infinite'}} />
             )}
             <input value={input} onChange={e => handleInput(e.target.value)}
               onFocus={() => { if (input.trim()) setIsOpen(true); }}
               onKeyDown={onKey}
               placeholder={placeholder}
-              style={{ ...inputBase, paddingLeft: 34, paddingRight: isSearching ? 34 : 14, border: `1px solid ${isOpen ? C.primary : C.border}`, boxShadow: isOpen ? `0 0 0 3px ${C.primary}15` : 'none', transition: 'border-color .15s, box-shadow .15s' }} />
+              style={{ ...inputBase, paddingLeft: 34, paddingRight: isSearching ? 34 : 14, border: `1px solid ${isOpen ? C.primary : C.border}`, boxShadow: isOpen ? `0 0 0 3px ${C.primary}15` : 'none', transition: 'border-color .15s, box-shadow .15s'}} />
           </div>
           <button onClick={() => commit(input)} style={{ ...addBtnStyle, whiteSpace: 'nowrap', flexShrink: 0 }}>
             <Plus size={14} /> Add
@@ -296,14 +296,14 @@ const AutoSuggestListField = ({
         </div>
 
         {isOpen && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radius, boxShadow: C.shadowMd, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radius, boxShadow: C.shadowMd, overflow: 'hidden'}}>
             {isSearching ? (
               <div style={{ padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 8, color: C.textMuted, fontSize: 13 }}>
-                <Loader2 size={14} style={{ color: C.primary, animation: 'spin .6s linear infinite' }} /> Searching…
+                <Loader2 size={14} style={{ color: C.primary, animation: 'spin .6s linear infinite'}} /> Searching…
               </div>
             ) : dropRows.length === 0 && input.trim() ? (
               <div style={{ padding: '11px 14px', fontSize: 13, color: C.textMuted }}>
-                No matches — press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 6px', fontSize: 11 }}>Enter</kbd> to add "{input}" as custom
+                No matches   press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 6px', fontSize: 11 }}>Enter</kbd> to add "{input}" as custom
               </div>
             ) : (
               <>
@@ -314,7 +314,7 @@ const AutoSuggestListField = ({
                     </div>
                     {dbRows.map((row, idx) => (
                       <div key={row.text} onMouseDown={() => commit(row.text)}
-                        style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === idx ? C.primaryGhost : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s' }}
+                        style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === idx ? C.primaryGhost : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s'}}
                         onMouseOver={e => (e.currentTarget.style.background = C.primaryGhost)}
                         onMouseOut={e => (e.currentTarget.style.background = selIdx === idx ? C.primaryGhost : 'transparent')}>
                         <span style={{ fontSize: 12, color: C.textLight }}>↵</span>
@@ -325,14 +325,14 @@ const AutoSuggestListField = ({
                 )}
                 {aiRows.length > 0 && (
                   <>
-                    <div style={{ padding: '5px 12px 3px', fontSize: 10, fontWeight: 700, color: C.purple, letterSpacing: 0.9, textTransform: 'uppercase', background: `${C.purple}08`, display: 'flex', alignItems: 'center', gap: 4, borderTop: dbRows.length ? `1px solid ${C.border}` : 'none' }}>
+                    <div style={{ padding: '5px 12px 3px', fontSize: 10, fontWeight: 700, color: C.purple, letterSpacing: 0.9, textTransform: 'uppercase', background: `${C.purple}08`, display: 'flex', alignItems: 'center', gap: 4, borderTop: dbRows.length ? `1px solid ${C.border}` : 'none'}}>
                       <Sparkles size={10} /> AI Suggested
                     </div>
                     {aiRows.map((row, idx) => {
                       const absIdx = dbRows.length + idx;
                       return (
                         <div key={row.text} onMouseDown={() => commit(row.text)}
-                          style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === absIdx ? C.purpleGhost : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s' }}
+                          style={{ padding: '9px 14px', fontSize: 13, cursor: 'pointer', background: selIdx === absIdx ? C.purpleGhost : 'transparent', color: C.text, display: 'flex', alignItems: 'center', gap: 8, transition: 'background .1s'}}
                           onMouseOver={e => (e.currentTarget.style.background = C.purpleGhost)}
                           onMouseOut={e => (e.currentTarget.style.background = selIdx === absIdx ? C.purpleGhost : 'transparent')}>
                           <Sparkles size={11} color={C.purple} />
@@ -345,7 +345,7 @@ const AutoSuggestListField = ({
                 {input.trim() && !dropRows.find(r => r.text.toLowerCase() === input.trim().toLowerCase()) && (
                   <div style={{ padding: '8px 14px', fontSize: 12, color: C.textMuted, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Plus size={11} color={C.primary} />
-                    Press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 5px', fontSize: 11, margin: '0 2px' }}>Enter</kbd> to add "<strong style={{ color: C.text }}>{input}</strong>" as custom
+                    Press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 5px', fontSize: 11, margin: '0 2px'}}>Enter</kbd> to add "<strong style={{ color: C.text }}>{input}</strong>" as custom
                   </div>
                 )}
               </>
@@ -363,7 +363,7 @@ const PROF_LABELS = ['', 'Beginner', 'Basic', 'Intermediate', 'Advanced', 'Exper
 const ProficiencyPicker = ({ value, onChange, color }: {
   value: number; onChange: (v: number) => void; color: string;
 }) => (
-  <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+  <div style={{ display: 'flex', gap: 4, alignItems: 'center'}}>
     {[1, 2, 3, 4, 5].map(n => (
       <button key={n} onClick={e => { e.stopPropagation(); onChange(n); }}
         title={PROF_LABELS[n]}
@@ -438,7 +438,7 @@ const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, place
     if (!q.trim()) return <span>{text}</span>;
     const i = text.toLowerCase().indexOf(q.toLowerCase());
     if (i === -1) return <span>{text}</span>;
-    return <span>{text.slice(0, i)}<mark style={{ background: '#fef08a', color: C.text, borderRadius: 2, padding: '0 1px' }}>{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</span>;
+    return <span>{text.slice(0, i)}<mark style={{ background: '#fef08a', color: C.text, borderRadius: 2, padding: '0 1px'}}>{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</span>;
   };
 
   const matchRows = dropRows.filter(r => !r.suggested);
@@ -454,7 +454,7 @@ const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, place
               onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
               style={{
                 display: 'inline-flex', flexDirection: 'column', gap: 6,
-                padding: expandedIdx === i ? '10px 14px' : '6px 14px',
+                padding: expandedIdx === i ? '10px 14px': '6px 14px',
                 borderRadius: expandedIdx === i ? 10 : 20,
                 background: expandedIdx === i ? `${color}20` : `${color}15`,
                 color,
@@ -472,7 +472,7 @@ const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, place
                   </span>
                 )}
                 <span style={{ fontSize: 10, opacity: 0.5, marginLeft: 2 }}>
-                  {expandedIdx === i ? '▲' : '▼'}
+                  {expandedIdx === i ? '▲': '▼'}
                 </span>
                 <button
                   onClick={e => {
@@ -503,17 +503,17 @@ const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, place
         </p>
       )}
 
-      <div ref={ref} style={{ position: 'relative' }}>
+      <div ref={ref} style={{ position: 'relative'}}>
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: isSearching ? color : C.textLight, pointerEvents: 'none', transition: 'color .2s' }} />
-            {isSearching && <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.primary, animation: 'spin .6s linear infinite' }} />}
+            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: isSearching ? color : C.textLight, pointerEvents: 'none', transition: 'color .2s'}} />
+            {isSearching && <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.primary, animation: 'spin .6s linear infinite'}} />}
             <input value={input}
               onChange={e => handleInput(e.target.value)}
               onFocus={() => { if (input.trim()) setOpen(true); }}
               onKeyDown={onKey}
               placeholder={placeholder}
-              style={{ ...inputBase, paddingLeft: 34, border: `1px solid ${open ? color : C.border}`, boxShadow: open ? `0 0 0 3px ${color}18` : 'none', transition: 'border-color .15s, box-shadow .15s' }} />
+              style={{ ...inputBase, paddingLeft: 34, border: `1px solid ${open ? color : C.border}`, boxShadow: open ? `0 0 0 3px ${color}18` : 'none', transition: 'border-color .15s, box-shadow .15s'}} />
           </div>
           <button onClick={() => add(input)} style={{ ...addBtnStyle, background: `${color}15`, color }}>
             <Plus size={14} /> Add
@@ -521,14 +521,14 @@ const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, place
         </div>
 
         {open && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radius, boxShadow: C.shadowMd, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 60, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radius, boxShadow: C.shadowMd, overflow: 'hidden'}}>
             {isSearching ? (
               <div style={{ padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 8, color: C.textMuted, fontSize: 13 }}>
-                <Loader2 size={14} style={{ color: C.primary, animation: 'spin .6s linear infinite' }} /> Searching…
+                <Loader2 size={14} style={{ color: C.primary, animation: 'spin .6s linear infinite'}} /> Searching…
               </div>
             ) : dropRows.length === 0 && input.trim() ? (
               <div style={{ padding: '11px 14px', fontSize: 13, color: C.textMuted }}>
-                No matches — press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 6px', fontSize: 11 }}>Enter</kbd> to add "{input}"
+                No matches   press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 6px', fontSize: 11 }}>Enter</kbd> to add "{input}"
               </div>
             ) : (
               <>
@@ -548,7 +548,7 @@ const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, place
                 )}
                 {suggestedRows.length > 0 && (
                   <>
-                    <div style={{ padding: '5px 12px 3px', fontSize: 10, fontWeight: 700, color: C.purple, letterSpacing: 0.9, textTransform: 'uppercase', background: `${C.purple}08`, display: 'flex', alignItems: 'center', gap: 4, borderTop: matchRows.length ? `1px solid ${C.border}` : 'none' }}>
+                    <div style={{ padding: '5px 12px 3px', fontSize: 10, fontWeight: 700, color: C.purple, letterSpacing: 0.9, textTransform: 'uppercase', background: `${C.purple}08`, display: 'flex', alignItems: 'center', gap: 4, borderTop: matchRows.length ? `1px solid ${C.border}` : 'none'}}>
                       <Sparkles size={10} /> Suggested
                     </div>
                     {suggestedRows.map((row, idx) => {
@@ -568,7 +568,7 @@ const SkillInput = ({ skills, onAdd, onRemove, onUpdateProficiency, color, place
                 {input.trim() && !dropRows.find(r => r.text.toLowerCase() === input.trim().toLowerCase()) && (
                   <div style={{ padding: '8px 14px', fontSize: 12, color: C.textMuted, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Plus size={11} color={color} />
-                    Press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 5px', fontSize: 11, margin: '0 2px' }}>Enter</kbd> to add "<strong style={{ color: C.text }}>{input}</strong>"
+                    Press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '1px 5px', fontSize: 11, margin: '0 2px'}}>Enter</kbd> to add "<strong style={{ color: C.text }}>{input}</strong>"
                   </div>
                 )}
               </>
@@ -585,17 +585,17 @@ const YearPicker = ({ value, onChange }: { value: string; onChange: (v: string) 
   const [custom, setCustom] = useState(!EXPERIENCE_YEAR_OPTIONS.includes(value) && value !== '');
 
   return custom ? (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center'}}>
       <input type="number" value={value} onChange={e => onChange(e.target.value)}
         min="0" max="50" placeholder="e.g. 8"
-        style={{ ...inputBase, width: 80, textAlign: 'center' }} />
+        style={{ ...inputBase, width: 80, textAlign: 'center'}} />
       <button onClick={() => setCustom(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, fontSize: 12 }}>↩ List</button>
     </div>
   ) : (
     <select value={value} onChange={e => { if (e.target.value === '__custom__') setCustom(true); else onChange(e.target.value); }}
       style={{ ...inputBase, width: 'auto', minWidth: 100 }}>
       <option value="">Any</option>
-      {EXPERIENCE_YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}{y === '20' ? '+' : ''} yr{y !== '1' ? 's' : ''}</option>)}
+      {EXPERIENCE_YEAR_OPTIONS.map(y => <option key={y} value={y}>{y}{y === '20'? '+': ''} yr{y !== '1'? 's': ''}</option>)}
       <option value="__custom__">Custom…</option>
     </select>
   );
@@ -604,16 +604,16 @@ const YearPicker = ({ value, onChange }: { value: string; onChange: (v: string) 
 // ─── SalaryTypeSelector ─────────────────────────────────────────────────────
 const SalaryTypeSelector = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
   const options = [
-    { value: 'range', label: 'Range', icon: '↔' },
-    { value: 'above', label: 'Above', icon: '↑' },
-    { value: 'under', label: 'Under', icon: '↓' },
-    { value: 'negotiable', label: 'Negotiable', icon: '~' },
+    { value: 'range', label: 'Range', icon: '↔'},
+    { value: 'above', label: 'Above', icon: '↑'},
+    { value: 'under', label: 'Under', icon: '↓'},
+    { value: 'negotiable', label: 'Negotiable', icon: '~'},
   ];
   return (
     <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
       {options.map(o => (
         <button key={o.value} onClick={() => onChange(o.value)}
-          style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1.5px solid ${value === o.value ? C.primary : C.border}`, background: value === o.value ? C.primaryGhost : '#fff', color: value === o.value ? C.primary : C.textMuted, fontWeight: value === o.value ? 600 : 400, fontSize: 13, cursor: 'pointer', transition: 'all .15s' }}>
+          style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1.5px solid ${value === o.value ? C.primary : C.border}`, background: value === o.value ? C.primaryGhost : '#fff', color: value === o.value ? C.primary : C.textMuted, fontWeight: value === o.value ? 600 : 400, fontSize: 13, cursor: 'pointer', transition: 'all .15s'}}>
           <span style={{ display: 'block', fontSize: 16 }}>{o.icon}</span>
           {o.label}
         </button>
@@ -671,30 +671,30 @@ const TagSearchInput = ({ tags, onAdd, onRemove, suggestions, placeholder, color
           ))}
         </div>
       )}
-      {tags.length === 0 && <p style={{ fontSize: 12, color: C.textLight, marginBottom: 8 }}>None added yet — search or pick below</p>}
-      <div ref={ref} style={{ position: 'relative' }}>
+      {tags.length === 0 && <p style={{ fontSize: 12, color: C.textLight, marginBottom: 8 }}>None added yet   search or pick below</p>}
+      <div ref={ref} style={{ position: 'relative'}}>
         <div style={{ display: 'flex', gap: 8 }}>
           <div style={{ position: 'relative', flex: 1 }}>
-            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: C.textLight, pointerEvents: 'none' }} />
-            {isSearching && <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.primary, animation: 'spin .6s linear infinite' }} />}
+            <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: C.textLight, pointerEvents: 'none'}} />
+            {isSearching && <Loader2 size={13} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: C.primary, animation: 'spin .6s linear infinite'}} />}
             <input value={input}
               onChange={e => handleInput(e.target.value)}
               onFocus={() => { if (input.trim()) setOpen(true); }}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(input); } if (e.key === 'Escape') setOpen(false); }}
               placeholder={placeholder}
-              style={{ ...inputBase, paddingLeft: 34, border: `1px solid ${open ? color : C.border}`, boxShadow: open ? `0 0 0 3px ${color}18` : 'none', transition: 'border-color .15s, box-shadow .15s' }} />
+              style={{ ...inputBase, paddingLeft: 34, border: `1px solid ${open ? color : C.border}`, boxShadow: open ? `0 0 0 3px ${color}18` : 'none', transition: 'border-color .15s, box-shadow .15s'}} />
           </div>
           <button onClick={() => add(input)} style={{ ...addBtnStyle, background: `${color}12`, color }}><Plus size={14} /></button>
         </div>
         {open && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radiusSm, boxShadow: C.shadowMd, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60, background: '#fff', border: `1px solid ${C.border}`, borderRadius: C.radiusSm, boxShadow: C.shadowMd, overflow: 'hidden'}}>
             {isSearching ? (
               <div style={{ padding: '10px 14px', fontSize: 13, color: C.textMuted, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Loader2 size={13} style={{ animation: 'spin .6s linear infinite', color: C.primary }} /> Searching…
               </div>
             ) : matches.length === 0 && input.trim() ? (
               <div style={{ padding: '10px 14px', fontSize: 13, color: C.textMuted }}>
-                No matches — press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 5px', fontSize: 11 }}>Enter</kbd> to add "{input}"
+                No matches   press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 5px', fontSize: 11 }}>Enter</kbd> to add "{input}"
               </div>
             ) : (
               <>
@@ -708,7 +708,7 @@ const TagSearchInput = ({ tags, onAdd, onRemove, suggestions, placeholder, color
                 ))}
                 {input.trim() && !matches.find(m => m.toLowerCase() === input.trim().toLowerCase()) && (
                   <div style={{ padding: '8px 14px', fontSize: 12, color: C.textMuted, borderTop: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Plus size={11} color={color} /> Press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 4px', fontSize: 11, margin: '0 2px' }}>Enter</kbd> to add "{input}"
+                    <Plus size={11} color={color} /> Press <kbd style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 3, padding: '0 4px', fontSize: 11, margin: '0 2px'}}>Enter</kbd> to add "{input}"
                   </div>
                 )}
               </>
@@ -720,7 +720,7 @@ const TagSearchInput = ({ tags, onAdd, onRemove, suggestions, placeholder, color
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
           {quickAdd.map(s => (
             <button key={s} onClick={() => add(s)}
-              style={{ padding: '2px 8px', borderRadius: 20, border: `1px dashed ${C.border}`, background: 'none', color: C.textMuted, fontSize: 11, cursor: 'pointer' }}>
+              style={{ padding: '2px 8px', borderRadius: 20, border: `1px dashed ${C.border}`, background: 'none', color: C.textMuted, fontSize: 11, cursor: 'pointer'}}>
               + {s}
             </button>
           ))}
@@ -731,22 +731,22 @@ const TagSearchInput = ({ tags, onAdd, onRemove, suggestions, placeholder, color
 };
 
 // ─── AgeRequirementInput ─────────────────────────────────────────────────────
-type AgeInputType = 'not_required' | 'above' | 'under' | 'range';
+type AgeInputType = 'not_required'| 'above'| 'under'| 'range';
 
 const AgeRequirementInput = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
   const parse = (v: string): { t: AgeInputType; a: string; b: string } => {
-    if (!v || v === '' || /not/i.test(v)) return { t: 'not_required', a: '', b: '' };
+    if (!v || v === ''|| /not/i.test(v)) return { t: 'not_required', a: '', b: ''};
     const clean = v.trim();
     if (clean.includes('-')) {
       const [lo, hi] = clean.split('-').map(s => s.replace(/\D/g, ''));
-      return { t: 'range', a: lo || '', b: hi || '' };
+      return { t: 'range', a: lo || '', b: hi || ''};
     }
     if (clean.includes('+') || /^(above|over)/i.test(clean))
-      return { t: 'above', a: clean.replace(/\D/g, ''), b: '' };
+      return { t: 'above', a: clean.replace(/\D/g, ''), b: ''};
     if (/^(under|below)/i.test(clean))
-      return { t: 'under', a: clean.replace(/\D/g, ''), b: '' };
+      return { t: 'under', a: clean.replace(/\D/g, ''), b: ''};
     const num = clean.replace(/\D/g, '');
-    return num ? { t: 'above', a: num, b: '' } : { t: 'not_required', a: '', b: '' };
+    return num ? { t: 'above', a: num, b: ''} : { t: 'not_required', a: '', b: ''};
   };
 
   const init = parse(value);
@@ -756,17 +756,17 @@ const AgeRequirementInput = ({ value, onChange }: { value: string; onChange: (v:
 
   const emit = (t: AgeInputType, va: string, vb: string) => {
     if (t === 'not_required') onChange('Not required');
-    else if (t === 'above' && va) onChange(`${va}+`);
-    else if (t === 'under' && va) onChange(`Under ${va}`);
-    else if (t === 'range' && va && vb) onChange(`${va}–${vb}`);
+    else if (t === 'above'&& va) onChange(`${va}+`);
+    else if (t === 'under'&& va) onChange(`Under ${va}`);
+    else if (t === 'range'&& va && vb) onChange(`${va}–${vb}`);
     else onChange('');
   };
 
   const typeOptions: { value: AgeInputType; label: string; icon: string }[] = [
-    { value: 'not_required', label: 'Not required', icon: '—' },
-    { value: 'above', label: 'Above / min', icon: '↑' },
-    { value: 'under', label: 'Under / max', icon: '↓' },
-    { value: 'range', label: 'Range', icon: '↔' },
+    { value: 'not_required', label: 'Not required', icon: ' '},
+    { value: 'above', label: 'Above / min', icon: '↑'},
+    { value: 'under', label: 'Under / max', icon: '↓'},
+    { value: 'range', label: 'Range', icon: '↔'},
   ];
 
   return (
@@ -774,36 +774,36 @@ const AgeRequirementInput = ({ value, onChange }: { value: string; onChange: (v:
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         {typeOptions.map(o => (
           <button key={o.value} onClick={() => { setType(o.value); emit(o.value, a, b); }}
-            style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1.5px solid ${type === o.value ? C.primary : C.border}`, background: type === o.value ? C.primaryGhost : '#fff', color: type === o.value ? C.primary : C.textMuted, fontWeight: type === o.value ? 600 : 400, fontSize: 12, cursor: 'pointer', transition: 'all .15s' }}>
+            style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `1.5px solid ${type === o.value ? C.primary : C.border}`, background: type === o.value ? C.primaryGhost : '#fff', color: type === o.value ? C.primary : C.textMuted, fontWeight: type === o.value ? 600 : 400, fontSize: 12, cursor: 'pointer', transition: 'all .15s'}}>
             <span style={{ display: 'block', fontSize: 16, marginBottom: 2 }}>{o.icon}</span>
             {o.label}
           </button>
         ))}
       </div>
-      {type === 'not_required' && (
+      {type === 'not_required'&& (
         <div style={{ padding: '10px 14px', background: C.successGhost, borderRadius: 8, color: C.success, fontSize: 13, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
           <CheckCircle size={14} /> No age requirement for this role
         </div>
       )}
-      {type !== 'not_required' && (
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {type === 'range' ? (
+      {type !== 'not_required'&& (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center'}}>
+          {type === 'range'? (
             <>
               <input type="number" value={a} onChange={e => { setA(e.target.value); emit('range', e.target.value, b); }}
                 placeholder="Min (e.g. 25)" min="0" max="100"
-                style={{ ...inputBase, width: 130, textAlign: 'center' }} />
+                style={{ ...inputBase, width: 130, textAlign: 'center'}} />
               <span style={{ color: C.textMuted, fontWeight: 600, fontSize: 18 }}>–</span>
               <input type="number" value={b} onChange={e => { setB(e.target.value); emit('range', a, e.target.value); }}
                 placeholder="Max (e.g. 40)" min="0" max="100"
-                style={{ ...inputBase, width: 130, textAlign: 'center' }} />
+                style={{ ...inputBase, width: 130, textAlign: 'center'}} />
             </>
           ) : (
             <input type="number" value={a} onChange={e => { setA(e.target.value); emit(type, e.target.value, b); }}
-              placeholder={type === 'above' ? 'Min age (e.g. 18)' : 'Max age (e.g. 35)'}
+              placeholder={type === 'above'? 'Min age (e.g. 18)': 'Max age (e.g. 35)'}
               min="0" max="100"
               style={{ ...inputBase, width: 200 }} />
           )}
-          {value && value !== '' && (
+          {value && value !== ''&& (
             <span style={{ fontSize: 13, color: C.success, fontWeight: 600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5 }}>
               <CheckCircle size={13} /> {value} years
             </span>
@@ -838,12 +838,12 @@ const QualificationsSection = ({ entries, onChange, degreeSuggestions = DEGREE_T
   return (
     <div>
       {entries.map(entry => (
-        <div key={entry.id} style={{ border: `1px solid ${C.border}`, borderRadius: C.radiusSm, padding: 16, marginBottom: 12, background: '#fff' }}>
+        <div key={entry.id} style={{ border: `1px solid ${C.border}`, borderRadius: C.radiusSm, padding: 16, marginBottom: 12, background: '#fff'}}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 14 }}>
             <div style={{ flex: 1 }}>
               <Label>Degree Type</Label>
               <ComboBox value={entry.degree} onChange={v => updateDegree(entry.id, v)}
-                options={degreeSuggestions} placeholder="e.g. Bachelor's Degree — type or select" />
+                options={degreeSuggestions} placeholder="e.g. Bachelor's Degree   type or select" />
             </div>
             <button onClick={() => removeEntry(entry.id)}
               style={{ marginTop: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 38, borderRadius: 8, border: 'none', background: `${C.danger}12`, color: C.danger, cursor: 'pointer', flexShrink: 0 }}>
@@ -896,7 +896,7 @@ const validate = (data: JobFormData, step: number, isEditing = false): Validatio
         const min = parseFloat(data.salaryMin), max = parseFloat(data.salaryMax);
         if (!isNaN(min) && !isNaN(max) && min > max) errors.salaryMax = 'Max salary must be ≥ min salary';
       }
-    } else if (st === 'above' || st === 'under') {
+    } else if (st === 'above'|| st === 'under') {
       if (!data.salaryMin.trim()) errors.salaryMin = 'Salary amount is required';
       else {
         const v = parseFloat(data.salaryMin);
@@ -1001,14 +1001,14 @@ const normalizeQualificationEntries = (raw: any, fallbackDegree?: string): Quali
 const FormSection = ({ title, icon, children }: { title: string; icon?: React.ReactNode; children: React.ReactNode }) => (
   <div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
-      {icon && <div style={{ width: 32, height: 32, borderRadius: 8, background: C.primaryGhost, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</div>}
+      {icon && <div style={{ width: 32, height: 32, borderRadius: 8, background: C.primaryGhost, display: 'flex', alignItems: 'center', justifyContent: 'center'}}>{icon}</div>}
       <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>{title}</h2>
     </div>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>{children}</div>
   </div>
 );
 
-const FormRow = ({ children, cols = '1fr 1fr' }: { children: React.ReactNode; cols?: string }) => (
+const FormRow = ({ children, cols = '1fr 1fr'}: { children: React.ReactNode; cols?: string }) => (
   <div style={{ display: 'grid', gridTemplateColumns: cols, gap: 16 }}>{children}</div>
 );
 
@@ -1024,7 +1024,7 @@ const FormField = ({ label, required, error, hint, children }: {
 );
 
 const AddMoreBtn = ({ onClick, label }: { onClick: () => void; label: string }) => (
-  <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: C.primary, fontSize: 13, fontWeight: 500, padding: '4px 0' }}>
+  <button onClick={onClick} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: C.primary, fontSize: 13, fontWeight: 500, padding: '4px 0'}}>
     <Plus size={13} /> {label}
   </button>
 );
@@ -1046,7 +1046,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg, fontFamily: font }}>
         <div style={{ textAlign: 'center', maxWidth: 360, padding: 32 }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: C.dangerGhost, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: C.dangerGhost, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px'}}>
             <AlertCircle size={28} color={C.danger} />
           </div>
           <h2 style={{ fontSize: 22, fontWeight: 700, color: C.text, marginBottom: 8 }}>Access Denied</h2>
@@ -1066,13 +1066,13 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [touched, setTouched] = useState(false);
 
-  const [newLang, setNewLang] = useState({ name: '', proficiency: 'professional' as Language['proficiency'], is_required: false });
+  const [newLang, setNewLang] = useState({ name: '', proficiency: 'professional'as Language['proficiency'], is_required: false });
   const [editingLangIdx, setEditingLangIdx] = useState<number | null>(null);
 
-  const [newExp, setNewExp] = useState<{ title: string; years: string; description: string }>({ title: '', years: '', description: '' });
+  const [newExp, setNewExp] = useState<{ title: string; years: string; description: string }>({ title: '', years: '', description: ''});
   const [editingExpIdx, setEditingExpIdx] = useState<number | null>(null);
 
-  const [newCert, setNewCert] = useState({ name: '', issuer: '' });
+  const [newCert, setNewCert] = useState({ name: '', issuer: ''});
   const [editingCertIdx, setEditingCertIdx] = useState<number | null>(null);
 
   const [newDoc, setNewDoc] = useState({ name: '', is_required: true });
@@ -1122,25 +1122,25 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
   const addSkill = (name: string, required: boolean) => {
     if (!name.trim()) return;
     const skill: Skill = { name: name.trim(), proficiency_level: 3 };
-    const field = required ? 'requiredSkills' : 'preferredSkills';
+    const field = required ? 'requiredSkills': 'preferredSkills';
     const existing = formData[field] as Skill[];
     if (!existing.find(s => s.name === name.trim())) update(field, [...existing, skill]);
   };
 
   const updateSkillProficiency = (idx: number, level: number, required: boolean) => {
-    const field = required ? 'requiredSkills' : 'preferredSkills';
+    const field = required ? 'requiredSkills': 'preferredSkills';
     const skills = [...(formData[field] as Skill[])];
     skills[idx] = { ...skills[idx], proficiency_level: level };
     update(field, skills);
   };
 
-  // ── FREE NAVIGATION — validate for warnings only, never block ──────────────
+  // ── FREE NAVIGATION   validate for warnings only, never block ──────────────
   const goToStep = (step: number) => {
     setTouched(true);
     setErrors(validate(formData, currentStep, isEditing));
     setCurrentStep(step);
     // Scroll form content back to top
-    window.scrollTo({ top: 120, behavior: 'smooth' });
+    window.scrollTo({ top: 120, behavior: 'smooth'});
   };
 
   const goNext = () => goToStep(Math.min(STEPS.length, currentStep + 1));
@@ -1162,8 +1162,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         }));
       } else if (edObj.minimum_degree && edObj.minimum_degree.trim()) {
         const degreeText = edObj.minimum_degree;
-        if (degreeText.includes(' in ')) {
-          const [degree, fieldsPart] = degreeText.split(' in ');
+        if (degreeText.includes('in ')) {
+          const [degree, fieldsPart] = degreeText.split('in ');
           const fields = fieldsPart.split(/\s+or\s+|,|;/).map((f: string) => f.trim());
           qualificationEntries = [{ id: String(Date.now()), degree: degree.trim(), fields }];
         } else {
@@ -1191,12 +1191,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         .filter((e: ExperienceRequirement) => Boolean(e.title));
 
       const locations: string[] = Array.isArray(job.locations)
-        ? job.locations.map((l: any) => typeof l === 'string' ? l : l.is_remote ? 'Remote' : `${l.city || ''}, ${l.country || ''}`.trim().replace(/^,|,$/g, ''))
+        ? job.locations.map((l: any) => typeof l === 'string'? l : l.is_remote ? 'Remote': `${l.city || ''}, ${l.country || ''}`.trim().replace(/^,|,$/g, ''))
         : [''];
 
       const hasSalaryMin = job.salary_min != null;
       const hasSalaryMax = job.salary_max != null;
-      let salaryType: 'range' | 'above' | 'under' | 'negotiable' = 'range';
+      let salaryType: 'range'| 'above'| 'under'| 'negotiable'= 'range';
       if (!hasSalaryMin && !hasSalaryMax) salaryType = 'negotiable';
       else if (hasSalaryMin && !hasSalaryMax) salaryType = 'above';
       else if (!hasSalaryMin && hasSalaryMax) salaryType = 'under';
@@ -1214,11 +1214,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         qualifications: job.qualifications || edObj.minimum_degree || '',
         qualificationEntries,
         salaryType,
-        // 'under' uses salary_max in the DB but the shared input is bound to salaryMin
+        // 'under'uses salary_max in the DB but the shared input is bound to salaryMin
         salaryMin: salaryType === 'under'
           ? (job.salary_max != null ? String(job.salary_max) : '')
           : (job.salary_min != null ? String(job.salary_min) : ''),
-        salaryMax: salaryType !== 'under' && job.salary_max != null ? String(job.salary_max) : '',
+        salaryMax: salaryType !== 'under'&& job.salary_max != null ? String(job.salary_max) : '',
         salaryCurrency: job.salary_currency || 'Rwf',
         salaryPeriod: job.salary_period || 'month',
         salaryVisible: job.salary_visible !== false,
@@ -1229,18 +1229,18 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         experienceRequirements,
         languages: toArray(edObj.languages ?? job.language_requirements).map((l: any, i: number) => ({
           id: l.id ? String(l.id) : String(Date.now() + i),
-          name: typeof l === 'string' ? l : l.name || '',
+          name: typeof l === 'string'? l : l.name || '',
           proficiency: (l.proficiency || 'professional') as Language['proficiency'],
           is_required: Boolean(l.is_required),
         })).filter((l): l is Language => Boolean(l.name)),
         certifications: toArray(edObj.certifications).map((c: any, i: number) => ({
           id: c.id ? String(c.id) : String(Date.now() + i),
-          name: typeof c === 'string' ? c : c.name || '',
-          issuer: typeof c === 'string' ? '' : c.issuer || '',
+          name: typeof c === 'string'? c : c.name || '',
+          issuer: typeof c === 'string'? '': c.issuer || '',
         })),
         requiredDocuments: toArray(job.documents).map((d: any, i: number) => ({
           id: d.id ? String(d.id) : String(Date.now() + i),
-          name: typeof d === 'string' ? d : d.name || '',
+          name: typeof d === 'string'? d : d.name || '',
           is_required: d.is_required !== false,
         })),
         ageRequirement: edObj.age_requirement || '',
@@ -1271,7 +1271,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
     }
   };
 
-  const handleSave = async (action: 'draft' | 'publish') => {
+  const handleSave = async (action: 'draft'| 'publish') => {
     setEditingExpIdx(null);
     setEditingLangIdx(null);
     setEditingCertIdx(null);
@@ -1284,12 +1284,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         ...finalFormData,
         experienceRequirements: [
           ...finalFormData.experienceRequirements,
-          { id: `${Date.now()}-auto`, title: newExp.title, years: newExp.years, description: newExp.description || '' },
+          { id: `${Date.now()}-auto`, title: newExp.title, years: newExp.years, description: newExp.description || ''},
         ],
         noExperienceNeeded: false,
       };
       setFormData(finalFormData);
-      setNewExp({ title: '', years: '', description: '' });
+      setNewExp({ title: '', years: '', description: ''});
     }
 
     if (newCert.name.trim()) {
@@ -1297,12 +1297,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         ...finalFormData,
         certifications: [
           ...finalFormData.certifications,
-          { id: `${Date.now()}-cert`, name: newCert.name, issuer: newCert.issuer || '' },
+          { id: `${Date.now()}-cert`, name: newCert.name, issuer: newCert.issuer || ''},
         ],
         noCertificationsNeeded: false,
       };
       setFormData(finalFormData);
-      setNewCert({ name: '', issuer: '' });
+      setNewCert({ name: '', issuer: ''});
     }
 
     if (newDoc.name.trim()) {
@@ -1414,7 +1414,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         (finalFormData.qualificationEntries.length > 0
           ? finalFormData.qualificationEntries.map(e =>
             e.fields.length > 0
-              ? `${e.degree} in ${e.fields.join(' or ')}`
+              ? `${e.degree} in ${e.fields.join('or ')}`
               : e.degree
           ).join('; ')
           : null);
@@ -1461,7 +1461,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         })),
         applicationLimit: finalFormData.applicationLimit ? parseInt(finalFormData.applicationLimit) : null,
         visibility: finalFormData.visibility,
-        status: action === 'publish' ? 'active' : 'draft',
+        status: action === 'publish'? 'active': 'draft',
         publishedAt: new Date(finalFormData.publishedAt).toISOString(),
         expiresAt: new Date(finalFormData.expiresAt).toISOString(),
         aiMatchRequiredScore: finalFormData.aiMatchRequiredScore || 70,
@@ -1506,8 +1506,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
   if (pageLoading) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg, fontFamily: font }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ width: 44, height: 44, borderRadius: '50%', border: `3px solid ${C.border}`, borderTopColor: C.primary, animation: 'spin .8s linear infinite', margin: '0 auto 12px' }} />
+      <div style={{ textAlign: 'center'}}>
+        <div style={{ width: 44, height: 44, borderRadius: '50%', border: `3px solid ${C.border}`, borderTopColor: C.primary, animation: 'spin .8s linear infinite', margin: '0 auto 12px'}} />
         <p style={{ color: C.textMuted, fontSize: 14 }}>Loading job…</p>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
@@ -1533,7 +1533,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
           </button>
           <div style={{ width: 1, height: 20, background: C.border }} />
           <h1 style={{ fontSize: 17, fontWeight: 700, color: C.text }}>
-            {isPreview ? 'Preview Job Posting' : isEditing ? 'Edit Job Posting' : 'New Job Posting'}
+            {isPreview ? 'Preview Job Posting': isEditing ? 'Edit Job Posting': 'New Job Posting'}
           </h1>
           {!isPreview && (
             <span style={{ fontSize: 12, color: C.textMuted, background: C.bg, padding: '3px 10px', borderRadius: 20, border: `1px solid ${C.border}` }}>
@@ -1548,25 +1548,25 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
               <button onClick={() => setIsPreview(true)} style={ghostBtnStyle}><Eye size={14} /> Preview</button>
               <button onClick={() => handleSave('draft')} disabled={loading} style={ghostBtnStyle}><Save size={14} /> Save Draft</button>
               <button onClick={() => handleSave('publish')} disabled={loading} style={primaryBtnStyle}>
-                {loading ? <Loader2 size={14} style={{ animation: 'spin .8s linear infinite' }} /> : null}
-                {loading ? 'Saving…' : isEditing ? 'Update Job' : 'Publish Job'}
+                {loading ? <Loader2 size={14} style={{ animation: 'spin .8s linear infinite'}} /> : null}
+                {loading ? 'Saving…': isEditing ? 'Update Job': 'Publish Job'}
               </button>
             </>
           ) : (
             <>
               <button onClick={() => setIsPreview(false)} style={ghostBtnStyle}><ChevronLeft size={14} /> Edit</button>
               <button onClick={() => handleSave('publish')} disabled={loading} style={primaryBtnStyle}>
-                {loading ? 'Publishing…' : 'Publish Job'}
+                {loading ? 'Publishing…': 'Publish Job'}
               </button>
             </>
           )}
         </div>
       </div>
 
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 24px 120px 24px' }}>
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '24px 24px 120px 24px'}}>
         {!isPreview ? (
           <>
-            {/* ── Step tabs — STICKY below top bar ── */}
+            {/* ── Step tabs   STICKY below top bar ── */}
             <div style={{
               position: 'sticky',
               top: 64,
@@ -1600,7 +1600,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                       style={{
                         flex: 1, padding: '13px 6px', border: 'none',
                         background: active ? C.primary : done ? C.primaryGhost : 'transparent',
-                        color: active ? '#fff' : done ? C.primary : C.textMuted,
+                        color: active ? '#fff': done ? C.primary : C.textMuted,
                         cursor: 'pointer',
                         fontSize: 12, fontWeight: 600,
                         borderRight: i < STEPS.length - 1 ? `1px solid ${C.border}` : 'none',
@@ -1611,8 +1611,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     >
                       <span style={{
                         width: 22, height: 22, borderRadius: '50%', fontSize: 11,
-                        background: active ? 'rgba(255,255,255,.25)' : done ? C.primary : C.border,
-                        color: done || active ? '#fff' : C.textMuted,
+                        background: active ? 'rgba(255,255,255,.25)': done ? C.primary : C.border,
+                        color: done || active ? '#fff': C.textMuted,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700,
                       }}>
                         {done ? <Check size={12} /> : step.id}
@@ -1637,12 +1637,12 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: C.dangerGhost, border: `1px solid ${C.danger}30`, borderRadius: 10, marginBottom: 16 }}>
                 <AlertCircle size={16} color={C.danger} />
                 <span style={{ fontSize: 13, color: C.danger, fontWeight: 500 }}>
-                  Some fields need attention — you can still navigate freely, but fix them before publishing.
+                  Some fields need attention   you can still navigate freely, but fix them before publishing.
                 </span>
               </div>
             )}
 
-            {/* Form card — extra bottom padding so sticky nav doesn't overlap content */}
+            {/* Form card   extra bottom padding so sticky nav doesn't overlap content */}
             <div style={{ background: C.surface, borderRadius: C.radius, border: `1px solid ${C.border}`, boxShadow: C.shadow, padding: 32, paddingBottom: 40 }}>
 
               {/* ── STEP 1 ── */}
@@ -1678,7 +1678,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                         <input value={loc} onChange={e => updateArr('locations', i, e.target.value)}
                           placeholder={`e.g. "Kigali, Rwanda" or "Remote"`}
                           style={{ ...inputBase, flex: 1, border: `1px solid ${errors.locations ? C.danger : C.border}` }} />
-                        {i > 0 && <button onClick={() => removeArr('locations', i)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 38, borderRadius: 8, border: 'none', background: `${C.danger}12`, color: C.danger, cursor: 'pointer' }}><Minus size={14} /></button>}
+                        {i > 0 && <button onClick={() => removeArr('locations', i)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 38, borderRadius: 8, border: 'none', background: `${C.danger}12`, color: C.danger, cursor: 'pointer'}}><Minus size={14} /></button>}
                       </div>
                     ))}
                     <AddMoreBtn onClick={() => addArr('locations')} label="Add Location" />
@@ -1734,11 +1734,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     <SalaryTypeSelector value={formData.salaryType} onChange={v => update('salaryType', v as any)} />
                   </FormField>
 
-                  {formData.salaryType === 'negotiable' ? (
+                  {formData.salaryType === 'negotiable'? (
                     <div style={{ padding: '16px 20px', background: C.successGhost, borderRadius: C.radiusSm, color: C.success, fontSize: 14, fontWeight: 500 }}>
                       ✓ This job will show "Competitive / Negotiable" salary to candidates.
                     </div>
-                  ) : formData.salaryType === 'range' ? (
+                  ) : formData.salaryType === 'range'? (
                     <FormRow cols="1fr 1fr 110px">
                       <FormField label="Min Salary" error={errors.salaryMin}>
                         <Input type="number" value={formData.salaryMin} onChange={v => update('salaryMin', v)} placeholder="100,000" hasError={!!errors.salaryMin} />
@@ -1752,9 +1752,9 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </FormRow>
                   ) : (
                     <FormRow cols="1fr 110px">
-                      <FormField label={formData.salaryType === 'above' ? 'Minimum Amount (above)' : 'Maximum Amount (under)'} required error={errors.salaryMin}>
+                      <FormField label={formData.salaryType === 'above'? 'Minimum Amount (above)': 'Maximum Amount (under)'} required error={errors.salaryMin}>
                         <Input type="number" value={formData.salaryMin} onChange={v => update('salaryMin', v)}
-                          placeholder={formData.salaryType === 'above' ? 'e.g. 500,000' : 'e.g. 1,000,000'} hasError={!!errors.salaryMin} />
+                          placeholder={formData.salaryType === 'above'? 'e.g. 500,000': 'e.g. 1,000,000'} hasError={!!errors.salaryMin} />
                       </FormField>
                       <FormField label="Currency" error={errors.salaryCurrency}>
                         <Input value={formData.salaryCurrency} onChange={v => update('salaryCurrency', v)} placeholder="Rwf" maxLength={5} hasError={!!errors.salaryCurrency} />
@@ -1762,7 +1762,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </FormRow>
                   )}
 
-                  {formData.salaryType !== 'negotiable' && (
+                  {formData.salaryType !== 'negotiable'&& (
                     <FormRow cols="1fr auto">
                       <FormField label="Pay Period">
                         <Sel value={formData.salaryPeriod} onChange={v => update('salaryPeriod', v as any)}>
@@ -1772,7 +1772,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                         </Sel>
                       </FormField>
                       <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 2 }}>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: C.text, whiteSpace: 'nowrap' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 14, color: C.text, whiteSpace: 'nowrap'}}>
                           <input type="checkbox" checked={formData.salaryVisible}
                             onChange={e => update('salaryVisible', e.target.checked)}
                             style={{ width: 16, height: 16, accentColor: C.primary }} />
@@ -1847,7 +1847,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                             </div>
                           ) : (
                             <EditableListItem key={exp.id} label={exp.title}
-                              sub={exp.years ? `${exp.years} year${exp.years !== '1' ? 's' : ''} required${exp.description ? ` — ${exp.description}` : ''}` : 'Any duration'}
+                              sub={exp.years ? `${exp.years} year${exp.years !== '1'? 's': ''} required${exp.description ? `   ${exp.description}` : ''}` : 'Any duration'}
                               onRemove={() => setFormData(p => ({ ...p, experienceRequirements: p.experienceRequirements.filter(e => e.id !== exp.id) }))}
                               onEdit={() => setEditingExpIdx(idx)} />
                           )
@@ -1876,7 +1876,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                             <button onClick={() => {
                               if (!newExp.title.trim()) return alert('Please enter an area of experience.');
                               setFormData(p => ({ ...p, experienceRequirements: [...p.experienceRequirements, { id: Date.now().toString(), title: newExp.title, years: newExp.years, description: newExp.description }], noExperienceNeeded: false }));
-                              setNewExp({ title: '', years: '', description: '' });
+                              setNewExp({ title: '', years: '', description: ''});
                             }} style={{ ...addBtnStyle, marginTop: 12 }}>
                               <Plus size={14} /> Add Experience
                             </button>
@@ -1948,7 +1948,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                             </div>
                           ) : (
                             <EditableListItem key={l.id} label={l.name}
-                              sub={`${l.proficiency} · ${l.is_required ? 'Required' : 'Preferred'}`}
+                              sub={`${l.proficiency} · ${l.is_required ? 'Required': 'Preferred'}`}
                               onRemove={() => setFormData(p => ({ ...p, languages: p.languages.filter(x => x.id !== l.id) }))}
                               onEdit={() => setEditingLangIdx(idx)} />
                           )
@@ -1956,7 +1956,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
                         {editingLangIdx === null && (
                           <>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginTop: 12, alignItems: 'end' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginTop: 12, alignItems: 'end'}}>
                               <div><input value={newLang.name} onChange={e => setNewLang(p => ({ ...p, name: e.target.value }))} placeholder="Language (e.g. English)" style={inputBase} /></div>
                               <select value={newLang.proficiency} onChange={e => setNewLang(p => ({ ...p, proficiency: e.target.value as any }))} style={inputBase}>
                                 <option value="basic">Basic</option>
@@ -1964,7 +1964,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                                 <option value="professional">Professional</option>
                                 <option value="native">Native</option>
                               </select>
-                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap'}}>
                                 <input type="checkbox" checked={newLang.is_required} onChange={e => setNewLang(p => ({ ...p, is_required: e.target.checked }))} style={{ accentColor: C.primary }} /> Required
                               </label>
                             </div>
@@ -2030,10 +2030,10 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                               if (!newCert.name.trim()) return alert('Enter a certification name.');
                               setFormData(prev => ({
                                 ...prev,
-                                certifications: [...prev.certifications, { id: Date.now().toString(), name: newCert.name, issuer: newCert.issuer || '' }],
+                                certifications: [...prev.certifications, { id: Date.now().toString(), name: newCert.name, issuer: newCert.issuer || ''}],
                                 noCertificationsNeeded: false
                               }));
-                              setNewCert({ name: '', issuer: '' });
+                              setNewCert({ name: '', issuer: ''});
                             }} style={{ ...addBtnStyle, marginTop: 10 }}>
                               <Plus size={14} /> Add Certification
                             </button>
@@ -2077,7 +2077,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                               </div>
                             </div>
                           ) : (
-                            <EditableListItem key={d.id} label={d.name} sub={d.is_required ? 'Required' : 'Optional'}
+                            <EditableListItem key={d.id} label={d.name} sub={d.is_required ? 'Required': 'Optional'}
                               onRemove={() => setFormData(p => ({ ...p, requiredDocuments: p.requiredDocuments.filter(x => x.id !== d.id) }))}
                               onEdit={() => setEditingDocIdx(idx)} />
                           )
@@ -2085,9 +2085,9 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
                         {editingDocIdx === null && (
                           <>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginTop: 12, alignItems: 'center' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, marginTop: 12, alignItems: 'center'}}>
                               <input value={newDoc.name} onChange={e => setNewDoc(p => ({ ...p, name: e.target.value }))} placeholder="Document (e.g. Resume, Cover Letter, Portfolio)" style={inputBase} />
-                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+                              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap'}}>
                                 <input type="checkbox" checked={newDoc.is_required} onChange={e => setNewDoc(p => ({ ...p, is_required: e.target.checked }))} style={{ accentColor: C.primary }} /> Required
                               </label>
                             </div>
@@ -2118,14 +2118,14 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
               {currentStep === 5 && (
                 <FormSection title="Screening Questions" icon={<FileText size={16} color={C.primary} />}>
                   {formData.screeningQuestions.map((q, i) => (
-                    <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: C.radiusSm, padding: 18, marginBottom: 14, background: '#fafafa' }}>
+                    <div key={i} style={{ border: `1px solid ${C.border}`, borderRadius: C.radiusSm, padding: 18, marginBottom: 14, background: '#fafafa'}}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{ width: 22, height: 22, borderRadius: '50%', background: C.primary, color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
                           <span style={{ fontSize: 13, fontWeight: 600, color: C.textMuted }}>Screening Question</span>
                         </div>
                         <button onClick={() => update('screeningQuestions', formData.screeningQuestions.filter((_, idx) => idx !== i))}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.danger, display: 'flex', alignItems: 'center' }}>
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.danger, display: 'flex', alignItems: 'center'}}>
                           <X size={16} />
                         </button>
                       </div>
@@ -2136,9 +2136,9 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                           style={{ ...inputBase, marginBottom: 0 }} />
                         {touched && !q.question.trim() && <p style={{ fontSize: 12, color: C.danger, marginTop: 3 }}>Question text is required</p>}
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, alignItems: 'center'}}>
                         <select value={q.type}
-                          onChange={e => update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, type: e.target.value as any, options: e.target.value === 'multiple_choice' ? (x.options || ['', '']) : x.options } : x))}
+                          onChange={e => update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, type: e.target.value as any, options: e.target.value === 'multiple_choice'? (x.options || ['', '']) : x.options } : x))}
                           style={inputBase}>
                           <option value="text">Text Answer</option>
                           <option value="yes_no">Yes / No</option>
@@ -2146,7 +2146,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                           <option value="date">Date</option>
                           <option value="multiple_choice">Multiple Choice</option>
                         </select>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, whiteSpace: 'nowrap'}}>
                           <input type="checkbox" checked={q.required}
                             onChange={e => update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, required: e.target.checked } : x))}
                             style={{ accentColor: C.primary }} /> Required
@@ -2161,7 +2161,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                         </div>
                       </div>
 
-                      {q.type === 'multiple_choice' && (
+                      {q.type === 'multiple_choice'&& (
                         <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                           <p style={{ fontSize: 12, fontWeight: 600, color: C.textMuted, marginBottom: 8 }}>Answer Options:</p>
                           {(q.options || []).map((opt, oi) => (
@@ -2173,19 +2173,19 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                                   update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, options: newOpts } : x));
                                 }}
                                 placeholder={`Option ${oi + 1}`}
-                                style={{ ...inputBase, flex: 1, padding: '7px 12px' }} />
+                                style={{ ...inputBase, flex: 1, padding: '7px 12px'}} />
                               {(q.options || []).length > 2 && (
                                 <button onClick={() => {
                                   const newOpts = (q.options || []).filter((_, oIdx) => oIdx !== oi);
                                   update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, options: newOpts } : x));
-                                }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 34, borderRadius: 6, border: 'none', background: `${C.danger}12`, color: C.danger, cursor: 'pointer' }}>
+                                }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 34, borderRadius: 6, border: 'none', background: `${C.danger}12`, color: C.danger, cursor: 'pointer'}}>
                                   <X size={12} />
                                 </button>
                               )}
                             </div>
                           ))}
                           <button onClick={() => update('screeningQuestions', formData.screeningQuestions.map((x, idx) => idx === i ? { ...x, options: [...(x.options || []), ''] } : x))}
-                            style={{ ...addBtnStyle, fontSize: 12, padding: '5px 10px' }}><Plus size={12} /> Add Option</button>
+                            style={{ ...addBtnStyle, fontSize: 12, padding: '5px 10px'}}><Plus size={12} /> Add Option</button>
                         </div>
                       )}
                     </div>
@@ -2214,7 +2214,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                         <button key={hint} onClick={() => {
                           const current = formData.applicationInstructions;
                           update('applicationInstructions', current ? `${current}\n• ${hint}` : `• ${hint}`);
-                        }} style={{ padding: '3px 10px', borderRadius: 20, border: `1px dashed ${C.primary}40`, background: 'none', color: C.primary, fontSize: 12, cursor: 'pointer' }}>
+                        }} style={{ padding: '3px 10px', borderRadius: 20, border: `1px dashed ${C.primary}40`, background: 'none', color: C.primary, fontSize: 12, cursor: 'pointer'}}>
                           + {hint}
                         </button>
                       ))}
@@ -2245,7 +2245,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 <FormSection title="Posting Settings" icon={<Target size={16} color={C.primary} />}>
                   <div style={{ background: 'linear-gradient(135deg, #667eea15, #764ba215)', border: `1px solid #667eea40`, borderRadius: C.radius, padding: 20 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #667eea, #764ba2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 12, background: 'linear-gradient(135deg, #667eea, #764ba2)', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
                         <Target size={20} color="#fff" />
                       </div>
                       <div>
@@ -2256,7 +2256,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                       <input type="range" min="0" max="100" step="5" value={formData.aiMatchRequiredScore || 70}
                         onChange={e => update('aiMatchRequiredScore', parseInt(e.target.value))}
-                        style={{ flex: 1, height: 6, borderRadius: 3, background: `linear-gradient(90deg, #667eea 0%, #667eea ${formData.aiMatchRequiredScore || 70}%, #e2e8f0 ${formData.aiMatchRequiredScore || 70}%, #e2e8f0 100%)`, WebkitAppearance: 'none' }} />
+                        style={{ flex: 1, height: 6, borderRadius: 3, background: `linear-gradient(90deg, #667eea 0%, #667eea ${formData.aiMatchRequiredScore || 70}%, #e2e8f0 ${formData.aiMatchRequiredScore || 70}%, #e2e8f0 100%)`, WebkitAppearance: 'none'}} />
                       <div style={{ minWidth: 56, textAlign: 'center', padding: '5px 10px', background: 'linear-gradient(135deg, #667eea, #764ba2)', borderRadius: 20, color: '#fff', fontWeight: 700, fontSize: 14 }}>
                         {formData.aiMatchRequiredScore || 70}%
                       </div>
@@ -2291,27 +2291,27 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <input value={tagInput} onChange={e => setTagInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && tagInput.trim()) { update('tags', [...formData.tags, tagInput.trim()]); setTagInput(''); } }}
+                        onKeyDown={e => { if (e.key === 'Enter'&& tagInput.trim()) { update('tags', [...formData.tags, tagInput.trim()]); setTagInput(''); } }}
                         placeholder="Type a tag and press Enter…" style={{ ...inputBase, flex: 1 }} />
                       <button onClick={() => { if (tagInput.trim()) { update('tags', [...formData.tags, tagInput.trim()]); setTagInput(''); } }} style={addBtnStyle}>Add</button>
                     </div>
                   </FormField>
 
                   <div style={{ background: C.primaryGhost, border: `1px solid ${C.primary}25`, borderRadius: C.radiusSm, padding: 20, marginTop: 8 }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: C.primary, marginBottom: 12, letterSpacing: 0.3, textTransform: 'uppercase' }}>Job Summary</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px' }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: C.primary, marginBottom: 12, letterSpacing: 0.3, textTransform: 'uppercase'}}>Job Summary</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px'}}>
                       {[
-                        ['Title', formData.title || '—'],
-                        ['Department', formData.department || '—'],
+                        ['Title', formData.title || ' '],
+                        ['Department', formData.department || ' '],
                         ['Type', JOB_TYPE_LABELS[formData.jobType]],
-                        ['Location', formData.locations.filter(Boolean).join(', ') || '—'],
+                        ['Location', formData.locations.filter(Boolean).join(', ') || ' '],
                         ['Arrangement', WORK_ARRANGEMENT_LABELS[formData.workArrangement]],
-                        ['Salary', formData.salaryType === 'negotiable' ? 'Negotiable' : formData.salaryType === 'above' ? `Above ${formData.salaryMin} ${formData.salaryCurrency}` : formData.salaryType === 'under' ? `Under ${formData.salaryMin} ${formData.salaryCurrency}` : `${formData.salaryMin || '?'} – ${formData.salaryMax || '?'} ${formData.salaryCurrency}`],
+                        ['Salary', formData.salaryType === 'negotiable'? 'Negotiable': formData.salaryType === 'above'? `Above ${formData.salaryMin} ${formData.salaryCurrency}` : formData.salaryType === 'under'? `Under ${formData.salaryMin} ${formData.salaryCurrency}` : `${formData.salaryMin || '?'} – ${formData.salaryMax || '?'} ${formData.salaryCurrency}`],
                         ['Required Skills', `${formData.requiredSkills.length} skills`],
                         ['Screening Qs', `${formData.screeningQuestions.length} questions`],
                         ['AI Match Min', `${formData.aiMatchRequiredScore || 70}%`],
-                        ['Publish', formData.publishedAt ? new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'],
-                        ['Expires', formData.expiresAt ? new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'],
+                        ['Publish', formData.publishedAt ? new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : ' '],
+                        ['Expires', formData.expiresAt ? new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : ' '],
                       ].map(([k, v]) => (
                         <div key={k} style={{ fontSize: 13 }}>
                           <span style={{ color: C.textMuted }}>{k}: </span>
@@ -2325,7 +2325,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
             </div>{/* end form card */}
 
-            {/* ── Bottom navigation — STICKY at bottom of viewport ── */}
+            {/* ── Bottom navigation   STICKY at bottom of viewport ── */}
             <div style={{
               position: 'sticky',
               bottom: 0,
@@ -2350,8 +2350,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                   <ChevronLeft size={16} /> Previous
                 </button>
 
-                {/* Step dots — quick visual indicator */}
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {/* Step dots   quick visual indicator */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center'}}>
                   {STEPS.map(step => (
                     <button
                       key={step.id}
@@ -2381,8 +2381,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                   </button>
                 ) : (
                   <button onClick={() => handleSave('publish')} disabled={loading} style={primaryBtnStyle}>
-                    {loading ? <Loader2 size={14} style={{ animation: 'spin .8s linear infinite' }} /> : null}
-                    {loading ? 'Publishing…' : isEditing ? 'Update Job' : 'Publish Job'}
+                    {loading ? <Loader2 size={14} style={{ animation: 'spin .8s linear infinite'}} /> : null}
+                    {loading ? 'Publishing…': isEditing ? 'Update Job': 'Publish Job'}
                   </button>
                 )}
               </div>
@@ -2406,11 +2406,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 16, marginBottom: 28, padding: '20px', background: C.bg, borderRadius: C.radiusSm }}>
               {[
-                { label: 'Location', value: formData.locations.filter(Boolean).join(', ') || '—' },
-                { label: 'Salary', value: formData.salaryType === 'negotiable' ? 'Negotiable' : formData.salaryType === 'above' ? `Above ${formData.salaryMin} ${formData.salaryCurrency}` : formData.salaryType === 'under' ? `Under ${formData.salaryMin} ${formData.salaryCurrency}` : (formData.salaryMin || formData.salaryMax) ? `${formData.salaryMin || '—'} – ${formData.salaryMax || '—'} ${formData.salaryCurrency}/${formData.salaryPeriod}` : '—' },
+                { label: 'Location', value: formData.locations.filter(Boolean).join(', ') || ' '},
+                { label: 'Salary', value: formData.salaryType === 'negotiable'? 'Negotiable': formData.salaryType === 'above'? `Above ${formData.salaryMin} ${formData.salaryCurrency}` : formData.salaryType === 'under'? `Under ${formData.salaryMin} ${formData.salaryCurrency}` : (formData.salaryMin || formData.salaryMax) ? `${formData.salaryMin || ' '} – ${formData.salaryMax || ' '} ${formData.salaryCurrency}/${formData.salaryPeriod}` : ' '},
                 { label: 'Visibility', value: formData.visibility.charAt(0).toUpperCase() + formData.visibility.slice(1) },
-                { label: 'Publish', value: formData.publishedAt ? new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' },
-                { label: 'Expires', value: formData.expiresAt ? new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' },
+                { label: 'Publish', value: formData.publishedAt ? new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : ' '},
+                { label: 'Expires', value: formData.expiresAt ? new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : ' '},
               ].map(({ label, value }) => (
                 <div key={label}>
                   <p style={previewLabel}>{label}</p>
@@ -2423,7 +2423,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
             <div style={{ marginTop: 24 }}>
               <p style={{ ...previewLabel, marginBottom: 8 }}>Description</p>
-              <p style={{ fontSize: 14, color: C.text, lineHeight: 1.75, whiteSpace: 'pre-line' }}>{formData.description}</p>
+              <p style={{ fontSize: 14, color: C.text, lineHeight: 1.75, whiteSpace: 'pre-line'}}>{formData.description}</p>
             </div>
 
             {formData.responsibilities.filter(Boolean).length > 0 && (
@@ -2473,7 +2473,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 <ul style={{ paddingLeft: 20, margin: 0 }}>
                   {formData.experienceRequirements.map(exp => (
                     <li key={exp.id} style={{ fontSize: 14, color: C.text, lineHeight: 1.8 }}>
-                      {exp.years ? `${exp.years} year${exp.years !== '1' ? 's' : ''} of ` : ''}<strong>{exp.title}</strong>
+                      {exp.years ? `${exp.years} year${exp.years !== '1'? 's': ''} of ` : ''}<strong>{exp.title}</strong>
                       {exp.description ? ` (${exp.description})` : ''}
                     </li>
                   ))}
@@ -2529,7 +2529,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
               <div style={{ marginTop: 24 }}>
                 <p style={{ ...previewLabel, marginBottom: 8 }}>Language Requirements</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {formData.languages.map((l, i) => <span key={i} style={{ padding: '4px 12px', borderRadius: 20, background: C.bg, color: C.text, fontSize: 13, border: `1px solid ${C.border}` }}>{l.name} — {l.proficiency}{l.is_required ? ' (required)' : ''}</span>)}
+                  {formData.languages.map((l, i) => <span key={i} style={{ padding: '4px 12px', borderRadius: 20, background: C.bg, color: C.text, fontSize: 13, border: `1px solid ${C.border}` }}>{l.name}   {l.proficiency}{l.is_required ? '(required)': ''}</span>)}
                 </div>
               </div>
             )}
@@ -2547,7 +2547,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
               <div style={{ marginTop: 24 }}>
                 <p style={{ ...previewLabel, marginBottom: 8 }}>Required Documents</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {formData.requiredDocuments.map((d, i) => <span key={i} style={{ padding: '4px 12px', borderRadius: 20, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 13 }}>{d.name}{d.is_required ? '' : ' (optional)'}</span>)}
+                  {formData.requiredDocuments.map((d, i) => <span key={i} style={{ padding: '4px 12px', borderRadius: 20, background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontSize: 13 }}>{d.name}{d.is_required ? '': '(optional)'}</span>)}
                 </div>
               </div>
             )}
@@ -2558,8 +2558,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
                 {formData.screeningQuestions.filter(q => q.question.trim()).map((q, i) => (
                   <div key={i} style={{ padding: '10px 14px', background: C.bg, borderRadius: C.radiusSm, marginBottom: 8, border: `1px solid ${C.border}` }}>
                     <p style={{ fontSize: 14, color: C.text, fontWeight: 500 }}>{i + 1}. {q.question}</p>
-                    <p style={{ fontSize: 12, color: C.textMuted }}>{q.type.replace('_', ' ')} · {q.required ? 'Required' : 'Optional'}</p>
-                    {q.type === 'multiple_choice' && q.options && q.options.filter(Boolean).length > 0 && (
+                    <p style={{ fontSize: 12, color: C.textMuted }}>{q.type.replace('_', '')} · {q.required ? 'Required': 'Optional'}</p>
+                    {q.type === 'multiple_choice'&& q.options && q.options.filter(Boolean).length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
                         {q.options.filter(Boolean).map((o, oi) => <span key={oi} style={{ padding: '2px 8px', borderRadius: 4, background: '#fff', border: `1px solid ${C.border}`, fontSize: 12 }}>{o}</span>)}
                       </div>
@@ -2587,9 +2587,9 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
             <div style={{ marginTop: 32, padding: 16, background: C.bg, borderRadius: C.radiusSm }}>
               <p style={{ fontSize: 12, color: C.textMuted }}>
-                <strong>Application window:</strong>{' '}
-                {new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} –{' '}
-                {new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                <strong>Application window:</strong>{''}
+                {new Date(formData.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'})} –{''}
+                {new Date(formData.expiresAt).toLocaleString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'})}
                 {formData.applicationLimit && ` · Max ${formData.applicationLimit} applications`}
               </p>
             </div>
@@ -2600,7 +2600,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
       {/* Delete modal */}
       {showDeleteConfirm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
-          <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.2)' }}>
+          <div style={{ background: C.surface, borderRadius: 16, padding: 32, maxWidth: 420, width: '90%', boxShadow: '0 20px 60px rgba(0,0,0,.2)'}}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <div style={{ width: 44, height: 44, borderRadius: '50%', background: C.dangerGhost, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Trash2 size={20} color={C.danger} />
@@ -2613,10 +2613,10 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
             <p style={{ fontSize: 14, color: C.text, marginBottom: 24 }}>
               Are you sure you want to delete <strong>"{formData.title}"</strong>?
             </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end'}}>
               <button onClick={() => setShowDeleteConfirm(false)} style={ghostBtnStyle}>Cancel</button>
               <button onClick={handleDelete} disabled={loading} style={{ ...primaryBtnStyle, background: C.danger }}>
-                {loading ? 'Deleting…' : 'Delete Job'}
+                {loading ? 'Deleting…': 'Delete Job'}
               </button>
             </div>
           </div>

@@ -4,7 +4,7 @@ const fs = require('fs');
 const privateKeys = {
   network: "localhost",
   generatedAt: new Date().toISOString(),
-  warning: "⚠️ THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ⚠️",
+  warning: " THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ",
   neverUseOnMainnet: "Never use these keys on Mainnet or any live network!",
   accounts: [
     { index: 0, address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", privateKey: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" },
@@ -32,11 +32,11 @@ const privateKeys = {
 
 // Save to file
 fs.writeFileSync('./local-keys.json', JSON.stringify(privateKeys, null, 2));
-console.log("✅ All 20 private keys saved to local-keys.json");
-console.log("📁 File location: " + __dirname + "/local-keys.json");
-console.log("\n⚠️  WARNING:");
+console.log("''All 20 private keys saved to local-keys.json");
+console.log(" File location: " + __dirname + "/local-keys.json");
+console.log("\n️  WARNING:");
 console.log("   - DO NOT commit this file to Git!");
 console.log("   - These keys are for LOCAL DEVELOPMENT only!");
 console.log("   - Never use these keys on Mainnet or any live network!");
-console.log("\n📝 Add to .gitignore:");
+console.log("\n Add to .gitignore:");
 console.log("   local-keys.json");

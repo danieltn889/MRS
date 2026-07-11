@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""
+"
 ICP Project Evaluation System - Main Script
 
 This script evaluates ICP projects based on README documentation quality and commit activity.
-"""
+"
 
 import argparse
 import sys

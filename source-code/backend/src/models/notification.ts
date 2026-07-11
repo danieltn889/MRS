@@ -7,7 +7,7 @@ export interface Notification extends BaseEntity {
   title: string;
   content?: string;
   data?: JSONB;
-  priority: 'low' | 'normal' | 'high' | 'urgent';
+  priority: 'low'| 'normal'| 'high'| 'urgent';
   channels: string[];
   status: NotificationStatus;
   sent_at?: TIMESTAMP;
@@ -58,7 +58,7 @@ export interface NotificationDeliveryMonitoring extends BaseEntity {
 export interface SystemAnnouncement extends BaseEntity {
   title: string;
   content: string;
-  type: 'info' | 'warning' | 'error' | 'success';
+  type: 'info'| 'warning'| 'error'| 'success';
   target_audience: string;
   is_active: boolean;
   published_at?: TIMESTAMP;

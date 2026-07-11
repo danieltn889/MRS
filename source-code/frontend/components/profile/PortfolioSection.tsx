@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Plus, Edit, Trash2, Save, X, ExternalLink, Globe, Github, Linkedin, Briefcase, Upload, FileText, Download, Eye, File as FileIcon, Image as ImageIcon } from 'lucide-react';
 import { addPortfolioLink, updatePortfolioLink, deletePortfolioLink, uploadCandidateDocument } from '../../services/candidateAPI';
+import { resolveFileUrl } from '../../utils/fileUrl';
 import ConfirmDialog from './ConfirmDialog';
 
 // =====================================================
@@ -224,7 +225,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
       setEditingId(null);
       resetForm();
     } catch (error: any) {
-      alert('Error saving portfolio link: ' + (error.message || 'Unknown error'));
+      alert('Error saving portfolio link: '+ (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -255,7 +256,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
       setDeleteId(null);
       onUpdate();
     } catch (error: any) {
-      alert('Error removing portfolio link: ' + (error.message || 'Unknown error'));
+      alert('Error removing portfolio link: '+ (error.message || 'Unknown error'));
     } finally {
       setDeleting(false);
     }
@@ -334,7 +335,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
       {isAdding && (
         <div className="bg-gray-50 p-6 rounded-lg border">
           <h3 className="text-lg font-medium mb-4">
-            {editingId ? 'Edit Portfolio Link' : 'Add Portfolio Link'}
+            {editingId ? 'Edit Portfolio Link': 'Add Portfolio Link'}
           </h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Title */}
@@ -365,7 +366,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                   setUrlError('');
                 }}
                 className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                  urlError ? 'border-red-500' : 'border-gray-300'
+                  urlError ? 'border-red-500': 'border-gray-300'
                 }`}
                 placeholder="https://example.com"
                 required
@@ -414,7 +415,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
             {/* Project Files (images / documents) */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Project Files <span className="text-gray-400 font-normal">(optional — images or documents)</span>
+                Project Files <span className="text-gray-400 font-normal">(optional   images or documents)</span>
               </label>
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
                 <input
@@ -459,7 +460,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                 <div className="mt-3 space-y-2">
                   {formData.attachedFiles.map((file, index) => (
                     <div key={`${file.name}-${index}`} className="flex items-center gap-2 text-sm text-gray-700 bg-white border border-gray-200 rounded-lg px-3 py-2">
-                      {file.type.startsWith('image/') ? <ImageIcon size={16} /> : file.type === 'application/pdf' ? <FileText size={16} /> : <FileIcon size={16} />}
+                      {file.type.startsWith('image/') ? <ImageIcon size={16} /> : file.type === 'application/pdf'? <FileText size={16} /> : <FileIcon size={16} />}
                       <span className="flex-1 truncate">{file.name}</span>
                       <span className="text-xs text-gray-500">{formatFileSize(file.size)}</span>
                       <button type="button" onClick={() => removeAttachedFile(index)} className="text-gray-400 hover:text-red-600" title="Remove">
@@ -492,7 +493,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 <Save size={18} />
-                {loading ? 'Saving...' : 'Save'}
+                {loading ? 'Saving...': 'Save'}
               </button>
               <button
                 type="button"
@@ -572,7 +573,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                       className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium break-all"
                     >
                       <ExternalLink size={14} />
-                      {link.url.length > 50 ? link.url.substring(0, 50) + '...' : link.url}
+                      {link.url.length > 50 ? link.url.substring(0, 50) + '...': link.url}
                     </a>
 
                     {link.description && (
@@ -590,7 +591,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                               <Eye size={15} />
                             </button>
                             {file.file_url && (
-                              <a href={file.file_url} download={file.file_name} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title="Download">
+                              <a href={resolveFileUrl(file.file_url)} download={file.file_name} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title="Download">
                                 <Download size={15} />
                               </a>
                             )}
@@ -625,7 +626,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
               <span className="font-medium text-gray-900 truncate">{previewFile.file_name}</span>
               <div className="flex items-center gap-2 flex-shrink-0">
                 {previewFile.file_url && (
-                  <a href={previewFile.file_url} download={previewFile.file_name} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                  <a href={resolveFileUrl(previewFile.file_url)} download={previewFile.file_name} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
                     <Download size={16} /> Download
                   </a>
                 )}
@@ -639,15 +640,15 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                 <p className="text-center text-gray-500 py-12">Preview unavailable.</p>
               ) : isImageFile(previewFile.file_name) ? (
                 <div className="flex items-center justify-center min-h-[300px] bg-white rounded-lg shadow-inner overflow-auto">
-                  <img src={previewFile.file_url} alt={previewFile.file_name} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
+                  <img src={resolveFileUrl(previewFile.file_url)} alt={previewFile.file_name} className="max-w-full max-h-[70vh] object-contain rounded-lg" />
                 </div>
               ) : isPdfFile(previewFile.file_name) ? (
-                <iframe src={previewFile.file_url} title={previewFile.file_name} className="w-full h-[70vh] rounded-lg bg-white shadow-inner" />
+                <iframe src={resolveFileUrl(previewFile.file_url)} title={previewFile.file_name} className="w-full h-[70vh] rounded-lg bg-white shadow-inner" />
               ) : (
                 <div className="flex flex-col items-center justify-center min-h-[300px] text-center">
                   <FileIcon size={64} className="text-gray-300 mb-4" />
                   <p className="text-gray-600">This file type can't be previewed inline.</p>
-                  <a href={previewFile.file_url} download={previewFile.file_name} target="_blank" rel="noopener noreferrer" className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                  <a href={resolveFileUrl(previewFile.file_url)} download={previewFile.file_name} target="_blank" rel="noopener noreferrer" className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
                     <Download size={16} /> Download File
                   </a>
                 </div>

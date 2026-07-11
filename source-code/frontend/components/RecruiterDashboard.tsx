@@ -138,9 +138,9 @@ const RecruiterDashboard = ({ onBack }: RecruiterDashboardProps) => {
 
   const getFilteredApplications = () => {
     return applications.filter(app => {
-      const matchesJob = selectedJob === 'all' || app.job_id === selectedJob;
-      const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
-      const matchesSearch = searchTerm === '' ||
+      const matchesJob = selectedJob === 'all'|| app.job_id === selectedJob;
+      const matchesStatus = statusFilter === 'all'|| app.status === statusFilter;
+      const matchesSearch = searchTerm === ''||
         app.candidate_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         app.job_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         app.application_number.toLowerCase().includes(searchTerm.toLowerCase());
@@ -226,7 +226,7 @@ const RecruiterDashboard = ({ onBack }: RecruiterDashboardProps) => {
       ])
     ].map(row => row.join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv'});
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -456,15 +456,15 @@ const RecruiterDashboard = ({ onBack }: RecruiterDashboardProps) => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(application.status)}`}>
                         {getStatusIcon(application.status)}
-                        <span className="ml-1 capitalize">{application.status.replace('_', ' ')}</span>
+                        <span className="ml-1 capitalize">{application.status.replace('_', '')}</span>
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {application.match_score ? (
                         <div className="flex items-center">
                           <span className={`text-sm font-medium ${
-                            application.match_score >= 90 ? 'text-green-600' :
-                            application.match_score >= 80 ? 'text-yellow-600' :
+                            application.match_score >= 90 ? 'text-green-600':
+                            application.match_score >= 80 ? 'text-yellow-600':
                             'text-red-600'
                           }`}>
                             {application.match_score}%
@@ -472,8 +472,8 @@ const RecruiterDashboard = ({ onBack }: RecruiterDashboardProps) => {
                           <div className="ml-2 w-16 bg-gray-200 rounded-full h-2">
                             <div
                               className={`h-2 rounded-full ${
-                                application.match_score >= 90 ? 'bg-green-600' :
-                                application.match_score >= 80 ? 'bg-yellow-600' :
+                                application.match_score >= 90 ? 'bg-green-600':
+                                application.match_score >= 80 ? 'bg-yellow-600':
                                 'bg-red-600'
                               }`}
                               style={{ width: `${application.match_score}%` }}
@@ -518,7 +518,7 @@ const RecruiterDashboard = ({ onBack }: RecruiterDashboardProps) => {
               <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No applications found</h3>
               <p className="text-gray-600">
-                {searchTerm || selectedJob !== 'all' || statusFilter !== 'all'
+                {searchTerm || selectedJob !== 'all'|| statusFilter !== 'all'
                   ? 'Try adjusting your filters or search terms.'
                   : 'Applications will appear here as candidates apply to your jobs.'
                 }

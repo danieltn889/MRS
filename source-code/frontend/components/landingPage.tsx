@@ -51,7 +51,7 @@ interface SearchResponse {
     skill_matches: number;
     semantic_matches: number;
   };
-  // Typo-corrected version of the query (see ml_search.py's display_corrected_query) —
+  // Typo-corrected version of the query (see ml_search.py's display_corrected_query)  
   // only meaningfully different from search_term when a typo was actually fixed.
   corrected_query?: string;
 }
@@ -77,7 +77,7 @@ const PRIORITY_CONFIG: Record<string, {
     bgColor: "bg-red-50",
     textColor: "text-red-700",
     borderColor: "border-red-200",
-    icon: "🎯",
+    icon: "''",
     label: "Title Match (Highest)",
     labelShort: "Title",
     order: 1
@@ -86,7 +86,7 @@ const PRIORITY_CONFIG: Record<string, {
     bgColor: "bg-purple-50",
     textColor: "text-purple-700",
     borderColor: "border-purple-200",
-    icon: "📚",
+    icon: "",
     label: "Qualification Match",
     labelShort: "Qual",
     order: 2
@@ -104,7 +104,7 @@ const PRIORITY_CONFIG: Record<string, {
     bgColor: "bg-green-50",
     textColor: "text-green-700",
     borderColor: "border-green-200",
-    icon: "✅",
+    icon: "''",
     label: "Requirements Match",
     labelShort: "Req",
     order: 4
@@ -139,8 +139,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/
 function normalizeBackendJob(job: any): JobResult {
   const locs: string[] = Array.isArray(job.locations)
     ? (job.locations as any[])
-        .map((l) => (typeof l === 'object' ? l.city || l.country || '' : String(l)))
-        .filter(Boolean)
+      .map((l) => (typeof l === 'object' ? l.city || l.country || '' : String(l)))
+      .filter(Boolean)
     : [];
 
   let salary: string | null = null;
@@ -184,9 +184,8 @@ function JobCard({ job, isExpanded, onToggle, onViewJob, showMatchBadge = true }
 
   return (
     <div
-      className={`border rounded-xl bg-white transition-all duration-200 overflow-hidden ${
-        isExpanded ? 'border-blue-300 shadow-lg' : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
-      }`}
+      className={`border rounded-xl bg-white transition-all duration-200 overflow-hidden ${isExpanded ? 'border-blue-300 shadow-lg' : 'border-gray-100 hover:border-gray-200 hover:shadow-sm'
+        }`}
     >
       <button
         onClick={onToggle}
@@ -218,19 +217,18 @@ function JobCard({ job, isExpanded, onToggle, onViewJob, showMatchBadge = true }
                 {job.location[0]}
               </span>
             )}
-            <span className="capitalize">{(job.job_type || 'full-time').replace('-', ' ')}</span>
+            <span className="capitalize">{(job.job_type || 'full-time').replace('-', '')}</span>
             <span className="capitalize">{job.work_arrangement || 'onsite'}</span>
             {job.experience_level && (
-              <span className="capitalize">🎯 {job.experience_level}</span>
+              <span className="capitalize">''{job.experience_level}</span>
             )}
             {job.salary && <span>{job.salary}</span>}
           </div>
         </div>
 
         <ChevronRight
-          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${
-            isExpanded ? 'rotate-90' : ''
-          }`}
+          className={`w-4 h-4 text-gray-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''
+            }`}
         />
       </button>
 
@@ -394,7 +392,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
           setRecentJobs(data.results);
         }
       } catch {
-        // silent — recent pills are optional
+        // silent   recent pills are optional
       } finally {
         setIsLoadingRecent(false);
       }
@@ -574,7 +572,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
 
   const displayedResults = getDisplayedResults();
 
-  // Browse section always shows every loaded job — the search dropdown handles filtered suggestions
+  // Browse section always shows every loaded job   the search dropdown handles filtered suggestions
   const browsedJobs = showAllBrowseJobs ? allJobs : allJobs.slice(0, 10);
 
   return (
@@ -655,29 +653,24 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
           </div>
 
           <div className="w-full px-4 sm:px-6 lg:px-8 text-center">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 border border-blue-100 rounded-full text-sm font-semibold text-blue-700 mb-6">
-              <Sparkles className="w-4 h-4" />
-              AI + Blockchain Powered Recruitment
-            </div>
-
             {/* Headline */}
             <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 leading-tight mb-6 tracking-tight">
               Hire Smarter in<br />
               <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                Rwanda's Digital Economy
+                MIFOTRA recruitment system
               </span>
             </h1>
 
+            
             {/* Subheadline */}
             <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed">
-              Virtual work practical assessments powered by AI behavioral analytics and blockchain verification find the perfect cultural and technical fit for your organisation.
+              Empower smarter hiring decisions with  designed to connect organisations with skilled and qualified talent.
             </p>
 
             {/* ── Search Container ── */}
             <div className="max-w-2xl mx-auto relative z-20" ref={dropdownRef}>
 
-              {/* Input wrapper — focus ring via CSS focus-within */}
+              {/* Input wrapper   focus ring via CSS focus-within */}
               <div className="flex items-center bg-white border border-gray-200 rounded-2xl shadow-md transition-all duration-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100">
                 {/* Search icon */}
                 <div className="pl-4 flex-shrink-0 pointer-events-none">
@@ -702,7 +695,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   className="flex-1 py-4 px-3 outline-none text-gray-900 placeholder-gray-400 bg-transparent text-sm"
                 />
 
-                {/* Clear (X) button — only when there is text */}
+                {/* Clear (X) button   only when there is text */}
                 {searchQuery && (
                   <button
                     onClick={handleClear}
@@ -766,7 +759,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                     </button>
                   </div>
 
-                  {/* "Did you mean" — only shown when typo correction actually changed the query */}
+                  {/* "Did you mean"   only shown when typo correction actually changed the query */}
                   {correctedQuery && (
                     <div className="flex-shrink-0 px-4 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-800">
                       Showing results for <button className="underline font-semibold" onClick={() => handleSearch(correctedQuery)}>{correctedQuery}</button> instead of "{searchQuery}"
@@ -779,10 +772,10 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                       <div className="flex items-center justify-between text-xs flex-wrap gap-2">
                         <span className="font-semibold text-gray-700">Match breakdown:</span>
                         <div className="flex gap-3 flex-wrap">
-                          {searchBreakdown.title_matches > 0 && <span className="text-red-600">🎯 Title: {searchBreakdown.title_matches}</span>}
-                          {searchBreakdown.qualification_matches > 0 && <span className="text-purple-600">📚 Qual: {searchBreakdown.qualification_matches}</span>}
+                          {searchBreakdown.title_matches > 0 && <span className="text-red-600">''Title: {searchBreakdown.title_matches}</span>}
+                          {searchBreakdown.qualification_matches > 0 && <span className="text-purple-600"> Qual: {searchBreakdown.qualification_matches}</span>}
                           {searchBreakdown.responsibility_matches > 0 && <span className="text-blue-600">📋 Resp: {searchBreakdown.responsibility_matches}</span>}
-                          {searchBreakdown.requirement_matches > 0 && <span className="text-green-600">✅ Req: {searchBreakdown.requirement_matches}</span>}
+                          {searchBreakdown.requirement_matches > 0 && <span className="text-green-600">''Req: {searchBreakdown.requirement_matches}</span>}
                           {searchBreakdown.skill_matches > 0 && <span className="text-gray-600">💪 Skills: {searchBreakdown.skill_matches}</span>}
                           {searchBreakdown.semantic_matches > 0 && <span className="text-indigo-600">🧠 Related: {searchBreakdown.semantic_matches}</span>}
                         </div>
@@ -845,7 +838,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                         </div>
                         <h4 className="font-semibold text-gray-900 mb-1">No keyword matches</h4>
                         <p className="text-sm text-gray-500 mb-4 max-w-xs">
-                          Try a job title, skill, or technology — or scroll down to browse every active job.
+                          Try a job title, skill, or technology   or scroll down to browse every active job.
                         </p>
                         <button
                           onClick={() => {
@@ -874,10 +867,10 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                 </div>
               )}
 
-              {/* Recent Jobs — shown only when search is idle */}
+              {/* Recent Jobs   shown only when search is idle */}
               {!showResults && !isSearching && !isLoadingRecent && recentJobs.length > 0 && (
                 <div className="mt-4 text-left">
-                  <p className="text-xs text-gray-400 mb-2">📌 Recent Jobs</p>
+                  <p className="text-xs text-gray-400 mb-2">Recent Jobs</p>
                   <div className="flex flex-wrap gap-2">
                     {recentJobs.slice(0, 5).map((job) => (
                       <button
@@ -907,7 +900,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
               </div>
             </div>
 
-            {/* Browse All Jobs CTA — always visible, outside the dropdown */}
+            {/* Browse All Jobs CTA   always visible, outside the dropdown */}
             <div className="mt-6 flex justify-center">
               <button
                 onClick={() =>
@@ -970,7 +963,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                 </div>
               )}
 
-              {/* Job list — always shows ALL active jobs regardless of search query */}
+              {/* Job list   always shows ALL active jobs regardless of search query */}
               {!isLoadingAllJobs && allJobs.length > 0 && (
                 <>
                   <div className="flex flex-col gap-2">
@@ -1002,7 +995,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                 <div className="text-center py-16 text-gray-400">
                   <Briefcase className="w-12 h-12 mx-auto mb-4 text-gray-200" />
                   <p className="text-lg font-medium">No active job openings at the moment.</p>
-                  <p className="text-sm mt-1">Check back soon — new positions are added regularly.</p>
+                  <p className="text-sm mt-1">Check back soon   new positions are added regularly.</p>
                 </div>
               )}
 
@@ -1245,7 +1238,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
               Ready to Transform<br />Your Hiring?
             </h2>
             <p className="text-xl text-blue-100 mb-10 max-w-2xl mx-auto leading-relaxed">
-              Join the future of recruitment in Rwanda. Start your 14-day free trial today — no credit card required.
+              Join the future of recruitment in Rwanda. Start your 14-day free trial today   no credit card required.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <button

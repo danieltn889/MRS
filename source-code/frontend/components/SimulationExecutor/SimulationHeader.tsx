@@ -26,7 +26,7 @@ interface SimulationHeaderProps {
   setShowMinimap: (show: boolean) => void;
   showSidebar: boolean;
   setShowSidebar: (show: boolean) => void;
-  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  syncStatus: 'idle'| 'syncing'| 'success'| 'error';
   syncMessage: string;
   onPushToLocal: () => void;
   onPullFromLocal: () => void;
@@ -110,7 +110,7 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
             {chatUnreadCount > 0 ? <Bell size={16} /> : <MessageCircle size={16} />}
             {chatUnreadCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 bg-red-500 rounded-full text-[10px] leading-[17px] text-white text-center font-bold">
-                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                {chatUnreadCount > 9 ? '9+': chatUnreadCount}
               </span>
             )}
           </button>
@@ -158,11 +158,11 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
         {/* Editor Controls */}
         <div className="flex items-center gap-1">
           <button
-            onClick={() => setEditorTheme(editorTheme === 'vs-dark' ? 'light' : 'vs-dark')}
+            onClick={() => setEditorTheme(editorTheme === 'vs-dark'? 'light': 'vs-dark')}
             className="p-1.5 text-gray-400 hover:text-white rounded text-sm"
             title="Toggle theme"
           >
-            {editorTheme === 'vs-dark' ? '☀️' : '🌙'}
+            {editorTheme === 'vs-dark'? '☀️': '🌙'}
           </button>
           <button
             onClick={() => setFontSize(Math.max(10, fontSize - 2))}
@@ -181,14 +181,14 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
           </button>
           <button
             onClick={() => setShowMinimap(!showMinimap)}
-            className={`p-1.5 rounded ${showMinimap ? 'text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded ${showMinimap ? 'text-blue-400': 'text-gray-400 hover:text-white'}`}
             title="Toggle minimap"
           >
             <BarChart3 size={13} />
           </button>
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className={`p-1.5 rounded ${showSidebar ? 'text-blue-400' : 'text-gray-400 hover:text-white'}`}
+            className={`p-1.5 rounded ${showSidebar ? 'text-blue-400': 'text-gray-400 hover:text-white'}`}
             title="Toggle left sidebar"
           >
             <Menu size={13} />
@@ -197,7 +197,7 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
           {onToggleRightSidebar && (
             <button
               onClick={onToggleRightSidebar}
-              className={`p-1.5 rounded ${showRightSidebar ? 'text-green-400' : 'text-gray-400 hover:text-white'}`}
+              className={`p-1.5 rounded ${showRightSidebar ? 'text-green-400': 'text-gray-400 hover:text-white'}`}
               title={showRightSidebar ? "Hide repository stats" : "Show repository stats"}
             >
               {showRightSidebar ? <X size={13} /> : <BarChart3 size={13} />}
@@ -205,7 +205,7 @@ const SimulationHeader: React.FC<SimulationHeaderProps> = ({
           )}
         </div>
         {syncMessage && (
-          <span className={`text-xs ${syncStatus === 'success' ? 'text-green-400' : syncStatus === 'error' ? 'text-red-400' : 'text-yellow-400'} ml-1`}>
+          <span className={`text-xs ${syncStatus === 'success'? 'text-green-400': syncStatus === 'error'? 'text-red-400': 'text-yellow-400'} ml-1`}>
             {syncMessage}
           </span>
         )}

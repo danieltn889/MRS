@@ -51,7 +51,7 @@ const storage = multer.diskStorage({
     cb(null, path.join(__dirname, '../../../uploads/company'));
   },
   filename: (req: any, file: Express.Multer.File, cb: (error: Error | null, filename: string) => void) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const uniqueSuffix = Date.now() + '-'+ Math.round(Math.random() * 1E9);
     cb(null, `company-${(req as AuthenticatedRequest).user!.id}-${uniqueSuffix}${path.extname(file.originalname)}`);
   }
 });
@@ -118,7 +118,7 @@ router.get('/', [
       paramIndex++;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM companies c ${whereClause}`;
@@ -1145,7 +1145,7 @@ router.put('/locations/:id', protect, authorize('company_admin'), [
   // 🔧 FIX: Make employeeCount optional and handle string conversion
   body('employeeCount').optional().custom((value) => {
     if (value === undefined || value === null || value === '') return true;
-    const num = typeof value === 'string' ? parseInt(value, 10) : value;
+    const num = typeof value === 'string'? parseInt(value, 10) : value;
     return !isNaN(num) && num >= 0;
   }).withMessage('Employee count must be a non-negative number'),
   validateRequest
@@ -1180,11 +1180,11 @@ router.post('/team', protect, authorize('company_admin'), [
   body('name').trim().isLength({ min: 1, max: 255 }),
   body('title').trim().isLength({ min: 1, max: 255 }),
   body('department').optional().trim().isLength({ max: 255 }),
-  body('email').optional().custom((value) => !value || value === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)),
+  body('email').optional().custom((value) => !value || value === ''|| /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)),
   body('phone').optional().trim().isLength({ max: 50 }),
   body('bio').optional().trim().isLength({ max: 1000 }),
   body('expertise').optional().isArray(),
-  body('linkedinUrl').optional().custom((value) => !value || value === '' || /^https?:\/\/.+/.test(value)),
+  body('linkedinUrl').optional().custom((value) => !value || value === ''|| /^https?:\/\/.+/.test(value)),
   body('role').optional().isIn(['admin', 'recruiter', 'reviewer', 'viewer']),
   body('displayOnProfile').optional().isBoolean(),
   body('isLeadership').optional().isBoolean(),
@@ -1200,11 +1200,11 @@ router.put('/team/:id', protect, authorize('company_admin'), [
   body('name').optional().trim().isLength({ min: 1, max: 255 }),
   body('title').optional().trim().isLength({ min: 1, max: 255 }),
   body('department').optional().trim().isLength({ max: 255 }),
-  body('email').optional().custom((value) => !value || value === '' || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)),
+  body('email').optional().custom((value) => !value || value === ''|| /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)),
   body('phone').optional().trim().isLength({ max: 50 }),
   body('bio').optional().trim().isLength({ max: 1000 }),
   body('expertise').optional().isArray(),
-  body('linkedinUrl').optional().custom((value) => !value || value === '' || /^https?:\/\/.+/.test(value)),
+  body('linkedinUrl').optional().custom((value) => !value || value === ''|| /^https?:\/\/.+/.test(value)),
   body('role').optional().isIn(['admin', 'recruiter', 'reviewer', 'viewer']),
   body('displayOnProfile').optional().isBoolean(),
   body('isLeadership').optional().isBoolean(),
@@ -1517,7 +1517,7 @@ router.get('/jobs', protect, authorize('recruiter', 'company_admin'), [
       companyId: authReq.user.company_id
     });
 
-    if (authReq.user.user_type === 'company_admin' || authReq.user.user_type === 'recruiter') {
+    if (authReq.user.user_type === 'company_admin'|| authReq.user.user_type === 'recruiter') {
       // Always lookup from company_team table first to ensure correct company
       const teamResult = await dbQuery(
         'SELECT company_id FROM company_team WHERE user_id = $1',
@@ -1565,7 +1565,7 @@ router.get('/jobs', protect, authorize('recruiter', 'company_admin'), [
       paramIndex++;
     }
 
-    const whereClause = whereConditions.join(' AND ');
+    const whereClause = whereConditions.join('AND ');
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM jobs j WHERE ${whereClause}`;

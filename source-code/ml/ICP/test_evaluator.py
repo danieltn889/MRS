@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""
+"
 Test script for the ICP Project Evaluator
-"""
+"
 
 import os
 from evaluator import ICPProjectEvaluator
 
 def test_single_project():
-    """Test evaluation of a single project."""
+    "Test evaluation of a single project."
     
     # Check if API keys are set
     if not os.getenv('GROQ_API_KEY') or not os.getenv('GITHUB_TOKEN'):

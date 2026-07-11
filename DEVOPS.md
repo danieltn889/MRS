@@ -1,4 +1,4 @@
-# DEVOPS — Operating the production deployment
+# DEVOPS   Operating the production deployment
 
 Architecture: **pm2** runs the three services on the EC2; **Nginx** is the single
 public entry point; **GitHub Actions** deploys on every push to `main` (rsync → server
@@ -35,7 +35,7 @@ sudo nginx -t && sudo systemctl reload nginx
 ```bash
 curl -s localhost:3001/health            # backend
 curl -s localhost:8080/matcher/health    # ML
-curl -s -o /dev/null -w '%{http_code}\n' localhost:3000   # frontend
+curl -s -o /dev/null -w '%{http_code}\n'localhost:3000   # frontend
 ```
 
 ## Logs
@@ -59,7 +59,7 @@ pm2 startup && pm2 save      # survive server reboot (run once)
 ## Rollback
 Deploys are plain `git` state synced to the server. To roll back, deploy a previous
 commit: in GitHub, revert the bad commit on `main` (or `git reset` to a known-good SHA
-and push) — the workflow redeploys it. On the box you can also:
+and push)   the workflow redeploys it. On the box you can also:
 ```bash
 cd ~/SVWR-CFE && git log --oneline   # if you deploy via git instead of rsync
 ```
@@ -81,7 +81,7 @@ cd ~/SVWR-CFE && git log --oneline   # if you deploy via git instead of rsync
 | Symptom | Check |
 |---|---|
 | Health check fails in CI | `pm2 logs <service>` on the server; missing/invalid `.env`? |
-| ML 503 on first call | model cold-start — wait ~30–60s; check `pm2 logs ml-gateway` |
+| ML 503 on first call | model cold-start   wait ~30–60s; check `pm2 logs ml-gateway` |
 | Frontend 502 via Nginx | is `frontend` running? `pm2 status`; port 3000 up? |
-| Email in spam | DNS (SPF/DKIM/DMARC) on the sending domain — see notes in repo |
+| Email in spam | DNS (SPF/DKIM/DMARC) on the sending domain   see notes in repo |
 | Reset/verify links point to localhost | set `FRONTEND_URL` to the real domain/IP in `.env` |

@@ -48,7 +48,7 @@ router.get('/jobs', protect, [
   const authReq = req as AuthenticatedRequest;
   try {
     if (!['recruiter', 'company_admin'].includes(authReq.user!.user_type)) {
-      res.status(403).json({ success: false, message: 'Access denied' });
+      res.status(403).json({ success: false, message: 'Access denied'});
       return;
     }
     // Placeholder implementation
@@ -77,7 +77,7 @@ router.get('/candidates', protect, [
   const authReq = req as AuthenticatedRequest;
   try {
     if (!['recruiter', 'company_admin'].includes(authReq.user!.user_type)) {
-      res.status(403).json({ success: false, message: 'Access denied' });
+      res.status(403).json({ success: false, message: 'Access denied'});
       return;
     }
     // Placeholder implementation
@@ -106,7 +106,7 @@ router.get('/simulations', protect, [
   const authReq = req as AuthenticatedRequest;
   try {
     if (!['candidate', 'system_admin'].includes(authReq.user!.user_type)) {
-      res.status(403).json({ success: false, message: 'Access denied' });
+      res.status(403).json({ success: false, message: 'Access denied'});
       return;
     }
     // Placeholder implementation
@@ -131,7 +131,7 @@ router.get('/simulations', protect, [
 router.get('/reports/job-performance', [protect, query('jobId').optional().isInt().toInt(), query('startDate').optional().isISO8601(), query('endDate').optional().isISO8601(), validateRequest], async (req: Request, res: Response) => {
   const authReq = req as unknown as AuthenticatedRequest;
   if (!['recruiter', 'company_admin'].includes(authReq.user.user_type)) {
-    return res.status(403).json({ success: false, message: 'Access denied' });
+    return res.status(403).json({ success: false, message: 'Access denied'});
   }
   try {
     const { jobId, startDate, endDate } = req.query;
@@ -145,8 +145,8 @@ router.get('/reports/job-performance', [protect, query('jobId').optional().isInt
         j.created_at,
         j.view_count,
         j.application_count,
-        COUNT(CASE WHEN a.status = 'hired' THEN 1 END) as hired_count,
-        COUNT(CASE WHEN a.status = 'interviewed' THEN 1 END) as interviewed_count,
+        COUNT(CASE WHEN a.status = 'hired'THEN 1 END) as hired_count,
+        COUNT(CASE WHEN a.status = 'interviewed'THEN 1 END) as interviewed_count,
         AVG(EXTRACT(EPOCH FROM (a.updated_at - a.created_at))/86400) as avg_time_to_hire
       FROM jobs j
       LEFT JOIN applications a ON j.id = a.job_id
@@ -155,7 +155,7 @@ router.get('/reports/job-performance', [protect, query('jobId').optional().isInt
     const params: any[] = [userId];
 
     if (jobId) {
-      query += ' AND j.id = $2';
+      query += 'AND j.id = $2';
       params.push(jobId as unknown as number);
     }
 
@@ -169,7 +169,7 @@ router.get('/reports/job-performance', [protect, query('jobId').optional().isInt
       params.push(endDate as string);
     }
 
-    query += ' GROUP BY j.id, j.title, j.status, j.created_at, j.view_count, j.application_count ORDER BY j.created_at DESC';
+    query += 'GROUP BY j.id, j.title, j.status, j.created_at, j.view_count, j.application_count ORDER BY j.created_at DESC';
 
     const result = await dbQuery(query, params);
 
@@ -195,7 +195,7 @@ router.get('/reports/job-performance', [protect, query('jobId').optional().isInt
 router.get('/reports/candidate-insights', [protect, query('startDate').optional().isISO8601(), query('endDate').optional().isISO8601(), validateRequest], async (req: Request, res: Response) => {
   const authReq = req as unknown as AuthenticatedRequest;
   if (!['recruiter', 'company_admin'].includes(authReq.user.user_type)) {
-    return res.status(403).json({ success: false, message: 'Access denied' });
+    return res.status(403).json({ success: false, message: 'Access denied'});
   }
   try {
     const { startDate, endDate } = req.query;
@@ -210,8 +210,8 @@ router.get('/reports/candidate-insights', [protect, query('startDate').optional(
         c.location,
         c.experience_years,
         COUNT(DISTINCT a.id) as total_applications,
-        COUNT(DISTINCT CASE WHEN a.status = 'hired' THEN a.id END) as successful_applications,
-        AVG(CASE WHEN a.status = 'hired' THEN EXTRACT(EPOCH FROM (a.updated_at - a.created_at))/86400 END) as avg_time_to_hire,
+        COUNT(DISTINCT CASE WHEN a.status = 'hired'THEN a.id END) as successful_applications,
+        AVG(CASE WHEN a.status = 'hired'THEN EXTRACT(EPOCH FROM (a.updated_at - a.created_at))/86400 END) as avg_time_to_hire,
         STRING_AGG(DISTINCT s.name, ', ') as top_skills
       FROM candidates c
       LEFT JOIN applications a ON c.user_id = a.candidate_id
@@ -263,7 +263,7 @@ router.get('/reports/candidate-insights', [protect, query('startDate').optional(
 router.get('/reports/platform-usage', [protect, query('startDate').optional().isISO8601(), query('endDate').optional().isISO8601(), validateRequest], async (req: Request, res: Response) => {
   const authReq = req as unknown as AuthenticatedRequest;
   if (!['system_admin'].includes(authReq.user.user_type)) {
-    return res.status(403).json({ success: false, message: 'Access denied' });
+    return res.status(403).json({ success: false, message: 'Access denied'});
   }
   try {
     const { startDate, endDate } = req.query;
@@ -272,7 +272,7 @@ router.get('/reports/platform-usage', [protect, query('startDate').optional().is
     const params = [];
 
     if (startDate) {
-      dateFilter += ' AND created_at >= $1';
+      dateFilter += 'AND created_at >= $1';
       params.push(startDate);
     }
 
@@ -293,7 +293,7 @@ router.get('/reports/platform-usage', [protect, query('startDate').optional().is
     const results: { [key: string]: any } = {};
     for (const [key, query] of Object.entries(queries)) {
       const result = await dbQuery(query, params);
-      results[key] = key === 'userTypeBreakdown' ? result.rows : result.rows[0].count;
+      results[key] = key === 'userTypeBreakdown'? result.rows : result.rows[0].count;
     }
 
     res.json({

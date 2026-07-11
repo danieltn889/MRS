@@ -46,7 +46,7 @@ export const verifyEmailToken = async (req: VerifyEmailRequest, res: Response): 
     const { token } = req.body;
 
     // Validate token format
-    if (!token || typeof token !== 'string' || token.length === 0) {
+    if (!token || typeof token !== 'string'|| token.length === 0) {
       res.status(400).json({
         success: false,
         message: 'Invalid verification token format'
@@ -88,7 +88,7 @@ export const verifyEmailToken = async (req: VerifyEmailRequest, res: Response): 
     const user = userResult.rows[0];
 
     // Case 2: Already verified account
-    if (user.status === 'verified' || user.status === 'active') {
+    if (user.status === 'verified'|| user.status === 'active') {
       await client.query('ROLLBACK');
       res.status(400).json({
         success: false,
@@ -267,7 +267,7 @@ export const resendVerificationEmail = async (req: ResendVerificationRequest, re
     const user = userResult.rows[0];
 
     // Case: Already verified
-    if (user.status === 'verified' || user.status === 'active') {
+    if (user.status === 'verified'|| user.status === 'active') {
       res.json({
         success: true,
         message: 'This email is already verified. You can log in directly.'
@@ -380,7 +380,7 @@ export const verifyEmailCode = async (req: VerifyManualCodeRequest, res: Respons
     const user = userResult.rows[0];
 
     // Already verified
-    if (user.status === 'verified' || user.status === 'active') {
+    if (user.status === 'verified'|| user.status === 'active') {
       await client.query('ROLLBACK');
       res.status(400).json({
         success: false,
@@ -471,7 +471,7 @@ export const checkVerificationStatus = async (req: Request, res: Response): Prom
       success: true,
       data: {
         email: user.email,
-        verified: user.status === 'verified' || user.status === 'active',
+        verified: user.status === 'verified'|| user.status === 'active',
         status: user.status,
         needsVerification: user.needs_verification
       }
@@ -516,7 +516,7 @@ function generateVerificationEmailHTML(email: string, token: string, frontendUrl
       <div class="container">
         <div class="header">
           <h1>Verify Your Email</h1>
-          <p>${isRetry ? 'Your previous link has expired. Here\'s a new one!' : 'Complete your registration'}</p>
+          <p>${isRetry ? 'Your previous link has expired. Here\'s a new one!': 'Complete your registration'}</p>
         </div>
         
         <div class="content">
@@ -538,7 +538,7 @@ function generateVerificationEmailHTML(email: string, token: string, frontendUrl
           <p>If you prefer, you can also <a href="${manualCodeUrl}">enter a verification code manually</a>. A 6-digit code has been sent to your email.</p>
           
           <div class="warning">
-            <strong>⚠️ Security Note:</strong> This link will expire in 24 hours. If it expires, you can request a new verification email.
+            <strong>Security Note:</strong> This link will expire in 24 hours. If it expires, you can request a new verification email.
           </div>
           
           <p style="color: #666; font-size: 12px;">
@@ -575,7 +575,7 @@ function generateWelcomeEmailHTML(email: string): string {
     <body>
       <div class="container">
         <div class="header">
-          <div class="checkmark">✅</div>
+          <div class="checkmark">''</div>
           <h1>Email Verified Successfully!</h1>
         </div>
         

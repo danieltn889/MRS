@@ -63,7 +63,7 @@ interface JobSimulationProps {
 const hasValidScore = (score: any): boolean => {
   if (score === null || score === undefined) return false;
   const strScore = String(score).trim();
-  if (strScore === '' || strScore === 'null' || strScore === 'undefined') return false;
+  if (strScore === ''|| strScore === 'null'|| strScore === 'undefined') return false;
   const numScore = parseFloat(strScore);
   return !isNaN(numScore) && numScore > 0;
 };
@@ -116,7 +116,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       setError(null);
 
       const params: any = { page: 1, limit: 50 };
-      if (selectedStatus !== 'all' && ['not_started', 'in_progress', 'completed'].includes(selectedStatus)) {
+      if (selectedStatus !== 'all'&& ['not_started', 'in_progress', 'completed'].includes(selectedStatus)) {
         params.status = selectedStatus;
       }
 
@@ -143,7 +143,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
             computedStatus = 'completed';
           }
           // If there's a session and it's in progress, mark as in_progress
-          else if (hasSessionId && (sessionStatus === 'in_progress' || sessionStatus === 'scheduled')) {
+          else if (hasSessionId && (sessionStatus === 'in_progress'|| sessionStatus === 'scheduled')) {
             computedStatus = 'in_progress';
           }
           // If completed from API
@@ -231,7 +231,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       let githubRepo = null;
       if (session.github_links || session.githubRepo) {
         const ghData = session.github_links || session.githubRepo;
-        githubRepo = typeof ghData === 'string' ? JSON.parse(ghData) : ghData;
+        githubRepo = typeof ghData === 'string'? JSON.parse(ghData) : ghData;
         console.log('🐙 GitHub repo found in session:', githubRepo);
       }
       
@@ -240,8 +240,8 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       if (userStr) {
         try {
           const user = JSON.parse(userStr);
-          isRecruiter = user.user_type === 'recruiter' || 
-                        user.user_type === 'company_admin' || 
+          isRecruiter = user.user_type === 'recruiter'|| 
+                        user.user_type === 'company_admin'|| 
                         user.user_type === 'system_admin';
         } catch (e) {
           console.error('Failed to parse user:', e);
@@ -286,7 +286,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
   };
 
   const handleStartSimulation = async (simulation: ExtendedSimulation, forceNew: boolean = false) => {
-    console.log('🎯 handleStartSimulation called:', { 
+    console.log('handleStartSimulation called:', { 
       simulationId: simulation.id, 
       forceNew, 
       hasSessionId: !!simulation.sessionId,
@@ -307,21 +307,21 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     }
 
     // Check if there's an existing session ID to resume (only if session is not completed)
-    if (simulation.sessionId && simulation.sessionStatus !== 'completed' && !forceNew) {
+    if (simulation.sessionId && simulation.sessionStatus !== 'completed'&& !forceNew) {
       console.log('🔄 Existing active session found, showing resume dialog. SessionId:', simulation.sessionId);
       await fetchSessionDetails(simulation.sessionId, simulation);
       return;
     }
 
     // For new sessions, show GitHub username dialog
-    console.log('✨ No existing active session or forceNew=true, showing GitHub dialog');
+    console.log(' No existing active session or forceNew=true, showing GitHub dialog');
     setPendingSimulation(simulation);
     setSessionStartDialogOpen(true);
     setDialogError(null);
   };
 
   const handleResumeExistingSession = async (simulation: ExtendedSimulation) => {
-    console.log('🎯 handleResumeExistingSession called with simulation:', simulation);
+    console.log('handleResumeExistingSession called with simulation:', simulation);
     
     const sessionId = simulation.sessionId;
     
@@ -346,7 +346,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         const sessionData = resumeResponse.data;
         const finalSessionId = sessionData.sessionId || sessionId;
         
-        console.log('✅ Resume successful, opening simulation with sessionId:', finalSessionId);
+        console.log('Resume successful, opening simulation with sessionId:', finalSessionId);
         
         window.open(`/simulation/execute/${finalSessionId}`, '_blank');
         
@@ -356,7 +356,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         throw new Error(resumeResponse.message || 'Failed to resume practical assessment');
       }
     } catch (err: any) {
-      console.error('❌ Failed to resume simulation:', err);
+      console.error(' Failed to resume simulation:', err);
       alert(err.message || 'Failed to resume practical assessment. Please try again.');
     } finally {
       setIsResuming(false);
@@ -385,7 +385,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
       setDialogLoading(true);
       setDialogError(null);
 
-      console.log('🚀 Starting NEW simulation with:', {
+      console.log(' Starting NEW simulation with:', {
         simulationId: simulation.id,
         applicationId: simulation.applicationId,
         githubUsername
@@ -423,7 +423,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
         setDialogError(startResponse.message || 'Failed to create GitHub repository');
       }
     } catch (err: any) {
-      console.error('❌ Failed to start simulation:', err);
+      console.error(' Failed to start simulation:', err);
       setDialogError(err.message || 'Failed to start practical assessment. Please try again.');
     } finally {
       setDialogLoading(false);
@@ -476,7 +476,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
                          data.simulation_session?.id;
         
         if (sessionId) {
-          console.log('✅ Found sessionId from API:', sessionId);
+          console.log('Found sessionId from API:', sessionId);
           return sessionId;
         }
       }
@@ -503,7 +503,7 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     }
 
     if (simulation.sessionId) {
-      console.log('✅ Using sessionId for navigation to session report:', simulation.sessionId);
+      console.log('Using sessionId for navigation to session report:', simulation.sessionId);
       navigate(`/session-report/${simulation.sessionId}`);
       return;
     }
@@ -511,22 +511,22 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
     try {
       const foundSessionId = await findSessionIdForSimulation(simulation.id);
       if (foundSessionId) {
-        console.log('✅ Found sessionId via API, navigating to session report:', foundSessionId);
+        console.log('Found sessionId via API, navigating to session report:', foundSessionId);
         navigate(`/session-report/${foundSessionId}`);
         return;
       }
 
       if (hasValidScore(simulation.score)) {
-        console.log('⚠️ Simulation has score but no sessionId, showing modal');
+        console.log(' Simulation has score but no sessionId, showing modal');
         setNoSessionSimulation(simulation);
         setNoSessionModalOpen(true);
         return;
       }
 
-      console.log('❌ No sessionId found anywhere, falling back to results page');
+      console.log(' No sessionId found anywhere, falling back to results page');
       navigate(`/simulation/results/${simulation.id}`);
     } catch (error) {
-      console.error('❌ Error finding sessionId:', error);
+      console.error(' Error finding sessionId:', error);
       navigate(`/simulation/results/${simulation.id}`);
     }
   };
@@ -647,40 +647,40 @@ const JobSimulation: React.FC<JobSimulationProps> = ({ onBack }) => {
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No practical assessments available</h3>
           <p className="text-gray-600 max-w-md mx-auto">
             {selectedStatus !== 'all'
-              ? `You don't have any ${selectedStatus.replace('_', ' ')} practical assessments.`
+              ? `You don't have any ${selectedStatus.replace('_', '')} practical assessments.`
               : "The employers you applied to haven't created practical assessments yet. Check back later!"}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6">
           {simulations.map((simulation, index) => {
-            // ✅ Check if simulation has valid configuration (has tasks)
+            // ''Check if simulation has valid configuration (has tasks)
             const isValidConfig = hasValidConfig(simulation);
-            const isTemplateMissing = simulation.status === 'no_template' || !isValidConfig;
+            const isTemplateMissing = simulation.status === 'no_template'|| !isValidConfig;
             
             const hasSessionId = !!simulation.sessionId;
             const hasScore = hasValidScore(simulation.score);
             const sessionStatus = simulation.sessionStatus;
             
-            // ✅ IN PROGRESS only if: has sessionId AND session is NOT completed/submitted AND has valid config
+            // ''IN PROGRESS only if: has sessionId AND session is NOT completed/submitted AND has valid config
             const isInProgress = hasSessionId && 
                                  !isTemplateMissing && 
-                                 sessionStatus !== 'completed' && 
+                                 sessionStatus !== 'completed'&& 
                                  sessionStatus !== 'submitted';
             
-            // ✅ COMPLETED if: status is 'completed' OR (has sessionId and session is completed) OR (has score without session)
-            const isCompleted = (simulation.status === 'completed' || 
+            // ''COMPLETED if: status is 'completed'OR (has sessionId and session is completed) OR (has score without session)
+            const isCompleted = (simulation.status === 'completed'|| 
                                 (hasSessionId && sessionStatus === 'completed') ||
                                 (hasScore && !hasSessionId)) && 
                                 !isTemplateMissing;
             
-            // ✅ NOT STARTED: has valid config, no sessionId, no score, not completed
+            // ''NOT STARTED: has valid config, no sessionId, no score, not completed
             const isNotStarted = !hasSessionId && 
                                  !hasScore && 
                                  !isTemplateMissing && 
                                  simulation.status !== 'completed';
             
-            console.log(`🎯 Simulation ${simulation.id}:`, {
+            console.log(`''Simulation ${simulation.id}:`, {
               isValidConfig,
               isTemplateMissing,
               hasSessionId,

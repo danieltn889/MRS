@@ -1,6 +1,6 @@
 # ICP Evaluation Tools
 
-This folder contains Python tooling used for automated evaluation experiments and README/commit activity analysis. It supports the V-WES capstone work by helping evaluate documentation quality and development activity.
+This folder contains Python tooling used for automated evaluation experiments and README/commit activity analysis. It supports the MRS capstone work by helping evaluate documentation quality and development activity.
 
 ## Company Information
 

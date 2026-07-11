@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""
+"
 PRIORITY-BASED JOB SEARCH API - 5 LEXICAL LEVELS + SEMANTIC FALLBACK
 NO HARDCODED TERMS - PURE NLP, WITH TYPO CORRECTION
-"""
+"
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,7 +26,7 @@ from nltk.stem import WordNetLemmatizer
 from nltk.tokenize import word_tokenize
 
 # Semantic embeddings (same model as ai_job_matcher_og.py / hybrid_job_recommender.py)
-# — optional: search still works with pure TF-IDF if this package is unavailable.
+#   optional: search still works with pure TF-IDF if this package is unavailable.
 try:
     from sentence_transformers import SentenceTransformer
     USE_SEMANTIC = True
@@ -65,15 +65,15 @@ def log_info(message):
     write_log(DEBUG_LOG, message, "INFO")
 
 def log_success(message): 
-    print(f"✅ {message}")
+    print(f"''{message}")
     write_log(DEBUG_LOG, message, "SUCCESS")
 
 def log_error(message): 
-    print(f"❌ {message}")
+    print(f" {message}")
     write_log(ERROR_LOG, message, "ERROR")
 
 def log_match(message):
-    print(f"🎯 {message}")
+    print(f"''{message}")
     write_log(MATCH_LOG, message, "MATCH")
 
 def log_debug(message):
@@ -124,11 +124,11 @@ STOP_WORDS = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
 def correct_typos(tokens: List[str], vocab: set) -> List[str]:
-    """Fuzzy-correct each token against a vocabulary built from the real job
-    postings (see PrioritySearchEngine.add_to_vocab) — same difflib approach
+    "Fuzzy-correct each token against a vocabulary built from the real job
+    postings (see PrioritySearchEngine.add_to_vocab)   same difflib approach
     ai_job_matcher_og.py uses for skill matching. Only touches tokens longer
     than 3 chars and not already a known word, so short/valid words are never
-    altered. A no-op when no vocabulary has been built yet."""
+    altered. A no-op when no vocabulary has been built yet."
     if not tokens or not vocab:
         return tokens
     corrected = []
@@ -138,26 +138,26 @@ def correct_typos(tokens: List[str], vocab: set) -> List[str]:
             continue
         match = difflib.get_close_matches(tok, vocab, n=1, cutoff=0.86)
         if match and match[0] != tok:
-            log_nlp(f"  [typo-correction] '{tok}' -> '{match[0]}'")
+            log_nlp(f"  [typo-correction] '{tok}'-> '{match[0]}'")
         corrected.append(match[0] if match else tok)
     return corrected
 
 def display_corrected_query(query: str, vocab: set) -> str:
-    """A readable 'did you mean' string — typo-corrected only, keeping
+    "A readable 'did you mean'string   typo-corrected only, keeping
     stopwords and word forms intact (unlike preprocess_text's TF-IDF-ready
-    output) so it's fit to show back to a user."""
+    output) so it's fit to show back to a user."
     if not query or not vocab:
         return query
-    tokens = re.sub(r'[^a-z0-9\s]', ' ', query.lower()).split()
+    tokens = re.sub(r'[^a-z0-9\s]', '', query.lower()).split()
     corrected = correct_typos(tokens, vocab)
-    return ' '.join(corrected)
+    return ''.join(corrected)
 
 def preprocess_text(text: str, context: str = "general", vocab: set = None) -> str:
-    """Pure NLP preprocessing - NO hardcoded terms.
+    "Pure NLP preprocessing - NO hardcoded terms.
     `vocab`, when given (only for the incoming search query, not job text),
-    fuzzy-corrects typos against real terms seen in the job postings."""
+    fuzzy-corrects typos against real terms seen in the job postings."
     if not text:
-        return ""
+        return 
 
     original = text
     log_nlp(f"  [{context}] Original: '{original[:100]}'")
@@ -166,7 +166,7 @@ def preprocess_text(text: str, context: str = "general", vocab: set = None) -> s
     text = text.lower()
 
     # Keep alphanumeric and spaces only (remove special chars but keep word boundaries)
-    text = re.sub(r'[^a-z0-9\s]', ' ', text)
+    text = re.sub(r'[^a-z0-9\s]', '', text)
 
     # Tokenize
     tokens = word_tokenize(text)
@@ -177,7 +177,7 @@ def preprocess_text(text: str, context: str = "general", vocab: set = None) -> s
     tokens = [token for token in tokens if token not in STOP_WORDS and len(token) > 1]
     log_nlp(f"  [{context}] After stopword removal: {len(tokens)} tokens (removed {tokens_before - len(tokens)})")
 
-    # Typo correction (query only) — before lemmatization, so correction
+    # Typo correction (query only)   before lemmatization, so correction
     # compares real surface forms against the vocabulary.
     if vocab:
         tokens = correct_typos(tokens, vocab)
@@ -186,7 +186,7 @@ def preprocess_text(text: str, context: str = "general", vocab: set = None) -> s
     tokens = [lemmatizer.lemmatize(token) for token in tokens]
     log_nlp(f"  [{context}] After lemmatization: {tokens[:10]}")
 
-    result = ' '.join(tokens)
+    result = ''.join(tokens)
     log_nlp(f"  [{context}] Final: '{result}'")
 
     return result
@@ -196,13 +196,13 @@ def preprocess_text(text: str, context: str = "general", vocab: set = None) -> s
 # =====================================================
 
 def extract_title_text(job: dict) -> str:
-    """PRIORITY 1: Job Title"""
+    "PRIORITY 1: Job Title"
     title = job.get('title', '')
     log_debug(f"    Title: '{title}'")
     return preprocess_text(title, "title")
 
 def extract_qualification_text(job: dict) -> str:
-    """PRIORITY 2: Qualifications & Education"""
+    "PRIORITY 2: Qualifications & Education"
     text_parts = []
     
     # Qualifications text
@@ -247,12 +247,12 @@ def extract_qualification_text(job: dict) -> str:
         if cert:
             text_parts.append(preprocess_text(cert, "certification"))
     
-    result = ' '.join(text_parts)
+    result = ''.join(text_parts)
     log_debug(f"    Qualifications text length: {len(result)} chars")
     return result
 
 def extract_responsibilities_text(job: dict) -> str:
-    """PRIORITY 3: Responsibilities"""
+    "PRIORITY 3: Responsibilities"
     text_parts = []
     
     responsibilities = job.get('responsibilities', [])
@@ -278,12 +278,12 @@ def extract_responsibilities_text(job: dict) -> str:
                     processed = preprocess_text(value, f"responsibility_{i}")
                     text_parts.append(processed)
     
-    result = ' '.join(text_parts)
+    result = ''.join(text_parts)
     log_debug(f"    Responsibilities text length: {len(result)} chars")
     return result
 
 def extract_requirements_text(job: dict) -> str:
-    """PRIORITY 4: Requirements"""
+    "PRIORITY 4: Requirements"
     text_parts = []
     
     requirements = job.get('requirements', [])
@@ -309,12 +309,12 @@ def extract_requirements_text(job: dict) -> str:
                     processed = preprocess_text(value, f"requirement_{i}")
                     text_parts.append(processed)
     
-    result = ' '.join(text_parts)
+    result = ''.join(text_parts)
     log_debug(f"    Requirements text length: {len(result)} chars")
     return result
 
 def extract_skills_text(job: dict) -> str:
-    """PRIORITY 5: Skills (Fallback) - Pure NLP, no hardcoding"""
+    "PRIORITY 5: Skills (Fallback) - Pure NLP, no hardcoding"
     text_parts = []
     skill_set = set()
     
@@ -378,7 +378,7 @@ def extract_skills_text(job: dict) -> str:
             if processed:
                 text_parts.append(processed)
     
-    result = ' '.join(text_parts)
+    result = ''.join(text_parts)
     log_debug(f"    Total unique skills: {len(skill_set)}")
     log_debug(f"    Skills text length: {len(result)} chars")
     log_skill(f"    Final skills text: '{result[:200]}'")
@@ -412,20 +412,20 @@ class PrioritySearchEngine:
 
     def __init__(self):
         self.models = {
-            'title': {'vectorizer': None, 'vectors': None, 'name': 'JOB TITLE', 'icon': '🎯', 'threshold': 0.20},
-            'qualification': {'vectorizer': None, 'vectors': None, 'name': 'QUALIFICATIONS', 'icon': '📚', 'threshold': 0.15},
+            'title': {'vectorizer': None, 'vectors': None, 'name': 'JOB TITLE', 'icon': '', 'threshold': 0.20},
+            'qualification': {'vectorizer': None, 'vectors': None, 'name': 'QUALIFICATIONS', 'icon': '', 'threshold': 0.15},
             'responsibility': {'vectorizer': None, 'vectors': None, 'name': 'RESPONSIBILITIES', 'icon': '📋', 'threshold': 0.12},
-            'requirement': {'vectorizer': None, 'vectors': None, 'name': 'REQUIREMENTS', 'icon': '✅', 'threshold': 0.10},
+            'requirement': {'vectorizer': None, 'vectors': None, 'name': 'REQUIREMENTS', 'icon': '', 'threshold': 0.10},
             'skill': {'vectorizer': None, 'vectors': None, 'name': 'SKILLS', 'icon': '💪', 'threshold': 0.05}
         }
         self.jobs = []
         self.is_fitted = False
 
-        # Typo-correction vocabulary — built from the real job postings at fit()
+        # Typo-correction vocabulary   built from the real job postings at fit()
         # time (titles, skills, qualifications, etc.), not a static word list.
         self.dynamic_vocab: set = set()
 
-        # Semantic fallback — catches conceptually related jobs with no lexical
+        # Semantic fallback   catches conceptually related jobs with no lexical
         # overlap at all (e.g. query "backend developer" vs. a posting titled
         # "Node.js Engineer"). Same model as ai_job_matcher_og.py /
         # hybrid_job_recommender.py, loaded once and reused.
@@ -440,19 +440,19 @@ class PrioritySearchEngine:
         self.semantic_matrix = None  # (n_jobs, 384) embeddings, one per job
 
     def add_to_vocab(self, terms: List[str]):
-        """Populate the fuzzy-correction vocabulary from real job text."""
+        "Populate the fuzzy-correction vocabulary from real job text."
         for term in terms:
             if not term or not isinstance(term, str):
                 continue
-            cleaned = re.sub(r'[^\w\s]', ' ', term.lower())
+            cleaned = re.sub(r'[^\w\s]', '', term.lower())
             for tok in cleaned.split():
                 if len(tok) > 3:
                     self.dynamic_vocab.add(tok)
 
     def _job_semantic_text(self, job: dict) -> str:
-        """A compact 'concept' string per job (title + skills) for the
-        semantic embedding — short and focused, unlike the full TF-IDF texts,
-        since sentence-transformers work best on phrase-length input."""
+        "A compact 'concept'string per job (title + skills) for the
+        semantic embedding   short and focused, unlike the full TF-IDF texts,
+        since sentence-transformers work best on phrase-length input."
         parts = [job.get('title', '') or '']
         for key in ('skills_required', 'skills_preferred'):
             skills = job.get(key, [])
@@ -465,10 +465,10 @@ class PrioritySearchEngine:
                 name = skill.get('name') if isinstance(skill, dict) else skill
                 if name:
                     parts.append(str(name))
-        return ' '.join(parts)
+        return ''.join(parts)
 
     def fit(self, jobs: List[dict]):
-        """Train all 5 models with complete logging"""
+        "Train all 5 models with complete logging"
         if not jobs:
             log_error("No jobs provided for training!")
             return
@@ -497,14 +497,14 @@ class PrioritySearchEngine:
         
         # Train each model
         # Title model
-        log_info(f"🎯 Training Level: JOB TITLE...")
+        log_info(f"''Training Level: JOB TITLE...")
         vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=5000, min_df=1)
         self.models['title']['vectors'] = vectorizer.fit_transform(title_texts)
         self.models['title']['vectorizer'] = vectorizer
         log_success(f"   JOB TITLE model ready. Vocabulary: {len(vectorizer.vocabulary_)}")
         
         # Qualifications model
-        log_info(f"📚 Training Level: QUALIFICATIONS...")
+        log_info(f" Training Level: QUALIFICATIONS...")
         vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=5000, min_df=1)
         self.models['qualification']['vectors'] = vectorizer.fit_transform(qual_texts)
         self.models['qualification']['vectorizer'] = vectorizer
@@ -518,7 +518,7 @@ class PrioritySearchEngine:
         log_success(f"   RESPONSIBILITIES model ready. Vocabulary: {len(vectorizer.vocabulary_)}")
         
         # Requirements model
-        log_info(f"✅ Training Level: REQUIREMENTS...")
+        log_info(f"''Training Level: REQUIREMENTS...")
         vectorizer = TfidfVectorizer(ngram_range=(1, 2), max_features=5000, min_df=1)
         self.models['requirement']['vectors'] = vectorizer.fit_transform(req_texts)
         self.models['requirement']['vectorizer'] = vectorizer
@@ -531,7 +531,7 @@ class PrioritySearchEngine:
         self.models['skill']['vectorizer'] = vectorizer
         log_success(f"   SKILLS model ready. Vocabulary: {len(vectorizer.vocabulary_)}")
 
-        # Typo-correction vocabulary — built from every level's real text, so a
+        # Typo-correction vocabulary   built from every level's real text, so a
         # misspelled query word can be fuzzy-matched against actual terms used
         # in the postings (skills, titles, qualifications, etc.).
         self.dynamic_vocab = set()
@@ -542,7 +542,7 @@ class PrioritySearchEngine:
         self.add_to_vocab(skill_texts)
         log_success(f"   Typo-correction vocabulary ready: {len(self.dynamic_vocab)} terms")
 
-        # Semantic fallback embeddings — one compact (title + skills) vector per job
+        # Semantic fallback embeddings   one compact (title + skills) vector per job
         if self.semantic_model:
             log_info("🧠 Training Level: SEMANTIC (fallback)...")
             semantic_texts = [self._job_semantic_text(job) for job in jobs]
@@ -558,11 +558,11 @@ class PrioritySearchEngine:
             self.semantic_matrix = None
 
         self.is_fitted = True
-        log_success("✅ All 5 models trained successfully!")
+        log_success("''All 5 models trained successfully!")
         write_log(TRAINING_LOG, "Training completed successfully", "SUCCESS")
     
     def search(self, query: str, thresholds: Dict = None) -> Dict:
-        """Search using 5 priority levels with complete logging"""
+        "Search using 5 priority levels with complete logging"
         if thresholds is None:
             thresholds = {
                 'title': 0.20,
@@ -619,12 +619,12 @@ class PrioritySearchEngine:
                 job = self.jobs[idx]
                 job_title = job.get('title', 'Unknown')
                 
-                log_vector(f"   Job {idx}: '{job_title}' - {data['name']} score: {score:.4f}")
+                log_vector(f"   Job {idx}: '{job_title}'- {data['name']} score: {score:.4f}")
                 write_log(VECTOR_LOG, f"{data['name']} - '{job_title}': {score:.4f}", "SCORE")
                 
                 if score >= threshold:
-                    log_match(f"   ✅ '{job_title}' - Score: {score:.4f} (threshold: {threshold})")
-                    write_log(MATCH_LOG, f"MATCH at {data['name']} level: '{job_title}' score {score:.4f}", "MATCH")
+                    log_match(f"   '''{job_title}'- Score: {score:.4f} (threshold: {threshold})")
+                    write_log(MATCH_LOG, f"MATCH at {data['name']} level: '{job_title}'score {score:.4f}", "MATCH")
                     
                     results[f"{level}_matches"].append({
                         'job': job,
@@ -635,12 +635,12 @@ class PrioritySearchEngine:
                     })
                     matched_indices.add(idx)
                 else:
-                    log_debug(f"   ❌ '{job_title}' - Score: {score:.4f} < {threshold}")
+                    log_debug(f"    '{job_title}'- Score: {score:.4f} < {threshold}")
             
             log_success(f"   {data['name']} matches: {len(results[f'{level}_matches'])}")
             write_log(SEARCH_LOG, f"{data['name']} matches: {len(results[f'{level}_matches'])}", "INFO")
 
-        # LEVEL 6 (fallback): SEMANTIC — catches jobs with no lexical overlap at
+        # LEVEL 6 (fallback): SEMANTIC   catches jobs with no lexical overlap at
         # all against the ORIGINAL (uncorrected) query, e.g. "backend developer"
         # matching a posting titled "Node.js Engineer". Only fills in jobs the
         # 5 lexical levels above didn't already match.
@@ -658,9 +658,9 @@ class PrioritySearchEngine:
                         continue
                     job = self.jobs[idx]
                     job_title = job.get('title', 'Unknown')
-                    log_vector(f"   Job {idx}: '{job_title}' - SEMANTIC score: {score:.4f}")
+                    log_vector(f"   Job {idx}: '{job_title}'- SEMANTIC score: {score:.4f}")
                     if score >= self.SEMANTIC_THRESHOLD:
-                        log_match(f"   ✅ '{job_title}' - Semantic score: {score:.4f}")
+                        log_match(f"   '''{job_title}'- Semantic score: {score:.4f}")
                         results['semantic_matches'].append({
                             'job': job,
                             'score': float(score),
@@ -677,10 +677,10 @@ class PrioritySearchEngine:
         total = sum(len(v) for v in results.values())
         log_info("=" * 50)
         log_success(f"📊 SEARCH SUMMARY: {total} total matches")
-        log_success(f"   🎯 Title: {len(results['title_matches'])}")
-        log_success(f"   📚 Qualifications: {len(results['qualification_matches'])}")
+        log_success(f"   ''Title: {len(results['title_matches'])}")
+        log_success(f"    Qualifications: {len(results['qualification_matches'])}")
         log_success(f"   📋 Responsibilities: {len(results['responsibility_matches'])}")
-        log_success(f"   ✅ Requirements: {len(results['requirement_matches'])}")
+        log_success(f"   ''Requirements: {len(results['requirement_matches'])}")
         log_success(f"   💪 Skills: {len(results['skill_matches'])}")
         log_success(f"   🧠 Semantic: {len(results['semantic_matches'])}")
         log_info("=" * 50)
@@ -732,10 +732,10 @@ class BackendClient:
             return False
     
     def _fetch_all_job_summaries(self):
-        """/jobs/candidate/list paginates (default limit=20, max=100) since it's
-        built for candidates browsing the UI — search needs the full active set,
+        "/jobs/candidate/list paginates (default limit=20, max=100) since it's
+        built for candidates browsing the UI   search needs the full active set,
         not just the most recent 20 (same fix as ai_job_matcher_og.py's
-        BackendClient.get_jobs())."""
+        BackendClient.get_jobs())."
         all_jobs = []
         page = 1
         page_size = 100
@@ -820,7 +820,7 @@ backend = BackendClient()
 # =====================================================
 
 def format_job(job: dict, match_info: dict = None) -> dict:
-    """Format job with match information"""
+    "Format job with match information"
     try:
         # Extract skills
         skills = []
@@ -867,10 +867,10 @@ def format_job(job: dict, match_info: dict = None) -> dict:
 
 @app.get("/search")
 async def search_jobs(
-    q: str = Query(default="", description="Search query"),
+    q: str = Query(default=, description="Search query"),
     limit: int = Query(default=50, ge=1, le=100)
 ):
-    """5-level priority search with complete logging"""
+    "5-level priority search with complete logging"
     start_time = datetime.now()
     write_log(SEARCH_LOG, f"NEW SEARCH: '{q}'", "INFO")
     
@@ -890,7 +890,7 @@ async def search_jobs(
     results = backend.search_engine.search(q)
     
     # Combine results in priority order (semantic is the lowest-priority
-    # fallback — it only ever contains jobs the 5 lexical levels above missed)
+    # fallback   it only ever contains jobs the 5 lexical levels above missed)
     all_matches = []
     all_matches.extend(results['title_matches'])
     all_matches.extend(results['qualification_matches'])
@@ -933,7 +933,7 @@ async def search_jobs(
 
 @app.get("/logs/all")
 async def get_all_logs():
-    """Get all log files content"""
+    "Get all log files content"
     all_logs = {}
     for log_file in [DEBUG_LOG, SEARCH_LOG, ERROR_LOG, NLP_LOG, DATA_LOG, MATCH_LOG, VECTOR_LOG, SKILLS_LOG, QUERY_LOG, TRAINING_LOG]:
         if log_file.exists():
@@ -951,7 +951,7 @@ async def get_all_logs():
 
 @app.get("/logs/{log_type}")
 async def get_log(log_type: str):
-    """Get specific log file"""
+    "Get specific log file"
     log_map = {
         "debug": DEBUG_LOG,
         "search": SEARCH_LOG,
@@ -980,10 +980,10 @@ async def health():
         "status": "healthy",
         "service": "6-Level Priority Job Search API - Pure NLP + Semantic + Typo Correction",
         "priority_levels": [
-            {"level": 1, "name": "JOB TITLE", "icon": "🎯", "threshold": 0.20},
-            {"level": 2, "name": "QUALIFICATIONS & EDUCATION", "icon": "📚", "threshold": 0.15},
+            {"level": 1, "name": "JOB TITLE", "icon": "''", "threshold": 0.20},
+            {"level": 2, "name": "QUALIFICATIONS & EDUCATION", "icon": "", "threshold": 0.15},
             {"level": 3, "name": "RESPONSIBILITIES", "icon": "📋", "threshold": 0.12},
-            {"level": 4, "name": "REQUIREMENTS", "icon": "✅", "threshold": 0.10},
+            {"level": 4, "name": "REQUIREMENTS", "icon": "''", "threshold": 0.10},
             {"level": 5, "name": "SKILLS", "icon": "💪", "threshold": 0.05},
             {"level": 6, "name": "SEMANTIC (fallback, related jobs with no keyword overlap)", "icon": "🧠", "threshold": PrioritySearchEngine.SEMANTIC_THRESHOLD}
         ],
@@ -1010,10 +1010,10 @@ async def root():
         "api": "5-Level Priority Job Search API - Pure NLP (No Hardcoded Terms)",
         "description": "Searches in priority order using pure NLP - NO hardcoded tech terms",
         "priority_logic": [
-            "1️⃣ 🎯 JOB TITLE (Highest Priority) - Threshold 0.20",
-            "2️⃣ 📚 QUALIFICATIONS & EDUCATION - Threshold 0.15",
+            "1️⃣ ''JOB TITLE (Highest Priority) - Threshold 0.20",
+            "2️⃣  QUALIFICATIONS & EDUCATION - Threshold 0.15",
             "3️⃣ 📋 RESPONSIBILITIES - Threshold 0.12",
-            "4️⃣ ✅ REQUIREMENTS - Threshold 0.10",
+            "4️⃣ ''REQUIREMENTS - Threshold 0.10",
             "5️⃣ 💪 SKILLS (Lowest Priority / Fallback) - Threshold 0.05"
         ],
         "logging": {
@@ -1042,13 +1042,13 @@ async def root():
 
 if __name__ == "__main__":
     print("\n" + "=" * 80)
-    print("🎯 5-LEVEL PRIORITY JOB SEARCH API - PURE NLP (NO HARDCODED TERMS)")
+    print("''5-LEVEL PRIORITY JOB SEARCH API - PURE NLP (NO HARDCODED TERMS)")
     print("=" * 80)
     print("\n📋 PRIORITY LEVELS (in search order):")
-    print("   1️⃣ 🎯 JOB TITLE (Highest) - Threshold: 0.20")
-    print("   2️⃣ 📚 QUALIFICATIONS & EDUCATION - Threshold: 0.15")
+    print("   1️⃣ ''JOB TITLE (Highest) - Threshold: 0.20")
+    print("   2️⃣  QUALIFICATIONS & EDUCATION - Threshold: 0.15")
     print("   3️⃣ 📋 RESPONSIBILITIES - Threshold: 0.12")
-    print("   4️⃣ ✅ REQUIREMENTS - Threshold: 0.10")
+    print("   4️⃣ ''REQUIREMENTS - Threshold: 0.10")
     print("   5️⃣ 💪 SKILLS (Fallback) - Threshold: 0.05")
     print("\n📁 LOG DIRECTORY:", LOG_DIR.absolute())
     print("\n📋 LOG FILES CREATED:")
@@ -1063,12 +1063,12 @@ if __name__ == "__main__":
     backend.fetch_jobs()
     
     print("\n🌐 Server starting on http://localhost:8001")
-    print("\n📝 Test commands:")
+    print("\n Test commands:")
     print("   curl 'http://localhost:8001/search?q=Software%20Engineer'")
     print("   curl 'http://localhost:8001/search?q=node%20js'")
     print("   curl 'http://localhost:8001/search?q=Bachelor%20Computer%20Science'")
     print("   curl 'http://localhost:8001/health'")
-    print("   curl 'http://localhost:8001/logs/all'  # View all logs")
+    print("   curl 'http://localhost:8001/logs/all' # View all logs")
     print("=" * 80 + "\n")
     
     uvicorn.run(app, host="0.0.0.0", port=8001)

@@ -2,7 +2,7 @@
   "network": "localhost",
   "chainId": 1337,
   "generatedAt": "2026-06-26T23:40:57.214Z",
-  "warning": "⚠️ THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ⚠️",
+  "warning": " THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ",
   "neverUseOnMainnet": "Never use these keys on Mainnet or any live network!",
   "accounts": [
     {

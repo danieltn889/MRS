@@ -1,21 +1,21 @@
 #!/usr/bin/env python3
-"""
+"
 Setup script for ICP Project Evaluation System
-"""
+"
 
 import os
 import sys
 import subprocess
 
 def check_python_version():
-    """Check if Python version is compatible."""
+    "Check if Python version is compatible."
     if sys.version_info < (3, 8):
         print("Error: Python 3.8 or higher is required")
         sys.exit(1)
     print(f"✓ Python {sys.version_info.major}.{sys.version_info.minor} detected")
 
 def install_dependencies():
-    """Install required dependencies."""
+    "Install required dependencies."
     print("Installing dependencies...")
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
@@ -25,7 +25,7 @@ def install_dependencies():
         sys.exit(1)
 
 def setup_environment():
-    """Set up environment file."""
+    "Set up environment file."
     env_file = ".env"
     if os.path.exists(env_file):
         print(f"✓ Environment file {env_file} already exists")
@@ -40,7 +40,7 @@ def setup_environment():
             f.write(content)
         
         print(f"✓ Created {env_file} file")
-        print("⚠️  Please edit .env file and add your API keys:")
+        print("  Please edit .env file and add your API keys:")
         print("   - GROQ_API_KEY: Get from https://console.groq.com/")
         print("   - GITHUB_TOKEN: Get from GitHub Settings → Developer settings → Personal access tokens")
     except Exception as e:

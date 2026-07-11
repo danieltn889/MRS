@@ -68,7 +68,7 @@ router.get('/stats', async (_req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Admin stats error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load platform stats' });
+    res.status(500).json({ success: false, message: 'Failed to load platform stats'});
   }
 });
 
@@ -118,12 +118,12 @@ router.get('/companies', [
     });
   } catch (error) {
     logger.error('Admin list companies error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load companies' });
+    res.status(500).json({ success: false, message: 'Failed to load companies'});
   }
 });
 
 // @route   POST /api/v1/admin/companies
-// @desc    Create a company (no owner yet — assign one via User Management)
+// @desc    Create a company (no owner yet   assign one via User Management)
 router.post('/companies', [
   body('name').trim().isLength({ min: 1, max: 100 }),
   body('description').optional().trim().isLength({ max: 2000 }),
@@ -146,10 +146,10 @@ router.post('/companies', [
     );
 
     logger.info(`Company created by system admin: ${result.rows[0].id}`);
-    res.status(201).json({ success: true, data: result.rows[0], message: 'Company created' });
+    res.status(201).json({ success: true, data: result.rows[0], message: 'Company created'});
   } catch (error) {
     logger.error('Admin create company error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create company' });
+    res.status(500).json({ success: false, message: 'Failed to create company'});
   }
 });
 
@@ -172,7 +172,7 @@ router.put('/companies/:id', [
 
     const existing = await dbQuery('SELECT headquarters_location FROM companies WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (existing.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'Company not found' });
+      res.status(404).json({ success: false, message: 'Company not found'});
       return;
     }
 
@@ -202,10 +202,10 @@ router.put('/companies/:id', [
       values
     );
 
-    res.json({ success: true, data: result.rows[0], message: 'Company updated' });
+    res.json({ success: true, data: result.rows[0], message: 'Company updated'});
   } catch (error) {
     logger.error('Admin update company error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update company' });
+    res.status(500).json({ success: false, message: 'Failed to update company'});
   }
 });
 
@@ -218,14 +218,14 @@ router.delete('/companies/:id', [param('id').isUUID(), validateRequest], async (
       [id]
     );
     if (result.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'Company not found' });
+      res.status(404).json({ success: false, message: 'Company not found'});
       return;
     }
     logger.info(`Company soft-deleted by system admin: ${id}`);
-    res.json({ success: true, message: 'Company deleted' });
+    res.json({ success: true, message: 'Company deleted'});
   } catch (error) {
     logger.error('Admin delete company error:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete company' });
+    res.status(500).json({ success: false, message: 'Failed to delete company'});
   }
 });
 
@@ -250,7 +250,7 @@ router.get('/companies/:id/users', [param('id').isUUID(), validateRequest], asyn
     res.json({ success: true, data: result.rows });
   } catch (error) {
     logger.error('Admin list company users error:', error);
-    res.status(500).json({ success: false, message: 'Failed to load users' });
+    res.status(500).json({ success: false, message: 'Failed to load users'});
   }
 });
 
@@ -280,7 +280,7 @@ router.post('/companies/:id/users', [
     );
     if (companyRes.rows.length === 0) {
       await client.query('ROLLBACK');
-      res.status(404).json({ success: false, message: 'Company not found' });
+      res.status(404).json({ success: false, message: 'Company not found'});
       return;
     }
     const company = companyRes.rows[0];
@@ -288,11 +288,11 @@ router.post('/companies/:id/users', [
     const dupe = await client.query('SELECT id FROM users WHERE email = $1', [email]);
     if (dupe.rows.length > 0) {
       await client.query('ROLLBACK');
-      res.status(409).json({ success: false, message: 'A user with this email already exists' });
+      res.status(409).json({ success: false, message: 'A user with this email already exists'});
       return;
     }
 
-    const userType = teamRole === 'admin' ? 'company_admin' : 'recruiter';
+    const userType = teamRole === 'admin'? 'company_admin': 'recruiter';
     const tempPassword = genTempPassword();
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(tempPassword, salt);
@@ -314,7 +314,7 @@ router.post('/companies/:id/users', [
 
     // First admin assigned to a company with no owner yet becomes its owner,
     // so existing company_admin-gated endpoints (job posting, etc.) work for them.
-    if (teamRole === 'admin' && !company.created_by) {
+    if (teamRole === 'admin'&& !company.created_by) {
       await client.query('UPDATE companies SET created_by = $1, updated_at = NOW() WHERE id = $2', [newUser.id, companyId]);
     }
 
@@ -327,7 +327,7 @@ router.post('/companies/:id/users', [
         name,
         email,
         tempPassword,
-        roleLabel: teamRole === 'admin' ? 'Company Admin' : teamRole.charAt(0).toUpperCase() + teamRole.slice(1),
+        roleLabel: teamRole === 'admin'? 'Company Admin': teamRole.charAt(0).toUpperCase() + teamRole.slice(1),
         companyName: company.name,
         loginUrl: `${process.env.FRONTEND_URL || ''}/login`,
       });
@@ -343,7 +343,7 @@ router.post('/companies/:id/users', [
   } catch (error) {
     await client.query('ROLLBACK');
     logger.error('Admin create user error:', error);
-    res.status(500).json({ success: false, message: 'Failed to create user' });
+    res.status(500).json({ success: false, message: 'Failed to create user'});
   } finally {
     client.release();
   }
@@ -368,7 +368,7 @@ router.put('/users/:id', [
         [status, id]
       );
       if (result.rows.length === 0) {
-        res.status(404).json({ success: false, message: 'User not found' });
+        res.status(404).json({ success: false, message: 'User not found'});
         return;
       }
     }
@@ -385,15 +385,15 @@ router.put('/users/:id', [
       if (teamRole) {
         await dbQuery(
           `UPDATE users SET user_type = $1, updated_at = NOW() WHERE id = $2 AND user_type IN ('company_admin','recruiter')`,
-          [teamRole === 'admin' ? 'company_admin' : 'recruiter', id]
+          [teamRole === 'admin'? 'company_admin': 'recruiter', id]
         );
       }
     }
 
-    res.json({ success: true, message: 'User updated' });
+    res.json({ success: true, message: 'User updated'});
   } catch (error) {
     logger.error('Admin update user error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update user' });
+    res.status(500).json({ success: false, message: 'Failed to update user'});
   }
 });
 
@@ -407,17 +407,17 @@ router.delete('/users/:id', [param('id').isUUID(), validateRequest], async (req:
       [id]
     );
     if (result.rows.length === 0) {
-      res.status(404).json({ success: false, message: 'User not found' });
+      res.status(404).json({ success: false, message: 'User not found'});
       return;
     }
     await dbQuery('DELETE FROM company_team WHERE user_id = $1', [id]);
     await dbQuery('UPDATE companies SET created_by = NULL WHERE created_by = $1', [id]);
 
     logger.info(`User soft-deleted by system admin: ${id}`);
-    res.json({ success: true, message: 'User deleted' });
+    res.json({ success: true, message: 'User deleted'});
   } catch (error) {
     logger.error('Admin delete user error:', error);
-    res.status(500).json({ success: false, message: 'Failed to delete user' });
+    res.status(500).json({ success: false, message: 'Failed to delete user'});
   }
 });
 

@@ -1,7 +1,7 @@
 // hardhat.config.js - local dev + free Sepolia testnet deploy
 require('@nomiclabs/hardhat-waffle');
 require('@nomiclabs/hardhat-ethers');
-try { require('dotenv').config(); } catch (e) { /* dotenv optional — env vars can be passed inline */ }
+try { require('dotenv').config(); } catch (e) { /* dotenv optional   env vars can be passed inline */ }
 
 module.exports = {
   solidity: {

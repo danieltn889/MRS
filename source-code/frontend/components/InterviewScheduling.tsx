@@ -34,8 +34,8 @@ interface Interview {
   candidateName: string;
   jobTitle: string;
   companyName: string;
-  type: 'phone' | 'video' | 'onsite' | 'panel';
-  status: 'scheduled' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+  type: 'phone'| 'video'| 'onsite'| 'panel';
+  status: 'scheduled'| 'confirmed'| 'completed'| 'cancelled'| 'no_show';
   scheduledAt: string;
   duration: number; // minutes
   interviewers: Interviewer[];
@@ -62,7 +62,7 @@ interface InterviewFeedback {
   culturalFit: number;
   strengths: string[];
   weaknesses: string[];
-  recommendation: 'strong_hire' | 'hire' | 'maybe' | 'no_hire';
+  recommendation: 'strong_hire'| 'hire'| 'maybe'| 'no_hire';
   notes: string;
   submittedAt: string;
   submittedBy: string;
@@ -87,7 +87,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
     candidateId: '',
     candidateName: '',
     jobTitle: '',
-    type: 'video' as const,
+    type: 'video'as const,
     scheduledAt: '',
     duration: 60,
     interviewers: [] as Interviewer[],
@@ -103,7 +103,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
     culturalFit: 3,
     strengths: [] as string[],
     weaknesses: [] as string[],
-    recommendation: 'maybe' as const,
+    recommendation: 'maybe'as const,
     notes: ''
   });
 
@@ -217,12 +217,12 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
 
   const getFilteredInterviews = () => {
     return interviews.filter(interview => {
-      const matchesSearch = searchTerm === '' ||
+      const matchesSearch = searchTerm === ''||
         interview.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         interview.jobTitle.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesStatus = filterStatus === 'all' || interview.status === filterStatus;
-      const matchesType = filterType === 'all' || interview.type === filterType;
+      const matchesStatus = filterStatus === 'all'|| interview.status === filterStatus;
+      const matchesType = filterType === 'all'|| interview.type === filterType;
 
       return matchesSearch && matchesStatus && matchesType;
     });
@@ -277,7 +277,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
       const feedbackData: InterviewFeedback = {
         ...feedback,
         submittedAt: new Date().toISOString(),
-        submittedBy: 'Current User' // Would come from auth context
+        submittedBy: 'Current User'// Would come from auth context
       };
 
       setInterviews(prev => prev.map(interview =>
@@ -356,7 +356,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
     const date = new Date(dateString);
     return {
       date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})
     };
   };
 
@@ -512,7 +512,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(interview.status)}`}>
                           {getStatusIcon(interview.status)}
-                          <span className="ml-1 capitalize">{interview.status.replace('_', ' ')}</span>
+                          <span className="ml-1 capitalize">{interview.status.replace('_', '')}</span>
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -541,7 +541,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                           >
                             <Eye size={16} />
                           </button>
-                          {interview.status === 'scheduled' && (
+                          {interview.status === 'scheduled'&& (
                             <>
                               <button className="text-green-600 hover:text-green-800">
                                 <CheckCircle size={16} />
@@ -551,7 +551,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                               </button>
                             </>
                           )}
-                          {interview.status === 'completed' && !interview.feedback && (
+                          {interview.status === 'completed'&& !interview.feedback && (
                             <button
                               onClick={() => {
                                 setSelectedInterview(interview);
@@ -576,7 +576,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
               <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No interviews found</h3>
               <p className="text-gray-600">
-                {searchTerm || filterStatus !== 'all' || filterType !== 'all'
+                {searchTerm || filterStatus !== 'all'|| filterType !== 'all'
                   ? 'Try adjusting your filters or search terms.'
                   : 'Schedule your first interview to get started.'
                 }
@@ -633,7 +633,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                     <h4 className="font-medium text-gray-900 mb-2">Status</h4>
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedInterview.status)}`}>
                       {getStatusIcon(selectedInterview.status)}
-                      <span className="ml-1 capitalize">{selectedInterview.status.replace('_', ' ')}</span>
+                      <span className="ml-1 capitalize">{selectedInterview.status.replace('_', '')}</span>
                     </span>
                   </div>
                 </div>
@@ -699,7 +699,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                               <Star
                                 key={star}
                                 size={16}
-                                className={star <= selectedInterview.feedback.overallRating ? 'text-yellow-500 fill-current' : 'text-gray-300'}
+                                className={star <= selectedInterview.feedback.overallRating ? 'text-yellow-500 fill-current': 'text-gray-300'}
                               />
                             ))}
                           </div>
@@ -707,12 +707,12 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                         <div>
                           <span className="text-sm text-gray-600">Recommendation:</span>
                           <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
-                            selectedInterview.feedback.recommendation === 'strong_hire' ? 'bg-green-100 text-green-800' :
-                            selectedInterview.feedback.recommendation === 'hire' ? 'bg-blue-100 text-blue-800' :
-                            selectedInterview.feedback.recommendation === 'maybe' ? 'bg-yellow-100 text-yellow-800' :
+                            selectedInterview.feedback.recommendation === 'strong_hire'? 'bg-green-100 text-green-800':
+                            selectedInterview.feedback.recommendation === 'hire'? 'bg-blue-100 text-blue-800':
+                            selectedInterview.feedback.recommendation === 'maybe'? 'bg-yellow-100 text-yellow-800':
                             'bg-red-100 text-red-800'
                           }`}>
-                            {selectedInterview.feedback.recommendation.replace('_', ' ').toUpperCase()}
+                            {selectedInterview.feedback.recommendation.replace('_', '').toUpperCase()}
                           </span>
                         </div>
                       </div>
@@ -811,7 +811,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                     />
                   </div>
 
-                  {newInterview.type === 'onsite' && (
+                  {newInterview.type === 'onsite'&& (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Location
@@ -826,7 +826,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                     </div>
                   )}
 
-                  {(newInterview.type === 'video' || newInterview.type === 'phone') && (
+                  {(newInterview.type === 'video'|| newInterview.type === 'phone') && (
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Meeting Link
@@ -911,7 +911,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                         >
                           <Star
                             size={24}
-                            className={star <= feedback.overallRating ? 'text-yellow-500 fill-current' : 'text-gray-300'}
+                            className={star <= feedback.overallRating ? 'text-yellow-500 fill-current': 'text-gray-300'}
                           />
                         </button>
                       ))}
@@ -947,7 +947,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                         >
                           <Star
                             size={20}
-                            className={star <= feedback.technicalSkills ? 'text-blue-500 fill-current' : 'text-gray-300'}
+                            className={star <= feedback.technicalSkills ? 'text-blue-500 fill-current': 'text-gray-300'}
                           />
                         </button>
                       ))}
@@ -967,7 +967,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                         >
                           <Star
                             size={20}
-                            className={star <= feedback.communication ? 'text-green-500 fill-current' : 'text-gray-300'}
+                            className={star <= feedback.communication ? 'text-green-500 fill-current': 'text-gray-300'}
                           />
                         </button>
                       ))}
@@ -987,7 +987,7 @@ const InterviewScheduling = ({ onBack }: InterviewSchedulingProps) => {
                         >
                           <Star
                             size={20}
-                            className={star <= feedback.culturalFit ? 'text-purple-500 fill-current' : 'text-gray-300'}
+                            className={star <= feedback.culturalFit ? 'text-purple-500 fill-current': 'text-gray-300'}
                           />
                         </button>
                       ))}

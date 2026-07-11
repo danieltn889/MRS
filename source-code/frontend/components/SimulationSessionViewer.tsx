@@ -38,7 +38,7 @@ interface SimulationSession {
   simulationType: string;
   difficulty: string;
   duration: number;
-  status: 'not_started' | 'in_progress' | 'completed';
+  status: 'not_started'| 'in_progress'| 'completed';
   score?: number;
   startedAt?: string;
   completedAt?: string;
@@ -92,7 +92,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
   const [selectedSession, setSelectedSession] = useState<SimulationDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [resumingId, setResumingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'in_progress' | 'completed'>('all');
+  const [filter, setFilter] = useState<'all'| 'in_progress'| 'completed'>('all');
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showResultsModal, setShowResultsModal] = useState(false);
@@ -105,10 +105,10 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
     total: sessions.length,
     completed: sessions.filter(s => s.status === 'completed').length,
     inProgress: sessions.filter(s => s.status === 'in_progress').length,
-    averageScore: sessions.filter(s => s.status === 'completed' && s.score).length > 0 
-      ? sessions.filter(s => s.status === 'completed' && s.score).reduce((sum, s) => sum + (s.score || 0), 0) / sessions.filter(s => s.status === 'completed' && s.score).length
+    averageScore: sessions.filter(s => s.status === 'completed'&& s.score).length > 0 
+      ? sessions.filter(s => s.status === 'completed'&& s.score).reduce((sum, s) => sum + (s.score || 0), 0) / sessions.filter(s => s.status === 'completed'&& s.score).length
       : null,
-    bestScore: sessions.filter(s => s.status === 'completed' && s.score).length > 0 
+    bestScore: sessions.filter(s => s.status === 'completed'&& s.score).length > 0 
       ? Math.max(...sessions.filter(s => s.status === 'completed').map(s => s.score || 0))
       : null
   };
@@ -132,7 +132,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
       const response = await simulationAPI.getMySimulationSessions({ 
         page: 1, 
         limit: 100,
-        status: filter === 'all' ? undefined : filter
+        status: filter === 'all'? undefined : filter
       });
       
       console.log('📊 API Response:', response);
@@ -154,7 +154,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
       // Map to component format
       let mappedSessions: SimulationSession[] = sessionsList.map((item: any) => {
         // Determine status
-        let status: 'not_started' | 'in_progress' | 'completed' = 'not_started';
+        let status: 'not_started'| 'in_progress'| 'completed'= 'not_started';
         const sessionStatus = item.session_status || item.status;
         
         if (sessionStatus === 'completed') {
@@ -250,9 +250,9 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
         console.log('📊 Submission results:', submissionResults);
         
         // Determine correct status
-        let sessionStatus: 'not_started' | 'in_progress' | 'completed' = 'not_started';
+        let sessionStatus: 'not_started'| 'in_progress'| 'completed'= 'not_started';
         
-        if (sessionData?.status === 'completed' || evaluationData?.status === 'completed' || apiData.has_evaluation === true) {
+        if (sessionData?.status === 'completed'|| evaluationData?.status === 'completed'|| apiData.has_evaluation === true) {
           sessionStatus = 'completed';
         } else if (sessionData?.status === 'in_progress') {
           sessionStatus = 'in_progress';
@@ -382,7 +382,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
   const ResultsModal = () => {
     if (!selectedSession) return null;
     
-    // ✅ Get submission_results from selectedSession
+    // ''Get submission_results from selectedSession
     const submissionResults = selectedSession.submission_results || {};
     
     // Check if we have submission results
@@ -407,14 +407,14 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
     
     // Score categories
     const scoreCategories = [
-      { name: 'Overall Score', score: scores.overall || score, max: 100, icon: <Award className="w-4 h-4" />, color: 'bg-blue-500' },
-      { name: 'Technical', score: scores.technical || 0, max: 100, icon: <Brain className="w-4 h-4" />, color: 'bg-purple-500' },
-      { name: 'Speed', score: scores.speed || 0, max: 100, icon: <Zap className="w-4 h-4" />, color: 'bg-yellow-500' },
-      { name: 'GitHub', score: scores.github || 0, max: 100, icon: <Github className="w-4 h-4" />, color: 'bg-gray-700' },
-      { name: 'Communication', score: scores.communication || 0, max: 100, icon: <MessageSquare className="w-4 h-4" />, color: 'bg-green-500' },
-      { name: 'Collaboration', score: scores.collaboration || 0, max: 100, icon: <Users className="w-4 h-4" />, color: 'bg-indigo-500' },
-      { name: 'Quality', score: scores.quality || 0, max: 100, icon: <Target className="w-4 h-4" />, color: 'bg-pink-500' },
-      { name: 'Behavioral', score: scores.behavioral || 0, max: 100, icon: <Heart className="w-4 h-4" />, color: 'bg-red-500' }
+      { name: 'Overall Score', score: scores.overall || score, max: 100, icon: <Award className="w-4 h-4" />, color: 'bg-blue-500'},
+      { name: 'Technical', score: scores.technical || 0, max: 100, icon: <Brain className="w-4 h-4" />, color: 'bg-purple-500'},
+      { name: 'Speed', score: scores.speed || 0, max: 100, icon: <Zap className="w-4 h-4" />, color: 'bg-yellow-500'},
+      { name: 'GitHub', score: scores.github || 0, max: 100, icon: <Github className="w-4 h-4" />, color: 'bg-gray-700'},
+      { name: 'Communication', score: scores.communication || 0, max: 100, icon: <MessageSquare className="w-4 h-4" />, color: 'bg-green-500'},
+      { name: 'Collaboration', score: scores.collaboration || 0, max: 100, icon: <Users className="w-4 h-4" />, color: 'bg-indigo-500'},
+      { name: 'Quality', score: scores.quality || 0, max: 100, icon: <Target className="w-4 h-4" />, color: 'bg-pink-500'},
+      { name: 'Behavioral', score: scores.behavioral || 0, max: 100, icon: <Heart className="w-4 h-4" />, color: 'bg-red-500'}
     ];
     
     // GitHub detailed marks
@@ -432,7 +432,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 Detailed results are being processed. Please check back later.
               </p>
               <p className="text-sm text-gray-500 mb-4">
-                Score: {Math.round(score)}% {passed ? '(Passed)' : '(Failed)'}
+                Score: {Math.round(score)}% {passed ? '(Passed)': '(Failed)'}
               </p>
               <button
                 onClick={() => setShowResultsModal(false)}
@@ -467,7 +467,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
             {/* Overall Score Section */}
             <div className="text-center mb-8">
               <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-br ${
-                passed ? 'from-green-500 to-teal-600' : 'from-red-500 to-orange-600'
+                passed ? 'from-green-500 to-teal-600': 'from-red-500 to-orange-600'
               } mb-4`}>
                 <div className="text-center">
                   <div className="text-3xl font-bold text-white">{Math.round(score)}%</div>
@@ -475,10 +475,10 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 </div>
               </div>
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold ${
-                passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                passed ? 'bg-green-100 text-green-700': 'bg-red-100 text-red-700'
               }`}>
                 {passed ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                {passed ? 'PASSED' : 'FAILED'} (Passing Score: {summary.passing_score || 70}%)
+                {passed ? 'PASSED': 'FAILED'} (Passing Score: {summary.passing_score || 70}%)
               </div>
             </div>
             
@@ -496,7 +496,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                         <span className="font-medium text-gray-900">{cat.name}</span>
                       </div>
                       <span className={`text-lg font-bold ${
-                        cat.score >= 70 ? 'text-green-600' : cat.score >= 50 ? 'text-yellow-600' : 'text-red-600'
+                        cat.score >= 70 ? 'text-green-600': cat.score >= 50 ? 'text-yellow-600': 'text-red-600'
                       }`}>
                         {Math.round(cat.score)}%
                       </span>
@@ -504,7 +504,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div 
                         className={`h-2 rounded-full transition-all duration-500 ${
-                          cat.score >= 70 ? 'bg-green-500' : cat.score >= 50 ? 'bg-yellow-500' : 'bg-red-500'
+                          cat.score >= 70 ? 'bg-green-500': cat.score >= 50 ? 'bg-yellow-500': 'bg-red-500'
                         }`}
                         style={{ width: `${Math.min(100, cat.score)}%` }}
                       />
@@ -540,7 +540,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                     </div>
                     <div className="bg-white rounded p-2 text-center border">
                       <p className="text-xs text-gray-500">README</p>
-                      <p className="text-lg font-bold">{githubDetailedMarks.readme?.present ? '✓' : '✗'}</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.readme?.present ? '✓': '✗'}</p>
                       <p className="text-xs text-green-600">+{githubDetailedMarks.readme?.earned || 0}/{githubDetailedMarks.readme?.max || 15}</p>
                     </div>
                     <div className="bg-white rounded p-2 text-center border">
@@ -550,7 +550,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                     </div>
                     <div className="bg-white rounded p-2 text-center border">
                       <p className="text-xs text-gray-500">.gitignore</p>
-                      <p className="text-lg font-bold">{githubDetailedMarks.gitignore?.present ? '✓' : '✗'}</p>
+                      <p className="text-lg font-bold">{githubDetailedMarks.gitignore?.present ? '✓': '✗'}</p>
                       <p className="text-xs text-green-600">+{githubDetailedMarks.gitignore?.earned || 0}/{githubDetailedMarks.gitignore?.max || 5}</p>
                     </div>
                     <div className="bg-white rounded p-2 text-center border">
@@ -645,8 +645,8 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 <div className="space-y-3">
                   {taskAnalysis.map((task: any, idx: number) => (
                     <div key={idx} className={`p-4 rounded-lg border ${
-                      task.status === 'completed' ? 'bg-green-50 border-green-200' :
-                      task.status === 'in_progress' ? 'bg-yellow-50 border-yellow-200' :
+                      task.status === 'completed'? 'bg-green-50 border-green-200':
+                      task.status === 'in_progress'? 'bg-yellow-50 border-yellow-200':
                       'bg-gray-50 border-gray-200'
                     }`}>
                       <div className="flex justify-between items-start">
@@ -654,16 +654,16 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-sm font-medium text-gray-500">Task {task.task_index + 1}</span>
                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                              task.status === 'completed' ? 'bg-green-200 text-green-800' :
-                              task.status === 'in_progress' ? 'bg-yellow-200 text-yellow-800' :
+                              task.status === 'completed'? 'bg-green-200 text-green-800':
+                              task.status === 'in_progress'? 'bg-yellow-200 text-yellow-800':
                               'bg-gray-200 text-gray-600'
                             }`}>
-                              {task.status === 'in_progress' ? 'In Progress' : task.status === 'completed' ? 'Completed' : 'Not Started'}
+                              {task.status === 'in_progress'? 'In Progress': task.status === 'completed'? 'Completed': 'Not Started'}
                             </span>
                             {task.scores?.overall > 0 && (
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                task.scores.overall >= 70 ? 'bg-green-200 text-green-800' :
-                                task.scores.overall >= 50 ? 'bg-yellow-200 text-yellow-800' :
+                                task.scores.overall >= 70 ? 'bg-green-200 text-green-800':
+                                task.scores.overall >= 50 ? 'bg-yellow-200 text-yellow-800':
                                 'bg-red-200 text-red-800'
                               }`}>
                                 Score: {Math.round(task.scores.overall)}%
@@ -677,7 +677,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                           {task.scores?.overall > 0 && (
                             <div className="text-2xl font-bold text-gray-700">{Math.round(task.scores.overall)}%</div>
                           )}
-                          {task.time_taken_formatted && task.time_taken_formatted !== 'Not started' && (
+                          {task.time_taken_formatted && task.time_taken_formatted !== 'Not started'&& (
                             <div className="text-xs text-gray-400 mt-1">{task.time_taken_formatted}</div>
                           )}
                         </div>
@@ -699,7 +699,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                   {(feedback.strengths || []).map((s: string, i: number) => (
                     <li key={i} className="text-sm text-green-700 flex items-start gap-2">
                       <span className="text-green-500">•</span>
-                      {s.replace('✅', '').trim()}
+                      {s.replace('', '').trim()}
                     </li>
                   ))}
                   {(!feedback.strengths || feedback.strengths.length === 0) && (
@@ -717,7 +717,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                   {(feedback.improvements || []).map((imp: string, i: number) => (
                     <li key={i} className="text-sm text-red-700 flex items-start gap-2">
                       <span className="text-red-500">•</span>
-                      {imp.replace('⚠️', '').trim()}
+                      {imp.replace('', '').trim()}
                     </li>
                   ))}
                   {(!feedback.improvements || feedback.improvements.length === 0) && (
@@ -924,15 +924,15 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold text-gray-900">
-              {isSpecificSimulation ? 'Practical Assessment Sessions' : 'My Practical Assessment Sessions'}
+              {isSpecificSimulation ? 'Practical Assessment Sessions': 'My Practical Assessment Sessions'}
             </h2>
             {!isSpecificSimulation && (
               <div className="flex gap-2">
                 <button
                   onClick={() => setFilter('all')}
                   className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                    filter === 'all' 
-                      ? 'bg-blue-600 text-white' 
+                    filter === 'all'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
@@ -941,8 +941,8 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 <button
                   onClick={() => setFilter('in_progress')}
                   className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                    filter === 'in_progress' 
-                      ? 'bg-yellow-600 text-white' 
+                    filter === 'in_progress'
+                      ? 'bg-yellow-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
@@ -951,8 +951,8 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 <button
                   onClick={() => setFilter('completed')}
                   className={`px-3 py-1 rounded-lg text-sm transition-colors ${
-                    filter === 'completed' 
-                      ? 'bg-green-600 text-white' 
+                    filter === 'completed'
+                      ? 'bg-green-600 text-white'
                       : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                   }`}
                 >
@@ -1014,7 +1014,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                       </div>
                     </div>
 
-                    {session.status === 'completed' && session.score && (
+                    {session.status === 'completed'&& session.score && (
                       <div className="mt-3 flex items-center gap-4">
                         <div className="flex items-center gap-1">
                           <Award className="w-4 h-4 text-yellow-500" />
@@ -1034,7 +1034,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                       </div>
                     )}
 
-                    {session.status === 'in_progress' && (
+                    {session.status === 'in_progress'&& (
                       <div className="mt-3 flex items-center gap-4">
                         <div className="flex items-center gap-1">
                           <Clock className="w-4 h-4 text-yellow-500" />
@@ -1047,7 +1047,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {session.status === 'in_progress' && (
+                    {session.status === 'in_progress'&& (
                       <>
                         <button
                           onClick={(e) => {
@@ -1077,7 +1077,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                         </button>
                       </>
                     )}
-                    {session.status === 'completed' && (
+                    {session.status === 'completed'&& (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -1118,8 +1118,8 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
     if (!selectedSession) return null;
 
     // Determine if the simulation is completed based on status or evaluation
-    const isCompleted = selectedSession.status === 'completed' || selectedSession.hasEvaluation === true;
-    const displayStatus = isCompleted ? 'completed' : selectedSession.status;
+    const isCompleted = selectedSession.status === 'completed'|| selectedSession.hasEvaluation === true;
+    const displayStatus = isCompleted ? 'completed': selectedSession.status;
     const displayScore = selectedSession.score || selectedSession.evaluation?.overall_score;
 
     return (
@@ -1173,7 +1173,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
             <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 {getStatusIcon(displayStatus)}
-                <span className="font-medium">Status: {displayStatus === 'completed' ? 'Completed' : (displayStatus === 'in_progress' ? 'In Progress' : 'Not Started')}</span>
+                <span className="font-medium">Status: {displayStatus === 'completed'? 'Completed': (displayStatus === 'in_progress'? 'In Progress': 'Not Started')}</span>
               </div>
               
               {selectedSession.startedAt && (
@@ -1223,7 +1223,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
 
           {/* Action Buttons */}
           <div className="flex gap-3 mb-6">
-            {displayStatus === 'in_progress' && (
+            {displayStatus === 'in_progress'&& (
               <>
                 <button
                   onClick={() => handleResume(selectedSession.sessionId, selectedSession.simulationId)}
@@ -1247,7 +1247,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
               </>
             )}
             
-            {displayStatus === 'completed' && displayScore && (
+            {displayStatus === 'completed'&& displayScore && (
               <button
                 onClick={() => handleViewResults(selectedSession)}
                 className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
@@ -1341,7 +1341,7 @@ const SimulationSessionViewer: React.FC<SimulationSessionViewerProps> = ({
                 ← Back
               </button>
               <h1 className="text-xl font-bold text-gray-900">
-                {isSpecificSimulation ? 'Practical Assessment Details' : 'My Practical Assessment Sessions'}
+                {isSpecificSimulation ? 'Practical Assessment Details': 'My Practical Assessment Sessions'}
               </h1>
             </div>
           </div>

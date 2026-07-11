@@ -27,9 +27,9 @@ interface OnboardingTask {
   id: string;
   title: string;
   description: string;
-  type: 'document' | 'form' | 'training' | 'meeting' | 'approval';
-  status: 'pending' | 'in_progress' | 'completed' | 'overdue';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  type: 'document'| 'form'| 'training'| 'meeting'| 'approval';
+  status: 'pending'| 'in_progress'| 'completed'| 'overdue';
+  priority: 'low'| 'medium'| 'high'| 'urgent';
   dueDate: string;
   assignedBy: string;
   completedAt?: string;
@@ -47,7 +47,7 @@ interface Candidate {
   manager: string;
   onboardingProgress: number;
   tasks: OnboardingTask[];
-  documents: { name: string; status: 'pending' | 'submitted' | 'approved' | 'rejected'; url?: string }[];
+  documents: { name: string; status: 'pending'| 'submitted'| 'approved'| 'rejected'; url?: string }[];
 }
 
 interface CandidateOnboardingProps {
@@ -67,8 +67,8 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
-    type: 'document' as const,
-    priority: 'medium' as const,
+    type: 'document'as const,
+    priority: 'medium'as const,
     dueDate: '',
     notes: ''
   });
@@ -127,11 +127,11 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
             }
           ],
           documents: [
-            { name: 'Offer Letter', status: 'approved', url: '#' },
-            { name: 'Background Check Authorization', status: 'approved', url: '#' },
-            { name: 'Tax Forms (W-4)', status: 'submitted', url: '#' },
-            { name: 'Direct Deposit Form', status: 'pending' },
-            { name: 'Emergency Contact Form', status: 'pending' }
+            { name: 'Offer Letter', status: 'approved', url: '#'},
+            { name: 'Background Check Authorization', status: 'approved', url: '#'},
+            { name: 'Tax Forms (W-4)', status: 'submitted', url: '#'},
+            { name: 'Direct Deposit Form', status: 'pending'},
+            { name: 'Emergency Contact Form', status: 'pending'}
           ]
         },
         {
@@ -157,10 +157,10 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
             }
           ],
           documents: [
-            { name: 'Offer Letter', status: 'approved', url: '#' },
-            { name: 'Tax Forms (W-4)', status: 'approved', url: '#' },
-            { name: 'Direct Deposit Form', status: 'approved', url: '#' },
-            { name: 'Emergency Contact Form', status: 'approved', url: '#' }
+            { name: 'Offer Letter', status: 'approved', url: '#'},
+            { name: 'Tax Forms (W-4)', status: 'approved', url: '#'},
+            { name: 'Direct Deposit Form', status: 'approved', url: '#'},
+            { name: 'Emergency Contact Form', status: 'approved', url: '#'}
           ]
         },
         {
@@ -186,10 +186,10 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
             }
           ],
           documents: [
-            { name: 'Offer Letter', status: 'approved', url: '#' },
-            { name: 'Tax Forms (W-4)', status: 'pending' },
-            { name: 'Direct Deposit Form', status: 'pending' },
-            { name: 'Emergency Contact Form', status: 'pending' }
+            { name: 'Offer Letter', status: 'approved', url: '#'},
+            { name: 'Tax Forms (W-4)', status: 'pending'},
+            { name: 'Direct Deposit Form', status: 'pending'},
+            { name: 'Emergency Contact Form', status: 'pending'}
           ]
         }
       ];
@@ -204,15 +204,15 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
 
   const getFilteredCandidates = () => {
     return candidates.filter(candidate => {
-      const matchesSearch = searchTerm === '' ||
+      const matchesSearch = searchTerm === ''||
         candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         candidate.position.toLowerCase().includes(searchTerm.toLowerCase()) ||
         candidate.email.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesStatus = filterStatus === 'all' ||
-        (filterStatus === 'completed' && candidate.onboardingProgress === 100) ||
-        (filterStatus === 'in_progress' && candidate.onboardingProgress > 0 && candidate.onboardingProgress < 100) ||
-        (filterStatus === 'pending' && candidate.onboardingProgress === 0);
+      const matchesStatus = filterStatus === 'all'||
+        (filterStatus === 'completed'&& candidate.onboardingProgress === 100) ||
+        (filterStatus === 'in_progress'&& candidate.onboardingProgress > 0 && candidate.onboardingProgress < 100) ||
+        (filterStatus === 'pending'&& candidate.onboardingProgress === 0);
 
       return matchesSearch && matchesStatus;
     });
@@ -267,7 +267,7 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
                   ? {
                       ...task,
                       status,
-                      completedAt: status === 'completed' ? new Date().toISOString() : undefined
+                      completedAt: status === 'completed'? new Date().toISOString() : undefined
                     }
                   : task
               )
@@ -434,7 +434,7 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
                 <p className="text-3xl font-bold text-red-600">
                   {candidates.reduce((total, candidate) =>
                     total + candidate.tasks.filter(task =>
-                      task.status !== 'completed' && isOverdue(task.dueDate)
+                      task.status !== 'completed'&& isOverdue(task.dueDate)
                     ).length, 0
                   )}
                 </p>
@@ -546,7 +546,7 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
                         <span className="text-sm text-gray-900">
                           {candidate.tasks.filter(t => t.status === 'completed').length}/{candidate.tasks.length}
                         </span>
-                        {candidate.tasks.some(t => t.status !== 'completed' && isOverdue(t.dueDate)) && (
+                        {candidate.tasks.some(t => t.status !== 'completed'&& isOverdue(t.dueDate)) && (
                           <AlertTriangle size={14} className="text-red-500" />
                         )}
                       </div>
@@ -655,7 +655,7 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
                                 <h5 className="font-medium text-gray-900">{task.title}</h5>
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
                                   {getStatusIcon(task.status)}
-                                  <span className="ml-1 capitalize">{task.status.replace('_', ' ')}</span>
+                                  <span className="ml-1 capitalize">{task.status.replace('_', '')}</span>
                                 </span>
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getPriorityColor(task.priority)}`}>
                                   {task.priority}
@@ -676,7 +676,7 @@ const CandidateOnboarding = ({ onBack }: CandidateOnboardingProps) => {
                           </div>
 
                           <div className="flex items-center space-x-2">
-                            {task.status !== 'completed' && (
+                            {task.status !== 'completed'&& (
                               <>
                                 <button
                                   onClick={() => updateTaskStatus(selectedCandidate.id, task.id, 'in_progress')}

@@ -45,7 +45,7 @@ const GitHubRepoLoader: React.FC<GitHubRepoLoaderProps> = ({ onLoadRepo, isLoadi
           type="text"
           value={repoUrl}
           onChange={(e) => setRepoUrl(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleLoad()}
+          onKeyDown={(e) => e.key === 'Enter'&& handleLoad()}
           placeholder="https://github.com/owner/repo"
           className="flex-1 text-xs bg-gray-700 border border-gray-600 rounded px-2.5 py-1.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
           disabled={isLoading}

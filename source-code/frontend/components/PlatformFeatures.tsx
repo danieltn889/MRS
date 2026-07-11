@@ -31,9 +31,9 @@ interface Integration {
   name: string;
   description: string;
   icon: React.ReactNode;
-  status: 'connected' | 'disconnected' | 'error';
+  status: 'connected'| 'disconnected'| 'error';
   lastSync?: string;
-  category: 'communication' | 'calendar' | 'storage' | 'analytics' | 'other';
+  category: 'communication'| 'calendar'| 'storage'| 'analytics'| 'other';
 }
 
 interface NotificationSetting {
@@ -202,8 +202,8 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
         integration.id === integrationId
           ? {
               ...integration,
-              status: integration.status === 'connected' ? 'disconnected' : 'connected',
-              lastSync: integration.status === 'disconnected' ? new Date().toISOString() : integration.lastSync
+              status: integration.status === 'connected'? 'disconnected': 'connected',
+              lastSync: integration.status === 'disconnected'? new Date().toISOString() : integration.lastSync
             }
           : integration
       ));
@@ -214,7 +214,7 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
     }
   };
 
-  const updateNotificationSetting = (settingId: string, type: 'email' | 'push' | 'inApp', value: boolean) => {
+  const updateNotificationSetting = (settingId: string, type: 'email'| 'push'| 'inApp', value: boolean) => {
     setNotifications(prev => prev.map(setting =>
       setting.id === settingId
         ? { ...setting, [type]: value }
@@ -317,7 +317,7 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
 
           <div className="p-6">
             {/* Integrations Tab */}
-            {activeTab === 'integrations' && (
+            {activeTab === 'integrations'&& (
               <div>
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Third-party Integrations</h3>
@@ -345,12 +345,12 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
                         <button
                           onClick={() => toggleIntegration(integration.id)}
                           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                            integration.status === 'connected' ? 'bg-blue-600' : 'bg-gray-200'
+                            integration.status === 'connected'? 'bg-blue-600': 'bg-gray-200'
                           }`}
                         >
                           <span
                             className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                              integration.status === 'connected' ? 'translate-x-6' : 'translate-x-1'
+                              integration.status === 'connected'? 'translate-x-6': 'translate-x-1'
                             }`}
                           />
                         </button>
@@ -399,7 +399,7 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
             )}
 
             {/* Notifications Tab */}
-            {activeTab === 'notifications' && (
+            {activeTab === 'notifications'&& (
               <div>
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Notification Preferences</h3>
@@ -478,7 +478,7 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
             )}
 
             {/* API & Webhooks Tab */}
-            {activeTab === 'api' && (
+            {activeTab === 'api'&& (
               <div>
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">API Access & Webhooks</h3>
@@ -564,7 +564,7 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
             )}
 
             {/* Security Tab */}
-            {activeTab === 'security' && (
+            {activeTab === 'security'&& (
               <div>
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Security Settings</h3>
@@ -655,7 +655,7 @@ const PlatformFeatures = ({ onBack }: PlatformFeaturesProps) => {
             )}
 
             {/* Branding Tab */}
-            {activeTab === 'branding' && (
+            {activeTab === 'branding'&& (
               <div>
                 <div className="mb-6">
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Company Branding</h3>

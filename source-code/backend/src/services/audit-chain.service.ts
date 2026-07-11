@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
  * -----------------
  * An application-level, hash-linked audit chain that provides a tamper-evident
  * record of important platform events. Each block stores the hash of the previous
- * block, so altering any block breaks every hash after it — which `verifyChain`
+ * block, so altering any block breaks every hash after it   which `verifyChain`
  * detects.
  *
  * This complements (does not replace) the existing Ethereum integration: a block
@@ -23,7 +23,7 @@ export interface AuditBlock {
   block_number: number;
   prev_hash: string;
   current_hash?: string;
-  timestamp: string;            // ISO string — part of the hash, so it must be stable
+  timestamp: string;            // ISO string   part of the hash, so it must be stable
   event_type: string;
   candidate_id?: string | null;
   simulation_id?: string | null;
@@ -59,7 +59,7 @@ export interface AppendEventInput {
 
 class AuditChainService {
   // =========================================================================
-  // PURE LOGIC (no DB / no network) — unit-testable
+  // PURE LOGIC (no DB / no network)   unit-testable
   // =========================================================================
 
   /** Sanitize metadata so secrets / huge blobs are never written to the chain. */
@@ -69,7 +69,7 @@ class AuditChainService {
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(metadata)) {
       if (REDACT.test(k)) continue;
-      if (typeof v === 'string' && v.length > 2000) {
+      if (typeof v === 'string'&& v.length > 2000) {
         out[k] = v.slice(0, 2000);
       } else {
         out[k] = v;
@@ -84,7 +84,7 @@ class AuditChainService {
    */
   static computeHash(block: AuditBlock): string {
     // A TIMESTAMPTZ comes back from PostgreSQL as a Date object (not the original
-    // ISO string), and BIGINT comes back as a string — normalize both so the hash
+    // ISO string), and BIGINT comes back as a string   normalize both so the hash
     // computed at insert time and at verify time are identical.
     let ts: string;
     try { ts = new Date(block.timestamp as any).toISOString(); } catch { ts = String(block.timestamp); }
@@ -116,7 +116,7 @@ class AuditChainService {
     let verifiedCount = 0;
     let firstInvalidBlockNumber: number | null = null;
 
-    // block_number arrives as a string from PostgreSQL (BIGINT) — coerce to numbers.
+    // block_number arrives as a string from PostgreSQL (BIGINT)   coerce to numbers.
     const ordered = [...blocks].sort((a, b) => Number(a.block_number) - Number(b.block_number));
 
     for (let i = 0; i < ordered.length; i++) {
@@ -128,24 +128,24 @@ class AuditChainService {
       const recomputed = AuditChainService.computeHash(block);
       if (recomputed !== block.current_hash) {
         blockValid = false;
-        issues.push({ block_number: blockNum, reason: 'Hash mismatch — block contents were altered' });
+        issues.push({ block_number: blockNum, reason: 'Hash mismatch   block contents were altered'});
       }
 
       // 2. Check the link to the previous block.
       if (i === 0) {
         if (block.prev_hash !== GENESIS_PREV_HASH) {
           blockValid = false;
-          issues.push({ block_number: blockNum, reason: 'Genesis block has an invalid previous hash' });
+          issues.push({ block_number: blockNum, reason: 'Genesis block has an invalid previous hash'});
         }
       } else {
         const prev = ordered[i - 1]!;
         if (block.prev_hash !== prev.current_hash) {
           blockValid = false;
-          issues.push({ block_number: blockNum, reason: 'Broken link — previous hash does not match prior block' });
+          issues.push({ block_number: blockNum, reason: 'Broken link   previous hash does not match prior block'});
         }
         if (blockNum !== Number(prev.block_number) + 1) {
           blockValid = false;
-          issues.push({ block_number: blockNum, reason: 'Non-sequential block number — a block may be missing' });
+          issues.push({ block_number: blockNum, reason: 'Non-sequential block number   a block may be missing'});
         }
       }
 
@@ -173,7 +173,7 @@ class AuditChainService {
   /**
    * Append a new event as a block linked to the current chain tip. Atomic: a
    * transaction-level advisory lock serializes appends so two events can't claim
-   * the same block number / prev_hash. Never throws — auditing must not break the
+   * the same block number / prev_hash. Never throws   auditing must not break the
    * triggering action; returns null on failure.
    */
   static async appendBlock(input: AppendEventInput): Promise<AuditBlock | null> {
@@ -245,14 +245,14 @@ class AuditChainService {
 
     const reasons: string[] = [];
     if (AuditChainService.computeHash(block as AuditBlock) !== block.current_hash) {
-      reasons.push('Hash mismatch — block contents were altered');
+      reasons.push('Hash mismatch   block contents were altered');
     }
     if (Number(block.block_number) === 0) {
       if (block.prev_hash !== GENESIS_PREV_HASH) reasons.push('Genesis block has an invalid previous hash');
     } else {
       const prev = await query(`SELECT current_hash FROM audit_chain WHERE block_number = $1`, [Number(block.block_number) - 1]);
       if (!prev.rows[0]) reasons.push('Previous block is missing');
-      else if (prev.rows[0].current_hash !== block.prev_hash) reasons.push('Broken link — previous hash does not match prior block');
+      else if (prev.rows[0].current_hash !== block.prev_hash) reasons.push('Broken link   previous hash does not match prior block');
     }
     return { found: true, valid: reasons.length === 0, reasons, block };
   }
@@ -287,7 +287,7 @@ class AuditChainService {
     if (filters.candidateId) { params.push(filters.candidateId); conds.push(`candidate_id = $${params.length}`); }
     if (filters.simulationId) { params.push(filters.simulationId); conds.push(`simulation_id = $${params.length}`); }
     if (filters.blockNumber !== undefined) { params.push(filters.blockNumber); conds.push(`block_number = $${params.length}`); }
-    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    const where = conds.length ? `WHERE ${conds.join('AND ')}` : '';
 
     const countRes = await query(`SELECT COUNT(*)::int AS total FROM audit_chain ${where}`, params);
     const listRes = await query(

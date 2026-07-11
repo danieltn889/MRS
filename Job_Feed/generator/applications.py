@@ -1,4 +1,4 @@
-"""
+"
 applications.py
 ================
 Builds the `applications` table from real Cleaned_Combined_Applications.csv
@@ -10,8 +10,8 @@ Status mapping (source text -> schema enum) is a judgment call documented
 inline: "Offer rejected" means the CANDIDATE declined an offer, which is
 closer to `withdrawn` than `rejected` (which reads as the employer's call);
 "Employed" is the final onboarded state (`hired`), distinct from "Offer
-accepted" (`offer` — accepted but not yet started).
-"""
+accepted" (`offer`   accepted but not yet started).
+"
 
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ def build_applications_table(applications_raw: pd.DataFrame, jobs_flat_df: pd.Da
     job_windows = jobs_flat_df.set_index("original_job_id")[["published_at", "expires_at"]]
 
     # Guard the unique (job_id, user_id) constraint even though the source
-    # data had none in our sample — keep the latest real record per pair.
+    # data had none in our sample   keep the latest real record per pair.
     deduped = (applications_raw.sort_values("Application_Date")
                .drop_duplicates(subset=["Candidate_ID", "Job_ID"], keep="last"))
 

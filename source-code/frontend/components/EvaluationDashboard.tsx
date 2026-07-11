@@ -88,7 +88,7 @@ interface CandidateEvaluation {
   candidateId: string;
   simulationId: string;
   overallScore: number;
-  status: 'pending' | 'completed' | 'reviewed';
+  status: 'pending'| 'completed'| 'reviewed';
   completedAt: string;
   reviewedAt?: string;
   reviewerId?: string;
@@ -142,7 +142,7 @@ interface BehavioralMetric {
 
 interface SkillAssessment {
   skill: string;
-  level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  level: 'beginner'| 'intermediate'| 'advanced'| 'expert';
   score: number;
   evidence: string[];
 }
@@ -209,7 +209,7 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
     try {
       await fetch('/api/v1/admin/ai-settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify(settings)
       });
     } catch (error) {
@@ -221,7 +221,7 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
     try {
       await fetch('/api/v1/admin/communication-standards', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify(standards)
       });
     } catch (error) {
@@ -233,7 +233,7 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
     try {
       await fetch('/api/v1/admin/minimum-scores', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify(thresholds)
       });
     } catch (error) {
@@ -300,7 +300,7 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
           <p className="text-gray-600">
             Completed on {new Date(evaluation.completedAt).toLocaleDateString()}
           </p>
-          {evaluation.status === 'reviewed' && (
+          {evaluation.status === 'reviewed'&& (
             <p className="text-sm text-gray-500 mt-1">
               Reviewed by evaluator
             </p>
@@ -425,8 +425,8 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600">Confidence:</span>
             <span className={`px-2 py-1 rounded text-xs font-medium ${
-              evaluation.aiConfidence >= 90 ? 'bg-green-100 text-green-800' :
-              evaluation.aiConfidence >= 80 ? 'bg-blue-100 text-blue-800' :
+              evaluation.aiConfidence >= 90 ? 'bg-green-100 text-green-800':
+              evaluation.aiConfidence >= 80 ? 'bg-blue-100 text-blue-800':
               'bg-yellow-100 text-yellow-800'
             }`}>
               {evaluation.aiConfidence}%
@@ -525,8 +525,8 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-medium text-gray-900">{metric.metric}</h4>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  metric.score >= 80 ? 'bg-green-100 text-green-800' :
-                  metric.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                  metric.score >= 80 ? 'bg-green-100 text-green-800':
+                  metric.score >= 60 ? 'bg-yellow-100 text-yellow-800':
                   'bg-red-100 text-red-800'
                 }`}>
                   {metric.score}/100
@@ -564,9 +564,9 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
               <div className="flex items-center justify-between mb-2">
                 <h4 className="font-medium text-gray-900">{skill.skill}</h4>
                 <span className={`px-2 py-1 rounded text-xs font-medium ${
-                  skill.level === 'expert' ? 'bg-purple-100 text-purple-800' :
-                  skill.level === 'advanced' ? 'bg-blue-100 text-blue-800' :
-                  skill.level === 'intermediate' ? 'bg-green-100 text-green-800' :
+                  skill.level === 'expert'? 'bg-purple-100 text-purple-800':
+                  skill.level === 'advanced'? 'bg-blue-100 text-blue-800':
+                  skill.level === 'intermediate'? 'bg-green-100 text-green-800':
                   'bg-yellow-100 text-yellow-800'
                 }`}>
                   {skill.level}
@@ -613,9 +613,9 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
           <div className="flex items-center space-x-2">
             <span className="text-sm text-gray-600">Analysis Confidence:</span>
             <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-              evaluation.aiConfidence >= 90 ? 'bg-green-100 text-green-800' :
-              evaluation.aiConfidence >= 80 ? 'bg-blue-100 text-blue-800' :
-              evaluation.aiConfidence >= 70 ? 'bg-yellow-100 text-yellow-800' :
+              evaluation.aiConfidence >= 90 ? 'bg-green-100 text-green-800':
+              evaluation.aiConfidence >= 80 ? 'bg-blue-100 text-blue-800':
+              evaluation.aiConfidence >= 70 ? 'bg-yellow-100 text-yellow-800':
               'bg-red-100 text-red-800'
             }`}>
               {evaluation.aiConfidence}%
@@ -786,14 +786,14 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
-              { label: 'Technical Skills', key: 'technical' },
-              { label: 'Communication', key: 'communication' },
-              { label: 'Problem Solving', key: 'problemSolving' },
-              { label: 'Adaptability', key: 'adaptability' },
-              { label: 'Collaboration', key: 'collaboration' },
-              { label: 'Attention to Detail', key: 'attentionToDetail' },
-              { label: 'Initiative', key: 'initiative' },
-              { label: 'Punctuality', key: 'punctuality' }
+              { label: 'Technical Skills', key: 'technical'},
+              { label: 'Communication', key: 'communication'},
+              { label: 'Problem Solving', key: 'problemSolving'},
+              { label: 'Adaptability', key: 'adaptability'},
+              { label: 'Collaboration', key: 'collaboration'},
+              { label: 'Attention to Detail', key: 'attentionToDetail'},
+              { label: 'Initiative', key: 'initiative'},
+              { label: 'Punctuality', key: 'punctuality'}
             ].map((item) => (
               <div key={item.key} className="text-center">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -985,11 +985,11 @@ const EvaluationDashboard: React.FC<EvaluationDashboardProps> = ({
 
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {activeTab === 'overview' && renderOverviewTab()}
-        {activeTab === 'breakdown' && renderDetailedBreakdownTab()}
-        {activeTab === 'ai-feedback' && renderAIFeedbackTab()}
-        {activeTab === 'benchmarks' && renderBenchmarksTab()}
-        {activeTab === 'admin' && renderAdminSettingsTab()}
+        {activeTab === 'overview'&& renderOverviewTab()}
+        {activeTab === 'breakdown'&& renderDetailedBreakdownTab()}
+        {activeTab === 'ai-feedback'&& renderAIFeedbackTab()}
+        {activeTab === 'benchmarks'&& renderBenchmarksTab()}
+        {activeTab === 'admin'&& renderAdminSettingsTab()}
       </div>
     </div>
   );

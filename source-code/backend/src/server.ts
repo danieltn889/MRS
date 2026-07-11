@@ -90,7 +90,7 @@ try {
       socket.join(`user:${userId}`);
       
       // Broadcast online status to all rooms user is in
-      socket.broadcast.emit('user_status_change', { userId, status: 'online' });
+      socket.broadcast.emit('user_status_change', { userId, status: 'online'});
     }
 
     socket.on('join_simulation', (simulationId: string) => {
@@ -195,7 +195,7 @@ try {
         logger.info(`Remaining connected users: ${connectedUsers.size}`);
         
         // Broadcast offline status
-        socket.broadcast.emit('user_status_change', { userId, status: 'offline' });
+        socket.broadcast.emit('user_status_change', { userId, status: 'offline'});
       } else {
         logger.info(`User disconnected: ${socket.id}`);
       }

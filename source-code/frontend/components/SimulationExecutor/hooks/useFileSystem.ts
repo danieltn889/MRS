@@ -5,7 +5,7 @@ import { useGitHubRepo } from "../context/GitHubRepoContext";
 export interface FileNode {
   name: string;
   path: string;
-  type: 'file' | 'folder';
+  type: 'file'| 'folder';
   content?: string;
   language?: string;
   children?: FileNode[];
@@ -28,7 +28,7 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
   const [currentFilePath, setCurrentFilePath] = useState<string | null>(null);
   const [currentFileContent, setCurrentFileContent] = useState('');
   const [currentFileLanguage, setCurrentFileLanguage] = useState('javascript');
-  const [syncStatus, setSyncStatus] = useState<{ status: string; message: string }>({ status: 'idle', message: '' });
+  const [syncStatus, setSyncStatus] = useState<{ status: string; message: string }>({ status: 'idle', message: ''});
   const [isLoading, setIsLoading] = useState(false);
 
   // Use context data
@@ -117,7 +117,7 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
     if (content === undefined) return;
     
     const fileName = sourcePath.split('/').pop();
-    const newPath = targetPath === '' ? fileName || 'file' : `${targetPath}/${fileName}`;
+    const newPath = targetPath === ''? fileName || 'file': `${targetPath}/${fileName}`;
     
     updateRepoFileContent(newPath, content);
     
@@ -131,7 +131,7 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
     if (content === undefined) return;
     
     const fileName = sourcePath.split('/').pop();
-    let newPath = targetPath === '' ? fileName || 'file' : `${targetPath}/${fileName}`;
+    let newPath = targetPath === ''? fileName || 'file': `${targetPath}/${fileName}`;
     
     let counter = 1;
     while (getRepoFileContent(newPath)) {
@@ -155,20 +155,20 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
   }, [getRepoFileStructure]);
   
   const pushToLocal = useCallback(async () => {
-    setSyncStatus({ status: 'syncing', message: 'Preparing files for export...' });
+    setSyncStatus({ status: 'syncing', message: 'Preparing files for export...'});
     
     const allFiles = getAllFiles();
     const fileCount = Object.keys(allFiles).length;
     
     if (fileCount === 0) {
-      setSyncStatus({ status: 'error', message: 'No files to export' });
-      setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+      setSyncStatus({ status: 'error', message: 'No files to export'});
+      setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
       return;
     }
     
-    if ('showDirectoryPicker' in window) {
+    if ('showDirectoryPicker'in window) {
       try {
-        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite', startIn: 'documents' });
+        const dirHandle = await (window as any).showDirectoryPicker({ mode: 'readwrite', startIn: 'documents'});
         let created = 0;
         
         for (const [filePath, content] of Object.entries(allFiles)) {
@@ -186,14 +186,14 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
           created++;
         }
         
-        setSyncStatus({ status: 'success', message: `✅ Exported ${created} files!` });
-        setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+        setSyncStatus({ status: 'success', message: `''Exported ${created} files!` });
+        setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
       } catch (err) {
-        setSyncStatus({ status: 'error', message: 'Export cancelled or failed' });
-        setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+        setSyncStatus({ status: 'error', message: 'Export cancelled or failed'});
+        setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
       }
     } else {
-      const blob = new Blob([JSON.stringify({ files: allFiles }, null, 2)], { type: 'application/json' });
+      const blob = new Blob([JSON.stringify({ files: allFiles }, null, 2)], { type: 'application/json'});
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -201,19 +201,19 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
       a.click();
       URL.revokeObjectURL(url);
       
-      setSyncStatus({ status: 'success', message: `✅ Exported ${fileCount} files as JSON` });
-      setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+      setSyncStatus({ status: 'success', message: `''Exported ${fileCount} files as JSON` });
+      setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
     }
   }, [getAllFiles]);
   
   const pullFromLocal = useCallback(async () => {
-    if (!('showDirectoryPicker' in window)) {
-      setSyncStatus({ status: 'error', message: 'Your browser does not support folder upload.' });
-      setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+    if (!('showDirectoryPicker'in window)) {
+      setSyncStatus({ status: 'error', message: 'Your browser does not support folder upload.'});
+      setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
       return;
     }
     
-    setSyncStatus({ status: 'syncing', message: 'Select a folder to import...' });
+    setSyncStatus({ status: 'syncing', message: 'Select a folder to import...'});
     
     try {
       const dirHandle = await (window as any).showDirectoryPicker();
@@ -221,8 +221,8 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
       const fileCount = Object.keys(filesFromFolder).length;
       
       if (fileCount === 0) {
-        setSyncStatus({ status: 'error', message: 'No files found.' });
-        setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+        setSyncStatus({ status: 'error', message: 'No files found.'});
+        setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
         return;
       }
       
@@ -230,13 +230,13 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
         updateRepoFileContent(path, content as string);
       }
       
-      setSyncStatus({ status: 'success', message: `✅ Imported ${fileCount} files!` });
-      setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+      setSyncStatus({ status: 'success', message: `''Imported ${fileCount} files!` });
+      setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
     } catch (err) {
       if (err?.name !== 'AbortError') {
-        setSyncStatus({ status: 'error', message: 'Import failed.' });
+        setSyncStatus({ status: 'error', message: 'Import failed.'});
       }
-      setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+      setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
     }
   }, [updateRepoFileContent]);
   
@@ -247,11 +247,11 @@ export function useFileSystem(simulationId: string | null, currentTask: any) {
     try {
       await loadRepositoryFromUrl(`https://github.com/${owner}/${repo}`);
       
-      setSyncStatus({ status: 'success', message: `✅ Loaded repository!` });
-      setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+      setSyncStatus({ status: 'success', message: `''Loaded repository!` });
+      setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
     } catch (err) {
-      setSyncStatus({ status: 'error', message: 'Failed to load repository' });
-      setTimeout(() => setSyncStatus({ status: 'idle', message: '' }), 3000);
+      setSyncStatus({ status: 'error', message: 'Failed to load repository'});
+      setTimeout(() => setSyncStatus({ status: 'idle', message: ''}), 3000);
     } finally {
       setIsLoading(false);
     }

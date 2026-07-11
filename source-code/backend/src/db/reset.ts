@@ -33,13 +33,13 @@ const resetDatabase = async (): Promise<void> => {
     if (dbExists.rows.length > 0) {
       logger.info(`Dropping existing database '${dbName}'...`);
       await client.query(`DROP DATABASE "${dbName}"`);
-      logger.info(`Database '${dbName}' dropped successfully`);
+      logger.info(`Database '${dbName}'dropped successfully`);
     }
 
     // Create fresh database
     logger.info(`Creating new database '${dbName}'...`);
     await client.query(`CREATE DATABASE "${dbName}"`);
-    logger.info(`Database '${dbName}' created successfully`);
+    logger.info(`Database '${dbName}'created successfully`);
 
     await client.end();
   } catch (error) {

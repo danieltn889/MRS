@@ -11,7 +11,7 @@ interface BillingPlan {
   description: string;
   price: number;
   currency: string;
-  interval: 'month' | 'year';
+  interval: 'month'| 'year';
   features: any;
   active: boolean;
   created_at?: Date;
@@ -21,7 +21,7 @@ interface Subscription {
   id?: number;
   user_id: number;
   plan_id: number;
-  status: 'active' | 'cancelled' | 'expired';
+  status: 'active'| 'cancelled'| 'expired';
   current_period_start: Date;
   current_period_end: Date;
   payment_method_id?: number;
@@ -40,7 +40,7 @@ interface Invoice {
   subscription_id?: number;
   amount: number;
   currency: string;
-  status: 'paid' | 'pending' | 'failed';
+  status: 'paid'| 'pending'| 'failed';
   due_date: Date;
   paid_at?: Date;
   created_at?: Date;
@@ -64,7 +64,7 @@ interface Coupon {
   id?: number;
   code: string;
   description: string;
-  discount_type: 'percentage' | 'fixed';
+  discount_type: 'percentage'| 'fixed';
   discount_value: number;
   max_uses?: number;
   used_count: number;
@@ -691,7 +691,7 @@ export class BillingController extends BaseController {
           SELECT COALESCE(SUM(bp.price), 0) as total
           FROM subscriptions s
           JOIN billing_plans bp ON s.plan_id = bp.id
-          WHERE s.status = 'active' AND bp.interval = 'month'
+          WHERE s.status = 'active'AND bp.interval = 'month'
         `,
         planDistribution: `
           SELECT bp.name, COUNT(s.id) as count
@@ -705,7 +705,7 @@ export class BillingController extends BaseController {
       const results: Partial<BillingStats> = {};
       for (const [key, query] of Object.entries(queries)) {
         const result = await this.dbService.query(query);
-        (results as any)[key] = key === 'planDistribution' ? result.rows : result.rows[0];
+        (results as any)[key] = key === 'planDistribution'? result.rows : result.rows[0];
       }
 
       const response: BillingStatsResponse = {

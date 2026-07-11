@@ -53,7 +53,7 @@ export interface Company extends BaseEntity {
 export interface CompanyLocation extends BaseEntity {
   company_id: UUID;
   name?: string;
-  type: 'headquarters' | 'branch' | 'remote_hub' | 'coworking' | 'office';
+  type: 'headquarters'| 'branch'| 'remote_hub'| 'coworking'| 'office';
   address_line1?: string;
   address_line2?: string;
   city: string;
@@ -155,8 +155,8 @@ export interface CompanyPolicy {
 
 export interface CompanyContact extends BaseEntity {
   company_id: UUID;
-  contact_type: 'general' | 'hr' | 'support' | 'press' | 'legal' | 'billing';
-  contact_method: 'email' | 'phone' | 'form' | 'chat';
+  contact_type: 'general'| 'hr'| 'support'| 'press'| 'legal'| 'billing';
+  contact_method: 'email'| 'phone'| 'form'| 'chat';
   contact_value: string;
   is_primary: boolean;
   department?: string;
@@ -170,12 +170,12 @@ export interface CompanyContact extends BaseEntity {
 
 export interface CompanyVerification extends BaseEntity {
   company_id: UUID;
-  verification_level: 'basic' | 'standard' | 'enhanced' | 'premium';
+  verification_level: 'basic'| 'standard'| 'enhanced'| 'premium';
   documents: JSONB;
   submitted_at: TIMESTAMP;
   reviewed_at?: TIMESTAMP;
   reviewed_by?: UUID;
-  status: 'pending' | 'approved' | 'rejected' | 'info_needed';
+  status: 'pending'| 'approved'| 'rejected'| 'info_needed';
   rejection_reason?: string;
   reviewer_notes?: string;
   expires_at?: TIMESTAMP;

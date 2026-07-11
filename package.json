@@ -1,7 +1,7 @@
 {
   "name": "simuhire-rwanda-local-dev",
   "private": true,
-  "description": "Root orchestration for running the full stack (backend, frontend, ML) locally with one command. Not deployed anywhere — dev-only.",
+  "description": "Root orchestration for running the full stack (backend, frontend, ML) locally with one command. Not deployed anywhere- dev-only.",
   "scripts": {
     "dev": "concurrently -n backend,frontend,ml -c blue,green,magenta \"npm run dev --prefix source-code/backend\" \"npm run dev --prefix source-code/frontend\" \"npm run dev:ml\"",
     "dev:ml": "source-code\\ml\\venv\\Scripts\\python.exe source-code\\ml\\gateway.py"

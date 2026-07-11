@@ -17,7 +17,7 @@ interface DatabaseBlockchainCredential {
   issuer: string; // Additional field
   issue_date: Date; // Additional field
   expiry_date?: Date; // Additional field
-  status: 'pending' | 'verified' | 'rejected'; // Different from model's CredentialStatus
+  status: 'pending'| 'verified'| 'rejected'; // Different from model's CredentialStatus
   verified_at?: Date; // Additional field
   verified_by?: number; // Additional field
   verifier_notes?: string; // Additional field
@@ -32,7 +32,7 @@ interface DatabaseCredentialAccess {
   credential_id: number; // Database uses number
   granted_to?: number; // Database uses number
   company_id?: number; // Database uses number
-  access_level: 'basic' | 'full'; // Different values
+  access_level: 'basic'| 'full'; // Different values
   access_token: string;
   expires_at?: Date;
   granted_by: number; // Database uses number
@@ -56,7 +56,7 @@ interface BlockchainNetworkStatus {
   network_name: string;
   block_height: number;
   gas_price: number;
-  status: 'healthy' | 'degraded' | 'down';
+  status: 'healthy'| 'degraded'| 'down';
   checked_at: Date;
 }
 
@@ -163,7 +163,7 @@ export class BlockchainController extends BaseController {
         paramIndex++;
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
 
       // Get total count
       const countQuery = `SELECT COUNT(*) as total FROM blockchain_credentials ${whereClause}`;
@@ -249,7 +249,7 @@ export class BlockchainController extends BaseController {
 
       if (userType === 'candidate') {
         hasPermission = credential.user_id === userId;
-      } else if (userType === 'recruiter' || userType === 'company_admin') {
+      } else if (userType === 'recruiter'|| userType === 'company_admin') {
         // Check if user has access to the company
         if (credential.company_id) {
           const companyCheck = await this.dbService.query(

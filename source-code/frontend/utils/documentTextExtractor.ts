@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import Tesseract from 'tesseract.js';
 
-export type ExtractionMethod = 'text' | 'ocr' | 'mixed';
+export type ExtractionMethod = 'text'| 'ocr'| 'mixed';
 
 export interface ExtractedDocumentText {
   text: string;
@@ -48,7 +48,7 @@ const getCanvasScale = (width: number, height: number, preferredScale = OCR_REND
   return Math.max(1.5, Math.sqrt(OCR_MAX_PIXELS / (width * height)));
 };
 
-type OcrPreprocessMode = 'grayscale' | 'threshold';
+type OcrPreprocessMode = 'grayscale'| 'threshold';
 
 const preprocessCanvasForOcr = (
   sourceCanvas: HTMLCanvasElement,
@@ -71,7 +71,7 @@ const preprocessCanvasForOcr = (
   for (let index = 0; index < data.length; index += 4) {
     const gray = (data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114);
     const contrasted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128));
-    const value = mode === 'threshold' ? (contrasted > 172 ? 255 : 0) : contrasted;
+    const value = mode === 'threshold'? (contrasted > 172 ? 255 : 0) : contrasted;
 
     data[index] = value;
     data[index + 1] = value;
@@ -107,7 +107,7 @@ const cleanupOcrText = (text: string): string => {
 
   return normalizeWhitespace(
     lines
-      .map((line) => line.replace(/[|_~=]{2,}/g, ' ').replace(/\b(?:TT+|EE+|oo+)\b/g, ' ').trim())
+      .map((line) => line.replace(/[|_~=]{2,}/g, '').replace(/\b(?:TT+|EE+|oo+)\b/g, '').trim())
       .filter((line) => {
         if (!line) {
           return false;
@@ -223,7 +223,7 @@ export const extractPdfText = async (file: Blob): Promise<ExtractedDocumentText>
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const content = await page.getTextContent();
-    const pageText = normalizeWhitespace(content.items.map((item: any) => item.str || '').join(' '));
+    const pageText = normalizeWhitespace(content.items.map((item: any) => item.str || '').join(''));
     pages.push(pageText);
 
     if (pageText.length < MIN_READABLE_PAGE_TEXT_LENGTH) {
@@ -249,7 +249,7 @@ export const extractPdfText = async (file: Blob): Promise<ExtractedDocumentText>
   const combinedPages = pages.map((pageText, index) => {
     const pageNumber = index + 1;
     const needsOcr = pagesNeedingOcr.includes(pageNumber);
-    return needsOcr && !pageText ? '' : pageText;
+    return needsOcr && !pageText ? '': pageText;
   });
 
   const text = stripWatermarks(normalizeWhitespace(combinedPages.filter(Boolean).join('\n\n')));
@@ -258,9 +258,9 @@ export const extractPdfText = async (file: Blob): Promise<ExtractedDocumentText>
     const pageNumber = index + 1;
     return !pagesNeedingOcr.includes(pageNumber) && pageText.length >= MIN_READABLE_PAGE_TEXT_LENGTH;
   });
-  const method: ExtractionMethod = usedOcr ? (hasEmbeddedText ? 'mixed' : 'ocr') : 'text';
+  const method: ExtractionMethod = usedOcr ? (hasEmbeddedText ? 'mixed': 'ocr') : 'text';
 
-  // Return empty text with a flag instead of throwing — let callers decide how to handle it.
+  // Return empty text with a flag instead of throwing   let callers decide how to handle it.
   return { text, method, pageCount: pdf.numPages };
 };
 
@@ -285,7 +285,7 @@ export const extractDocxText = async (file: Blob): Promise<ExtractedDocumentText
     throw new Error('No readable text found in this Word document.');
   }
 
-  return { text, method: 'text' };
+  return { text, method: 'text'};
 };
 
 export const extractImageText = async (file: Blob): Promise<ExtractedDocumentText> => {
@@ -324,7 +324,7 @@ export const extractTextFromFile = async (file: File | Blob, fileName = ''): Pro
   const mimeType = file instanceof File ? file.type : '';
   const lowerName = fileName.toLowerCase();
 
-  if (mimeType === 'application/pdf' || lowerName.endsWith('.pdf')) {
+  if (mimeType === 'application/pdf'|| lowerName.endsWith('.pdf')) {
     return extractPdfText(file);
   }
 

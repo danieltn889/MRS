@@ -14,7 +14,7 @@ interface Props {
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 
-const Badge = ({ text, color = 'purple' }: { text: string; color?: string }) => {
+const Badge = ({ text, color = 'purple'}: { text: string; color?: string }) => {
   const map: Record<string, string> = {
     purple: 'bg-purple-100 text-purple-800',
     blue:   'bg-blue-100   text-blue-800',
@@ -81,9 +81,9 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
   const settings = s.settings;
 
   const fmtDate = (d: any) => {
-    if (!d) return '—';
+    if (!d) return ' ';
     const dt = new Date(d);
-    return isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    return isNaN(dt.getTime()) ? ' ': dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric'});
   };
 
   return (
@@ -94,7 +94,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white rounded-t-2xl sticky top-0 z-10 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900">Practical Assessment Preview</h2>
-            <p className="text-xs text-gray-500">Everything filled in — candidate-facing view</p>
+            <p className="text-xs text-gray-500">Everything filled in   candidate-facing view</p>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition-colors">
             <X size={20} />
@@ -114,7 +114,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                     <Briefcase size={13} /> {s.jobRole}
                   </div>
                 )}
-                <p className="text-purple-100 text-sm leading-relaxed">{s.description || '—'}</p>
+                <p className="text-purple-100 text-sm leading-relaxed">{s.description || ' '}</p>
               </div>
               <div className="text-right shrink-0 space-y-1.5">
                 <Badge text={s.status}    color="gray"   />
@@ -124,7 +124,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
             </div>
             <div className="flex flex-wrap gap-5 mt-5 pt-4 border-t border-white/20 text-sm text-purple-100">
               <span className="flex items-center gap-1.5"><Clock size={13} /> {s.duration} min total</span>
-              <span className="flex items-center gap-1.5"><Target size={13} /> {s.tasks.length} task{s.tasks.length !== 1 ? 's' : ''}</span>
+              <span className="flex items-center gap-1.5"><Target size={13} /> {s.tasks.length} task{s.tasks.length !== 1 ? 's': ''}</span>
               <span className="flex items-center gap-1.5"><Users size={13} /> {totalTaskMins} min task time</span>
               {settings?.timeLimit > 0 && <span className="flex items-center gap-1.5"><Clock size={13} /> {settings.timeLimit} min time limit</span>}
               {s.jobId && <span className="flex items-center gap-1.5"><Briefcase size={13} /> Job linked</span>}
@@ -172,11 +172,11 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                         </div>
                       )}
                       {/* Technical config */}
-                      {task.type === 'technical' && task.data && (
+                      {task.type === 'technical'&& task.data && (
                         <div className="flex flex-wrap gap-2 mt-1">
                           {task.data.language   && <Badge text={task.data.language.toUpperCase()} color="blue" />}
-                          {task.data.projectType && <Badge text={task.data.projectType.replace('_', ' ')} color="indigo" />}
-                          {task.data.codeMode   && <Badge text={task.data.codeMode.replace('_', ' ')} color="gray" />}
+                          {task.data.projectType && <Badge text={task.data.projectType.replace('_', '')} color="indigo" />}
+                          {task.data.codeMode   && <Badge text={task.data.codeMode.replace('_', '')} color="gray" />}
                         </div>
                       )}
                       {/* Evaluation criteria */}
@@ -186,7 +186,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                           <div className="space-y-1">
                             {task.evaluation.criteria.map(c => (
                               <div key={c.id} className="flex items-center justify-between text-xs">
-                                <span className="text-gray-600">{c.name || '—'}</span>
+                                <span className="text-gray-600">{c.name || ' '}</span>
                                 <span className="text-purple-600 font-medium">{c.weight}% · {c.type}</span>
                               </div>
                             ))}
@@ -207,7 +207,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                 {[
                   { label: 'Total Points',  value: s.scoring.totalPoints,     icon: Star },
                   { label: 'Passing Score', value: `${s.scoring.passingScore}%`, icon: CheckCircle },
-                  { label: 'Time Bonus',    value: s.scoring.timeBonus ? 'Yes' : 'No', icon: Zap },
+                  { label: 'Time Bonus',    value: s.scoring.timeBonus ? 'Yes': 'No', icon: Zap },
                   { label: 'Max Attempts',  value: settings?.maxAttempts ?? 1, icon: Users },
                 ].map(({ label, value, icon: Icon }) => (
                   <div key={label} className="bg-gray-50 rounded-xl p-3 text-center">
@@ -239,9 +239,9 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
           {pfc && (
             <Section title="Pass / Fail Criteria" icon={Target} iconColor="text-green-500" defaultOpen={false}>
               <div className="space-y-1">
-                <Row label="Minimum Score"        value={`${pfc.overallScore?.minimum ?? '—'}%`} />
-                <Row label="Maximum Score"        value={`${pfc.overallScore?.maximum ?? '—'}%`} />
-                <Row label="Completion required"  value={pfc.timeManagement?.completionRequired ? 'Yes' : 'No'} />
+                <Row label="Minimum Score"        value={`${pfc.overallScore?.minimum ?? ' '}%`} />
+                <Row label="Maximum Score"        value={`${pfc.overallScore?.maximum ?? ' '}%`} />
+                <Row label="Completion required"  value={pfc.timeManagement?.completionRequired ? 'Yes': 'No'} />
                 {pfc.criticalTasks?.length > 0 && (
                   <Row label="Critical tasks" value={`${pfc.criticalTasks.length} task(s)`} />
                 )}
@@ -253,7 +253,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
           {settings && (
             <Section title="Environment & Settings" icon={Settings} iconColor="text-gray-500" defaultOpen={false}>
               <div className="space-y-1 mb-3">
-                <Row label="Environment"    value={<span className="capitalize">{settings.environment || '—'}</span>} />
+                <Row label="Environment"    value={<span className="capitalize">{settings.environment || ' '}</span>} />
                 <Row label="Max Attempts"   value={settings.maxAttempts} />
                 {settings.timeLimit > 0 && <Row label="Time Limit" value={`${settings.timeLimit} min`} />}
               </div>
@@ -267,9 +267,9 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                   { key: 'recordScreen',   label: 'Screen recorded', icon: Monitor },
                   { key: 'recordAudio',    label: 'Audio recorded',  icon: Mic   },
                 ].map(({ key, label, icon: Icon }) => (
-                  <div key={key} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${(settings as any)[key] ? 'bg-green-50 text-green-700' : 'bg-gray-50 text-gray-400'}`}>
+                  <div key={key} className={`flex items-center gap-2 text-xs px-3 py-2 rounded-lg ${(settings as any)[key] ? 'bg-green-50 text-green-700': 'bg-gray-50 text-gray-400'}`}>
                     <Icon size={12} />
-                    {label}: <strong>{(settings as any)[key] ? 'Yes' : 'No'}</strong>
+                    {label}: <strong>{(settings as any)[key] ? 'Yes': 'No'}</strong>
                   </div>
                 ))}
               </div>
@@ -278,7 +278,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                 <div className="mt-3">
                   <p className="text-xs font-semibold text-gray-500 mb-2">Available Tools</p>
                   <div className="flex flex-wrap gap-2">
-                    {settings.tools.map(t => <Badge key={t} text={t.replace('_', ' ')} color="indigo" />)}
+                    {settings.tools.map(t => <Badge key={t} text={t.replace('_', '')} color="indigo" />)}
                   </div>
                 </div>
               )}
@@ -291,10 +291,10 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
               <div className="space-y-1 mb-3">
                 <Row label="Start Date"           value={fmtDate(avail.startDate)} />
                 <Row label="End Date"             value={fmtDate(avail.endDate)} />
-                <Row label="Timezone"             value={avail.timezone || '—'} />
+                <Row label="Timezone"             value={avail.timezone || ' '} />
                 <Row label="Max concurrent"       value={avail.maxConcurrentCandidates} />
                 <Row label="Buffer time"          value={`${avail.bufferTime} min`} />
-                <Row label="Allow rescheduling"   value={avail.allowRescheduling ? 'Yes' : 'No'} />
+                <Row label="Allow rescheduling"   value={avail.allowRescheduling ? 'Yes': 'No'} />
                 {avail.allowRescheduling && <Row label="Max reschedules" value={avail.maxReschedules} />}
                 <Row label="Notice period"        value={`${avail.noticePeriod} hr`} />
               </div>
@@ -325,7 +325,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                 <Row label="Type"             value={<span className="capitalize">{practice.type}</span>} />
                 <Row label="Difficulty"       value={<span className="capitalize">{practice.difficulty}</span>} />
                 <Row label="Max attempts"     value={practice.maxAttempts} />
-                <Row label="Includes feedback"value={practice.includeFeedback ? 'Yes' : 'No'} />
+                <Row label="Includes feedback"value={practice.includeFeedback ? 'Yes': 'No'} />
                 {practice.timeLimit && <Row label="Time limit" value={`${practice.timeLimit} min`} />}
               </div>
               {practice.instructions && (
@@ -348,7 +348,7 @@ const SimulationPreviewModal: React.FC<Props> = ({ simulation, onClose }) => {
                 { label: 'Tasks have content',   ok: s.tasks.every(t => t.title?.trim() && t.description?.trim()) },
                 { label: 'Weights = 100%',       ok: weightTotal === 100 },
               ].map(({ label, ok }) => (
-                <div key={label} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg ${ok ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                <div key={label} className={`flex items-center gap-1.5 px-3 py-2 rounded-lg ${ok ? 'bg-green-50 text-green-700': 'bg-red-50 text-red-600'}`}>
                   {ok ? <CheckCircle size={12} /> : <AlertCircle size={12} />}
                   {label}
                 </div>

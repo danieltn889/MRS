@@ -133,18 +133,18 @@ interface MatchDetails {
   explanation?: string;
   improvement_suggestions?: string[];
   // Combined feed fields (matcher 70% + hybrid 30%, see
-  // hybrid_job_recommender.py::combined_score_candidate) — match_score above
+  // hybrid_job_recommender.py::combined_score_candidate)   match_score above
   // is now this blended total, not the matcher's raw score. The 4-factor
   // criteria_scores/skills_breakdown/etc. above are only real when
   // hasBreakdown is true (score_source is "matcher+hybrid" or "matcher-only");
   // for "hybrid-only" jobs they're zeroed placeholders and should be hidden.
   matcher_score?: number | null;
   hybrid_score?: number | null;
-  score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+  score_source?: 'matcher+hybrid'| 'matcher-only'| 'hybrid-only';
   reasons?: string[];
   hasBreakdown?: boolean;
   // Full behavior/collaborative/freshness/popularity/business-rule breakdown
-  // from hybrid_job_recommender.py's score_candidate() — null when
+  // from hybrid_job_recommender.py's score_candidate()   null when
   // score_source is "matcher-only" (hybrid had no data for this job).
   hybrid_detail?: {
     content: {
@@ -201,7 +201,7 @@ const JobDetails: React.FC = () => {
   const [matchDetails, setMatchDetails] = useState<MatchDetails | null>(null);
   const [matchError, setMatchError] = useState<string | null>(null);
   // Employer's minimum AI match score to be allowed to apply (reuses the existing
-  // jobs.ai_match_required_score field — no new schema).
+  // jobs.ai_match_required_score field   no new schema).
   const [requiredScore, setRequiredScore] = useState<number | null>(null);
   const [isLoadingMatch, setIsLoadingMatch] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
@@ -218,7 +218,7 @@ const JobDetails: React.FC = () => {
       checkIfApplied();
       loadCandidateProfile();
       // Landing here counts as viewing the job regardless of entry point
-      // (Job Feed, Header search, Saved Jobs "View Details") — the Job Feed
+      // (Job Feed, Header search, Saved Jobs "View Details")   the Job Feed
       // card already tracks its own view on click (see DashboardHome.tsx's
       // handleViewDetails), but those other entry points navigate straight
       // here without ever recording one, so it's tracked once per job id here.
@@ -358,11 +358,11 @@ const JobDetails: React.FC = () => {
           reasons: result.match.reasons || [],
           hasBreakdown: result.match.criteria_scores?.skills_match != null || result.match.criteria_scores?.qualifications_match != null,
           // Behavior/Collaborative/Freshness/Popularity/Business-rules
-          // breakdown — null when score_source is "matcher-only".
+          // breakdown   null when score_source is "matcher-only".
           hybrid_detail: (result.match as any).hybrid_detail || null
         });
 
-        console.log('✅ AI Match score loaded:', result.match.match_score);
+        console.log('AI Match score loaded:', result.match.match_score);
       } else {
         console.log('No match score available:', result.error);
         setMatchError(result.error || 'AI match score unavailable for this job right now.');
@@ -420,7 +420,7 @@ const JobDetails: React.FC = () => {
   const formatSalary = () => {
     if (!job) return 'Not specified';
     const currency = job.salary_currency || 'Rwf';
-    const period = job.salary_period === 'year' ? '/year' : '/month';
+    const period = job.salary_period === 'year'? '/year': '/month';
 
     if (job.salary_min && job.salary_max) {
       return `${currency} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}${period}`;
@@ -439,12 +439,12 @@ const JobDetails: React.FC = () => {
       return [loc.city, loc.country].filter(Boolean).join(', ');
     }
 
-    if (typeof job.location === 'object' && job.location !== null) {
+    if (typeof job.location === 'object'&& job.location !== null) {
       if (job.location.is_remote) return 'Remote';
       return [job.location.city, job.location.country].filter(Boolean).join(', ');
     }
 
-    return typeof job.location === 'string' ? job.location : 'Not specified';
+    return typeof job.location === 'string'? job.location : 'Not specified';
   };
 
   const formatDate = (dateString: string) => {
@@ -510,7 +510,7 @@ const JobDetails: React.FC = () => {
 
   const daysRemaining = getDaysRemaining();
   const isExpired = daysRemaining === 0;
-  const isActive = job.status === 'active' && !isExpired;
+  const isActive = job.status === 'active'&& !isExpired;
 
   // Show loading spinner while AI match is being calculated
   if (isLoadingMatch) {
@@ -556,10 +556,10 @@ const JobDetails: React.FC = () => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={handleSaveJob}
-                  className={`p-2 rounded-lg transition-colors ${isSaved ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  className={`p-2 rounded-lg transition-colors ${isSaved ? 'bg-blue-50 text-blue-600': 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                 >
-                  <Bookmark className="w-5 h-5" fill={isSaved ? 'currentColor' : 'none'} />
+                  <Bookmark className="w-5 h-5" fill={isSaved ? 'currentColor': 'none'} />
                 </button>
                 <button
                   onClick={handleShare}
@@ -611,7 +611,7 @@ const JobDetails: React.FC = () => {
                   </div>
                 )}
 
-                {/* Was previously silent on failure — surface it so "no score shown"
+                {/* Was previously silent on failure   surface it so "no score shown"
                     is never unexplained (e.g. candidate profile not yet trained by
                     the hybrid recommender, or the ML services being unreachable) */}
                 {isLoadingMatch && (
@@ -698,7 +698,7 @@ const JobDetails: React.FC = () => {
                     <>
                       <div className="flex flex-wrap gap-2">
                         {job.skills_required.map((skill, index) => {
-                          const skillName = typeof skill === 'string' ? skill : skill.name;
+                          const skillName = typeof skill === 'string'? skill : skill.name;
                           const matchedSkills = matchDetails.skills_breakdown.matched_skills || [];
                           const isMatched = matchedSkills.some(m => m.toLowerCase() === skillName.toLowerCase() || skillName.toLowerCase().includes(m.toLowerCase()));
                           const skillScore = matchDetails.skills_breakdown.individual_scores?.[index];
@@ -724,7 +724,7 @@ const JobDetails: React.FC = () => {
                         })}
                       </div>
 
-                      {/* Skills Match Score — only real when the profile matcher scored this job */}
+                      {/* Skills Match Score   only real when the profile matcher scored this job */}
                       {matchDetails.hasBreakdown ? (
                         <div className="mt-4 p-3 bg-gray-50 rounded-lg">
                           <div className="flex justify-between items-center mb-1">
@@ -744,7 +744,7 @@ const JobDetails: React.FC = () => {
                           </p>
                         </div>
                       ) : (
-                        <p className="mt-4 text-xs text-gray-500">Scored by the AI hybrid recommender only — the profile matcher hasn't evaluated this job yet.</p>
+                        <p className="mt-4 text-xs text-gray-500">Scored by the AI hybrid recommender only   the profile matcher hasn't evaluated this job yet.</p>
                       )}
 
                       {/* Missing Skills Warning */}
@@ -791,7 +791,7 @@ const JobDetails: React.FC = () => {
                                 <p key={idx} className="text-sm text-blue-900">✓ {deg}</p>
                               ))}
                               {matchDetails.qualifications_breakdown.candidate_fields.map((field, idx) => (
-                                <p key={idx} className="text-xs text-blue-700">📚 {field}</p>
+                                <p key={idx} className="text-xs text-blue-700"> {field}</p>
                               ))}
                             </div>
                           ) : (
@@ -823,7 +823,7 @@ const JobDetails: React.FC = () => {
                       {matchDetails.qualifications_breakdown.best_matched_field && (
                         <div className="p-3 bg-green-50 rounded-lg">
                           <p className="text-sm text-green-800 font-medium">
-                            🎯 Best match: {matchDetails.qualifications_breakdown.best_matched_field}
+                            ''Best match: {matchDetails.qualifications_breakdown.best_matched_field}
                           </p>
                           <p className="text-xs text-green-600 mt-1">
                             Similarity: {(matchDetails.qualifications_breakdown.best_similarity * 100).toFixed(0)}% -
@@ -835,7 +835,7 @@ const JobDetails: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Qualifications Score — only real when the profile matcher scored this job */}
+                      {/* Qualifications Score   only real when the profile matcher scored this job */}
                       {matchDetails.hasBreakdown && (
                         <div className="p-3 bg-gray-50 rounded-lg">
                           <div className="flex justify-between items-center mb-1">
@@ -907,15 +907,15 @@ const JobDetails: React.FC = () => {
                           : 'Consider updating your profile to better match this role.'}
                     </p>
 
-                    {/* Matcher (70%) + Hybrid (30%) split — same blend shown in the job feed */}
+                    {/* Matcher (70%) + Hybrid (30%) split   same blend shown in the job feed */}
                     {(matchDetails.matcher_score != null || matchDetails.hybrid_score != null) && (
                       <div className="flex justify-center gap-4 mb-3 text-xs text-white/80">
-                        {matchDetails.matcher_score != null && <span>🎯 Profile Match: {Math.round(matchDetails.matcher_score)}%</span>}
+                        {matchDetails.matcher_score != null && <span>''Profile Match: {Math.round(matchDetails.matcher_score)}%</span>}
                         {matchDetails.hybrid_score != null && <span>🧠 Hybrid Recommender: {Math.round(matchDetails.hybrid_score)}%</span>}
                       </div>
                     )}
 
-                    {/* Factor Breakdown — only real when the profile matcher scored this job */}
+                    {/* Factor Breakdown   only real when the profile matcher scored this job */}
                     {matchDetails.hasBreakdown ? (
                       <div className="space-y-3 text-left mb-4">
                         <p className="text-xs font-semibold text-white/80">Match Breakdown:</p>
@@ -961,7 +961,7 @@ const JobDetails: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-white/70 mb-4">Scored by the AI hybrid recommender only — the profile matcher hasn't evaluated this job yet.</p>
+                      <p className="text-xs text-white/70 mb-4">Scored by the AI hybrid recommender only   the profile matcher hasn't evaluated this job yet.</p>
                     )}
 
                     {/* Why this job matched (explainable AI) */}
@@ -1015,7 +1015,7 @@ const JobDetails: React.FC = () => {
                 </div>
               )}
 
-              {/* Experience Match Details Card — hidden when the profile matcher
+              {/* Experience Match Details Card   hidden when the profile matcher
                   never scored this job, since every field below would just be
                   a zeroed placeholder rather than a real "0" */}
               {matchDetails && matchDetails.hasBreakdown && (
@@ -1030,7 +1030,7 @@ const JobDetails: React.FC = () => {
 
                   {expandedSections.experience && (
                     <div className="space-y-3">
-                      {/* Total vs Relevant — relevant is computed by semantic matching, not raw years */}
+                      {/* Total vs Relevant   relevant is computed by semantic matching, not raw years */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-gray-50 rounded-lg p-3 text-center">
                           <p className="text-2xl font-bold text-gray-900">{(matchDetails.experience_breakdown.total_years || 0).toFixed(1)}</p>
@@ -1054,7 +1054,7 @@ const JobDetails: React.FC = () => {
                         <div className="space-y-2 pt-1">
                           <p className="text-xs font-semibold text-gray-600">How each role was used:</p>
                           {matchDetails.experience_breakdown.experience_analysis!.map((exp, idx) => (
-                            <div key={idx} className={`rounded-lg p-3 border ${exp.contributes ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100'}`}>
+                            <div key={idx} className={`rounded-lg p-3 border ${exp.contributes ? 'bg-green-50 border-green-100': 'bg-gray-50 border-gray-100'}`}>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
                                   <p className="text-sm font-medium text-gray-900 flex items-center gap-1.5">
@@ -1065,7 +1065,7 @@ const JobDetails: React.FC = () => {
                                   </p>
                                   {exp.company && <p className="text-xs text-gray-500 ml-5">{exp.company}</p>}
                                 </div>
-                                <span className={`text-xs font-bold whitespace-nowrap ${exp.contributes ? 'text-green-700' : 'text-gray-400'}`}>
+                                <span className={`text-xs font-bold whitespace-nowrap ${exp.contributes ? 'text-green-700': 'text-gray-400'}`}>
                                   {Math.round((exp.similarity || 0) * 100)}%
                                 </span>
                               </div>
@@ -1094,7 +1094,7 @@ const JobDetails: React.FC = () => {
                 </div>
               )}
 
-              {/* Preferences Match Details — same reasoning as Experience above */}
+              {/* Preferences Match Details   same reasoning as Experience above */}
               {matchDetails && matchDetails.hasBreakdown && (
                 <div className="bg-white rounded-2xl shadow-sm p-6">
                   <button
@@ -1184,7 +1184,7 @@ const JobDetails: React.FC = () => {
                   </div>
                   <div className="flex justify-between py-2">
                     <span className="text-gray-500">Deadline</span>
-                    <span className={daysRemaining && daysRemaining <= 7 ? 'text-red-600 font-medium' : 'text-gray-900'}>
+                    <span className={daysRemaining && daysRemaining <= 7 ? 'text-red-600 font-medium': 'text-gray-900'}>
                       {formatDate(job.expires_at)}
                       {daysRemaining && daysRemaining > 0 && (
                         <span className="text-xs ml-1">({daysRemaining} days left)</span>
@@ -1252,8 +1252,8 @@ const JobDetails: React.FC = () => {
                     onClick={handleSaveJob}
                     className="w-full py-3 border-2 border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
                   >
-                    <Bookmark className="w-4 h-4" fill={isSaved ? 'currentColor' : 'none'} />
-                    {isSaved ? 'Saved' : 'Save Job'}
+                    <Bookmark className="w-4 h-4" fill={isSaved ? 'currentColor': 'none'} />
+                    {isSaved ? 'Saved': 'Save Job'}
                   </button>
                 </div>
               </div>
@@ -1315,7 +1315,7 @@ const JobDetails: React.FC = () => {
       setIsApplying(false);
     }}
     onSuccess={() => {
-      // Mark as applied, but DON'T close the modal or alert here — the modal shows its
+      // Mark as applied, but DON'T close the modal or alert here   the modal shows its
       // own next-steps screen (simulation details, or the "no simulation yet" notice)
       // and closes itself when the user dismisses it.
       setHasApplied(true);
@@ -1343,7 +1343,7 @@ const JobDetails: React.FC = () => {
       resumes: fullCandidateProfile.resumes || [],
     }}
     matchScore={matchScore || 75}
-    matchDetails={{  // ✅ ADD THIS - pass the match details
+    matchDetails={{  // ''ADD THIS - pass the match details
       criteria_scores: matchDetails?.criteria_scores,
       skills_breakdown: matchDetails?.skills_breakdown,
       qualifications_breakdown: matchDetails?.qualifications_breakdown,
@@ -1356,7 +1356,7 @@ const JobDetails: React.FC = () => {
         ? (job as any).requiredDocuments
         : Array.isArray((job as any)?.required_documents) && (job as any).required_documents.length > 0
           ? (job as any).required_documents
-          // No job-level "required documents" field exists in the database —
+          // No job-level "required documents" field exists in the database  
           // Resume is universal; Cover Letter defaults to optional rather
           // than being hardcoded as required for every job.
           : [{ name: 'Resume', is_required: true }, { name: 'Cover Letter', is_required: false }]

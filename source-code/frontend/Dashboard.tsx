@@ -93,14 +93,14 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
   useEffect(() => {
     if (authUser) {
       setUser(authUser);
-      console.log('✅ User loaded from auth context:', authUser);
+      console.log('User loaded from auth context:', authUser);
     } else {
       const storedUser = localStorage.getItem('user');
       if (storedUser) {
         try {
           const parsedUser = JSON.parse(storedUser);
           setUser(parsedUser);
-          console.log('✅ Loaded user from localStorage fallback:', parsedUser);
+          console.log('Loaded user from localStorage fallback:', parsedUser);
         } catch (e) {
           console.error('Failed to parse user from localStorage:', e);
         }
@@ -131,12 +131,12 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
     const viewParam = params.get('view');
     const sessionIdParam = params.get('sessionId');
     const jobIdParam = params.get('jobId');
-    if (viewParam === 'session-report' && sessionIdParam) {
+    if (viewParam === 'session-report'&& sessionIdParam) {
       setReportReturnView('simulations-list');
       setEditingSimulationId(sessionIdParam);
       setCurrentView('session-report');
-    } else if (viewParam === 'job-candidates' && jobIdParam) {
-      setSelectedJobForCandidates({ id: jobIdParam, title: '' });
+    } else if (viewParam === 'job-candidates'&& jobIdParam) {
+      setSelectedJobForCandidates({ id: jobIdParam, title: ''});
       setCurrentView('job-candidates');
     } else if (viewParam === 'application-history') {
       setCurrentView('application-history');
@@ -201,7 +201,7 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
   }
 
   const renderView = () => {
-    console.log('🎯 Rendering view:', currentView, 'User type:', user?.userType || user?.user_type);
+    console.log('Rendering view:', currentView, 'User type:', user?.userType || user?.user_type);
 
     switch (currentView) {
       case 'dashboard':
@@ -218,7 +218,7 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
             onApplyToJob={(jobId) => {
               // Navigate to the real job details page and auto-open the
               // actual application modal there (same ?apply=1 pattern
-              // SavedJobs.tsx uses) — this feed's own job objects are too
+              // SavedJobs.tsx uses)   this feed's own job objects are too
               // thin (no description/salary/screening questions) to render
               // a real application form inline, and handleApplyJob() only
               // faked "applied" locally without ever submitting anything.
@@ -300,7 +300,7 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
             onBack={() => setCurrentView('dashboard')}
             onEditSimulation={handleEditSimulation}
             onCreateNew={handleCreateSimulation}
-            // ✅ REMOVED: onViewCandidatePerformance is not supported by SimulationList
+            // ''REMOVED: onViewCandidatePerformance is not supported by SimulationList
             // onViewCandidatePerformance={handleViewCandidatePerformance}
           />
         );
@@ -437,7 +437,7 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
       {/* Sidebar - Visible for EVERYONE (candidates AND recruiters) */}
       <div className={`
         fixed md:static left-0 top-16 md:top-0 h-[calc(100vh-4rem)] md:h-screen z-40 md:z-20 w-64 lg:w-72
-        ${sidebarOpen ? 'block' : 'hidden'}
+        ${sidebarOpen ? 'block': 'hidden'}
         transition-all duration-300 ease-in-out
       `}>
         <Sidebar

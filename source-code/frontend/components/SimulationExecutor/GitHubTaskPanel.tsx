@@ -50,7 +50,7 @@ const GitHubTaskPanel: React.FC<GitHubTaskPanelProps> = ({
             <Github size={14} className="text-white" />
             <span className="text-white text-xs font-semibold">GitHub Repository</span>
             {taskTitle && (
-              <span className="text-gray-400 text-xs">— {taskTitle}</span>
+              <span className="text-gray-400 text-xs">  {taskTitle}</span>
             )}
           </div>
           {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -85,7 +85,7 @@ const GitHubTaskPanel: React.FC<GitHubTaskPanelProps> = ({
           <Github size={14} className="text-white" />
           <span className="text-white text-xs font-semibold">GitHub Repository</span>
           {taskTitle && (
-            <span className="text-gray-400 text-xs">— {taskTitle}</span>
+            <span className="text-gray-400 text-xs">  {taskTitle}</span>
           )}
         </div>
         <div className="flex items-center gap-2">

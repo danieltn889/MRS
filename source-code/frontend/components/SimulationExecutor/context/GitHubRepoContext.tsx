@@ -5,7 +5,7 @@ import githubAPI from '../../../services/githubAPI';
 export interface FileNode {
   name: string;
   path: string;
-  type: 'file' | 'folder';
+  type: 'file'| 'folder';
   content?: string;
   language?: string;
   children?: FileNode[];
@@ -125,7 +125,7 @@ const GitHubRepoContext = createContext<GitHubRepoContextValue | undefined>(unde
 export const useGitHubRepo = () => {
   const context = useContext(GitHubRepoContext);
   if (!context) {
-    console.error('❌ useGitHubRepo: Context not found!');
+    console.error(' useGitHubRepo: Context not found!');
     throw new Error('useGitHubRepo must be used within GitHubRepoProvider');
   }
   return context;
@@ -201,8 +201,8 @@ const convertToFileNode = (files: Record<string, string>): FileNode[] => {
   
   const sortChildren = (nodes: FileNode[]) => {
     nodes.sort((a, b) => {
-      if (a.type === 'folder' && b.type === 'file') return -1;
-      if (a.type === 'file' && b.type === 'folder') return 1;
+      if (a.type === 'folder'&& b.type === 'file') return -1;
+      if (a.type === 'file'&& b.type === 'folder') return 1;
       return a.name.localeCompare(b.name);
     });
     nodes.forEach(node => {
@@ -332,7 +332,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     const savedRepo = taskRepos[sessionId]?.[taskIndex];
     
     if (savedRepo) {
-      console.log(`📁 Loading repository for Task ${taskIndex}:`, {
+      console.log(` Loading repository for Task ${taskIndex}:`, {
         owner: savedRepo.owner,
         repo: savedRepo.repo,
         branchName: savedRepo.branchName
@@ -355,7 +355,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       setCurrentRepo(repoState);
       return repoState;
     } else {
-      console.log(`📁 No saved repository for Task ${taskIndex}`);
+      console.log(` No saved repository for Task ${taskIndex}`);
       setCurrentRepo(null);
       return null;
     }
@@ -395,7 +395,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
           issues: statsData.issues || { total: 0, open: 0, closed: 0 },
           contributors: statsData.contributors || { total: 1, totalContributions: 0, topContributors: [] },
           scores: statsData.scores || { overall: fileCount > 0 ? 65 : 0, documentation: 50, activity: 50, community: 50 },
-          languages: statsData.languages || { breakdown: [], primary: 'unknown' },
+          languages: statsData.languages || { breakdown: [], primary: 'unknown'},
         };
       }
       
@@ -413,21 +413,21 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     }
   }, [currentRepo, fetchAllStats]);
 
-  // ✅ FIXED: loadRepository with correct branch handling
+  // ''FIXED: loadRepository with correct branch handling
   const loadRepository = useCallback(async (owner: string, repo: string, repoUrl?: string, branchName?: string, taskIndex?: number) => {
     setIsLoading(true);
     setError(null);
     
-    // ✅ FIX: Define effectiveBranch before using it
+    // ''FIX: Define effectiveBranch before using it
     const effectiveBranch = branchName || 'main';
     const targetTaskIndex = taskIndex ?? currentTaskIndex;
     
     try {
       console.log(`Loading GitHub repo: ${owner}/${repo}`, { branchName: effectiveBranch });
 
-      // ✅ Pass branch name to API call. An EMPTY repository (no commits yet) is the
-      // EXPECTED starting state of a simulation — the candidate creates the first
-      // files and commits — so a missing/empty file list is an empty workspace, NOT
+      // ''Pass branch name to API call. An EMPTY repository (no commits yet) is the
+      // EXPECTED starting state of a simulation   the candidate creates the first
+      // files and commits   so a missing/empty file list is an empty workspace, NOT
       // an error.
       let files: any[] = [];
       try {
@@ -445,7 +445,7 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
         const looksEmpty = status === 404 || status === 409 ||
           msg.includes('empty') || msg.includes('no files') || msg.includes('no commit') || msg.includes('not found');
         if (!looksEmpty) throw loadErr;
-        console.log('ℹ️ Repository is empty — starting with an empty workspace (the candidate will create the first files/commits).');
+        console.log('ℹ️ Repository is empty   starting with an empty workspace (the candidate will create the first files/commits).');
         files = [];
       }
       const fileMap: Record<string, string> = {};
@@ -459,13 +459,13 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
         try {
           let content = '';
 
-          if (typeof file.content === 'string' && file.content) {
-            // Content already decoded by the backend getEverything — use it directly
+          if (typeof file.content === 'string'&& file.content) {
+            // Content already decoded by the backend getEverything   use it directly
             content = file.content;
-          } else if (file.encoding === 'base64' && file.content) {
+          } else if (file.encoding === 'base64'&& file.content) {
             content = safeBase64Decode(file.content);
           } else {
-            // Content not in getEverything response — fetch individually
+            // Content not in getEverything response   fetch individually
             try {
               const contentResponse = await githubAPI.getFileContent(owner, repo, file.path, effectiveBranch);
               if (contentResponse?.data?.content) {
@@ -507,9 +507,9 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
       };
       
       setCurrentRepo(newRepo);
-      console.log(`✅ Successfully loaded ${Object.keys(fileMap).length} files from ${owner}/${repo}`, { branchName: newRepo.branchName });
+      console.log(`''Successfully loaded ${Object.keys(fileMap).length} files from ${owner}/${repo}`, { branchName: newRepo.branchName });
 
-      // Stats can be unavailable for an empty repo (no commits) — never let that
+      // Stats can be unavailable for an empty repo (no commits)   never let that
       // failure wipe the (valid) empty workspace we just loaded.
       try { await fetchAllStats(owner, repo); } catch (e: any) { console.warn('Stats unavailable (likely an empty repo):', e?.message); }
       
@@ -662,24 +662,24 @@ export const GitHubRepoProvider: React.FC<GitHubRepoProviderProps> = ({ children
     console.log('🔄 [loadSessionGitHubRepo] Loading from session:', { repoUrl, branchName });
     
     if (!repoUrl) {
-      console.warn('⚠️ No repoUrl provided');
+      console.warn(' No repoUrl provided');
       return;
     }
 
     const parsed = parseGitHubUrl(repoUrl);
     if (!parsed) {
-      console.error('❌ Failed to parse GitHub URL:', repoUrl);
+      console.error(' Failed to parse GitHub URL:', repoUrl);
       return;
     }
 
     console.log('🔍 Parsed:', parsed);
-    console.log('📌 Using branch:', branchName || 'main');
+    console.log('Using branch:', branchName || 'main');
 
     try {
       await loadRepository(parsed.owner, parsed.repo, repoUrl, branchName || 'main');
-      console.log('✅ Session GitHub repo loaded successfully');
+      console.log('Session GitHub repo loaded successfully');
     } catch (err) {
-      console.error('❌ Failed to load session GitHub repo:', err);
+      console.error(' Failed to load session GitHub repo:', err);
     }
   }, [loadRepository]);
 

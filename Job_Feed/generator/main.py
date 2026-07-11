@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+"
 main.py
 =======
 End-to-end orchestrator. Run as:
@@ -11,10 +11,10 @@ possible) -> generate every table -> reconcile derived counters -> validate
 against the real schema -> export CSVs, SQL, and reports.
 
 --use-cache pickles each expensive step to output/.cache/ and reuses it on
-a re-run with the same --n-candidates/--n-jobs/--seed — a development
+a re-run with the same --n-candidates/--n-jobs/--seed   a development
 convenience (streaming the 656MB/680MB source CSVs is the slow part), not
 part of the semantics of a "correct" run.
-"""
+"
 
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
     t_start = time.time()
 
     print("=" * 70)
-    print("STEP 1 — Parsing real database schema")
+    print("STEP 1   Parsing real database schema")
     print("=" * 70)
     schemas = parse_schema(config.SQL_SCHEMA_PATH)
     (config.REPORT_OUT_DIR / "01_schema_report.md").write_text(
@@ -69,7 +69,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
     print(f"  parsed {len(schemas)} tables from schema; report written")
 
     print("=" * 70)
-    print("STEP 2/3/4 — Selecting real candidates + jobs, building id mappings")
+    print("STEP 2/3/4   Selecting real candidates + jobs, building id mappings")
     print("=" * 70)
     selection = _cached(f"selection_{n_jobs}_{n_candidates}_{seed}", use_cache,
                          lambda: csv_loader.select_candidates_and_jobs(n_jobs, n_candidates, seed))
@@ -89,7 +89,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
     print(f"  found {len(existing_skills)} existing skill name(s), {len(existing_companies)} existing company name(s)")
 
     print("=" * 70)
-    print("STEP 5/10 — Building candidate tables (users, profiles, education, "
+    print("STEP 5/10   Building candidate tables (users, profiles, education, "
           "work experience, skills, certifications)")
     print("=" * 70)
     cand_tables = _cached(f"cand_tables_{n_candidates}_{seed}", use_cache,
@@ -99,7 +99,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
         print(f"  {k}: {len(v)} rows")
 
     print("=" * 70)
-    print("STEP 6/7 — Building job tables (companies, jobs, job_skills) — "
+    print("STEP 6/7   Building job tables (companies, jobs, job_skills)   "
           "forced active, posted Jun-Dec 2026")
     print("=" * 70)
     job_tables = _cached(f"job_tables_{n_jobs}_{seed}", use_cache,
@@ -109,7 +109,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
         print(f"  {k}: {len(v)} rows")
 
     print("=" * 70)
-    print("STEP 8 — Streaming real applications + engagement CSVs (filtered to selection)")
+    print("STEP 8   Streaming real applications + engagement CSVs (filtered to selection)")
     print("=" * 70)
     cand_ids_set, job_ids_set = set(selection.candidate_ids), set(selection.job_ids)
     apps_raw = _cached(f"apps_raw_{n_jobs}_{n_candidates}_{seed}", use_cache,
@@ -119,7 +119,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
     print(f"  real applications matched: {len(apps_raw)}, real engagement matched: {len(eng_raw)}")
 
     print("=" * 70)
-    print("STEP 8/9 — Date-shifting real events into each job's new active window, "
+    print("STEP 8/9   Date-shifting real events into each job's new active window, "
           "building applications + job_views + saved_jobs")
     print("=" * 70)
     job_shifts = date_shift.compute_job_date_shifts(job_tables["jobs_flat"], apps_raw, eng_raw)
@@ -129,7 +129,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
           f"saved_jobs: {len(engagement_tables['saved_jobs'])}")
 
     print("=" * 70)
-    print("STEP 11 — Building behaviour tables (search history, recommendation "
+    print("STEP 11   Building behaviour tables (search history, recommendation "
           "history / feed_scores, ignored jobs)")
     print("=" * 70)
     behaviour_tables = behaviour_mod.build_behaviour_tables(
@@ -150,7 +150,7 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
         jobs_df["view_count"] = jobs_df["id"].map(real_view_counts).fillna(0).astype(int)
 
     # ── merge candidate-side + job-side skill catalogs (same deterministic
-    # uuid5 per name, so a name in both is already the same id — just union) ──
+    # uuid5 per name, so a name in both is already the same id   just union) ──
     skills_df = pd.concat([cand_tables["skills_catalog"], job_tables["job_skills_catalog"]],
                           ignore_index=True).drop_duplicates(subset=["id"])
 
@@ -175,17 +175,17 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
     }
 
     print("=" * 70)
-    print("STEP 12 — Validating dataset against the real schema")
+    print("STEP 12   Validating dataset against the real schema")
     print("=" * 70)
     issues = validators.validate_dataset(db_tables, schemas)
     report = validators.render_validation_report(issues, db_tables)
     (config.REPORT_OUT_DIR / "03_validation_report.md").write_text(report, encoding="utf-8")
-    print(f"  {len(issues)} issue(s) found — see output/reports/03_validation_report.md")
+    print(f"  {len(issues)} issue(s) found   see output/reports/03_validation_report.md")
     for issue in issues:
         print(f"  ! {issue}")
 
     print("=" * 70)
-    print("STEP 13/OUTPUT — Exporting CSVs, SQL, and documentation")
+    print("STEP 13/OUTPUT   Exporting CSVs, SQL, and documentation")
     print("=" * 70)
     _export_csvs(db_tables, cand_tables, job_tables, behaviour_tables, engagement_tables)
     sql_text = sql_export.render_full_sql(db_tables, schemas)
@@ -201,13 +201,13 @@ def run(n_candidates: int, n_jobs: int, seed: int, use_cache: bool) -> None:
 
 
 def _write_combined_csv(deliverables: Dict[str, pd.DataFrame], path: Path) -> None:
-    """A single .csv holding every deliverable table, one after another, each
-    preceded by a '### TABLE: <name>' marker line and its own header row.
-    Plain CSV has no concept of sheets/tabs (that's an Excel-only feature) —
+    "A single .csv holding every deliverable table, one after another, each
+    preceded by a '### TABLE: <name>'marker line and its own header row.
+    Plain CSV has no concept of sheets/tabs (that's an Excel-only feature)  
     this is the closest single-file equivalent: still one file, each table's
     block clearly delimited so it's easy to find/copy out in any editor or
-    spreadsheet app, without adding an Excel-library dependency."""
-    with open(path, "w", encoding="utf-8", newline="") as f:
+    spreadsheet app, without adding an Excel-library dependency."
+    with open(path, "w", encoding="utf-8", newline=) as f:
         for name, df in deliverables.items():
             f.write(f"### TABLE: {name}\n")
             df.to_csv(f, index=False)
@@ -215,8 +215,8 @@ def _write_combined_csv(deliverables: Dict[str, pd.DataFrame], path: Path) -> No
 
 
 def _write_excel_workbook(deliverables: Dict[str, pd.DataFrame], path: Path) -> None:
-    """One .xlsx with a real separate sheet/tab per table — opens directly in
-    Excel/LibreOffice/Google Sheets with normal tab navigation."""
+    "One .xlsx with a real separate sheet/tab per table   opens directly in
+    Excel/LibreOffice/Google Sheets with normal tab navigation."
     with pd.ExcelWriter(path, engine="openpyxl") as writer:
         for name, df in deliverables.items():
             sheet_name = name[:31]  # Excel's hard sheet-name length limit
@@ -295,7 +295,7 @@ def _export_csvs(db_tables, cand_tables, job_tables, behaviour_tables, engagemen
     deliverables["candidate_id_mapping"] = pd.read_csv(out / "candidate_id_mapping.csv")
     deliverables["job_id_mapping"] = pd.read_csv(out / "job_id_mapping.csv")
     # A combined-output file left open in an editor/Excel can hold an OS-level
-    # lock on Windows — don't let that abort the rest of the export (SQL,
+    # lock on Windows   don't let that abort the rest of the export (SQL,
     # docs) that hasn't run yet.
     for label, fn, filename in (
         ("combined CSV", _write_combined_csv, "combined_dataset.csv"),
@@ -305,7 +305,7 @@ def _export_csvs(db_tables, cand_tables, job_tables, behaviour_tables, engagemen
             fn(deliverables, out / filename)
         except PermissionError as e:
             print(f"  ! Skipped {label} ({filename}): {e}. "
-                  f"Likely open in another program — close it and re-run to regenerate just this file.")
+                  f"Likely open in another program   close it and re-run to regenerate just this file.")
 
     # DB-import-ready shape of every table (extra "_original_*" bookkeeping
     # columns stripped) also written out, one CSV per table, for anyone who
@@ -319,13 +319,13 @@ def _export_csvs(db_tables, cand_tables, job_tables, behaviour_tables, engagemen
 
 def _write_documentation(db_tables, selection, n_real_apps, n_real_eng) -> None:
     lines = [
-        "# Job_Feed Demo Dataset — Documentation", "",
-        "Generated by `Job_Feed/generator/main.py` from:", "",
+        "# Job_Feed Demo Dataset   Documentation", ,
+        "Generated by `Job_Feed/generator/main.py` from:", ,
         f"- Real schema: `db_backups/db_backup_20260705_182104.sql` (parsed programmatically, "
         f"see `output/reports/01_schema_report.md`)",
         f"- Real CSVs: `Complete_Candidate_Profile.csv`, `Complete_Job_Profile.csv`, "
-        f"`Cleaned_Combined_Applications.csv`, `Cleaned_Combined_Engagement.csv`", "",
-        "## Selection strategy", "",
+        f"`Cleaned_Combined_Applications.csv`, `Cleaned_Combined_Engagement.csv`", ,
+        "## Selection strategy", ,
         f"- {len(selection.job_ids)} jobs sampled uniformly at random from the real "
         f"Complete_Job_Profile.csv (6,882 total).",
         "- Candidates were NOT sampled independently: Complete_Candidate_Profile.csv already "
@@ -334,49 +334,49 @@ def _write_documentation(db_tables, selection, n_real_apps, n_real_eng) -> None:
         "the connected pool ran short), to maximize how much real application/engagement data "
         "survives the down-sample.",
         f"- Result: {n_real_apps} real application rows and {n_real_eng} real engagement rows "
-        f"matched the final selection and were reused as-is (status/dates), not invented.", "",
-        "## What's real vs. generated", "",
+        f"matched the final selection and were reused as-is (status/dates), not invented.", ,
+        "## What's real vs. generated", ,
         "| Data | Source |",
         "|---|---|",
         "| Candidate education, field of study, district/province, languages, experience count | REAL (CSV) |",
         "| Candidate name, email, phone, DOB, bio, salary expectations, LinkedIn/GitHub | GENERATED (derived from real education/experience for consistency) |",
         "| Candidate skills, certifications | GENERATED from a real Field_Of_Study -> skills taxonomy (10 real categories) |",
         "| Job title, institution, required education text, required field, experience years | REAL (CSV) |",
-        "| Job location, language requirements, description prose, salary, structured education_required JSON | GENERATED (Job_Location/Required_Languages were 100% empty in the source — verified) |",
+        "| Job location, language requirements, description prose, salary, structured education_required JSON | GENERATED (Job_Location/Required_Languages were 100% empty in the source   verified) |",
         "| Applications (candidate, job, status, date) | REAL (CSV), status mapped to the DB enum, dates shifted into the job's new active window |",
-        "| Job views (job_views) | REAL (CSV) 'engagement' rows, deduplicated to satisfy the UNIQUE(user_id,job_id) constraint |",
-        "| Saved jobs | 100% GENERATED — the source Job_Save column is empty for all ~4.85M rows (verified with a full-file scan) |",
-        "| Search history, recommendation history (feed_scores), ignored jobs | 100% GENERATED — no equivalent exists in the source CSVs |",
-        "", "## Known modeling decisions", "",
+        "| Job views (job_views) | REAL (CSV) 'engagement'rows, deduplicated to satisfy the UNIQUE(user_id,job_id) constraint |",
+        "| Saved jobs | 100% GENERATED   the source Job_Save column is empty for all ~4.85M rows (verified with a full-file scan) |",
+        "| Search history, recommendation history (feed_scores), ignored jobs | 100% GENERATED   no equivalent exists in the source CSVs |",
+        , "## Known modeling decisions", ,
         "- Every job is forced `status='active'`, `published_at` in "
         f"[{config.JOB_POSTING_WINDOW_START}, {config.JOB_POSTING_WINDOW_END}] per the project spec. "
         "Real application/engagement dates are historical, so each job's real events are shifted by "
         "a constant per-job offset (not re-randomized) to preserve their relative order/spacing while "
-        "landing inside the new window — see `generator/date_shift.py`.",
+        "landing inside the new window   see `generator/date_shift.py`.",
         "- Application_Status source strings are mapped to the DB's applications_status_check enum; "
-        "see `applications.py::STATUS_MAP` for the exact mapping and rationale (e.g. 'Offer rejected' "
+        "see `applications.py::STATUS_MAP` for the exact mapping and rationale (e.g. 'Offer rejected'"
         "-> withdrawn, since it's the candidate's decision, not the employer's).",
-        "- IDs are deterministic (uuid5 of a fixed namespace + the original CSV id), not random — "
+        "- IDs are deterministic (uuid5 of a fixed namespace + the original CSV id), not random   "
         "re-running the pipeline reproduces the same database UUIDs without needing persisted state.",
         "- Generated `password_hash` values are a single shared bcrypt hash for the placeholder "
-        f"password `{candidates_mod.DEMO_PASSWORD}` — these are demo accounts, not real credentials.",
-        "", "## Table row counts (final, DB-import shape)", "",
+        f"password `{candidates_mod.DEMO_PASSWORD}`   these are demo accounts, not real credentials.",
+        , "## Table row counts (final, DB-import shape)", ,
     ]
     for name, df in db_tables.items():
         lines.append(f"- `{name}`: {len(df)}")
-    lines.append("")
+    lines.append()
     lines.append("## Files")
-    lines.append("")
-    lines.append("- `output/csv/*.csv` — the human-readable deliverables named in the project spec")
-    lines.append("- `output/csv/combined_dataset.csv` — all of the above stacked into one file, "
+    lines.append()
+    lines.append("- `output/csv/*.csv`   the human-readable deliverables named in the project spec")
+    lines.append("- `output/csv/combined_dataset.csv`   all of the above stacked into one file, "
                   "each table's block preceded by a `### TABLE: <name>` marker line")
-    lines.append("- `output/csv/combined_dataset.xlsx` — the same tables, but as a real Excel "
+    lines.append("- `output/csv/combined_dataset.xlsx`   the same tables, but as a real Excel "
                   "workbook with one sheet/tab per table")
-    lines.append("- `output/csv/db/*.csv` — one CSV per table, DB-import shape (matches column names exactly)")
-    lines.append("- `output/sql/import.sql` — PostgreSQL INSERT script (idempotent: ON CONFLICT DO NOTHING)")
-    lines.append("- `output/reports/01_schema_report.md` — Step 1 schema inspection")
-    lines.append("- `output/reports/02_mapping_report.md` — Step 2 CSV -> DB column mapping")
-    lines.append("- `output/reports/03_validation_report.md` — Step 12 validation results")
+    lines.append("- `output/csv/db/*.csv`   one CSV per table, DB-import shape (matches column names exactly)")
+    lines.append("- `output/sql/import.sql`   PostgreSQL INSERT script (idempotent: ON CONFLICT DO NOTHING)")
+    lines.append("- `output/reports/01_schema_report.md`   Step 1 schema inspection")
+    lines.append("- `output/reports/02_mapping_report.md`   Step 2 CSV -> DB column mapping")
+    lines.append("- `output/reports/03_validation_report.md`   Step 12 validation results")
     (config.REPORT_OUT_DIR / "README.md").write_text("\n".join(lines), encoding="utf-8")
 
 

@@ -2,7 +2,7 @@
 
 export interface Resource {
   id: string;
-  type: 'document' | 'video' | 'code' | 'image' | 'link';
+  type: 'document'| 'video'| 'code'| 'image'| 'link';
   name: string;
   url?: string;
   content?: string;
@@ -13,7 +13,7 @@ export interface EvaluationCriterion {
   id: string;
   name: string;
   description: string;
-  type: 'scale' | 'boolean' | 'text' | 'multiple_choice';
+  type: 'scale'| 'boolean'| 'text'| 'multiple_choice';
   options?: string[];
   required: boolean;
   weight: number;
@@ -68,14 +68,14 @@ export interface SimulationSettings {
   recordAudio: boolean;
   maxAttempts: number;
   timeLimit: number;
-  environment: 'office' | 'remote' | 'field' | 'custom' | string;
+  environment: 'office'| 'remote'| 'field'| 'custom'| string;
   tools: string[];
   constraints: string[];
 }
 
 export interface ComplianceCheck {
-  category: 'bias' | 'accessibility' | 'legal' | 'ethics' | 'technical';
-  status: 'passed' | 'warning' | 'failed';
+  category: 'bias'| 'accessibility'| 'legal'| 'ethics'| 'technical';
+  status: 'passed'| 'warning'| 'failed';
   issues: string[];
   recommendations: string[];
 }
@@ -91,33 +91,33 @@ export interface BehavioralMetric {
   id: string;
   name: string;
   minimumScore: number;
-  type: 'communication' | 'collaboration' | 'adaptability' | 'leadership';
+  type: 'communication'| 'collaboration'| 'adaptability'| 'leadership';
 }
 
 export interface QualityStandard {
   id: string;
   name: string;
   threshold: number;
-  type: 'code_quality' | 'writing_quality' | 'presentation_quality';
+  type: 'code_quality'| 'writing_quality'| 'presentation_quality';
 }
 
 export interface AutomatedRule {
   id: string;
   condition: string;
-  action: 'pass' | 'fail' | 'review_required';
-  priority: 'low' | 'medium' | 'high';
+  action: 'pass'| 'fail'| 'review_required';
+  priority: 'low'| 'medium'| 'high';
 }
 
-// ✅ ADD THIS - Task Priority Interface
+// ''ADD THIS - Task Priority Interface
 export interface TaskPriority {
-  mode: 'sequential' | 'parallel' | 'weighted';
-  weightDistribution: 'equal' | 'custom';
+  mode: 'sequential'| 'parallel'| 'weighted';
+  weightDistribution: 'equal'| 'custom';
   taskWeights: Record<string, number>;
   mandatoryTasks: string[];  // Task IDs that are mandatory
   optionalTasks: string[];   // Task IDs that are optional
 }
 
-// ✅ UPDATE - PassFailCriteria with taskPriority
+// ''UPDATE - PassFailCriteria with taskPriority
 export interface PassFailCriteria {
   overallScore: { minimum: number; maximum: number };
   sectionScores: SectionScore[];
@@ -126,7 +126,7 @@ export interface PassFailCriteria {
   timeManagement: { completionRequired: boolean; timeBonus: boolean };
   qualityStandards: QualityStandard[];
   automatedRules: AutomatedRule[];
-  taskPriority?: TaskPriority;  // ✅ ADD THIS
+  taskPriority?: TaskPriority;  // ''ADD THIS
 }
 
 export interface DailyWindow {
@@ -151,8 +151,8 @@ export interface AvailabilityConfig {
 
 export interface PracticeSimulation {
   enabled: boolean;
-  type: 'full' | 'section' | 'timed' | 'untimed' | 'tutorial';
-  difficulty: 'easier' | 'same' | 'adaptive';
+  type: 'full'| 'section'| 'timed'| 'untimed'| 'tutorial';
+  difficulty: 'easier'| 'same'| 'adaptive';
   includeFeedback: boolean;
   maxAttempts: number;
   timeLimit?: number;
@@ -167,12 +167,12 @@ export interface Simulation {
   jobId?: string;
   description: string;
   duration: number;
-  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  difficulty: 'beginner'| 'intermediate'| 'advanced'| 'expert';
   objectives: string[];
   tasks: SimulationTask[];
   scoring: ScoringConfig;
   settings: SimulationSettings;
-  status: 'draft' | 'testing' | 'published' | 'archived';
+  status: 'draft'| 'testing'| 'published'| 'archived';
   createdAt: string;
   updatedAt: string;
   compliance: ComplianceCheck[];
@@ -206,13 +206,13 @@ export const defaultAvailability: AvailabilityConfig = {
 };
 
 export const STEPS = [
-  { id: 1, title: 'Basics',        description: 'Define simulation fundamentals' },
-  { id: 2, title: 'Objectives',    description: 'Set learning and assessment goals' },
-  { id: 3, title: 'Tasks',         description: 'Design individual tasks and scenarios' },
-  { id: 4, title: 'Scoring',       description: 'Configure evaluation criteria' },
-  { id: 5, title: 'Pass/Fail',     description: 'Set passing standards and criteria' },
-  { id: 6, title: 'Settings',      description: 'Environment and technical settings' },
-  { id: 7, title: 'Availability',  description: 'Configure scheduling and access' },
-  { id: 8, title: 'Practice',      description: 'Set up practice simulation options' },
-  { id: 9, title: 'Publish',       description: 'Review and publish simulation' },
+  { id: 1, title: 'Basics',        description: 'Define simulation fundamentals'},
+  { id: 2, title: 'Objectives',    description: 'Set learning and assessment goals'},
+  { id: 3, title: 'Tasks',         description: 'Design individual tasks and scenarios'},
+  { id: 4, title: 'Scoring',       description: 'Configure evaluation criteria'},
+  { id: 5, title: 'Pass/Fail',     description: 'Set passing standards and criteria'},
+  { id: 6, title: 'Settings',      description: 'Environment and technical settings'},
+  { id: 7, title: 'Availability',  description: 'Configure scheduling and access'},
+  { id: 8, title: 'Practice',      description: 'Set up practice simulation options'},
+  { id: 9, title: 'Publish',       description: 'Review and publish simulation'},
 ] as const;

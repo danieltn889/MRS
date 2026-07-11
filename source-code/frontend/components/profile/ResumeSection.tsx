@@ -44,13 +44,13 @@ const formatFileSize = (bytes: number): string => {
 
 const formatDate = (d: string): string => {
   try { return new Date(d).toLocaleDateString('en-GB'); }
-  catch { return '—'; }
+  catch { return ' '; }
 };
 
 const fileIcon = (name: string) => {
   const ext = name.split('.').pop()?.toLowerCase();
   if (ext === 'pdf')               return '📄';
-  if (ext === 'doc' || ext === 'docx') return '📝';
+  if (ext === 'doc'|| ext === 'docx') return '';
   return '📎';
 };
 
@@ -72,7 +72,7 @@ const DeleteModal = ({
       </div>
       <h3 className="text-lg font-bold text-gray-900 mb-2">Delete Resume?</h3>
       <p className="text-sm text-gray-500 mb-6">
-        Are you sure you want to permanently delete{' '}
+        Are you sure you want to permanently delete{''}
         <span className="font-semibold text-gray-700">"{name}"</span>?
       </p>
       <div className="flex gap-3">
@@ -116,7 +116,7 @@ const UploadSuccessModal = ({
   </div>
 );
 
-// ── DOCX text extractor (uses jszip — no extra package needed) ─────────────────
+// ── DOCX text extractor (uses jszip   no extra package needed) ─────────────────
 
 // ── Content Viewer Modal ───────────────────────────────────────────────────────
 
@@ -225,9 +225,11 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
     const apiOrigin = apiBase.replace(/\/api\/v1\/?$/, '');
     if (resume.file_url) {
       if (/^https?:\/\//.test(resume.file_url)) return resume.file_url;
-      return `${apiOrigin}${resume.file_url.startsWith('/') ? '' : '/'}${resume.file_url}`;
+      return `${apiOrigin}${resume.file_url.startsWith('/') ? '': '/'}${resume.file_url}`;
     }
-    if (resume.file_key) return `${apiOrigin}/uploads/${resume.file_key}`;
+    // resume.file_key is a bare filename -- the file lives under
+    // uploads/resumes/ on the server (see backend uploadResume).
+    if (resume.file_key) return `${apiOrigin}/uploads/resumes/${resume.file_key}`;
     return '';
   };
 
@@ -353,7 +355,7 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
 
   // Preview ───────────────────────────────────────────────────────────────────
 
-  // Google Docs Viewer is a remote service — it cannot reach localhost or 127.x.
+  // Google Docs Viewer is a remote service   it cannot reach localhost or 127.x.
   const isLocalUrl = (url: string) =>
     /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(url);
 
@@ -361,11 +363,11 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
     setPreviewNote(null);
     const url = resolveUrl(resume);
     if (!url) {
-      setPreviewNote({ id: resume.id, message: 'No file URL is available for this resume.' });
+      setPreviewNote({ id: resume.id, message: 'No file URL is available for this resume.'});
       return;
     }
 
-    const isPDF  = resume.mime_type === 'application/pdf' || /\.pdf$/i.test(resume.file_name || '');
+    const isPDF  = resume.mime_type === 'application/pdf'|| /\.pdf$/i.test(resume.file_name || '');
     const isWord = isWordDoc(resume.file_name || '');
 
     if (isPDF) {
@@ -375,13 +377,13 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
 
     if (isWord) {
       if (isLocalUrl(url)) {
-        // Google Docs Viewer is a remote service — it cannot reach localhost.
+        // Google Docs Viewer is a remote service   it cannot reach localhost.
         // Trigger the download and show the explanation on this specific card.
         setPreviewNote({
           id: resume.id,
           message:
-            'Word documents cannot be previewed while running on localhost — ' +
-            'Google Docs Viewer is a remote service and cannot access local files. ' +
+            'Word documents cannot be previewed while running on localhost   '+
+            'Google Docs Viewer is a remote service and cannot access local files. '+
             'The file has been downloaded so you can open it directly.',
         });
         handleDownload(resume);
@@ -476,7 +478,7 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             <Upload size={18} />
-            {uploading ? 'Uploading…' : 'Upload Resume'}
+            {uploading ? 'Uploading…': 'Upload Resume'}
           </button>
           <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" onChange={handleFileSelect} className="hidden" />
         </div>
@@ -621,7 +623,7 @@ const ResumeSection: React.FC<ResumeSectionProps> = ({ profile, onUpdate }) => {
                   </button>
                 </div>
 
-                {/* Inline preview note — only shown on this specific card */}
+                {/* Inline preview note   only shown on this specific card */}
                 {previewNote?.id === resume.id && (
                   <div className="mt-3 flex items-start gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
                     <AlertCircle size={15} className="shrink-0 mt-0.5 text-amber-500" />

@@ -40,10 +40,10 @@ const createDatabaseIfNotExists = async (): Promise<void> => {
   try {
     console.log('🔴 [5] Connecting to PostgreSQL server...');
     await client.connect();
-    console.log('✅ Connected to PostgreSQL server');
+    console.log('Connected to PostgreSQL server');
 
     const dbName = process.env.DB_NAME || 'SVWR-CFE_DB';
-    console.log(`🔴 [6] Checking if database '${dbName}' exists...`);
+    console.log(`🔴 [6] Checking if database '${dbName}'exists...`);
     
     const result = await client.query(
       'SELECT datname FROM pg_database WHERE datname = $1',
@@ -51,17 +51,17 @@ const createDatabaseIfNotExists = async (): Promise<void> => {
     );
 
     if (result.rows.length === 0) {
-      console.log(`🔴 [7] Database '${dbName}' does not exist. Creating...`);
+      console.log(`🔴 [7] Database '${dbName}'does not exist. Creating...`);
       await client.query(`CREATE DATABASE "${dbName}"`);
-      console.log(`✅ Database '${dbName}' created successfully`);
+      console.log(`''Database '${dbName}'created successfully`);
     } else {
-      console.log(`✅ Database '${dbName}' already exists`);
+      console.log(`''Database '${dbName}'already exists`);
     }
 
     await client.end();
     console.log('🔴 [8] createDatabaseIfNotExists - completed');
   } catch (error) {
-    console.error('❌ Error creating database:', error);
+    console.error(' Error creating database:', error);
     throw error;
   }
 };
@@ -85,7 +85,7 @@ const parseSQLStatements = (sql: string): string[] => {
       const nextChar = line[j + 1] || '';
       
       if (!inDollarQuote && !inMultiLineComment) {
-        if (char === '-' && nextChar === '-') {
+        if (char === '-'&& nextChar === '-') {
           inSingleLineComment = true;
           continue;
         }
@@ -95,11 +95,11 @@ const parseSQLStatements = (sql: string): string[] => {
       }
 
       if (!inDollarQuote && !inSingleLineComment) {
-        if (char === '/' && nextChar === '*') {
+        if (char === '/'&& nextChar === '*') {
           inMultiLineComment = true;
           continue;
         }
-        if (char === '*' && nextChar === '/') {
+        if (char === '*'&& nextChar === '/') {
           inMultiLineComment = false;
           continue;
         }
@@ -109,7 +109,7 @@ const parseSQLStatements = (sql: string): string[] => {
       }
 
       if (!inSingleLineComment && !inMultiLineComment) {
-        if (char === '$' && !inDollarQuote) {
+        if (char === '$'&& !inDollarQuote) {
           let tag = '$';
           j++;
           while (j < line.length && line[j] !== '$') {
@@ -127,7 +127,7 @@ const parseSQLStatements = (sql: string): string[] => {
             processedLine += char;
             continue;
           }
-        } else if (char === '$' && inDollarQuote) {
+        } else if (char === '$'&& inDollarQuote) {
           let potentialEndTag = '$';
           const startJ = j;
           j++;
@@ -155,7 +155,7 @@ const parseSQLStatements = (sql: string): string[] => {
         }
       }
 
-      if (char === ';' && !inDollarQuote && !inSingleLineComment && !inMultiLineComment) {
+      if (char === ';'&& !inDollarQuote && !inSingleLineComment && !inMultiLineComment) {
         currentStatement += processedLine + char;
         const trimmedStatement = currentStatement.trim();
         if (trimmedStatement && !trimmedStatement.match(/^--/)) {
@@ -195,20 +195,20 @@ const executeSchemaWithErrorHandling = async (client: Client, schemaSQL: string)
     
     // Skip if statement is undefined or empty
     if (!statement || statement.trim().length === 0) {
-      console.log(`⚠️ Skipping empty statement at index ${i}`);
+      console.log(` Skipping empty statement at index ${i}`);
       continue;
     }
     
     try {
       await client.query(statement);
-      console.log(`✅ Statement ${i + 1}/${statements.length} executed`);
+      console.log(`''Statement ${i + 1}/${statements.length} executed`);
     } catch (error: any) {
-      // console.error(`❌ Error at statement ${i + 1}:`);
+      // console.error(` Error at statement ${i + 1}:`);
       // console.error(`SQL: ${statement.substring(0, 200)}...`);
       // console.error(`Error: ${error.message}`);
       
       // Don't fail on duplicate objects
-      if (error.code !== '42P07' && error.code !== '42710') {
+      if (error.code !== '42P07'&& error.code !== '42710') {
         throw error;
       }
     }
@@ -253,7 +253,7 @@ const runMigrations = async (): Promise<void> => {
     logger.info('Schema migration completed');
 
     // schema.sql's CHECK constraint on jobs.status only takes effect via a
-    // fresh CREATE TABLE — on a database where `jobs` already existed (any
+    // fresh CREATE TABLE   on a database where `jobs` already existed (any
     // install predating this constraint's expansion), the CREATE TABLE
     // statement above just hits "already exists" and is skipped, silently
     // leaving the OLD constraint in place. Re-discovering and replacing it
@@ -305,15 +305,15 @@ const migrate = async (): Promise<void> => {
   try {
     console.log('🔴 [migrate] Step 1: Creating database...');
     await createDatabaseIfNotExists();
-    console.log('✅ Database creation step completed');
+    console.log('Database creation step completed');
     
     console.log('🔴 [migrate] Step 2: Running schema migrations...');
     await runMigrations();
-    console.log('✅ Schema migration completed');
+    console.log('Schema migration completed');
     
-    console.log('✅ Database migration completed successfully!');
+    console.log('Database migration completed successfully!');
   } catch (error) {
-    console.error('❌ Migration failed:', error);
+    console.error(' Migration failed:', error);
     process.exit(1);
   }
 };

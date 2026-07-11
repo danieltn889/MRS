@@ -20,8 +20,8 @@ import { githubAuthService } from '../../../services/githubAuth.service';
 interface SimulationSession {
   id?: string;
   status?: string;
-  simulation_id?: string;  // ✅ Add this line
-  simulationId?: string;    // ✅ Add this line (camelCase version)
+  simulation_id?: string;  // ''Add this line
+  simulationId?: string;    // ''Add this line (camelCase version)
   started_at?: string;
   time_limit?: number;
   current_task?: number;
@@ -74,7 +74,7 @@ interface StartDialogProps {
   onExit: () => void;
   maxAttempts?: number;
   attemptNumber?: number;
-  priorityMode?: 'sequential' | 'parallel' | 'weighted';
+  priorityMode?: 'sequential'| 'parallel'| 'weighted';
 }
 
 // ============================================
@@ -111,7 +111,7 @@ interface ResumeSimulationDialogProps {
   onResume: () => void;
   onCancel: () => void;
   onViewDetails?: () => void;
-  onViewReport?: (sessionId: string) => void;  // ✅ Changed from onViewResults
+  onViewReport?: (sessionId: string) => void;  // ''Changed from onViewResults
   isLoading?: boolean;
 }
 
@@ -202,7 +202,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
                 onClick={() => setShowFullDetails(!showFullDetails)}
                 className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
               >
-                {showFullDetails ? 'Show Less ▲' : 'Show More ▼'}
+                {showFullDetails ? 'Show Less ▲': 'Show More ▼'}
               </button>
             </div>
 
@@ -260,7 +260,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
                       className="text-gray-500 hover:text-gray-300 ml-2 flex-shrink-0"
                       title="Copy URL"
                     >
-                      {copied === 'repoUrl' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
+                      {copied === 'repoUrl'? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
                     </button>
                   </div>
 
@@ -273,7 +273,7 @@ export const ResumeSimulationDialog: React.FC<ResumeSimulationDialogProps> = ({
                       className="text-gray-500 hover:text-gray-300 flex-shrink-0"
                       title="Copy clone command"
                     >
-                      {copied === 'cloneCommand' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
+                      {copied === 'cloneCommand'? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
                     </button>
                   </div>
 
@@ -410,7 +410,7 @@ export const SessionStartDialog: React.FC<SessionStartDialogProps> = ({
     const check = async () => {
       const lsUsername = localStorage.getItem('github_username');
       if (lsUsername) {
-        setGithubUser({ username: lsUsername, avatarUrl: '' });
+        setGithubUser({ username: lsUsername, avatarUrl: ''});
         return;
       }
       const user = await githubAuthService.getCurrentUser();
@@ -426,7 +426,7 @@ export const SessionStartDialog: React.FC<SessionStartDialogProps> = ({
     try {
       const result = await githubAuthService.loginWithGitHubPopup();
       if (result.success && result.username) {
-        setGithubUser({ username: result.username, avatarUrl: result.avatarUrl || '' });
+        setGithubUser({ username: result.username, avatarUrl: result.avatarUrl || ''});
       }
     } catch (err) {
       console.error('GitHub popup error:', err);
@@ -471,14 +471,14 @@ export const SessionStartDialog: React.FC<SessionStartDialogProps> = ({
               )}
             </button>
             <p className="text-gray-500 text-xs text-center mt-3">
-              A popup will open — make sure popups are allowed for this site
+              A popup will open   make sure popups are allowed for this site
             </p>
           </div>
         ) : (
           <div className="mb-6 p-4 bg-green-900/30 border border-green-700 rounded-lg">
             <div className="flex items-center gap-3">
               {githubUser.avatarUrl && (
-                <img src={githubUser.avatarUrl} alt="" className="w-10 h-10 rounded-full" />
+                <img src={githubUser.avatarUrl} alt=""className="w-10 h-10 rounded-full" />
               )}
               <div className="flex-1">
                 <p className="text-green-400 font-medium flex items-center gap-2">
@@ -599,7 +599,7 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
     gh: `gh repo clone ${repoData.organizationName || 'danieltn889'}/${repoData.repoName}`
   };
 
-  const [selectedProtocol, setSelectedProtocol] = useState<'https' | 'ssh' | 'gh'>('https');
+  const [selectedProtocol, setSelectedProtocol] = useState<'https'| 'ssh'| 'gh'>('https');
 
   const handleContinue = () => {
     if (onBeforeContinue) {
@@ -658,12 +658,12 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
                   onClick={() => copyToClipboard(repoData.repoName, 'repoName')}
                   className="text-gray-500 hover:text-gray-300 text-xs flex items-center gap-1"
                 >
-                  {copiedField === 'repoName' ? (
+                  {copiedField === 'repoName'? (
                     <CheckCircle size={12} className="text-green-400" />
                   ) : (
                     <Copy size={12} />
                   )}
-                  {copiedField === 'repoName' ? 'Copied!' : 'Copy'}
+                  {copiedField === 'repoName'? 'Copied!': 'Copy'}
                 </button>
               </div>
               <code className="text-sm bg-gray-800 px-3 py-1.5 rounded block text-green-400 break-all">
@@ -713,7 +713,7 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
                   className="p-2 text-gray-400 hover:text-white bg-gray-700 rounded-lg"
                   title="Copy clone command"
                 >
-                  {copiedField === 'cloneCommand' ? <CheckCircle size={16} className="text-green-400" /> : <Copy size={16} />}
+                  {copiedField === 'cloneCommand'? <CheckCircle size={16} className="text-green-400" /> : <Copy size={16} />}
                 </button>
               </div>
             </div>
@@ -725,8 +725,8 @@ export const RepoCreatedDialog: React.FC<RepoCreatedDialogProps> = ({
                   onClick={() => copyToClipboard(repoData.branchName, 'branch')}
                   className="text-gray-500 hover:text-gray-300 text-xs flex items-center gap-1"
                 >
-                  {copiedField === 'branch' ? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
-                  {copiedField === 'branch' ? 'Copied!' : 'Copy'}
+                  {copiedField === 'branch'? <CheckCircle size={12} className="text-green-400" /> : <Copy size={12} />}
+                  {copiedField === 'branch'? 'Copied!': 'Copy'}
                 </button>
               </div>
               <code className="text-sm bg-gray-800 px-3 py-1.5 rounded block text-purple-400">
@@ -801,7 +801,7 @@ export const StartDialog: React.FC<StartDialogProps> = ({
   attemptNumber,
   priorityMode,
 }) => {
-  if (session?.status === 'completed' || session?.status === 'submitted') {
+  if (session?.status === 'completed'|| session?.status === 'submitted') {
     return null;
   }
 
@@ -810,9 +810,9 @@ export const StartDialog: React.FC<StartDialogProps> = ({
   const remainingAfter = showAttemptInfo ? Math.max(0, maxAttempts - attemptNumber) : null;
 
   const modeInfo = {
-    sequential: { label: 'Sequential', color: 'text-red-400', bg: 'bg-red-900/20 border-red-700/50', desc: 'You must finish each task completely before starting the next one.' },
-    parallel:   { label: 'Parallel',   color: 'text-green-400', bg: 'bg-green-900/20 border-green-700/50', desc: 'You can start and switch between any tasks in any order.' },
-    weighted:   { label: 'Weighted',   color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-700/50', desc: 'Tasks have different importance weights affecting your final score.' },
+    sequential: { label: 'Sequential', color: 'text-red-400', bg: 'bg-red-900/20 border-red-700/50', desc: 'You must finish each task completely before starting the next one.'},
+    parallel:   { label: 'Parallel',   color: 'text-green-400', bg: 'bg-green-900/20 border-green-700/50', desc: 'You can start and switch between any tasks in any order.'},
+    weighted:   { label: 'Weighted',   color: 'text-yellow-400', bg: 'bg-yellow-900/20 border-yellow-700/50', desc: 'Tasks have different importance weights affecting your final score.'},
   };
   const modeData = priorityMode ? modeInfo[priorityMode] : null;
 
@@ -822,10 +822,10 @@ export const StartDialog: React.FC<StartDialogProps> = ({
         <div className="text-center mb-5">
           <Play className="mx-auto h-14 w-14 text-green-500 mb-3" />
           <h2 className="text-2xl font-bold text-white">
-            {isPaused ? 'Resume Practical Assessment?' : 'Ready to Start?'}
+            {isPaused ? 'Resume Practical Assessment?': 'Ready to Start?'}
           </h2>
           <p className="text-gray-400 mt-1 text-sm">
-            {isPaused ? 'Continue from where you left off.' : "Ensure you're in a quiet environment."}
+            {isPaused ? 'Continue from where you left off.': "Ensure you're in a quiet environment."}
           </p>
         </div>
 
@@ -835,8 +835,8 @@ export const StartDialog: React.FC<StartDialogProps> = ({
             <p className="text-blue-300 text-sm font-medium">
               Attempt {attemptNumber} of {maxAttempts}
               {remainingAfter !== null && remainingAfter > 0
-                ? ` · ${remainingAfter} attempt${remainingAfter !== 1 ? 's' : ''} remaining after this`
-                : ' · This is your last attempt'}
+                ? ` · ${remainingAfter} attempt${remainingAfter !== 1 ? 's': ''} remaining after this`
+                : '· This is your last attempt'}
             </p>
           </div>
         )}
@@ -856,13 +856,13 @@ export const StartDialog: React.FC<StartDialogProps> = ({
             onClick={onExit}
             className="flex-1 px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700"
           >
-            {isPaused ? 'Exit' : 'Not Ready'}
+            {isPaused ? 'Exit': 'Not Ready'}
           </button>
           <button
             onClick={onStart}
             className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
           >
-            {isPaused ? 'Resume' : 'Start When Ready'}
+            {isPaused ? 'Resume': 'Start When Ready'}
           </button>
         </div>
       </div>
@@ -878,7 +878,7 @@ interface PauseDialogProps {
 
 export const PauseDialog: React.FC<PauseDialogProps> = ({ open, onResume, session }) => {
   if (!open) return null;
-  if (session?.status === 'completed' || session?.status === 'submitted') {
+  if (session?.status === 'completed'|| session?.status === 'submitted') {
     return null;
   }
 
@@ -923,7 +923,7 @@ export const SubmitDialog: React.FC<SubmitDialogProps> = ({
   formatTime,
 }) => {
   if (!open) return null;
-  if (session?.status === 'completed' || session?.status === 'submitted') {
+  if (session?.status === 'completed'|| session?.status === 'submitted') {
     return null;
   }
 
@@ -943,14 +943,14 @@ export const SubmitDialog: React.FC<SubmitDialogProps> = ({
             : 'bg-green-900/30 border-green-700'
           }`}>
           <div className="flex items-center gap-2">
-            <Clock size={16} className={remainingSeconds > 0 ? 'text-yellow-400' : 'text-green-400'} />
-            <p className={`text-sm font-semibold ${remainingSeconds > 0 ? 'text-yellow-300' : 'text-green-300'}`}>
+            <Clock size={16} className={remainingSeconds > 0 ? 'text-yellow-400': 'text-green-400'} />
+            <p className={`text-sm font-semibold ${remainingSeconds > 0 ? 'text-yellow-300': 'text-green-300'}`}>
               Minimum time: {displayTime(minSubmitSeconds)}
             </p>
           </div>
           <p className="text-gray-300 text-xs mt-1">
             Time spent: {displayTime(timeSpent)}
-            {remainingSeconds > 0 ? ` · wait ${displayTime(remainingSeconds)} more before submitting.` : ' · ready to submit.'}
+            {remainingSeconds > 0 ? ` · wait ${displayTime(remainingSeconds)} more before submitting.` : '· ready to submit.'}
           </p>
         </div>
 
@@ -973,7 +973,7 @@ export const SubmitDialog: React.FC<SubmitDialogProps> = ({
             disabled={!canSubmit}
             className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? 'Submitting...' : remainingSeconds > 0 ? 'Wait to Submit' : 'Submit Now'}
+            {isSubmitting ? 'Submitting...': remainingSeconds > 0 ? 'Wait to Submit': 'Submit Now'}
           </button>
         </div>
       </div>
@@ -1047,7 +1047,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
   essay = '',
   mcqAnswers = {},
 }) => {
-  const [activeTab, setActiveTab] = useState<'submission' | 'evaluation'>('submission');
+  const [activeTab, setActiveTab] = useState<'submission'| 'evaluation'>('submission');
   const [evaluation, setEvaluation] = useState<EvaluationResult | null>(null);
   const [githubScoreAnalysis, setGithubScoreAnalysis] = useState<any>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
@@ -1055,9 +1055,9 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
   const [repoError, setRepoError] = useState('');
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
-  const supportsGithub = task?.type === 'code_editor' ||
-    task?.type === 'code_execution' ||
-    task?.type === 'technical' ||
+  const supportsGithub = task?.type === 'code_editor'||
+    task?.type === 'code_execution'||
+    task?.type === 'technical'||
     task?.type === 'github_challenge';
 
   const isEditMode = draft.completed === true;
@@ -1124,7 +1124,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
   };
 
   const runEvaluation = async () => {
-    console.log('🚀 Running evaluation...');
+    console.log(' Running evaluation...');
     setIsEvaluating(true);
     try {
       if (displayRepo?.owner && displayRepo?.repo) {
@@ -1165,7 +1165,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
       const result = aiEvaluationService.evaluateTask(evaluationInput) as EvaluationResult;
       setEvaluation(result);
     } catch (error) {
-      console.error('❌ Evaluation failed:', error);
+      console.error(' Evaluation failed:', error);
     } finally {
       setIsEvaluating(false);
     }
@@ -1220,7 +1220,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
   };
 
   if (!open || !task) return null;
-  if (session?.status === 'completed' || session?.status === 'submitted') return null;
+  if (session?.status === 'completed'|| session?.status === 'submitted') return null;
 
   const renderDetailedScores = () => {
     if (!evaluation) return null;
@@ -1228,7 +1228,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
     return scoreEntries.map(([key, value]) => (
       <div key={key}>
         <div className="flex justify-between text-xs mb-1">
-          <span className="text-gray-400 capitalize">{key.replace(/([A-Z])/g, ' $1')}</span>
+          <span className="text-gray-400 capitalize">{key.replace(/([A-Z])/g, '$1')}</span>
           <span className={getScoreColor(value)}>{value}%</span>
         </div>
         <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
@@ -1436,7 +1436,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
       <div className="bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full border border-gray-700 max-h-[90vh] overflow-y-auto flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 bg-gray-850 sticky top-0">
           <h3 className="text-white font-semibold">
-            {isEditMode ? '✏️ Edit Task' : '✅ Complete Task'}: {task?.title || task?.task_name || `Task ${taskIndex + 1}`}
+            {isEditMode ? '✏️ Edit Task': 'Complete Task'}: {task?.title || task?.task_name || `Task ${taskIndex + 1}`}
           </h3>
           <button onClick={onCancel} className="text-gray-400 hover:text-white">
             <X size={18} />
@@ -1471,7 +1471,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {activeTab === 'submission' ? (
+          {activeTab === 'submission'? (
             <>
               <div className="p-4 bg-gray-700/30 rounded-lg border border-gray-600">
                 <div className="flex items-center gap-2 mb-3">
@@ -1487,7 +1487,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                     type="text"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLoadRepo()}
+                    onKeyDown={(e) => e.key === 'Enter'&& handleLoadRepo()}
                     placeholder="https://github.com/owner/repo"
                     className="flex-1 text-sm bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                     disabled={Boolean(isLoadingGitHub || isRefreshingRepo)}
@@ -1498,7 +1498,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                     className="px-4 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
                   >
                     {isLoadingGitHub ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-                    {isLoadingGitHub ? 'Loading...' : 'Load Repo'}
+                    {isLoadingGitHub ? 'Loading...': 'Load Repo'}
                   </button>
                 </div>
 
@@ -1551,12 +1551,12 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
               </label>
 
               <div>
-                <label className="block text-gray-400 text-xs font-medium mb-1.5">📝 Comment / Summary</label>
+                <label className="block text-gray-400 text-xs font-medium mb-1.5"> Comment / Summary</label>
                 <textarea value={draft.comment} onChange={(e) => onDraftChange({ ...draft, comment: e.target.value })} rows={3} className="w-full rounded border border-gray-700 bg-gray-900 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="Describe what you accomplished..." />
               </div>
 
               <div>
-                <label className="block text-gray-400 text-xs font-medium mb-1.5">⚠️ Challenges Faced</label>
+                <label className="block text-gray-400 text-xs font-medium mb-1.5"> Challenges Faced</label>
                 <textarea value={draft.challenges} onChange={(e) => onDraftChange({ ...draft, challenges: e.target.value })} rows={2} className="w-full rounded border border-gray-700 bg-gray-900 text-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" placeholder="What challenges did you encounter?" />
               </div>
 
@@ -1599,7 +1599,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                       className="absolute top-2 right-2 p-1.5 text-gray-400 hover:text-blue-400 transition-colors rounded-md hover:bg-gray-600"
                       title="Rerun AI Evaluation"
                     >
-                      <RefreshCw size={14} className={isEvaluating ? 'animate-spin' : ''} />
+                      <RefreshCw size={14} className={isEvaluating ? 'animate-spin': ''} />
                     </button>
                   </div>
 
@@ -1615,7 +1615,7 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
                         disabled={Boolean(isEvaluating)}
                         className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
                       >
-                        <RefreshCw size={10} className={isEvaluating ? 'animate-spin' : ''} />
+                        <RefreshCw size={10} className={isEvaluating ? 'animate-spin': ''} />
                         Rerun Evaluation
                       </button>
                     </div>
@@ -1643,10 +1643,10 @@ export const TaskCompletionDialog: React.FC<TaskCompletionDialogProps> = ({
 
         <div className="flex justify-end gap-3 px-4 py-3 border-t border-gray-700 sticky bottom-0 bg-gray-800">
           <button onClick={onCancel} className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600">Cancel</button>
-          {activeTab === 'submission' && (
+          {activeTab === 'submission'&& (
             <button onClick={onSave} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
               {isEditMode ? <Edit size={14} /> : <Save size={14} />}
-              {isEditMode ? 'Update Submission' : (draft.completed ? 'Complete Task' : 'Save Progress')}
+              {isEditMode ? 'Update Submission': (draft.completed ? 'Complete Task': 'Save Progress')}
             </button>
           )}
         </div>
@@ -1816,14 +1816,14 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
         <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
           <div className="bg-gray-900 rounded-lg p-4 border border-gray-700 text-center">
             <p className="text-gray-400 text-xs uppercase">Overall Score</p>
-            <p className={`text-3xl font-bold mt-1 ${score >= 70 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+            <p className={`text-3xl font-bold mt-1 ${score >= 70 ? 'text-green-400': score >= 50 ? 'text-yellow-400': 'text-red-400'}`}>
               {Math.round(score)}%
             </p>
           </div>
           <div className="bg-gray-900 rounded-lg p-4 border border-gray-700 text-center">
             <p className="text-gray-400 text-xs uppercase">Result</p>
-            <p className={`text-xl font-bold mt-2 ${passed ? 'text-green-400' : 'text-yellow-400'}`}>
-              {passed ? 'Passed' : 'Completed'}
+            <p className={`text-xl font-bold mt-2 ${passed ? 'text-green-400': 'text-yellow-400'}`}>
+              {passed ? 'Passed': 'Completed'}
             </p>
           </div>
           <div className="bg-gray-900 rounded-lg p-4 border border-gray-700 text-center">
@@ -1999,13 +1999,13 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
           const bb = sb.behavioral_breakdown || {};
 
           const rawScores = [
-            { label: 'Technical', key: 'technical', color: 'bg-blue-500', desc: 'Code quality from editor / GitHub repo' },
-            { label: 'Speed', key: 'speed', color: 'bg-green-500', desc: 'Tasks completed within time limit' },
-            { label: 'Punctuality', key: 'punctuality', color: 'bg-emerald-500', desc: 'On-time task completion' },
-            { label: 'Adaptability', key: 'adaptability', color: 'bg-yellow-500', desc: 'Handling unexpected tasks / changes' },
-            { label: 'Communication', key: 'communication', color: 'bg-sky-500', desc: 'Chat message quality and tone' },
-            { label: 'GitHub', key: 'github', color: 'bg-purple-500', desc: 'Repository structure, commits, docs' },
-            { label: 'Collaboration', key: 'collaboration', color: 'bg-pink-500', desc: 'Interaction volume and balance' },
+            { label: 'Technical', key: 'technical', color: 'bg-blue-500', desc: 'Code quality from editor / GitHub repo'},
+            { label: 'Speed', key: 'speed', color: 'bg-green-500', desc: 'Tasks completed within time limit'},
+            { label: 'Punctuality', key: 'punctuality', color: 'bg-emerald-500', desc: 'On-time task completion'},
+            { label: 'Adaptability', key: 'adaptability', color: 'bg-yellow-500', desc: 'Handling unexpected tasks / changes'},
+            { label: 'Communication', key: 'communication', color: 'bg-sky-500', desc: 'Chat message quality and tone'},
+            { label: 'GitHub', key: 'github', color: 'bg-purple-500', desc: 'Repository structure, commits, docs'},
+            { label: 'Collaboration', key: 'collaboration', color: 'bg-pink-500', desc: 'Interaction volume and balance'},
           ].filter(r => sb[r.key] !== undefined && sb[r.key] !== null);
 
           const fmtW = (w: number) => `${(w * 100).toFixed(1)}%`;
@@ -2044,7 +2044,7 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
               <div className="p-4 space-y-4">
                 {/* STEP 1: Raw scores */}
                 <div>
-                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 1 — Individual Metrics (Raw Scores)</p>
+                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 1   Individual Metrics (Raw Scores)</p>
                   <div className="space-y-2">
                     {rawScores.map(({ label, key, color, desc }) => {
                       const val = fmtScore(sb[key]);
@@ -2053,7 +2053,7 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-gray-300 text-xs w-28 flex-shrink-0">{label}</span>
                             {scoreBar(val, color)}
-                            <span className={`text-xs font-bold w-9 text-right flex-shrink-0 ${val >= 80 ? 'text-green-400' : val >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{val}%</span>
+                            <span className={`text-xs font-bold w-9 text-right flex-shrink-0 ${val >= 80 ? 'text-green-400': val >= 50 ? 'text-yellow-400': 'text-red-400'}`}>{val}%</span>
                           </div>
                           <p className="text-gray-600 text-[10px] pl-[7.5rem]">{desc}</p>
                         </div>
@@ -2064,13 +2064,13 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
 
                 {/* STEP 2: Composite formulas */}
                 <div className="border-t border-gray-700 pt-3">
-                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 2 — Composite Scores</p>
+                  <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 2   Composite Scores</p>
                   <div className="space-y-2">
                     {/* Quality */}
                     <div className="bg-gray-800 rounded p-3">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-gray-300 text-xs font-medium">Quality Score</span>
-                        <span className={`text-sm font-bold ${qualityScore >= 80 ? 'text-green-400' : qualityScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{qualityScore}%</span>
+                        <span className={`text-sm font-bold ${qualityScore >= 80 ? 'text-green-400': qualityScore >= 50 ? 'text-yellow-400': 'text-red-400'}`}>{qualityScore}%</span>
                       </div>
                       <p className="text-gray-500 text-[11px]">
                         = (Technical + Punctuality + Adaptability) ÷ 3
@@ -2084,7 +2084,7 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
                     <div className="bg-gray-800 rounded p-3">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-gray-300 text-xs font-medium">Behavioral Score</span>
-                        <span className={`text-sm font-bold ${behavioralScore >= 80 ? 'text-green-400' : behavioralScore >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{behavioralScore}%</span>
+                        <span className={`text-sm font-bold ${behavioralScore >= 80 ? 'text-green-400': behavioralScore >= 50 ? 'text-yellow-400': 'text-red-400'}`}>{behavioralScore}%</span>
                       </div>
                       <p className="text-gray-500 text-[11px]">
                         = (Adaptability + Communication) ÷ 2
@@ -2099,13 +2099,13 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
                 {/* STEP 3: Weighted overall */}
                 {hasWeights && (
                   <div className="border-t border-gray-700 pt-3">
-                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 3 — Weighted Overall Score</p>
+                    <p className="text-gray-400 text-xs font-semibold uppercase tracking-wide mb-2">Step 3   Weighted Overall Score</p>
                     <div className="bg-gray-800 rounded p-3 space-y-2">
                       {[
-                        { label: 'Quality', score: qualityScore, weight: wQ, contrib: cQ, color: 'text-purple-400' },
-                        { label: 'Speed', score: speedScore, weight: wS, contrib: cS, color: 'text-green-400' },
-                        { label: 'Behavioral', score: behavioralScore, weight: wB, contrib: cB, color: 'text-sky-400' },
-                        { label: 'GitHub', score: githubScore, weight: wG, contrib: cG, color: 'text-yellow-400' },
+                        { label: 'Quality', score: qualityScore, weight: wQ, contrib: cQ, color: 'text-purple-400'},
+                        { label: 'Speed', score: speedScore, weight: wS, contrib: cS, color: 'text-green-400'},
+                        { label: 'Behavioral', score: behavioralScore, weight: wB, contrib: cB, color: 'text-sky-400'},
+                        { label: 'GitHub', score: githubScore, weight: wG, contrib: cG, color: 'text-yellow-400'},
                       ].map(({ label, score, weight, contrib, color }) => (
                         <div key={label} className="flex items-center text-[11px] gap-1">
                           <span className={`w-20 flex-shrink-0 font-medium ${color}`}>{label}</span>
@@ -2118,7 +2118,7 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
                       ))}
                       <div className="border-t border-gray-700 pt-2 mt-1 flex justify-between items-center">
                         <span className="text-gray-400 text-xs">Total ({fmtW(wQ)} + {fmtW(wS)} + {fmtW(wB)} + {fmtW(wG)} = 100%)</span>
-                        <span className={`text-base font-bold ${score >= 70 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                        <span className={`text-base font-bold ${score >= 70 ? 'text-green-400': score >= 50 ? 'text-yellow-400': 'text-red-400'}`}>
                           {Math.round(Number(cQ) + Number(cS) + Number(cB) + Number(cG))}%
                         </span>
                       </div>
@@ -2127,16 +2127,16 @@ export const PostSubmitDialog: React.FC<PostSubmitDialogProps> = ({
                 )}
 
                 {/* STEP 4: Pass/Fail */}
-                <div className={`rounded p-3 border ${passed ? 'bg-green-900/30 border-green-700' : 'bg-red-900/20 border-red-800'}`}>
+                <div className={`rounded p-3 border ${passed ? 'bg-green-900/30 border-green-700': 'bg-red-900/20 border-red-800'}`}>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-semibold text-gray-300">Step 4 — Pass / Fail</p>
+                      <p className="text-xs font-semibold text-gray-300">Step 4   Pass / Fail</p>
                       <p className="text-[11px] text-gray-500 mt-0.5">
-                        Your score {Math.round(Number(score))}% {passed ? '≥' : '<'} {result?.passingScore ?? result?.summary?.passing_score ?? 70}% threshold
+                        Your score {Math.round(Number(score))}% {passed ? '≥': '<'} {result?.passingScore ?? result?.summary?.passing_score ?? 70}% threshold
                       </p>
                     </div>
-                    <span className={`text-sm font-bold px-3 py-1 rounded-full ${passed ? 'bg-green-800 text-green-300' : 'bg-red-900 text-red-300'}`}>
-                      {passed ? 'PASSED' : 'NOT PASSED'}
+                    <span className={`text-sm font-bold px-3 py-1 rounded-full ${passed ? 'bg-green-800 text-green-300': 'bg-red-900 text-red-300'}`}>
+                      {passed ? 'PASSED': 'NOT PASSED'}
                     </span>
                   </div>
                 </div>

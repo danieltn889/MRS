@@ -16,7 +16,7 @@ interface TeamMember {
   bio?: string;
   expertise?: string[];
   linkedinUrl?: string;
-  role: 'admin' | 'recruiter' | 'reviewer' | 'viewer';
+  role: 'admin'| 'recruiter'| 'reviewer'| 'viewer';
   displayOnProfile: boolean;
   isLeadership: boolean;
   displayOrder: number;
@@ -40,7 +40,7 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
     bio: '',
     expertise: [] as string[],
     linkedinUrl: '',
-    role: 'viewer' as TeamMember['role'],
+    role: 'viewer'as TeamMember['role'],
     displayOnProfile: true,
     isLeadership: false,
     displayOrder: 0,
@@ -123,7 +123,7 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
       setSaving(true);
       setError(null);
 
-      // ✅ FIX: Use undefined instead of null to avoid validation errors
+      // ''FIX: Use undefined instead of null to avoid validation errors
       const memberData: any = {
         name: formData.name.trim(),
         title: formData.title.trim(),
@@ -175,7 +175,7 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
           await uploadTeamMemberPhoto(memberId, photoFile);
         } catch (photoErr: any) {
           console.error('Error uploading photo:', photoErr);
-          setError('Member saved but photo upload failed: ' + photoErr.message);
+          setError('Member saved but photo upload failed: '+ photoErr.message);
         } finally {
           setUploadingPhoto(false);
         }
@@ -271,10 +271,10 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
   };
 
   const roles = [
-    { value: 'admin', label: 'Admin', description: 'Full access to company profile management' },
-    { value: 'recruiter', label: 'Recruiter', description: 'Can view and manage job postings' },
-    { value: 'reviewer', label: 'Reviewer', description: 'Can review applications and candidates' },
-    { value: 'viewer', label: 'Viewer', description: 'Read-only access to company profile' },
+    { value: 'admin', label: 'Admin', description: 'Full access to company profile management'},
+    { value: 'recruiter', label: 'Recruiter', description: 'Can view and manage job postings'},
+    { value: 'reviewer', label: 'Reviewer', description: 'Can review applications and candidates'},
+    { value: 'viewer', label: 'Viewer', description: 'Read-only access to company profile'},
   ];
 
   const sortedTeamMembers = [...teamMembers].sort((a, b) => {
@@ -376,7 +376,7 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
           >
             <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-900">
-                {editingMember ? 'Edit Team Member' : 'Add Team Member'}
+                {editingMember ? 'Edit Team Member': 'Add Team Member'}
               </h3>
               <button
                 onClick={() => {
@@ -433,7 +433,7 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                     className="inline-flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
                   >
                     <Upload className="h-4 w-4" />
-                    <span>{photoPreview ? 'Change Photo' : 'Upload Photo'}</span>
+                    <span>{photoPreview ? 'Change Photo': 'Upload Photo'}</span>
                   </button>
                   <p className="text-xs text-gray-500 mt-1">Max 5MB, JPG/PNG recommended</p>
                 </div>
@@ -539,10 +539,10 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                   onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
                   rows={3}
                   maxLength={520}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${formData.bio.length > 500 ? 'border-orange-400' : 'border-gray-300'}`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${formData.bio.length > 500 ? 'border-orange-400': 'border-gray-300'}`}
                   placeholder="Brief biography and background..."
                 />
-                <p className={`text-xs mt-1 text-right ${formData.bio.length > 480 ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
+                <p className={`text-xs mt-1 text-right ${formData.bio.length > 480 ? 'text-orange-500 font-medium': 'text-gray-400'}`}>
                   {formData.bio.length}/500
                 </p>
               </div>
@@ -653,8 +653,8 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
                 >
                   {saving || uploadingPhoto
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> {uploadingPhoto ? 'Uploading…' : 'Saving…'}</>
-                  : editingMember ? 'Update Member' : 'Add Member'}
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> {uploadingPhoto ? 'Uploading…': 'Saving…'}</>
+                  : editingMember ? 'Update Member': 'Add Member'}
                 </button>
               </div>
             </form>
@@ -768,7 +768,7 @@ const CompanyTeam: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                             key={index}
                             className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-800"
                           >
-                            {skill.length > 20 ? skill.slice(0, 17) + '...' : skill}
+                            {skill.length > 20 ? skill.slice(0, 17) + '...': skill}
                           </span>
                         ))}
                         {member.expertise.length > 3 && (

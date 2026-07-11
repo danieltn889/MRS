@@ -24,7 +24,7 @@ export class LocalBlockchainService {
     this.wallet = new ethers.Wallet(privateKey, this.provider);
     
     console.log(`🔗 Connected to blockchain at ${rpcUrl}`);
-    console.log(`👤 Wallet address: ${this.wallet.address}`);
+    console.log(` Wallet address: ${this.wallet.address}`);
   }
 
   async initializeContract(abi: any): Promise<boolean> {
@@ -41,18 +41,18 @@ export class LocalBlockchainService {
         this.contractAddress = process.env.BLOCKCHAIN_CONTRACT_ADDRESS || null;
         
         if (!this.contractAddress) {
-          console.warn('⚠️ No contract address found. Please deploy the contract first.');
-          console.log('📝 Run: cd blockchain && npx hardhat run scripts/deploy.js --network localhost');
+          console.warn(' No contract address found. Please deploy the contract first.');
+          console.log(' Run: cd blockchain && npx hardhat run scripts/deploy.js --network localhost');
           return false;
         }
       }
       
       this.contract = new ethers.Contract(this.contractAddress, abi, this.wallet);
       this.isInitialized = true;
-      console.log(`✅ Contract initialized at: ${this.contractAddress}`);
+      console.log(`''Contract initialized at: ${this.contractAddress}`);
       return true;
     } catch (error: any) {
-      console.error('❌ Failed to initialize contract:', error.message);
+      console.error(' Failed to initialize contract:', error.message);
       this.isInitialized = false;
       return false;
     }
@@ -72,7 +72,7 @@ export class LocalBlockchainService {
     }
 
     try {
-      console.log('📝 Storing simulation on blockchain...');
+      console.log(' Storing simulation on blockchain...');
       console.log(`   Session: ${data.sessionId}`);
       console.log(`   Candidate: ${data.candidateAddress}`);
       console.log(`   Score: ${data.overallScore}`);
@@ -91,14 +91,14 @@ export class LocalBlockchainService {
       console.log(`⏳ Transaction sent: ${tx.hash}`);
       
       const receipt = await tx.wait();
-      console.log(`✅ Stored on blockchain! Block: ${receipt.blockNumber}`);
+      console.log(`''Stored on blockchain! Block: ${receipt.blockNumber}`);
       
       return {
         txHash: receipt.transactionHash,
         blockNumber: receipt.blockNumber
       };
     } catch (error: any) {
-      console.error('❌ Failed to store on blockchain:', error.message);
+      console.error(' Failed to store on blockchain:', error.message);
       throw error;
     }
   }
@@ -109,7 +109,7 @@ export class LocalBlockchainService {
     }
 
     try {
-      // ✅ Now correctly reads the full struct object returned by the Solidity update
+      // ''Now correctly reads the full struct object returned by the Solidity update
       const result = await this.contract.getResult(sessionId);
       
       // Safety guard against empty address indicators for uninitialized states
@@ -128,7 +128,7 @@ export class LocalBlockchainService {
         verified: result.verified
       };
     } catch (error: any) {
-      console.error('❌ Failed to get simulation:', error.message);
+      console.error(' Failed to get simulation:', error.message);
       throw error;
     }
   }
@@ -141,10 +141,10 @@ export class LocalBlockchainService {
     try {
       const tx = await this.contract.verifyResult(sessionId, { gasLimit: 200000 });
       const receipt = await tx.wait();
-      console.log(`✅ Simulation verified in block ${receipt.blockNumber}`);
+      console.log(`''Simulation verified in block ${receipt.blockNumber}`);
       return receipt.transactionHash;
     } catch (error: any) {
-      console.error('❌ Failed to verify simulation:', error.message);
+      console.error(' Failed to verify simulation:', error.message);
       throw error;
     }
   }

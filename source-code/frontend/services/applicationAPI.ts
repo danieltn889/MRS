@@ -16,7 +16,7 @@ export interface ApplicationData {
     documents?: Array<{
       name: string;
       url: string;
-      type: 'resume' | 'cover_letter' | 'portfolio' | 'certificate';
+      type: 'resume'| 'cover_letter'| 'portfolio'| 'certificate';
     }>;
     candidateProfile?: any;
     jobDetails?: any;
@@ -33,7 +33,7 @@ export interface Application {
   company_logo?: string;
   user_id: string;
   application_number: string;
-  status: 'submitted' | 'under_review' | 'shortlisted' | 'interview' | 'assessment' | 'reference_check' | 'offer' | 'hired' | 'rejected' | 'withdrawn' | 'on_hold';
+  status: 'submitted'| 'under_review'| 'shortlisted'| 'interview'| 'assessment'| 'reference_check'| 'offer'| 'hired'| 'rejected'| 'withdrawn'| 'on_hold';
   current_stage?: string;
   applied_at: string;
   updated_at: string;
@@ -136,7 +136,7 @@ export const submitApplication = async (applicationData: ApplicationData): Promi
     
     // Validate required fields
     if (!applicationData.jobId) {
-      throw { response: { data: { success: false, message: 'Job ID is required' } } };
+      throw { response: { data: { success: false, message: 'Job ID is required'} } };
     }
 
     // CRITICAL FIX: Convert matchScore to integer to avoid PostgreSQL error
@@ -170,11 +170,11 @@ export const submitApplication = async (applicationData: ApplicationData): Promi
       }
     });
     
-    console.log('✅ Application submitted successfully:', response.data);
+    console.log('Application submitted successfully:', response.data);
     return response.data;
   } catch (error: any) {
     console.error('Submit application error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to submit application' };
+    throw error.response?.data || { success: false, message: 'Failed to submit application'};
   }
 };
 
@@ -203,7 +203,7 @@ export const getApplications = async (params?: {
     return response.data;
   } catch (error: any) {
     console.error('Get applications error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to fetch applications' };
+    throw error.response?.data || { success: false, message: 'Failed to fetch applications'};
   }
 };
 
@@ -219,7 +219,7 @@ export const getApplication = async (applicationId: string): Promise<{ success: 
     return response.data;
   } catch (error: any) {
     console.error('Get application error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to fetch application' };
+    throw error.response?.data || { success: false, message: 'Failed to fetch application'};
   }
 };
 
@@ -244,7 +244,7 @@ export const updateApplication = async (
     return response.data;
   } catch (error: any) {
     console.error('Update application error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to update application' };
+    throw error.response?.data || { success: false, message: 'Failed to update application'};
   }
 };
 
@@ -260,7 +260,7 @@ export const deleteApplication = async (applicationId: string): Promise<{ succes
     return response.data;
   } catch (error: any) {
     console.error('Delete application error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to withdraw application' };
+    throw error.response?.data || { success: false, message: 'Failed to withdraw application'};
   }
 };
 
@@ -271,10 +271,10 @@ export const deleteApplication = async (applicationId: string): Promise<{ succes
 export const withdrawApplication = async (applicationId: string): Promise<ApplicationResponse> => {
   try {
     const token = getAuthToken();
-    // ✅ Use PUT method with status: 'withdrawn'
+    // ''Use PUT method with status: 'withdrawn'
     const response = await axios.put(
       `${API_BASE_URL}/applications/${applicationId}`,
-      { status: 'withdrawn' },  // ← Send status in body
+      { status: 'withdrawn'},  // ← Send status in body
       {
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
@@ -285,7 +285,7 @@ export const withdrawApplication = async (applicationId: string): Promise<Applic
     return response.data;
   } catch (error: any) {
     console.error('Withdraw application error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to withdraw application' };
+    throw error.response?.data || { success: false, message: 'Failed to withdraw application'};
   }
 };
 
@@ -301,7 +301,7 @@ export const getRejectionReason = async (applicationId: string): Promise<{ succe
     return response.data;
   } catch (error: any) {
     console.error('Get rejection reason error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to fetch rejection reason' };
+    throw error.response?.data || { success: false, message: 'Failed to fetch rejection reason'};
   }
 };
 
@@ -317,7 +317,7 @@ export const getApplicationRequirements = async (jobId: string): Promise<JobRequ
     return response.data;
   } catch (error: any) {
     console.error('Get application requirements error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to fetch application requirements' };
+    throw error.response?.data || { success: false, message: 'Failed to fetch application requirements'};
   }
 };
 
@@ -334,7 +334,7 @@ export const applyWithProfile = async (jobId: string): Promise<{ success: boolea
     return response.data;
   } catch (error: any) {
     console.error('Apply with profile error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to submit application with profile' };
+    throw error.response?.data || { success: false, message: 'Failed to submit application with profile'};
   }
 };
 
@@ -344,7 +344,7 @@ export const uploadApplicationDocument = async (
   document: {
     name: string;
     url: string;
-    type: 'resume' | 'cover_letter' | 'portfolio' | 'certificate';
+    type: 'resume'| 'cover_letter'| 'portfolio'| 'certificate';
   }
 ): Promise<{ success: boolean; message: string }> => {
   try {
@@ -358,7 +358,7 @@ export const uploadApplicationDocument = async (
     return response.data;
   } catch (error: any) {
     console.error('Upload document error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to upload document' };
+    throw error.response?.data || { success: false, message: 'Failed to upload document'};
   }
 };
 
@@ -378,7 +378,7 @@ export const submitScreeningAnswers = async (
     return response.data;
   } catch (error: any) {
     console.error('Submit answers error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to submit answers' };
+    throw error.response?.data || { success: false, message: 'Failed to submit answers'};
   }
 };
 
@@ -402,7 +402,7 @@ export const scheduleSimulation = async (
     return response.data;
   } catch (error: any) {
     console.error('Schedule simulation error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to schedule simulation' };
+    throw error.response?.data || { success: false, message: 'Failed to schedule simulation'};
   }
 };
 
@@ -437,7 +437,7 @@ export const getApplicationHistory = async (params?: {
     return response.data;
   } catch (error: any) {
     console.error('Get application history error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to fetch application history' };
+    throw error.response?.data || { success: false, message: 'Failed to fetch application history'};
   }
 };
 
@@ -470,14 +470,14 @@ export const getRecruiterFeed = async (since?: string): Promise<RecruiterFeedRes
     return response.data;
   } catch (error: any) {
     console.error('Get recruiter feed error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to fetch applications feed' };
+    throw error.response?.data || { success: false, message: 'Failed to fetch applications feed'};
   }
 };
 
 // Bulk process applications
 export const bulkProcessApplications = async (
   applicationIds: string[],
-  action: 'shortlist' | 'reject' | 'move_to_interview',
+  action: 'shortlist'| 'reject'| 'move_to_interview',
   rejectionReason?: string
 ): Promise<{ success: boolean; message: string }> => {
   try {
@@ -495,14 +495,14 @@ export const bulkProcessApplications = async (
     return response.data;
   } catch (error: any) {
     console.error('Bulk process error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to process applications' };
+    throw error.response?.data || { success: false, message: 'Failed to process applications'};
   }
 };
 
 // Move application to next stage
 export const moveApplicationStage = async (
   applicationId: string,
-  newStatus: 'under_review' | 'shortlisted' | 'interview' | 'offer' | 'hired' | 'rejected',
+  newStatus: 'under_review'| 'shortlisted'| 'interview'| 'offer'| 'hired'| 'rejected',
   notes?: string
 ): Promise<{ success: boolean; message: string }> => {
   try {
@@ -520,7 +520,7 @@ export const moveApplicationStage = async (
     return response.data;
   } catch (error: any) {
     console.error('Move stage error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to move application stage' };
+    throw error.response?.data || { success: false, message: 'Failed to move application stage'};
   }
 };
 
@@ -543,7 +543,7 @@ export const addApplicationNote = async (
     return response.data;
   } catch (error: any) {
     console.error('Add note error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to add note' };
+    throw error.response?.data || { success: false, message: 'Failed to add note'};
   }
 };
 
@@ -566,7 +566,7 @@ export const assignApplication = async (
     return response.data;
   } catch (error: any) {
     console.error('Assign application error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to assign application' };
+    throw error.response?.data || { success: false, message: 'Failed to assign application'};
   }
 };
 
@@ -591,13 +591,13 @@ export const setApplicationReminder = async (
     return response.data;
   } catch (error: any) {
     console.error('Set reminder error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to set reminder' };
+    throw error.response?.data || { success: false, message: 'Failed to set reminder'};
   }
 };
 
 // Export applications
 export const exportApplications = async (
-  format: 'csv' | 'excel',
+  format: 'csv'| 'excel',
   jobId?: string
 ): Promise<{ success: boolean; data: any[]; message: string }> => {
   try {
@@ -614,7 +614,7 @@ export const exportApplications = async (
     return response.data;
   } catch (error: any) {
     console.error('Export applications error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to export applications' };
+    throw error.response?.data || { success: false, message: 'Failed to export applications'};
   }
 };
 
@@ -636,7 +636,7 @@ export const getApplicationSources = async (jobId?: string): Promise<{
     return response.data;
   } catch (error: any) {
     console.error('Get sources error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to fetch application sources' };
+    throw error.response?.data || { success: false, message: 'Failed to fetch application sources'};
   }
 };
 
@@ -659,7 +659,7 @@ export const blacklistCandidate = async (
     return response.data;
   } catch (error: any) {
     console.error('Blacklist candidate error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to blacklist candidate' };
+    throw error.response?.data || { success: false, message: 'Failed to blacklist candidate'};
   }
 };
 
@@ -686,7 +686,7 @@ export const setupAutoRejectRules = async (
     return response.data;
   } catch (error: any) {
     console.error('Setup auto-reject error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to setup auto-reject rules' };
+    throw error.response?.data || { success: false, message: 'Failed to setup auto-reject rules'};
   }
 };
 

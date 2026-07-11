@@ -16,14 +16,16 @@ import analyticsRoutes from './v1/analytics.routes.js';  // .ts -> .js
 import notificationRoutes from './v1/notification.routes.js';  // .ts -> .js
 import integrationRoutes from './v1/integration.routes.js';  // .ts -> .js
 import billingRoutes from './v1/billing.routes.js';  // .ts -> .js
-import githubRoutes from './v1/github.routes.js';  // Already correct  // ✅ ADD THIS LINE
+import githubRoutes from './v1/github.routes.js';  // Already correct  // ''ADD THIS LINE
 import feedRoutes from './v1/feed.routes.js';
 import adminRoutes from './v1/admin.routes.js';
+import locationsRoutes from './v1/locations.routes.js';
 
 // Mount routes
 router.use('/auth', authRoutes);
 router.use('/verify-email', verifyEmailRoutes);
 router.use('/candidates', candidateRoutes);
+router.use('/locations', locationsRoutes);
 router.use('/companies', companyRoutes);
 router.use('/jobs', jobRoutes);
 router.use('/applications', applicationRoutes);
@@ -35,7 +37,7 @@ router.use('/analytics', analyticsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/integrations', integrationRoutes);
 router.use('/billing', billingRoutes);
-router.use('/github', githubRoutes);  // ✅ ADD THIS LINE
+router.use('/github', githubRoutes);  // ''ADD THIS LINE
 router.use('/feed', feedRoutes);
 router.use('/admin', adminRoutes);
 
@@ -59,7 +61,7 @@ router.get('/', (req: Request, res: Response) => {
       notifications: '/api/v1/notifications',
       integrations: '/api/v1/integrations',
       billing: '/api/v1/billing',
-      github: '/api/v1/github'  // ✅ ADD THIS LINE
+      github: '/api/v1/github' // ''ADD THIS LINE
     }
   });
 });

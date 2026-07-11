@@ -23,45 +23,45 @@ databases.
 ## Core tables (by domain)
 
 ### Identity & auth
-- **users** — accounts (id, email, password hash, `user_type`, status, timestamps).
-- **companies** — company tenants (created_by, name, slug, …).
-- **company_team** — recruiter/admin membership of a company.
-- **jobs**, **applications** — postings and candidate applications (link candidates ↔ jobs).
+- **users**   accounts (id, email, password hash, `user_type`, status, timestamps).
+- **companies**   company tenants (created_by, name, slug, …).
+- **company_team**   recruiter/admin membership of a company.
+- **jobs**, **applications**   postings and candidate applications (link candidates ↔ jobs).
 
 ### Candidate profile (1 user → many)
-- **candidate_profiles** (PK `user_id`) — names, contact, photo, headline, summary,
+- **candidate_profiles** (PK `user_id`)   names, contact, photo, headline, summary,
   `languages`, `privacy_settings`, `job_preferences`, `availability`, `profile_completion`.
-- **education** — institution, degree, field, dates, grade, `skills TEXT[]`, `attachments` JSONB.
-- **work_experience** — company, title, employment/location type, dates, `attachments` JSONB.
+- **education**   institution, degree, field, dates, grade, `skills TEXT[]`, `attachments` JSONB.
+- **work_experience**   company, title, employment/location type, dates, `attachments` JSONB.
 - **skills** (global catalog) + **user_skills** (junction: proficiency, primary, verified).
-- **resumes** — file metadata, `parsed_data` JSONB, `skills_extracted`.
-- **portfolio_links** — platform, url, title, `metadata` JSONB (stores uploaded project files).
+- **resumes**   file metadata, `parsed_data` JSONB, `skills_extracted`.
+- **portfolio_links**   platform, url, title, `metadata` JSONB (stores uploaded project files).
 
 ### Simulations
-- **simulation_templates** — reusable definitions (tasks JSONB, duration, scoring rubric).
-- **simulations** — instances; `overall_score`, per-dimension scores, `blockchain_*` columns.
-- **simulation_sessions** — a candidate run: status, `started_at`/`completed_at`, `time_limit`,
+- **simulation_templates**   reusable definitions (tasks JSONB, duration, scoring rubric).
+- **simulations**   instances; `overall_score`, per-dimension scores, `blockchain_*` columns.
+- **simulation_sessions**   a candidate run: status, `started_at`/`completed_at`, `time_limit`,
   `time_spent`, `answers`, `progress`, `submission_results` JSONB.
-- **simulation_tasks**, **session_task_progress** — per-task definition and progress
+- **simulation_tasks**, **session_task_progress**   per-task definition and progress
   (status, answer, score, feedback, `github_commit_url`).
-- **chat_messages** — in-simulation chat (threaded via `reply_to`/`thread_id`, `is_read`).
+- **chat_messages**   in-simulation chat (threaded via `reply_to`/`thread_id`, `is_read`).
 
 ### Evaluation & results
 - **evaluations**, **evaluation_sections**, **evaluation_behavioral_metrics**,
-  **evaluation_ai_feedback** — normalized evaluation output.
-- **simulation_results** — score, passed, evaluation details, strengths/improvements, feedback.
+  **evaluation_ai_feedback**   normalized evaluation output.
+- **simulation_results**   score, passed, evaluation details, strengths/improvements, feedback.
 
 ### Notifications & email
-- **notifications** — `user_id`, type, category, title, content, `data` JSONB, status/read.
-- **notification_preferences** — per-channel JSONB prefs (email/sms/push/in_app/quiet_hours).
-- **email_tracking** — every email send attempt (recipient, subject, delivered, `metadata`).
+- **notifications**   `user_id`, type, category, title, content, `data` JSONB, status/read.
+- **notification_preferences**   per-channel JSONB prefs (email/sms/push/in_app/quiet_hours).
+- **email_tracking**   every email send attempt (recipient, subject, delivered, `metadata`).
 
 ### Blockchain / audit
-- **audit_chain** — hash-linked audit chain (see [BLOCKCHAIN.md](BLOCKCHAIN.md)).
-- **blockchain_records** — Ethereum tx per session (`tx_id`, `block_hash`, `data_hash`, `data`).
-- **verifiable_credentials**, **blockchain_credentials** — verifiable credentials + hashes.
-- **wallet_addresses** — per-candidate-per-simulation Ethereum wallet.
-- **access_audit**, **credential_access** — credential access log & sharing grants.
+- **audit_chain**   hash-linked audit chain (see [BLOCKCHAIN.md](BLOCKCHAIN.md)).
+- **blockchain_records**   Ethereum tx per session (`tx_id`, `block_hash`, `data_hash`, `data`).
+- **verifiable_credentials**, **blockchain_credentials**   verifiable credentials + hashes.
+- **wallet_addresses**   per-candidate-per-simulation Ethereum wallet.
+- **access_audit**, **credential_access**   credential access log & sharing grants.
 
 ---
 

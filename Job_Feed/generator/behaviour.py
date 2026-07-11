@@ -1,4 +1,4 @@
-"""
+"
 behaviour.py
 ============
 Tables with zero real source data: `job_searches` (search_history.csv),
@@ -7,7 +7,7 @@ are generated FROM each candidate's already-real profile (field of study,
 degree, district) and already-real engagement (view/apply history), so
 they read as behaviourally consistent with the rest of that candidate's
 record rather than arbitrary filler.
-"""
+"
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def build_behaviour_tables(candidates_flat: pd.DataFrame, jobs_flat: pd.DataFram
             search_rows.append({
                 # Index included because two searches can legitimately generate
                 # the same (query, timestamp) by chance from a small template
-                # pool — content alone isn't a reliable unique key here.
+                # pool   content alone isn't a reliable unique key here.
                 "id": mapping.deterministic_uuid("search", original_id, str(search_idx)),
                 "user_id": user_id, "query": query, "searched_at": searched_at,
             })

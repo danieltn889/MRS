@@ -3,8 +3,8 @@ import { Request } from 'express';
 export interface User {
   id: string;
   email: string;
-  user_type: 'candidate' | 'recruiter' | 'company_admin' | 'system_admin';
-  status: 'verified' | 'unverified' | 'locked' | 'suspended' | 'deleted';
+  user_type: 'candidate'| 'recruiter'| 'company_admin'| 'system_admin';
+  status: 'verified'| 'unverified'| 'locked'| 'suspended'| 'deleted';
   company_id?: string;
   name?: string;
 }

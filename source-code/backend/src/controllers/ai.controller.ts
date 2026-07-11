@@ -135,7 +135,7 @@ export class AIController extends BaseController {
         paramIndex++;
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
 
       // Get total count
       const countQuery = `SELECT COUNT(*) as total FROM ai_analysis ${whereClause}`;
@@ -444,7 +444,7 @@ export class AIController extends BaseController {
       }
 
       // Check permission: candidate can only view their own matches, recruiters can view any candidate
-      if (userType === 'candidate' && userId !== candidateId) {
+      if (userType === 'candidate'&& userId !== candidateId) {
         ResponseService.forbidden(res, 'Access denied: You can only view your own job matches');
         return;
       }
@@ -458,7 +458,7 @@ export class AIController extends BaseController {
         cp.user_id as id,
         cp.first_name,
         cp.last_name,
-        CONCAT(cp.first_name, ' ', cp.last_name) as name,
+        CONCAT(cp.first_name, '', cp.last_name) as name,
         cp.headline,
         cp.summary,
         cp.city,
@@ -551,7 +551,7 @@ export class AIController extends BaseController {
           id: candidate.id,
           name: candidate.name || `${candidate.first_name} ${candidate.last_name}`.trim(),
           email: candidate.email,
-          level: totalExperienceYears >= 5 ? 'Senior' : totalExperienceYears >= 3 ? 'Mid-Level' : 'Entry-Level',
+          level: totalExperienceYears >= 5 ? 'Senior': totalExperienceYears >= 3 ? 'Mid-Level': 'Entry-Level',
           total_experience_years: Math.round(totalExperienceYears * 10) / 10,
           skills: candidate.skills?.map((s: any) => s.name) || [],
           complete_profile: candidate

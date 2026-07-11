@@ -1,7 +1,7 @@
-# V-WES Frontend
+# MRS Frontend
 
 React + Vite + TypeScript single-page application for candidates, recruiters, and
-administrators. Part of the [V-WES platform](../README.md).
+administrators. Part of the [MRS platform](../README.md).
 
 ## Tech stack
 
@@ -85,4 +85,4 @@ cards, progress bars, and consistent spacing; destructive actions use a shared `
 ## Build process
 
 `npm run build` runs Vite (esbuild) and emits static assets to `dist/`. Note esbuild does
-**not** type-check — run `npx tsc --noEmit` separately to catch type errors before shipping.
+**not** type-check   run `npx tsc --noEmit` separately to catch type errors before shipping.

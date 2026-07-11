@@ -54,7 +54,7 @@ router.post('/auth/callback', async (req: Request, res: Response) => {
       console.error('GitHub OAuth error:', tokenData.error_description || tokenData.error);
       res.status(400).json({ 
         success: false, 
-        error: tokenData.error_description || 'Failed to get access token' 
+        error: tokenData.error_description || 'Failed to get access token'
       });
       return;
     }
@@ -87,7 +87,7 @@ router.post('/auth/callback', async (req: Request, res: Response) => {
     console.error('GitHub OAuth callback error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message || 'Failed to authenticate with GitHub' 
+      error: error.message || 'Failed to authenticate with GitHub'
     });
   }
 });
@@ -106,9 +106,9 @@ router.post('/verify-user',
   validateRequest,
   (req: Request, res: Response) => {
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log('📝 [GitHub Route] /verify-user POST REQUEST');
+    console.log(' [GitHub Route] /verify-user POST REQUEST');
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log('📥 Request body:', req.body);
+    console.log(' Request body:', req.body);
     console.log('═══════════════════════════════════════════════════════════════');
     return GitHubController.verifyUser(req, res);
   }
@@ -305,7 +305,7 @@ router.post('/verify-ownership',
 // @desc    GitHub webhook receiver
 // @access  Public (verified by signature)
 router.post('/webhook', 
-  express.raw({ type: 'application/json' }), 
+  express.raw({ type: 'application/json'}), 
   GitHubController.handleWebhook
 );
 
@@ -454,7 +454,7 @@ router.get('/debug/routes', (req: Request, res: Response) => {
       if (layer.route) {
         const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
         routes.push(`${methods} ${basePath}${layer.route.path}`);
-      } else if (layer.name === 'router' && layer.handle.stack) {
+      } else if (layer.name === 'router'&& layer.handle.stack) {
         extractRoutes(layer.handle.stack, `${basePath}${layer.regexp.source.replace('\\/?(?=\\/|$)', '')}`);
       }
     }
@@ -468,8 +468,8 @@ router.get('/debug/routes', (req: Request, res: Response) => {
 
 router.get('/check-env', (req: Request, res: Response) => {
   res.json({
-    clientId: process.env.GITHUB_CLIENT_ID ? '✅ set: ' + process.env.GITHUB_CLIENT_ID : '❌ MISSING',
-    clientSecret: process.env.GITHUB_CLIENT_SECRET ? '✅ set (length: ' + process.env.GITHUB_CLIENT_SECRET.length + ')' : '❌ MISSING',
+    clientId: process.env.GITHUB_CLIENT_ID ? 'set: '+ process.env.GITHUB_CLIENT_ID : ' MISSING',
+    clientSecret: process.env.GITHUB_CLIENT_SECRET ? 'set (length: '+ process.env.GITHUB_CLIENT_SECRET.length + ')': ' MISSING',
   });
 });
 

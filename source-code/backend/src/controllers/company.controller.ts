@@ -120,7 +120,7 @@ export const updateCompanyProfile = async (req: AuthenticatedRequest, res: Respo
 
     await client.query('COMMIT');
 
-    console.log('✅ Updated company:', {
+    console.log('Updated company:', {
       id: updateResult.rows[0].id,
       legal_name: updateResult.rows[0].legal_name,
       founded_year: updateResult.rows[0].founded_year
@@ -476,12 +476,12 @@ export const updateCompanyLocation = async (req: AuthenticatedRequest, res: Resp
       updateValues.push(country);
     }
     
-    // ✅ FIX: Handle coordinates properly - update BOTH latitude and longitude when provided
+    // ''FIX: Handle coordinates properly - update BOTH latitude and longitude when provided
     if (latitude !== undefined && longitude !== undefined) {
       // Both provided - update both columns and location JSONB
       updateFields.push(`latitude = $${paramIndex++}`);
       updateValues.push(latitude);
-      updateFields.push(`longitude = $${paramIndex++}`);  // ✅ ADD THIS LINE
+      updateFields.push(`longitude = $${paramIndex++}`);  // ''ADD THIS LINE
       updateValues.push(longitude);
       updateFields.push(`location = $${paramIndex++}`);
       updateValues.push(JSON.stringify({ lat: latitude, lng: longitude }));
@@ -560,8 +560,8 @@ export const updateCompanyLocation = async (req: AuthenticatedRequest, res: Resp
     
     updateValues.push(id, companyId);
     
-    console.log('📝 Update query:', updateQuery);
-    console.log('📝 Update values:', updateValues);
+    console.log(' Update query:', updateQuery);
+    console.log(' Update values:', updateValues);
 
     const updateResult = await client.query(updateQuery, updateValues);
 
@@ -601,7 +601,7 @@ async function geocodeAddress(address: string): Promise<{ lat: number; lng: numb
       `https://nominatim.openstreetmap.org/search?q=${encodedAddress}&format=json&limit=1`,
       {
         headers: {
-          'User-Agent': 'RecruitmentPlatform/1.0' // Required by Nominatim
+          'User-Agent': 'RecruitmentPlatform/1.0'// Required by Nominatim
         }
       }
     );
@@ -693,7 +693,7 @@ export const getCompanyLocations = async (req: AuthenticatedRequest, res: Respon
     const locationsResult = await query(`
       SELECT * FROM company_locations
       WHERE company_id = $1
-      ORDER BY type = 'headquarters' DESC, created_at ASC
+      ORDER BY type = 'headquarters'DESC, created_at ASC
     `, [companyId]);
 
     return res.json({
@@ -729,7 +729,7 @@ export const updateCompanyCulture = async (req: AuthenticatedRequest, res: Respo
       employeeTestimonials
     } = req.body;
 
-    console.log('📝 Received culture data:', {
+    console.log(' Received culture data:', {
       attributes,
       values,
       description,
@@ -742,7 +742,7 @@ export const updateCompanyCulture = async (req: AuthenticatedRequest, res: Respo
       employeeTestimonials
     });
 
-    // ✅ Convert attributes array to object if needed
+    // ''Convert attributes array to object if needed
     let processedAttributes = attributes;
     if (Array.isArray(attributes)) {
       // Convert array of strings to object
@@ -853,7 +853,7 @@ export const updateCompanyCulture = async (req: AuthenticatedRequest, res: Respo
 
     await client.query('COMMIT');
 
-    console.log('✅ Culture updated successfully for company:', companyId);
+    console.log('Culture updated successfully for company:', companyId);
 
     return res.json({
       success: true,
@@ -867,7 +867,7 @@ export const updateCompanyCulture = async (req: AuthenticatedRequest, res: Respo
     return res.status(500).json({
       success: false,
       message: 'Failed to update company culture',
-      error: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+      error: process.env.NODE_ENV === 'development'? (error as Error).message : undefined
     });
   } finally {
     client.release();
@@ -906,11 +906,11 @@ export const getCompanyCulture = async (req: AuthenticatedRequest, res: Response
     `, [companyId]);
 
     if (cultureResult.rows.length === 0) {
-      // ✅ FIX: Return object instead of array for attributes
+      // ''FIX: Return object instead of array for attributes
       return res.json({
         success: true,
         data: {
-          attributes: {  // ✅ Changed from [] to {}
+          attributes: {  // ''Changed from [] to {}
             collaborative: 0,
             innovative: 0,
             structured: 0,
@@ -934,7 +934,7 @@ export const getCompanyCulture = async (req: AuthenticatedRequest, res: Response
       });
     }
 
-    // ✅ Ensure attributes is an object, not an array
+    // ''Ensure attributes is an object, not an array
     const data = cultureResult.rows[0];
     if (Array.isArray(data.attributes)) {
       data.attributes = {};
@@ -1045,7 +1045,7 @@ function validateTeamMemberFields(
       errors.expertise = 'Expertise must be an array of strings';
     } else if (fields.expertise.length > 30) {
       errors.expertise = 'Maximum 30 expertise items allowed';
-    } else if (fields.expertise.some((s: any) => typeof s !== 'string' || s.length > 100)) {
+    } else if (fields.expertise.some((s: any) => typeof s !== 'string'|| s.length > 100)) {
       errors.expertise = 'Each expertise item must be a string of 100 characters or less';
     }
   }
@@ -1143,9 +1143,9 @@ export const addTeamMember = async (req: AuthenticatedRequest, res: Response) =>
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
     // Split name into first and last name if provided
-    const nameParts = name ? name.trim().split(' ') : [];
+    const nameParts = name ? name.trim().split('') : [];
     const firstName = nameParts[0] || null;
-    const lastName = nameParts.slice(1).join(' ') || null;
+    const lastName = nameParts.slice(1).join('') || null;
 
     // Create invitation record - REMOVED metadata column
     const invitationResult = await client.query(`
@@ -1163,7 +1163,7 @@ export const addTeamMember = async (req: AuthenticatedRequest, res: Response) =>
       expiresAt,
       firstName,
       lastName,
-      bio || 'Welcome to our team!' // Use bio as personal message
+      bio || 'Welcome to our team!'// Use bio as personal message
     ]);
 
     await client.query('COMMIT');
@@ -1194,9 +1194,9 @@ export const addTeamMember = async (req: AuthenticatedRequest, res: Response) =>
             <div style="background-color: #f3f4f6; padding: 20px; border-radius: 5px; margin: 20px 0;">
               <h3 style="color: #374151; margin-top: 0;">Your Role: ${role.charAt(0).toUpperCase() + role.slice(1)}</h3>
               <ul style="color: #4b5563;">
-                ${role === 'admin' ? '<li>Full access to company settings and team management</li><li>Post and manage jobs</li><li>Review candidates</li>' :
-                  role === 'recruiter' ? '<li>Post and manage jobs</li><li>Review and manage candidates</li>' :
-                  role === 'reviewer' ? '<li>Review and assess candidates</li><li>Provide feedback on applications</li>' :
+                ${role === 'admin'? '<li>Full access to company settings and team management</li><li>Post and manage jobs</li><li>Review candidates</li>':
+                  role === 'recruiter'? '<li>Post and manage jobs</li><li>Review and manage candidates</li>':
+                  role === 'reviewer'? '<li>Review and assess candidates</li><li>Provide feedback on applications</li>':
                   '<li>View company dashboard and candidates</li><li>Read-only access</li>'}
               </ul>
               ${title ? `<p><strong>Title:</strong> ${title}</p>` : ''}
@@ -1222,9 +1222,9 @@ Accept the invitation and register here:
 ${frontendUrl}/accept-invitation?token=${invitationToken}
 
 Your Role: ${role.charAt(0).toUpperCase() + role.slice(1)}
-${role === 'admin' ? '- Full access to company settings and team management\n- Post and manage jobs\n- Review candidates' :
-  role === 'recruiter' ? '- Post and manage jobs\n- Review and manage candidates' :
-  role === 'reviewer' ? '- Review and assess candidates\n- Provide feedback on applications' :
+${role === 'admin'? '- Full access to company settings and team management\n- Post and manage jobs\n- Review candidates':
+  role === 'recruiter'? '- Post and manage jobs\n- Review and manage candidates':
+  role === 'reviewer'? '- Review and assess candidates\n- Provide feedback on applications':
   '- View company dashboard and candidates\n- Read-only access'}
 ${title ? `Title: ${title}` : ''}
 ${department ? `Department: ${department}` : ''}
@@ -1969,7 +1969,7 @@ export const uploadProjectMedia = async (req: AuthenticatedRequest, res: Respons
     const companyId = companyResult.rows[0].id;
     const mediaUrl = `/uploads/company/${req.file.filename}`;
     const mediaKey = req.file.filename;
-    const mediaType = req.file.mimetype.startsWith('image/') ? 'image' : 'video';
+    const mediaType = req.file.mimetype.startsWith('image/') ? 'image': 'video';
 
     // Get current media array
     const currentMediaResult = await query(`

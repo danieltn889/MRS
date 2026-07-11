@@ -1,5 +1,5 @@
 import express, { Router, Request, Response } from 'express';
-import { query, body, param } from 'express-validator';  // ← ADD 'param' here
+import { query, body, param } from 'express-validator';  // ← ADD 'param'here
 import { protect, authorize } from '../../middleware/auth.middleware.js';
 import { validateRequest } from '../../middleware/validation.middleware.js';
 import aiController from '../../controllers/ai.controller.js';
@@ -21,7 +21,7 @@ router.get('/analysis', protect, [
 // @access  Private (Candidates)
 router.get('/skill-gaps', protect, (req: any, res: any) => {
   if (!['candidate'].includes(req.user.user_type)) {
-    return res.status(403).json({ success: false, message: 'Access denied' });
+    return res.status(403).json({ success: false, message: 'Access denied'});
   }
   return aiController.getSkillGaps(req, res);
 });
@@ -31,7 +31,7 @@ router.get('/skill-gaps', protect, (req: any, res: any) => {
 // @access  Private (Candidates)
 router.post('/analyze-resume', protect, body('resumeId').isUUID(), validateRequest, (req: any, res: any) => {
   if (!['candidate'].includes(req.user.user_type)) {
-    return res.status(403).json({ success: false, message: 'Access denied' });
+    return res.status(403).json({ success: false, message: 'Access denied'});
   }
   return aiController.analyzeResume(req, res);
 });
@@ -41,7 +41,7 @@ router.post('/analyze-resume', protect, body('resumeId').isUUID(), validateReque
 // @access  Private (Candidates)
 router.post('/match-job', protect, body('jobIds').isArray(), body('jobIds.*').isUUID(), validateRequest, (req: any, res: any) => {
   if (!['candidate'].includes(req.user.user_type)) {
-    return res.status(403).json({ success: false, message: 'Access denied' });
+    return res.status(403).json({ success: false, message: 'Access denied'});
   }
   return aiController.matchJobs(req, res);
 });
@@ -52,7 +52,7 @@ router.post('/match-job', protect, body('jobIds').isArray(), body('jobIds.*').is
 router.get('/performance-trends', protect, (req: any, res: any) => aiController.getPerformanceTrends(req, res));
 
 // ============================================
-// ✅ FIXED: Add the missing job matches endpoint
+// ''FIXED: Add the missing job matches endpoint
 // ============================================
 
 // @route   GET /api/v1/ai/job-matches/:candidateId
@@ -70,7 +70,7 @@ router.get('/job-matches/:candidateId', protect, [
       console.error('getJobMatchesForCandidate method not found in aiController');
       return res.status(500).json({ 
         success: false, 
-        message: 'Job matching service not available' 
+        message: 'Job matching service not available'
       });
     }
     return await aiController.getJobMatchesForCandidate(req, res);

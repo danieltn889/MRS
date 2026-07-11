@@ -72,6 +72,8 @@ interface MatchDetailsType {
     total_required?: number;
     total_matched?: number;
     individual_scores?: number[];
+    applicable?: boolean;
+    note?: string | null;
   };
   qualifications_breakdown?: {
     candidate_degrees?: string[];
@@ -109,13 +111,23 @@ interface MatchDetailsType {
     unmatched_requirements?: string[];
   };
   preferences_breakdown?: any;
+  // Actual per-factor weights used AFTER redistribution (a factor the job
+  // doesn't require is excluded, weight 0, its share redistributed) -- the
+  // real math behind criteria_scores' points, not the nominal 40/25/20/15.
+  factor_weights_used?: { skills?: number; qualifications?: number; experience?: number; preferences?: number } | null;
+  excluded_factors?: string[];
   // Combined feed (matcher 70% + hybrid 30%, see hybrid_job_recommender.py::combined_score_candidate)
   matcher_score?: number | null;
   hybrid_score?: number | null;
-  score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+  score_source?: 'matcher+hybrid'| 'matcher-only'| 'hybrid-only';
   reasons?: string[];
+  // True when hybrid_score includes Content (false only for "matcher+hybrid",
+  // where Content is excluded to avoid double-counting the matcher's own fit).
+  hybrid_content_included?: boolean;
+  // Outer matcher/hybrid split actually used for this candidate's feed.
+  outer_weights_used?: { matcher: number; hybrid: number } | null;
   // Full behavior/collaborative/freshness/popularity/business-rule breakdown
-  // from hybrid_job_recommender.py's score_candidate() — null when
+  // from hybrid_job_recommender.py's score_candidate()   null when
   // score_source is "matcher-only" (hybrid had no data for this job).
   hybrid_detail?: {
     content: {
@@ -171,25 +183,36 @@ interface JobApplicationModalProps {
 // Mirrors JobViewModal.tsx's FactorRow exactly, so the 4-Factor Score
 // Breakdown looks identical whether a candidate is viewing or applying.
 const FactorRow = ({
-  label, score, weight, pts, colour
+  label, score, weight, pts, colour, excluded, excludedNote
 }: {
-  label: string; score: number; weight: string; pts: number; colour: string
+  label: string; score: number; weight: string; pts: number; colour: string;
+  excluded?: boolean; excludedNote?: string
 }) => (
   <div className="mb-4 border-b border-gray-100 pb-3 last:border-0">
     <div className="flex items-center justify-between text-sm mb-1">
       <span className="font-semibold text-gray-700">{label}</span>
       <div className="flex items-center gap-3 text-xs">
-        <span className={`font-bold px-2 py-0.5 rounded-full ${
-          score >= 80 ? 'bg-green-100 text-green-800' :
-          score >= 60 ? 'bg-yellow-100 text-yellow-800' :
-          'bg-red-100 text-red-800'
-        }`}>{score.toFixed(0)}%</span>
+        {excluded ? (
+          <span className="font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Excluded</span>
+        ) : (
+          <span className={`font-bold px-2 py-0.5 rounded-full ${
+            score >= 80 ? 'bg-green-100 text-green-800':
+            score >= 60 ? 'bg-yellow-100 text-yellow-800':
+            'bg-red-100 text-red-800'
+          }`}>{score.toFixed(0)}%</span>
+        )}
         <span className="text-gray-400">× {weight} = <strong className="text-gray-700">{pts.toFixed(1)} pts</strong></span>
       </div>
     </div>
-    <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
-      <div className={`${colour} h-2 rounded-full transition-all`} style={{ width: `${Math.min(score, 100)}%` }} />
-    </div>
+    {excluded ? (
+      <p className="text-[11px] text-gray-400 italic">
+        {excludedNote || 'Not required by this job -- excluded from scoring, its weight redistributed to the other factors.'}
+      </p>
+    ) : (
+      <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
+        <div className={`${colour} h-2 rounded-full transition-all`} style={{ width: `${Math.min(score, 100)}%` }} />
+      </div>
+    )}
   </div>
 );
 
@@ -204,7 +227,7 @@ const JobApplicationModal = ({
   candidateProfile: candidateProfileProp,
   matchScore: matchScoreProp = 0,
   matchDetails: matchDetailsProp = null,
-  // No job-level "required documents" field exists in the database — Resume
+  // No job-level "required documents" field exists in the database   Resume
   // is the only document every job genuinely needs; Cover Letter defaults to
   // optional rather than being hardcoded as required for every job.
   requiredDocuments = [{ name: 'Resume', is_required: true }, { name: 'Cover Letter', is_required: false }],
@@ -325,14 +348,14 @@ const JobApplicationModal = ({
     if (!dateString) return 'Present';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return String(dateString);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short'});
   }
 
   function formatFullDate(dateString: string | null): string {
     if (!dateString) return 'Not specified';
     const d = new Date(dateString);
     if (isNaN(d.getTime())) return String(dateString);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric'});
   }
 
   function calculateExperienceYears(workExperiences: any[] | undefined): number {
@@ -433,18 +456,18 @@ const JobApplicationModal = ({
   // ─── DOCUMENT TEMPLATES ──────────────────────────────────────
   // Normalize the job's configured documents (strings OR { name, is_required }).
   const documentTemplates = (requiredDocuments || []).map((doc: any) => {
-    const name: string = typeof doc === 'string' ? doc : (doc?.name || 'Document');
-    // A plain string means the caller didn't specify — only Resume is
+    const name: string = typeof doc === 'string'? doc : (doc?.name || 'Document');
+    // A plain string means the caller didn't specify   only Resume is
     // genuinely universal; everything else (Cover Letter, etc.) defaults to
     // optional rather than being silently marked required for every job.
-    const required: boolean = typeof doc === 'string' ? name === 'Resume' : (doc?.is_required !== false);
+    const required: boolean = typeof doc === 'string'? name === 'Resume': (doc?.is_required !== false);
     return {
       name,
       required,
       acceptedTypes: ['.pdf', '.doc', '.docx'],
       maxSize: 5 * 1024 * 1024,
-      description: name === 'Resume' ? 'Upload your CV/Resume (PDF, DOC, DOCX)' :
-        name === 'Cover Letter' ? 'Upload your cover letter' :
+      description: name === 'Resume'? 'Upload your CV/Resume (PDF, DOC, DOCX)':
+        name === 'Cover Letter'? 'Upload your cover letter':
           `Upload your ${name.toLowerCase()}`,
     };
   });
@@ -556,8 +579,8 @@ const JobApplicationModal = ({
               {skillsToShow.map((skillName: string, idx: number) => {
                 const skillDetail = profile.skillDetails?.find(s => s.name === skillName);
                 return (
-                  <span key={idx} className={`px-3 py-1.5 text-sm rounded-full ${(skillDetail?.proficiency_level ?? 3) >= 4 ? 'bg-green-100 text-green-800 border border-green-300' :
-                    (skillDetail?.proficiency_level ?? 3) >= 3 ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                  <span key={idx} className={`px-3 py-1.5 text-sm rounded-full ${(skillDetail?.proficiency_level ?? 3) >= 4 ? 'bg-green-100 text-green-800 border border-green-300':
+                    (skillDetail?.proficiency_level ?? 3) >= 3 ? 'bg-blue-100 text-blue-800 border border-blue-300':
                       'bg-gray-100 text-gray-700 border border-gray-200'
                     }`}>
                     {skillName}
@@ -568,7 +591,7 @@ const JobApplicationModal = ({
             </div>
             {profile.skills.length > 10 && (
               <button onClick={() => setShowAllSkills(!showAllSkills)} className="text-xs text-blue-600 hover:underline mt-3">
-                {showAllSkills ? 'Show less' : `Show all ${profile.skills.length} skills`}
+                {showAllSkills ? 'Show less': `Show all ${profile.skills.length} skills`}
               </button>
             )}
           </div>
@@ -589,7 +612,7 @@ const JobApplicationModal = ({
                     <p className="text-gray-600 text-sm">{exp.company || 'Company not specified'}</p>
                   </div>
                   <span className="text-xs text-gray-500">
-                    {formatDate(exp.start_date)} – {exp.is_current ? 'Present' : formatDate(exp.end_date)}
+                    {formatDate(exp.start_date)} – {exp.is_current ? 'Present': formatDate(exp.end_date)}
                   </span>
                 </div>
                 {exp.description && <p className="text-sm text-gray-600 mt-2 line-clamp-2">{exp.description}</p>}
@@ -597,7 +620,7 @@ const JobApplicationModal = ({
             ))}
             {profile.workExperience.length > 3 && (
               <button onClick={() => setShowAllExperience(!showAllExperience)} className="text-xs text-blue-600 hover:underline mt-2">
-                {showAllExperience ? 'Show less' : `Show all ${profile.workExperience.length} positions`}
+                {showAllExperience ? 'Show less': `Show all ${profile.workExperience.length} positions`}
               </button>
             )}
           </div>
@@ -618,7 +641,7 @@ const JobApplicationModal = ({
                 <p className="text-gray-600 text-sm">{edu.institution || 'Institution not specified'}</p>
                 <div className="flex justify-between items-center mt-1">
                   <span className="text-xs text-gray-500">
-                    {formatDate(edu.start_date)} – {edu.is_current ? 'Present' : formatDate(edu.end_date)}
+                    {formatDate(edu.start_date)} – {edu.is_current ? 'Present': formatDate(edu.end_date)}
                   </span>
                   {edu.grade && <span className="text-xs text-gray-500">Grade: {edu.grade}</span>}
                 </div>
@@ -626,7 +649,7 @@ const JobApplicationModal = ({
             ))}
             {profile.education.length > 3 && (
               <button onClick={() => setShowAllEducation(!showAllEducation)} className="text-xs text-blue-600 hover:underline mt-2">
-                {showAllEducation ? 'Show less' : `Show all ${profile.education.length} education entries`}
+                {showAllEducation ? 'Show less': `Show all ${profile.education.length} education entries`}
               </button>
             )}
           </div>
@@ -642,7 +665,7 @@ const JobApplicationModal = ({
             <div className="flex flex-wrap gap-2">
               {profile.languages.map((lang: any, idx: number) => (
                 <span key={idx} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
-                  {typeof lang === 'string' ? lang : lang.name || 'Language'}
+                  {typeof lang === 'string'? lang : lang.name || 'Language'}
                 </span>
               ))}
             </div>
@@ -659,8 +682,8 @@ const JobApplicationModal = ({
             <div className="space-y-2">
               {profile.portfolioLinks.slice(0, 5).map((link: any, idx: number) => (
                 <div key={idx} className="flex items-center gap-2">
-                  {link.platform === 'github' && <Github className="w-4 h-4 text-gray-600" />}
-                  {link.platform === 'linkedin' && <Linkedin className="w-4 h-4 text-blue-600" />}
+                  {link.platform === 'github'&& <Github className="w-4 h-4 text-gray-600" />}
+                  {link.platform === 'linkedin'&& <Linkedin className="w-4 h-4 text-blue-600" />}
                   {(!link.platform || link.platform === 'personal') && <Link className="w-4 h-4 text-gray-600" />}
                   <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline truncate">
                     {link.title || link.url}
@@ -700,20 +723,35 @@ const JobApplicationModal = ({
 
     const criteria = matchDetails?.criteria_scores || {};
     const skillsBD = matchDetails?.skills_breakdown || {};
-    // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown —
+    const qualsBD: any = matchDetails?.qualifications_breakdown || {};
+    const prefsBD: any = matchDetails?.preferences_breakdown || {};
+    // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown
     // null when score_source is "matcher-only" (hybrid had no data for this job).
     const hybridDetail = matchDetails?.hybrid_detail || null;
+    const contentDetail: any = (hybridDetail as any)?.content || null;
+
+    // Actual weights used AFTER redistribution, and the outer matcher/hybrid
+    // blend actually applied -- the real math behind the numbers below, not
+    // the nominal 40/25/20/15 / 70/30 defaults.
+    const factorWeightsUsed = matchDetails?.factor_weights_used || null;
+    const excludedFactorsList: string[] = matchDetails?.excluded_factors || [];
+    const skillsWeightPct = Math.round((factorWeightsUsed?.skills ?? 0.40) * 100);
+    const qualsWeightPct = Math.round((factorWeightsUsed?.qualifications ?? 0.25) * 100);
+    const expWeightPct = Math.round((factorWeightsUsed?.experience ?? 0.20) * 100);
+    const prefsWeightPct = Math.round((factorWeightsUsed?.preferences ?? 0.15) * 100);
+    const hybridContentIncluded = matchDetails?.hybrid_content_included;
+    const outerWeightsUsed = matchDetails?.outer_weights_used || null;
 
     const skillsMatchScore = criteria.skills_match ?? 0;
     const qualsMatchScore = criteria.qualifications_match ?? 0;
     const expMatchScore = criteria.experience_match ?? 0;
     const prefsMatchScore = criteria.preferences_match ?? 0;
     // Only real when the profile matcher actually scored this job
-    // (score_source "matcher+hybrid"/"matcher-only") — for "hybrid-only"
+    // (score_source "matcher+hybrid"/"matcher-only")   for "hybrid-only"
     // jobs criteria_scores is null, so 0% here would misleadingly sit next
     // to a real, non-zero total score from the hybrid recommender alone.
     const hasBreakdown = criteria.skills_match != null || criteria.qualifications_match != null;
-    const ringColor = matchScore >= 80 ? '#22c55e' : matchScore >= 60 ? '#3b82f6' : matchScore >= 40 ? '#f59e0b' : '#ef4444';
+    const ringColor = matchScore >= 80 ? '#22c55e': matchScore >= 60 ? '#3b82f6': matchScore >= 40 ? '#f59e0b': '#ef4444';
 
     return (
       <div className="space-y-6">
@@ -750,25 +788,34 @@ const JobApplicationModal = ({
 
         {/* Match Score Card */}
         {matchScore > 0 && (
-          <div className={`p-4 rounded-xl ${matchScore >= 80 ? 'bg-green-50 border border-green-200' : matchScore >= 70 ? 'bg-blue-50 border border-blue-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+          <div className={`p-4 rounded-xl ${matchScore >= 80 ? 'bg-green-50 border border-green-200': matchScore >= 70 ? 'bg-blue-50 border border-blue-200': 'bg-yellow-50 border border-yellow-200'}`}>
             <div className="flex items-center gap-3">
-              <div className={`w-14 h-14 rounded-full flex items-center justify-center ${matchScore >= 80 ? 'bg-green-200' : matchScore >= 70 ? 'bg-blue-200' : 'bg-yellow-200'}`}>
-                <Target className={`w-7 h-7 ${matchScore >= 80 ? 'text-green-600' : matchScore >= 70 ? 'text-blue-600' : 'text-yellow-600'}`} />
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center ${matchScore >= 80 ? 'bg-green-200': matchScore >= 70 ? 'bg-blue-200': 'bg-yellow-200'}`}>
+                <Target className={`w-7 h-7 ${matchScore >= 80 ? 'text-green-600': matchScore >= 70 ? 'text-blue-600': 'text-yellow-600'}`} />
               </div>
               <div className="flex-1">
                 <h3 className="font-bold text-lg">AI Match Score: {Math.round(matchScore)}%</h3>
                 <p className="text-sm">
-                  {matchScore >= 90 ? '🏆 Excellent match! You are highly qualified.' :
-                    matchScore >= 80 ? '✅ Great match! You meet most requirements.' :
-                      matchScore >= 70 ? '📈 Good match. You meet the minimum requirements.' :
-                        '⚠️ Low match. Consider updating your profile.'}
+                  {matchScore >= 90 ? '🏆 Excellent match! You are highly qualified.':
+                    matchScore >= 80 ? 'Great match! You meet most requirements.':
+                      matchScore >= 70 ? '📈 Good match. You meet the minimum requirements.':
+                        ' Low match. Consider updating your profile.'}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
+                  <Info className="w-3 h-3 shrink-0" />
+                  {hasBreakdown && outerWeightsUsed
+                    ? `Profile matcher ${Math.round(outerWeightsUsed.matcher * 100)}% + hybrid recommender ${Math.round(outerWeightsUsed.hybrid * 100)}%` +
+                      (hybridContentIncluded === false ? ' (Content excluded from hybrid here -- already covered by the matcher).' : '.')
+                    : hasBreakdown
+                    ? 'Profile matcher only -- hybrid recommender had no data for this job.'
+                    : 'Hybrid recommender only -- profile matcher had no data for this job.'}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        {/* 4-Factor Score Breakdown — mirrors JobViewModal.tsx exactly (same
+        {/* 4-Factor Score Breakdown   mirrors JobViewModal.tsx exactly (same
             FactorRow weighted score × weight = pts math and total-score
             line), so the numbers a candidate sees while viewing a job match
             what they see while applying to it. Only shown when the profile
@@ -778,10 +825,24 @@ const JobApplicationModal = ({
             <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
               <Target size={15} className="text-blue-600" /> 4-Factor Score Breakdown
             </h3>
-            <FactorRow label="🔧 Skills"          score={skillsMatchScore} weight="40%" pts={skillsMatchScore * 0.40} colour="bg-green-500" />
-            <FactorRow label="🎓 Qualifications"  score={qualsMatchScore}  weight="25%" pts={qualsMatchScore  * 0.25} colour="bg-blue-500" />
-            <FactorRow label="📅 Experience"      score={expMatchScore}    weight="20%" pts={expMatchScore    * 0.20} colour="bg-purple-500" />
-            <FactorRow label="⚙️ Preferences"     score={prefsMatchScore}  weight="15%" pts={prefsMatchScore  * 0.15} colour="bg-yellow-500" />
+            {excludedFactorsList.length > 0 && (
+              <p className="text-[11px] text-gray-500 mb-3 -mt-1">
+                Weights below are the ACTUAL weights used after redistribution -- {excludedFactorsList.join(', ')} excluded (job stated no requirement), their share moved to the remaining factors.
+              </p>
+            )}
+            <FactorRow label="🔧 Skills"          score={skillsMatchScore} weight={`${skillsWeightPct}%`} pts={skillsMatchScore * (skillsWeightPct / 100)} colour="bg-green-500"
+              excluded={excludedFactorsList.includes('skills')} excludedNote={skillsBD.note || undefined} />
+            <FactorRow label="🎓 Qualifications"  score={qualsMatchScore}  weight={`${qualsWeightPct}%`}  pts={qualsMatchScore  * (qualsWeightPct / 100)}  colour="bg-blue-500"
+              excluded={excludedFactorsList.includes('qualifications')} />
+            <FactorRow label="📅 Experience"      score={expMatchScore}    weight={`${expWeightPct}%`}    pts={expMatchScore    * (expWeightPct / 100)}    colour="bg-purple-500" />
+            <FactorRow label="⚙️ Preferences"     score={prefsMatchScore}  weight={`${prefsWeightPct}%`}  pts={prefsMatchScore  * (prefsWeightPct / 100)}  colour="bg-yellow-500"
+              excluded={excludedFactorsList.includes('preferences')} />
+            {(qualsBD.excluded_dimensions?.length > 0 || prefsBD.excluded_dimensions?.length > 0) && (
+              <p className="text-[10px] text-gray-400 -mt-2 mb-2">
+                {qualsBD.excluded_dimensions?.length > 0 && `Within Qualifications: ${qualsBD.excluded_dimensions.join(', ')} not required. `}
+                {prefsBD.excluded_dimensions?.length > 0 && `Within Preferences: ${prefsBD.excluded_dimensions.join(', ')} not specified by this job.`}
+              </p>
+            )}
             <div className="mt-4 pt-3 border-t border-gray-200">
               <div className="flex justify-between text-sm font-bold text-gray-900 mb-1">
                 <span>Total Score</span>
@@ -791,16 +852,16 @@ const JobApplicationModal = ({
                 <div className="h-2.5 rounded-full" style={{ width: `${matchScore}%`, background: ringColor }} />
               </div>
               <p className="text-center text-xs text-gray-500 mt-3">
-                {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.' :
-                 matchScore >= 65 ? '👍 Good match! Consider applying.' :
-                 matchScore >= 50 ? '⚠️ Partial match. Update your profile to improve.' :
-                                    '📝 Low match. Focus on skill development.'}
+                {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.':
+                 matchScore >= 65 ? ' Good match! Consider applying.':
+                 matchScore >= 50 ? ' Partial match. Update your profile to improve.':
+                                    ' Low match. Focus on skill development.'}
               </p>
             </div>
           </div>
         )}
 
-        {/* Hybrid Recommendation Signals — Behavior/Collaborative/Freshness/
+        {/* Hybrid Recommendation Signals   Behavior/Collaborative/Freshness/
             Popularity/Business rules from hybrid_job_recommender.py. Absent
             (null) when score_source is "matcher-only", i.e. hybrid had no
             data for this job. */}
@@ -810,7 +871,32 @@ const JobApplicationModal = ({
               <Sparkles className="w-4 h-4 text-indigo-500" />
               Hybrid Recommendation Signals
             </h4>
+            <p className="text-[11px] text-gray-500 -mt-2 mb-3">
+              5 signals blended: Content 35% · Behavior 30% · Collaborative 20% · Freshness 10% · Popularity 5%
+              {hybridContentIncluded === false && ' (Content excluded here -- see note above)'}.
+            </p>
             <div className="space-y-3">
+              {/* Content */}
+              {contentDetail && (
+                <div className={hybridContentIncluded === false ? 'opacity-60' : ''}>
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="flex items-center gap-1"><Code className="w-3 h-3 text-fuchsia-600" /> Content
+                      {hybridContentIncluded === false && <span className="text-[10px] text-gray-400 font-normal">(excluded from total)</span>}
+                    </span>
+                    <span className="font-semibold">{Math.round((contentDetail.final_score ?? 0) * 100)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                    <div className="bg-fuchsia-500 h-2 rounded-full transition-all duration-500" style={{ width: `${(contentDetail.final_score ?? 0) * 100}%` }} />
+                  </div>
+                  {(() => {
+                    const matched = Object.values(contentDetail.matched_terms_by_pair || {}).flat() as string[];
+                    return matched.length > 0 && (
+                      <p className="text-xs text-fuchsia-700">✓ Matched terms: {matched.slice(0, 6).join(', ')}</p>
+                    );
+                  })()}
+                </div>
+              )}
+
               {/* Behavior */}
               <div>
                 <div className="flex justify-between text-xs mb-1">
@@ -907,7 +993,7 @@ const JobApplicationModal = ({
             </h3>
             <div className="flex flex-wrap gap-2">
               {skillsRequired.map((skill: any, idx: number) => {
-                const skillName = typeof skill === 'string' ? skill : skill.name || skill.skill_name;
+                const skillName = typeof skill === 'string'? skill : skill.name || skill.skill_name;
                 const matchedSkillsList = skillsBD.matched_skills || [];
                 const isMatched = matchedSkillsList.some((ms: string) =>
                   ms.toLowerCase() === skillName.toLowerCase() ||
@@ -915,7 +1001,7 @@ const JobApplicationModal = ({
                   ms.toLowerCase().includes(skillName.toLowerCase())
                 );
                 return (
-                  <span key={idx} className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1 ${isMatched ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                  <span key={idx} className={`px-3 py-1.5 rounded-full text-sm flex items-center gap-1 ${isMatched ? 'bg-green-100 text-green-800 border border-green-300': 'bg-red-50 text-red-700 border border-red-200'}`}>
                     {skillName}
                     {isMatched ? <CheckCircle className="w-3 h-3 text-green-600" /> : <X className="w-3 h-3 text-red-500" />}
                   </span>
@@ -1043,27 +1129,27 @@ const JobApplicationModal = ({
               {q.required && <span className="text-red-500 ml-1">*</span>}
             </label>
 
-            {q.type === 'text' && (
+            {q.type === 'text'&& (
               <textarea
                 value={answers[idx] || ''}
                 onChange={(e) => handleAnswerChange(idx, e.target.value)}
                 rows={3}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors[idx] ? 'border-red-500' : 'border-gray-300'}`}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 ${errors[idx] ? 'border-red-500': 'border-gray-300'}`}
                 placeholder="Type your answer here..."
               />
             )}
 
-            {q.type === 'number' && (
+            {q.type === 'number'&& (
               <input
                 type="number"
                 value={answers[idx] || ''}
                 onChange={(e) => handleAnswerChange(idx, e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg ${errors[idx] ? 'border-red-500' : 'border-gray-300'}`}
+                className={`w-full px-3 py-2 border rounded-lg ${errors[idx] ? 'border-red-500': 'border-gray-300'}`}
                 placeholder="Enter number..."
               />
             )}
 
-            {q.type === 'yes_no' && (
+            {q.type === 'yes_no'&& (
               <div className="flex gap-4">
                 {['Yes', 'No'].map((opt) => (
                   <label key={opt} className="flex items-center gap-2 cursor-pointer">
@@ -1074,7 +1160,7 @@ const JobApplicationModal = ({
               </div>
             )}
 
-            {q.type === 'multiple_choice' && q.options?.length > 0 && (
+            {q.type === 'multiple_choice'&& q.options?.length > 0 && (
               <div className="flex flex-col gap-2">
                 {q.options.map((opt: string, oIdx: number) => (
                   <label key={oIdx} className="flex items-center gap-2 cursor-pointer">
@@ -1217,8 +1303,8 @@ const JobApplicationModal = ({
         {documentTemplates.map((doc, idx) => (
           <div key={idx} className="flex items-center gap-2 text-sm py-1">
             {documents[idx] ? <Check className="w-4 h-4 text-green-600" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
-            <span className={documents[idx] ? 'text-gray-800' : 'text-red-600'}>
-              {doc.name} {documents[idx] ? `— ${documents[idx]?.name}` : '— Not uploaded'}
+            <span className={documents[idx] ? 'text-gray-800': 'text-red-600'}>
+              {doc.name} {documents[idx] ? `  ${documents[idx]?.name}` : '  Not uploaded'}
             </span>
           </div>
         ))}
@@ -1246,7 +1332,7 @@ const JobApplicationModal = ({
         return {
           name: doc.name,
           url: uploadedDoc?.preview || '',
-          type: getDocumentType(doc.name) as 'resume' | 'cover_letter' | 'portfolio' | 'certificate'
+          type: getDocumentType(doc.name) as 'resume'| 'cover_letter'| 'portfolio'| 'certificate'
         };
       }).filter(doc => doc.url);
 
@@ -1262,29 +1348,29 @@ const JobApplicationModal = ({
 
       console.log('📤 Submitting application:', applicationData);
       const result = await submitApplication(applicationData);
-      console.log('📥 Submit response:', result);
+      console.log(' Submit response:', result);
 
       if (result?.success) {
         const responseData = result.data as any;
         console.log('📊 Response data:', responseData);
 
-        // ✅ Always show success message first
-        setSuccessMessage('✅ Application submitted successfully!');
+        // ''Always show success message first
+        setSuccessMessage('Application submitted successfully!');
 
-        // ✅ Store the full response
+        // ''Store the full response
         setSubmissionResponse(responseData);
 
-        // ✅ Check using simulationTemplates fields only
+        // ''Check using simulationTemplates fields only
         const hasAnySimulation =
           responseData?.hasSimulationTemplates === true ||
           (Array.isArray(responseData?.simulationTemplates) && responseData.simulationTemplates.length > 0) ||
           (responseData?.totalTemplates && responseData.totalTemplates > 0);
 
-        console.log('🎯 Has any simulation:', hasAnySimulation);
+        console.log('Has any simulation:', hasAnySimulation);
 
         // Always switch to the "next steps" screen. It shows the simulation details
-        // when the job has one, or a "no simulation yet — you'll be notified" notice.
-        console.log('🎯 Showing next-steps screen, hasSimulation =', hasAnySimulation);
+        // when the job has one, or a "no simulation yet   you'll be notified" notice.
+        console.log('Showing next-steps screen, hasSimulation =', hasAnySimulation);
         setShowSimulationPrompt(true);
 
         if (onSuccess) {
@@ -1307,7 +1393,7 @@ const JobApplicationModal = ({
     } catch (error: any) {
       console.error('Submission error:', error);
       setSuccessMessage(null);
-      alert('Failed to submit application: ' + (error?.message || 'Unknown error'));
+      alert('Failed to submit application: '+ (error?.message || 'Unknown error'));
     } finally {
       setSubmitting(false);
     }
@@ -1380,7 +1466,7 @@ const JobApplicationModal = ({
       try {
         const [hours, minutes] = timeStr.split(':');
         const hour = parseInt(hours);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const ampm = hour >= 12 ? 'PM': 'AM';
         const hour12 = hour % 12 || 12;
         return `${hour12}:${minutes} ${ampm}`;
       } catch {
@@ -1390,7 +1476,7 @@ const JobApplicationModal = ({
 
     // Check if simulation is currently available
     const isSimulationAvailable = (availability: any): { available: boolean; message: string } => {
-      if (!availability) return { available: true, message: 'Always available' };
+      if (!availability) return { available: true, message: 'Always available'};
 
       const now = new Date();
       const currentDay = now.getDay();
@@ -1413,7 +1499,7 @@ const JobApplicationModal = ({
         if (now > endDate) {
           return {
             available: false,
-            message: `❌ This practical assessment expired on ${formatAvailabilityDate(availability.endDate)}`
+            message: ` This practical assessment expired on ${formatAvailabilityDate(availability.endDate)}`
           };
         }
       }
@@ -1443,10 +1529,10 @@ const JobApplicationModal = ({
           if (found) {
             return {
               available: false,
-              message: `📅 Next available: ${nextDayName} (in ${daysToAdd} day${daysToAdd > 1 ? 's' : ''})`
+              message: `📅 Next available: ${nextDayName} (in ${daysToAdd} day${daysToAdd > 1 ? 's': ''})`
             };
           }
-          return { available: false, message: '❌ No available time slots configured' };
+          return { available: false, message: ' No available time slots configured'};
         }
 
         // Check if current time is within any window
@@ -1482,11 +1568,11 @@ const JobApplicationModal = ({
               message: `⏰ Available from ${formatTime(nextWindowTime)} today`
             };
           }
-          return { available: false, message: '⏰ Outside of available hours' };
+          return { available: false, message: '⏰ Outside of available hours'};
         }
       }
 
-      return { available: true, message: '✅ Available now!' };
+      return { available: true, message: 'Available now!'};
     };
 
     // Get availability info from metadata
@@ -1505,7 +1591,7 @@ const JobApplicationModal = ({
       };
     };
 
-    // ✅ Get sorted daily windows
+    // ''Get sorted daily windows
     const getSortedWindows = (windows: any[]) => {
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       return windows
@@ -1517,16 +1603,16 @@ const JobApplicationModal = ({
         }));
     };
 
-    // ✅ Handle Start Simulation - Navigate to simulation view using onViewChange
+    // ''Handle Start Simulation - Navigate to simulation view using onViewChange
     const handleStartSimulation = () => {
-      console.log('🚀 Navigating to Job Simulation page');
+      console.log(' Navigating to Job Simulation page');
       console.log('📋 Application ID:', applicationId);
 
-      // ✅ Close the modal first
+      // ''Close the modal first
       setShowSimulationPrompt(false);
       onClose();
 
-      // ✅ Then navigate using the onSuccess callback or directly
+      // ''Then navigate using the onSuccess callback or directly
       // The modal is closed and the parent component (DashboardHome) 
       // will handle the view change via onSuccess
       if (onSuccess) {
@@ -1538,7 +1624,7 @@ const JobApplicationModal = ({
       }
     };
 
-    // ✅ Handle Close
+    // ''Handle Close
     const handleClose = () => {
       console.log('🔒 Closing simulation prompt');
       setShowSimulationPrompt(false);
@@ -1562,9 +1648,9 @@ const JobApplicationModal = ({
               <Rocket className="w-5 h-5 text-blue-600" />
             </div>
             <div className="flex-1">
-              <h4 className="font-semibold text-blue-800 text-base">🎯 Next Step: Complete the Practical Assessment</h4>
+              <h4 className="font-semibold text-blue-800 text-base">''Next Step: Complete the Practical Assessment</h4>
               <p className="text-sm mt-1 text-blue-700">
-                {message || `This job requires ${totalTemplates} practical assessment${totalTemplates > 1 ? 's' : ''} to evaluate your skills.`}
+                {message || `This job requires ${totalTemplates} practical assessment${totalTemplates > 1 ? 's': ''} to evaluate your skills.`}
               </p>
             </div>
           </div>
@@ -1575,12 +1661,12 @@ const JobApplicationModal = ({
           <div className="space-y-4">
             {simulationTemplates.map((sim: any) => {
               const availability = getAvailabilityInfo(sim.metadata);
-              const availabilityStatus = availability ? isSimulationAvailable(availability) : { available: true, message: 'Always available' };
+              const availabilityStatus = availability ? isSimulationAvailable(availability) : { available: true, message: 'Always available'};
               const isAvailable = availabilityStatus.available;
               const sortedWindows = availability ? getSortedWindows(availability.dailyWindows) : [];
 
               return (
-                <div key={sim.id} className={`bg-white rounded-xl border p-5 transition-shadow ${isAvailable ? 'border-green-300 hover:shadow-md' : 'border-gray-200'}`}>
+                <div key={sim.id} className={`bg-white rounded-xl border p-5 transition-shadow ${isAvailable ? 'border-green-300 hover:shadow-md': 'border-gray-200'}`}>
 
                   {/* Simulation Name */}
                   <h4 className="font-bold text-gray-900 text-lg">{sim.name}</h4>
@@ -1604,10 +1690,10 @@ const JobApplicationModal = ({
                   </div>
 
                   {/* Availability Status */}
-                  <div className={`mt-4 p-4 rounded-lg border-2 ${isAvailable ? 'bg-green-50 border-green-400' : 'bg-yellow-50 border-yellow-400'
+                  <div className={`mt-4 p-4 rounded-lg border-2 ${isAvailable ? 'bg-green-50 border-green-400': 'bg-yellow-50 border-yellow-400'
                     }`}>
                     <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-full flex-shrink-0 ${isAvailable ? 'bg-green-200' : 'bg-yellow-200'
+                      <div className={`p-2 rounded-full flex-shrink-0 ${isAvailable ? 'bg-green-200': 'bg-yellow-200'
                         }`}>
                         {isAvailable ? (
                           <CheckCircle className="w-6 h-6 text-green-700" />
@@ -1616,17 +1702,17 @@ const JobApplicationModal = ({
                         )}
                       </div>
                       <div className="flex-1">
-                        <p className={`text-base font-bold ${isAvailable ? 'text-green-800' : 'text-yellow-800'}`}>
-                          {isAvailable ? '✅ Available Now!' : '⏳ Not Currently Available'}
+                        <p className={`text-base font-bold ${isAvailable ? 'text-green-800': 'text-yellow-800'}`}>
+                          {isAvailable ? 'Available Now!': '⏳ Not Currently Available'}
                         </p>
-                        <p className={`text-sm mt-1 ${isAvailable ? 'text-green-700' : 'text-yellow-700'}`}>
+                        <p className={`text-sm mt-1 ${isAvailable ? 'text-green-700': 'text-yellow-700'}`}>
                           {availabilityStatus.message}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* ✅ FULL AVAILABILITY DETAILS */}
+                  {/* ''FULL AVAILABILITY DETAILS */}
                   {availability && (
                     <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                       <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
@@ -1652,11 +1738,11 @@ const JobApplicationModal = ({
                         {/* Timezone */}
                         {availability.timezone && (
                           <div className="text-gray-600">
-                            🌐 Timezone: <strong>{availability.timezone}</strong>
+                             Timezone: <strong>{availability.timezone}</strong>
                           </div>
                         )}
 
-                        {/* ✅ ALL Daily Windows - Show ALL days */}
+                        {/* ''ALL Daily Windows - Show ALL days */}
                         {sortedWindows.length > 0 && (
                           <div className="mt-2">
                             <p className="text-xs font-semibold text-gray-500 mb-2">Daily Windows:</p>
@@ -1689,7 +1775,7 @@ const JobApplicationModal = ({
                     </div>
                   )}
 
-                  {/* ✅ Action Button - Navigate to /simulations/my */}
+                  {/* ''Action Button - Navigate to /simulations/my */}
                   <div className="mt-5 flex justify-center">
                     {isAvailable ? (
                       <button
@@ -1720,7 +1806,7 @@ const JobApplicationModal = ({
                   {sim.tasks && sim.tasks.length > 0 && (
                     <div className="mt-3 text-center">
                       <span className="text-xs text-gray-400">
-                        📋 {sim.tasks.length} task{sim.tasks.length > 1 ? 's' : ''} • {sim.scoringRubric?.passingScore || 70}% passing score
+                        📋 {sim.tasks.length} task{sim.tasks.length > 1 ? 's': ''} • {sim.scoringRubric?.passingScore || 70}% passing score
                       </span>
                     </div>
                   )}
@@ -1739,14 +1825,14 @@ const JobApplicationModal = ({
             const availability = getAvailabilityInfo(sim.metadata);
             const status = availability ? isSimulationAvailable(availability) : { available: true };
             return status.available;
-          }) ? 'Skip for now — I\'ll start later' : 'Close'}
+          }) ? 'Skip for now   I\'ll start later': 'Close'}
         </button>
       </div>
     );
   };
 
   // ============================================
-  // EARLY RETURNS — must come before main return
+  // EARLY RETURNS   must come before main return
   // ============================================
   if (!isOpen || !job) return null;
 
@@ -1784,7 +1870,7 @@ const JobApplicationModal = ({
   }
 
   // ============================================
-  // MAIN RENDER — single return
+  // MAIN RENDER   single return
   // ============================================
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -1795,8 +1881,8 @@ const JobApplicationModal = ({
           <div>
             <h2 className="text-lg font-bold">Apply for {safeStr(job.title)}</h2>
             <p className="text-xs text-gray-500">
-              {showSimulationPrompt ? '📋 Application Submitted — Next Steps' :
-                reviewMode ? 'Review & Submit' :
+              {showSimulationPrompt ? '📋 Application Submitted   Next Steps':
+                reviewMode ? 'Review & Submit':
                   `Step ${currentStep} of ${totalSteps}`}
             </p>
           </div>
@@ -1805,7 +1891,7 @@ const JobApplicationModal = ({
           </button>
         </div>
 
-        {/* Success message — shown when NOT in simulation prompt (e.g. no simulation case) */}
+        {/* Success message   shown when NOT in simulation prompt (e.g. no simulation case) */}
         {successMessage && !showSimulationPrompt && (
           <div className="mx-4 mt-4 p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center gap-3">
             <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
@@ -1819,12 +1905,12 @@ const JobApplicationModal = ({
             <div className="flex items-center justify-between">
               {[1, 2, 3, 4].map((step) => (
                 <div key={step} className="flex items-center flex-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step === currentStep ? 'bg-blue-600 text-white' :
-                    step < currentStep ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${step === currentStep ? 'bg-blue-600 text-white':
+                    step < currentStep ? 'bg-green-500 text-white': 'bg-gray-200 text-gray-500'
                     }`}>
                     {step < currentStep ? <CheckCircle className="w-5 h-5" /> : step}
                   </div>
-                  {step < 4 && <div className={`flex-1 h-1 mx-2 rounded ${step < currentStep ? 'bg-green-500' : 'bg-gray-200'}`} />}
+                  {step < 4 && <div className={`flex-1 h-1 mx-2 rounded ${step < currentStep ? 'bg-green-500': 'bg-gray-200'}`} />}
                 </div>
               ))}
             </div>
@@ -1850,7 +1936,7 @@ const JobApplicationModal = ({
           )}
         </div>
 
-        {/* Footer — hidden when simulation prompt is shown */}
+        {/* Footer   hidden when simulation prompt is shown */}
         {!showSimulationPrompt && (
           <div className="border-t p-4 flex justify-between flex-shrink-0">
             <div>

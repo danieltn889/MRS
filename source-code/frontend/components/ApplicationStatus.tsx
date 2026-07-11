@@ -185,7 +185,7 @@ const getStatusLabel = (status: string): string => {
     'reference_check': 'Reference Check',
     'on_hold':         'On Hold',
   };
-  return labels[status] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, ' ');
+  return labels[status] || status.charAt(0).toUpperCase() + status.slice(1).replace(/_/g, '');
 };
 
 const getStatusIcon = (status: string, size = 20) => {
@@ -264,7 +264,7 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
       const response = await withdrawApplication(application.id);
 
       if (response.success) {
-        setApplication(prev => prev ? { ...prev, status: 'withdrawn' } : null);
+        setApplication(prev => prev ? { ...prev, status: 'withdrawn'} : null);
         const withdrawalEvent: TimelineEvent = {
           id: Date.now().toString(),
           event_type: 'application_withdrawn',
@@ -348,7 +348,7 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
            null;
   };
 
-  // Progress tracker — only for non-terminal statuses
+  // Progress tracker   only for non-terminal statuses
   const currentStepIndex = STATUS_STEPS.indexOf(application?.status || '');
   const isTerminal = ['rejected', 'withdrawn', 'on_hold'].includes(application?.status || '');
 
@@ -451,7 +451,7 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
                       <span className="flex items-center gap-1"><MapPin size={11} />{job.location}</span>
                     )}
                     {job?.type && (
-                      <span className="flex items-center gap-1"><Briefcase size={11} />{job.type.replace('-', ' ')}</span>
+                      <span className="flex items-center gap-1"><Briefcase size={11} />{job.type.replace('-', '')}</span>
                     )}
                     {job?.experience_level && (
                       <span className="flex items-center gap-1"><Award size={11} />{job.experience_level}</span>
@@ -466,15 +466,15 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
                       <div className="flex-1 max-w-[120px] bg-gray-200 rounded-full h-1.5">
                         <div
                           className={`h-1.5 rounded-full ${
-                            application.match_score >= 80 ? 'bg-green-500' :
-                            application.match_score >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                            application.match_score >= 80 ? 'bg-green-500':
+                            application.match_score >= 60 ? 'bg-yellow-500': 'bg-red-500'
                           }`}
                           style={{ width: `${Math.min(application.match_score, 100)}%` }}
                         />
                       </div>
                       <span className={`text-xs font-bold ${
-                        application.match_score >= 80 ? 'text-green-600' :
-                        application.match_score >= 60 ? 'text-yellow-600' : 'text-red-600'
+                        application.match_score >= 80 ? 'text-green-600':
+                        application.match_score >= 60 ? 'text-yellow-600': 'text-red-600'
                       }`}>{application.match_score}%</span>
                     </div>
                   )}
@@ -501,8 +501,8 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
                       return (
                         <div key={step} className="flex flex-col items-center gap-1" style={{ minWidth: 0 }}>
                           <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center z-10 ${
-                            done    ? 'bg-blue-500 border-blue-500' :
-                            current ? 'bg-white border-blue-500' :
+                            done    ? 'bg-blue-500 border-blue-500':
+                            current ? 'bg-white border-blue-500':
                                       'bg-white border-gray-200'
                           }`}>
                             {done
@@ -513,8 +513,8 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
                             }
                           </div>
                           <span className={`text-xs text-center leading-tight ${
-                            current ? 'text-blue-600 font-semibold' :
-                            done    ? 'text-gray-500' : 'text-gray-300'
+                            current ? 'text-blue-600 font-semibold':
+                            done    ? 'text-gray-500': 'text-gray-300'
                           }`} style={{ maxWidth: 56 }}>
                             {getStatusLabel(step)}
                           </span>
@@ -529,15 +529,15 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
             {/* Terminal status banner */}
             {isTerminal && (
               <div className={`rounded-xl border p-4 flex items-center gap-3 ${
-                application.status === 'rejected'  ? 'bg-red-50 border-red-200' :
-                application.status === 'withdrawn' ? 'bg-gray-50 border-gray-200' :
+                application.status === 'rejected' ? 'bg-red-50 border-red-200':
+                application.status === 'withdrawn'? 'bg-gray-50 border-gray-200':
                                                      'bg-orange-50 border-orange-200'
               }`}>
                 {getStatusIcon(application.status, 20)}
                 <div>
                   <p className="text-sm font-semibold text-gray-900">
-                    {application.status === 'rejected'  ? 'Application Not Successful' :
-                     application.status === 'withdrawn' ? 'Application Withdrawn' :
+                    {application.status === 'rejected' ? 'Application Not Successful':
+                     application.status === 'withdrawn'? 'Application Withdrawn':
                                                           'Application On Hold'}
                   </p>
                   <p className="text-xs text-gray-500 mt-0.5">
@@ -552,7 +552,7 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
             )}
 
             {/* Rejection reason - would need to be added to API */}
-            {application.status === 'rejected' && application.metadata?.rejection_reason && (
+            {application.status === 'rejected'&& application.metadata?.rejection_reason && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-5">
                 <div className="flex items-start gap-3">
                   <XCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
@@ -604,7 +604,7 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
                           {event.old_status && event.new_status && (
                             <p className="text-xs text-gray-500 mt-0.5">
                               <span className="font-medium">{getStatusLabel(event.old_status)}</span>
-                              {' → '}
+                              {'→ '}
                               <span className="font-medium">{getStatusLabel(event.new_status)}</span>
                             </p>
                           )}

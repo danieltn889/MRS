@@ -1,7 +1,7 @@
 // App.jsx - COMPLETE with GitHub OAuth Callback Route
 import React from 'react';
 import { Routes, Route, Navigate, useNavigate, useParams } from 'react-router-dom';
-import SignUp from './components/SignUp';
+import CandidateSignUp from './components/CandidateSignUp';
 import CompanySignUp from './components/CompanySignUp';
 import Login from './components/Login';
 import ForgotPassword from './components/ForgotPassword';
@@ -40,12 +40,12 @@ function AppRoutes() {
   const navigate = useNavigate();
 
   const handleSignupSuccess = (result) => {
-    console.log('✅ Signup successful:', result);
+    console.log('Signup successful:', result);
     alert(`Account created! Check email: ${result.email}`);
   };
 
   const handleCompanySignupSuccess = (result) => {
-    console.log('✅ Company registration successful:', result);
+    console.log('Company registration successful:', result);
     alert(`Company registered! Check admin email: ${result.data.user.email}`);
   };
 
@@ -55,10 +55,6 @@ function AppRoutes() {
 
   const handleLogin = () => {
     navigate('/login');
-  };
-
-  const handleCloseModal = () => {
-    navigate('/');
   };
 
   return (
@@ -78,44 +74,16 @@ function AppRoutes() {
         } 
       />
 
-      {/* Login Route - Shows Modal Only On Demand */}
+      {/* Login Route - Full Page */}
       <Route
         path="/login"
-        element={
-          isAuthenticated ? (
-            <Navigate to="/" replace />
-          ) : (
-            <div className="app">
-              <LandingPage onSignUp={handleSignUp} onLogin={handleLogin} />
-              <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
-                <div className="relative w-full max-w-md bg-white rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-                  <button onClick={handleCloseModal} className="absolute top-4 right-4 z-10 text-gray-500 hover:text-gray-700 text-2xl font-bold bg-white hover:bg-gray-100 w-8 h-8 flex items-center justify-center rounded-full">✕</button>
-                  <div className="p-0 max-h-[85vh] overflow-y-auto"><Login /></div>
-                </div>
-              </div>
-            </div>
-          )
-        }
+        element={!isAuthenticated ? <Login /> : <Navigate to="/" replace />}
       />
 
-      {/* Signup Route - Shows Modal Only On Demand */}
+      {/* Signup Route - Full Page (personal info, Rwanda location, identity verification) */}
       <Route
         path="/signup"
-        element={
-          isAuthenticated ? (
-            <Navigate to="/" replace />
-          ) : (
-            <div className="app">
-              <LandingPage onSignUp={handleSignUp} onLogin={handleLogin} />
-              <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
-                <div className="relative w-full max-w-md bg-white rounded-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-                  <button onClick={handleCloseModal} className="absolute top-4 right-4 z-10 text-gray-500 hover:text-gray-700 text-2xl font-bold bg-white hover:bg-gray-100 w-8 h-8 flex items-center justify-center rounded-full">✕</button>
-                  <div className="p-0"><SignUp onSignupSuccess={handleSignupSuccess} /></div>
-                </div>
-              </div>
-            </div>
-          )
-        }
+        element={!isAuthenticated ? <CandidateSignUp onSignupSuccess={handleSignupSuccess} /> : <Navigate to="/" replace />}
       />
 
       {/* Company Signup Route - Full Page */}

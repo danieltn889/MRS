@@ -32,10 +32,10 @@ interface TeamMember {
   name: string;
   title: string;
   email: string;
-  role: 'admin' | 'recruiter' | 'reviewer' | 'viewer';
+  role: 'admin'| 'recruiter'| 'reviewer'| 'viewer';
   permissions: any;
   joined_at: string;
-  member_status: 'active' | 'pending';
+  member_status: 'active'| 'pending';
   user_status?: string;
   last_login_at?: string;
 }
@@ -43,8 +43,8 @@ interface TeamMember {
 interface TeamInvitation {
   id: string;
   email: string;
-  role: 'admin' | 'recruiter' | 'reviewer' | 'viewer';
-  status: 'pending' | 'accepted' | 'expired' | 'revoked';
+  role: 'admin'| 'recruiter'| 'reviewer'| 'viewer';
+  status: 'pending'| 'accepted'| 'expired'| 'revoked';
   expires_at: string;
   created_at: string;
   current_status: string;
@@ -55,13 +55,13 @@ interface TeamInvitation {
 
 interface Alert {
   id: number;
-  type: 'success' | 'error' | 'warning' | 'info';
+  type: 'success'| 'error'| 'warning'| 'info';
   message: string;
 }
 
 const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'members' | 'invitations'>('members');
+  const [activeTab, setActiveTab] = useState<'members'| 'invitations'>('members');
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +70,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   // Invite form state
   const [showInviteForm, setShowInviteForm] = useState(false);
   const [inviteEmails, setInviteEmails] = useState('');
-  const [inviteRole, setInviteRole] = useState<'recruiter' | 'admin' | 'reviewer' | 'viewer'>('recruiter');
+  const [inviteRole, setInviteRole] = useState<'recruiter'| 'admin'| 'reviewer'| 'viewer'>('recruiter');
   const [inviteMessage, setInviteMessage] = useState('');
   const [inviteFirstName, setInviteFirstName] = useState('');
   const [inviteLastName, setInviteLastName] = useState('');
@@ -82,7 +82,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
   // Helper to add alert
-  const addAlert = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
+  const addAlert = (type: 'success'| 'error'| 'warning'| 'info', message: string) => {
     const id = Date.now();
     setAlerts(prev => [...prev, { id, type, message }]);
     // Auto remove after 5 seconds
@@ -147,7 +147,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     const emails = inviteEmails.split(',').map(email => email.trim()).filter(email => email);
     
     if (emails.length === 0) {
-      addAlert('error', '❌ Please enter at least one email address');
+      addAlert('error', ' Please enter at least one email address');
       return;
     }
 
@@ -156,7 +156,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     const invalidEmails = emails.filter(email => !emailRegex.test(email));
     
     if (invalidEmails.length > 0) {
-      addAlert('error', `❌ Invalid email address(es): ${invalidEmails.join(', ')}`);
+      addAlert('error', ` Invalid email address(es): ${invalidEmails.join(', ')}`);
       return;
     }
 
@@ -176,10 +176,10 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       // Check response for errors
       if (response.data?.errors && response.data.errors.length > 0) {
         const errorMessages = response.data.errors.map((err: any) => `${err.email}: ${err.error}`).join('; ');
-        addAlert('error', `❌ Failed to send: ${errorMessages}`);
+        addAlert('error', ` Failed to send: ${errorMessages}`);
       } else {
         const sentCount = response.data?.sent?.length || emails.length;
-        addAlert('success', `✅ ${sentCount} invitation${sentCount !== 1 ? 's' : ''} sent successfully to: ${emails.join(', ')}`);
+        addAlert('success', `''${sentCount} invitation${sentCount !== 1 ? 's': ''} sent successfully to: ${emails.join(', ')}`);
       }
 
       // Reset form and close modal
@@ -194,7 +194,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       await loadData();
     } catch (err: any) {
       console.error('Invite error:', err);
-      addAlert('error', err.message || '❌ Failed to send invitations');
+      addAlert('error', err.message || ' Failed to send invitations');
     } finally {
       setInviting(false);
     }
@@ -203,10 +203,10 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const handleResendInvitation = async (invitationId: string, email: string) => {
     try {
       await resendTeamInvitation(invitationId);
-      addAlert('success', `✅ Invitation resent successfully to ${email}`);
+      addAlert('success', `''Invitation resent successfully to ${email}`);
       await loadData();
     } catch (err: any) {
-      addAlert('error', err.message || '❌ Failed to resend invitation');
+      addAlert('error', err.message || ' Failed to resend invitation');
     }
   };
 
@@ -215,20 +215,20 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
     try {
       await revokeTeamInvitation(invitationId);
-      addAlert('success', `✅ Invitation to ${email} has been revoked`);
+      addAlert('success', `''Invitation to ${email} has been revoked`);
       await loadData();
     } catch (err: any) {
-      addAlert('error', err.message || '❌ Failed to revoke invitation');
+      addAlert('error', err.message || ' Failed to revoke invitation');
     }
   };
 
   const handleUpdateRole = async (memberId: string, memberName: string, newRole: string) => {
     try {
       await updateTeamMemberRole(memberId, newRole);
-      addAlert('success', `✅ ${memberName}'s role has been updated to ${newRole}`);
+      addAlert('success', `''${memberName}'s role has been updated to ${newRole}`);
       await loadData();
     } catch (err: any) {
-      addAlert('error', err.message || '❌ Failed to update role');
+      addAlert('error', err.message || ' Failed to update role');
     }
   };
 
@@ -255,13 +255,13 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || member.role === roleFilter;
+    const matchesRole = roleFilter === 'all'|| member.role === roleFilter;
     return matchesSearch && matchesRole;
   });
 
   const filteredInvitations = invitations.filter(invitation => {
     const matchesSearch = invitation.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || invitation.role === roleFilter;
+    const matchesRole = roleFilter === 'all'|| invitation.role === roleFilter;
     return matchesSearch && matchesRole;
   });
 
@@ -373,7 +373,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       </div>
 
       {/* Content */}
-      {activeTab === 'members' ? (
+      {activeTab === 'members'? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           <div className="p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Team Members</h2>
@@ -409,7 +409,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
                       <div className="text-right">
                         <p className="text-sm text-gray-600">
-                          {member.member_status === 'active' ? 'Active' : 'Pending'}
+                          {member.member_status === 'active'? 'Active': 'Pending'}
                         </p>
                         {member.last_login_at && (
                           <p className="text-xs text-gray-500">
@@ -479,19 +479,19 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {invitation.current_status === 'pending' && (
+                        {invitation.current_status === 'pending'&& (
                           <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800">
                             <Clock className="w-3 h-3" />
                             Pending
                           </span>
                         )}
-                        {invitation.current_status === 'expired' && (
+                        {invitation.current_status === 'expired'&& (
                           <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800">
                             <XCircle className="w-3 h-3" />
                             Expired
                           </span>
                         )}
-                        {invitation.current_status === 'accepted' && (
+                        {invitation.current_status === 'accepted'&& (
                           <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
                             <CheckCircle className="w-3 h-3" />
                             Accepted
@@ -499,7 +499,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                         )}
                       </div>
 
-                      {invitation.status === 'pending' && (
+                      {invitation.status === 'pending'&& (
                         <div className="flex gap-2">
                           <button
                             onClick={() => handleResendInvitation(invitation.id, invitation.email)}
@@ -548,7 +548,7 @@ const TeamManagement: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   placeholder="Enter email addresses, separated by commas"
                   rows={3}
                   className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-                    emailError ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                    emailError ? 'border-red-500 bg-red-50': 'border-gray-300'
                   }`}
                   required
                 />

@@ -93,7 +93,7 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
           disabled={isRefreshing}
           className="text-gray-400 hover:text-white text-xs flex items-center gap-1"
         >
-          <RefreshCw size={10} className={isRefreshing ? 'animate-spin' : ''} />
+          <RefreshCw size={10} className={isRefreshing ? 'animate-spin': ''} />
           Refresh
         </button>
       </div>
@@ -101,7 +101,7 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
       <div className="p-3 space-y-3 max-h-[500px] overflow-y-auto">
         {/* File Stats */}
         <div className="flex items-center gap-3 text-xs text-gray-400 pb-2 border-b border-gray-700">
-          <span>📁 {folderCount} folders</span>
+          <span> {folderCount} folders</span>
           <span>📄 {fileCount} files</span>
           {currentRepo.branchName && (
             <span className="flex items-center gap-1">
@@ -146,16 +146,16 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
               <span className="text-gray-500 text-[10px]">({openIssues} open / {closedIssues} closed)</span>
               <span className="text-green-400 text-[9px]">{issueResolutionRate}% resolved</span>
             </div>
-            {expandedSection === 'issues' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {expandedSection === 'issues'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
           
-          {expandedSection === 'issues' && (
+          {expandedSection === 'issues'&& (
             <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-64 overflow-y-auto">
               {recentIssues.length > 0 ? (
                 recentIssues.slice(0, 10).map((issue: any, idx: number) => (
                   <div key={idx} className="p-2 hover:bg-gray-800/50">
                     <div className="flex items-start gap-2">
-                      {issue.state === 'open' ? (
+                      {issue.state === 'open'? (
                         <AlertCircle size={12} className="text-red-400 mt-0.5 flex-shrink-0" />
                       ) : (
                         <CheckCircle size={12} className="text-green-400 mt-0.5 flex-shrink-0" />
@@ -185,13 +185,13 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
                           <div className="flex flex-wrap gap-1 mt-1">
                             {issue.labels.slice(0, 3).map((label: any, lidx: number) => (
                               <span key={lidx} className="text-[7px] px-1 py-0.5 rounded-full" 
-                                    style={{ backgroundColor: `#${label.color}`, color: '#000' }}>
+                                    style={{ backgroundColor: `#${label.color}`, color: '#000'}}>
                                 {label.name}
                               </span>
                             ))}
                           </div>
                         )}
-                        {issue.state === 'closed' && issue.closed_at && (
+                        {issue.state === 'closed'&& issue.closed_at && (
                           <p className="text-green-600/70 text-[8px] mt-1">✓ Closed {new Date(issue.closed_at).toLocaleDateString()}</p>
                         )}
                       </div>
@@ -217,10 +217,10 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
               <span className="text-gray-500 text-[10px]">({openPRs} open / {mergedPRs} merged / {closedPRs} closed)</span>
               <span className="text-purple-400 text-[9px]">{mergeRate}% merged</span>
             </div>
-            {expandedSection === 'prs' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {expandedSection === 'prs'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
           
-          {expandedSection === 'prs' && (
+          {expandedSection === 'prs'&& (
             <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-64 overflow-y-auto">
               {recentPRs.length > 0 ? (
                 recentPRs.slice(0, 10).map((pr: any, idx: number) => (
@@ -228,7 +228,7 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
                     <div className="flex items-start gap-2">
                       {pr.merged_at ? (
                         <GitPullRequest size={12} className="text-purple-400 mt-0.5 flex-shrink-0" />
-                      ) : pr.state === 'closed' ? (
+                      ) : pr.state === 'closed'? (
                         <XCircle size={12} className="text-red-400 mt-0.5 flex-shrink-0" />
                       ) : (
                         <GitPullRequest size={12} className="text-green-400 mt-0.5 flex-shrink-0" />
@@ -260,7 +260,7 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
                         {pr.merged_at && (
                           <p className="text-purple-400 text-[8px] mt-1">✓ Merged {new Date(pr.merged_at).toLocaleDateString()}</p>
                         )}
-                        {pr.state === 'closed' && !pr.merged_at && pr.closed_at && (
+                        {pr.state === 'closed'&& !pr.merged_at && pr.closed_at && (
                           <p className="text-red-400/70 text-[8px] mt-1">✗ Closed {new Date(pr.closed_at).toLocaleDateString()}</p>
                         )}
                       </div>
@@ -288,10 +288,10 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
                 <span className="text-blue-400 text-[9px]">{avgCommitsPerWeek.toFixed(1)}/week avg</span>
               )}
             </div>
-            {expandedSection === 'commits' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {expandedSection === 'commits'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
           
-          {expandedSection === 'commits' && (
+          {expandedSection === 'commits'&& (
             <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-64 overflow-y-auto">
               {recentCommits.length > 0 ? (
                 recentCommits.slice(0, 15).map((commit: any, idx: number) => (
@@ -363,10 +363,10 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
               <span className="text-gray-300 text-xs font-medium">Contributors</span>
               <span className="text-gray-500 text-[10px]">({contributorCount} people)</span>
             </div>
-            {expandedSection === 'contributors' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {expandedSection === 'contributors'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
           
-          {expandedSection === 'contributors' && (
+          {expandedSection === 'contributors'&& (
             <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-48 overflow-y-auto">
               {topContributors.length > 0 ? (
                 topContributors.slice(0, 10).map((contributor: any, idx: number) => (
@@ -412,7 +412,7 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
               ))}
             </div>
             {primaryLanguage && (
-              <p className="text-gray-500 text-[8px]">🎯 Primary: <span className="text-gray-300">{primaryLanguage}</span></p>
+              <p className="text-gray-500 text-[8px]">''Primary: <span className="text-gray-300">{primaryLanguage}</span></p>
             )}
           </div>
         )}
@@ -423,7 +423,7 @@ export const GitHubStatsCompact: React.FC<GitHubStatsCompactProps> = ({
             <span className="text-gray-400 text-[9px] flex items-center gap-1">
               <Activity size={10} /> Health Score
             </span>
-            <span className={`text-sm font-bold ${qualityScore >= 70 ? 'text-green-400' : qualityScore >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+            <span className={`text-sm font-bold ${qualityScore >= 70 ? 'text-green-400': qualityScore >= 40 ? 'text-yellow-400': 'text-red-400'}`}>
               {qualityScore}%
             </span>
           </div>

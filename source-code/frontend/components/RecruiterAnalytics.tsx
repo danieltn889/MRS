@@ -132,7 +132,7 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
       // Get job IDs
       const jobIds = jobs.map((job: any) => job.id);
 
-      // ✅ FIXED: Use the applications endpoint with job_id filter
+      // ''FIXED: Use the applications endpoint with job_id filter
       // First, try to get all applications (without job filter)
       let allApplications: any[] = [];
       
@@ -251,7 +251,7 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
           }
         }
         skills.forEach((skill: any) => {
-          const skillName = typeof skill === 'string' ? skill : skill.name;
+          const skillName = typeof skill === 'string'? skill : skill.name;
           if (skillName) {
             skillsMap.set(skillName, (skillsMap.get(skillName) || 0) + 1);
           }
@@ -332,7 +332,7 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
       ];
       
       filteredApplications.forEach((app: any) => {
-        if (app.status !== 'submitted' && app.updated_at) {
+        if (app.status !== 'submitted'&& app.updated_at) {
           const appliedDate = new Date(app.applied_at || app.created_at);
           const decisionDate = new Date(app.updated_at);
           const days = Math.ceil((decisionDate.getTime() - appliedDate.getTime()) / (1000 * 60 * 60 * 24));
@@ -348,10 +348,10 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
 
       // Source effectiveness data (simplified)
       const sourceEffectiveness = [
-        { source: 'Direct Apply', applications: filteredApplications.filter((a: any) => !a.source || a.source === 'direct').length, hires: filteredApplications.filter((a: any) => a.status === 'hired' && (!a.source || a.source === 'direct')).length },
-        { source: 'LinkedIn', applications: filteredApplications.filter((a: any) => a.source === 'linkedin').length, hires: filteredApplications.filter((a: any) => a.status === 'hired' && a.source === 'linkedin').length },
-        { source: 'Indeed', applications: filteredApplications.filter((a: any) => a.source === 'indeed').length, hires: filteredApplications.filter((a: any) => a.status === 'hired' && a.source === 'indeed').length },
-        { source: 'Referral', applications: filteredApplications.filter((a: any) => a.source === 'referral').length, hires: filteredApplications.filter((a: any) => a.status === 'hired' && a.source === 'referral').length },
+        { source: 'Direct Apply', applications: filteredApplications.filter((a: any) => !a.source || a.source === 'direct').length, hires: filteredApplications.filter((a: any) => a.status === 'hired'&& (!a.source || a.source === 'direct')).length },
+        { source: 'LinkedIn', applications: filteredApplications.filter((a: any) => a.source === 'linkedin').length, hires: filteredApplications.filter((a: any) => a.status === 'hired'&& a.source === 'linkedin').length },
+        { source: 'Indeed', applications: filteredApplications.filter((a: any) => a.source === 'indeed').length, hires: filteredApplications.filter((a: any) => a.status === 'hired'&& a.source === 'indeed').length },
+        { source: 'Referral', applications: filteredApplications.filter((a: any) => a.source === 'referral').length, hires: filteredApplications.filter((a: any) => a.status === 'hired'&& a.source === 'referral').length },
       ].filter(s => s.applications > 0);
 
       // Monthly trends data
@@ -363,13 +363,13 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
       }).reverse();
       
       last6Months.forEach(date => {
-        const monthKey = date.toLocaleString('default', { month: 'short' });
+        const monthKey = date.toLocaleString('default', { month: 'short'});
         monthlyData.set(monthKey, { applications: 0, hires: 0 });
       });
       
       filteredApplications.forEach((app: any) => {
         const appDate = new Date(app.applied_at || app.created_at);
-        const monthKey = appDate.toLocaleString('default', { month: 'short' });
+        const monthKey = appDate.toLocaleString('default', { month: 'short'});
         if (monthlyData.has(monthKey)) {
           monthlyData.get(monthKey)!.applications++;
           if (app.status === 'hired') {
@@ -431,7 +431,7 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
       ...analyticsData.topSkills.map(item => [item.skill, item.count.toString()])
     ].map(row => row.join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv'});
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -454,7 +454,7 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
   };
 
   const getStatusLabel = (status: string) => {
-    return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+    return status.replace('_', '').replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const calculateGrowth = (current: number, previous: number) => {
@@ -548,7 +548,7 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
                   ) : (
                     <TrendingDown className="w-4 h-4 text-red-500 mr-1" />
                   )}
-                  <span className={`text-sm font-medium ${growthRate >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`text-sm font-medium ${growthRate >= 0 ? 'text-green-600': 'text-red-600'}`}>
                     {Math.abs(growthRate).toFixed(1)}% from last month
                   </span>
                 </div>
@@ -763,12 +763,12 @@ const RecruiterAnalytics = ({ onBack }: RecruiterAnalyticsProps) => {
                         <div className="flex items-center">
                           <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                             <div
-                              className={`h-2 rounded-full ${conversionRate >= 5 ? 'bg-green-500' : conversionRate >= 3 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                              className={`h-2 rounded-full ${conversionRate >= 5 ? 'bg-green-500': conversionRate >= 3 ? 'bg-yellow-500': 'bg-red-500'}`}
                               style={{ width: `${Math.min(conversionRate * 20, 100)}%` }}
                             />
                           </div>
-                          <span className={`text-xs font-medium ${conversionRate >= 5 ? 'text-green-600' : conversionRate >= 3 ? 'text-yellow-600' : 'text-red-600'}`}>
-                            {conversionRate >= 5 ? 'High' : conversionRate >= 3 ? 'Medium' : 'Low'}
+                          <span className={`text-xs font-medium ${conversionRate >= 5 ? 'text-green-600': conversionRate >= 3 ? 'text-yellow-600': 'text-red-600'}`}>
+                            {conversionRate >= 5 ? 'High': conversionRate >= 3 ? 'Medium': 'Low'}
                           </span>
                         </div>
                       </td>

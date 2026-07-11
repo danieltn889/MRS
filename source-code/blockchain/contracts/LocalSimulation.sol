@@ -22,7 +22,7 @@ contract LocalSimulation {
     event ResultStored(string sessionId, address indexed candidate, uint256 score);
     event ResultVerified(string indexed sessionId, address indexed verifier);
     
-    // ✅ ANYONE can store results - no restrictions!
+    // ''ANYONE can store results - no restrictions!
     function storeResult(
         string memory sessionId,
         address candidate,
@@ -62,7 +62,7 @@ contract LocalSimulation {
         return results[sessionId];
     }
     
-    // ✅ ANYONE can verify results
+    // ''ANYONE can verify results
     function verifyResult(string memory sessionId) public {
         require(results[sessionId].candidate != address(0), "Session result does not exist");
         require(!results[sessionId].verified, "Result already verified");

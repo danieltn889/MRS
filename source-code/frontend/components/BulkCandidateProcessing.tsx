@@ -133,13 +133,13 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
 
   const getFilteredCandidates = () => {
     return candidates.filter(candidate => {
-      const matchesSearch = searchTerm === '' ||
+      const matchesSearch = searchTerm === ''||
         candidate.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         candidate.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
         candidate.skills.some(skill => skill.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter;
-      const matchesSkill = skillFilter === 'all' ||
+      const matchesStatus = statusFilter === 'all'|| candidate.status === statusFilter;
+      const matchesSkill = skillFilter === 'all'||
         candidate.skills.some(skill => skill.toLowerCase().includes(skillFilter.toLowerCase()));
       const matchesScore = candidate.match_score >= minScore;
 
@@ -177,7 +177,7 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
           // Update status for selected candidates
           setCandidates(prev => prev.map(candidate =>
             selectedCandidates.has(candidate.id)
-              ? { ...candidate, status: 'shortlisted' }
+              ? { ...candidate, status: 'shortlisted'}
               : candidate
           ));
           break;
@@ -201,7 +201,7 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
           // Reject selected candidates
           setCandidates(prev => prev.map(candidate =>
             selectedCandidates.has(candidate.id)
-              ? { ...candidate, status: 'rejected' }
+              ? { ...candidate, status: 'rejected'}
               : candidate
           ));
           break;
@@ -237,7 +237,7 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
       ])
     ].map(row => row.join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv'});
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -444,7 +444,7 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
                 className="flex items-center space-x-2 text-sm text-blue-600 hover:text-blue-800"
               >
                 {allSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                <span>{allSelected ? 'Deselect All' : 'Select All'}</span>
+                <span>{allSelected ? 'Deselect All': 'Select All'}</span>
               </button>
             </div>
           </div>
@@ -513,14 +513,14 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(candidate.status)}`}>
                         {getStatusIcon(candidate.status)}
-                        <span className="ml-1 capitalize">{candidate.status.replace('_', ' ')}</span>
+                        <span className="ml-1 capitalize">{candidate.status.replace('_', '')}</span>
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <span className={`text-sm font-medium ${
-                          candidate.match_score >= 90 ? 'text-green-600' :
-                          candidate.match_score >= 80 ? 'text-yellow-600' :
+                          candidate.match_score >= 90 ? 'text-green-600':
+                          candidate.match_score >= 80 ? 'text-yellow-600':
                           'text-red-600'
                         }`}>
                           {candidate.match_score}%
@@ -528,8 +528,8 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
                         <div className="ml-2 w-16 bg-gray-200 rounded-full h-2">
                           <div
                             className={`h-2 rounded-full ${
-                              candidate.match_score >= 90 ? 'bg-green-600' :
-                              candidate.match_score >= 80 ? 'bg-yellow-600' :
+                              candidate.match_score >= 90 ? 'bg-green-600':
+                              candidate.match_score >= 80 ? 'bg-yellow-600':
                               'bg-red-600'
                             }`}
                             style={{ width: `${candidate.match_score}%` }}
@@ -584,7 +584,7 @@ const BulkCandidateProcessing = ({ onBack }: BulkCandidateProcessingProps) => {
               <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No candidates found</h3>
               <p className="text-gray-600">
-                {searchTerm || statusFilter !== 'all' || skillFilter !== 'all' || minScore > 0
+                {searchTerm || statusFilter !== 'all'|| skillFilter !== 'all'|| minScore > 0
                   ? 'Try adjusting your filters or search terms.'
                   : 'Candidates will appear here as they apply to your jobs.'
                 }

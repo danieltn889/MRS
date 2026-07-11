@@ -1,6 +1,6 @@
 # Deployment Guide
 
-This guide covers deploying the V-WES backend, frontend, and database to a server.
+This guide covers deploying the MRS backend, frontend, and database to a server.
 
 ## Overview
 
@@ -8,7 +8,7 @@ This guide covers deploying the V-WES backend, frontend, and database to a serve
 |-----------|-------|---------|
 | Backend | `npm run build` (type-check) | Node 18+ running `dist/server.js` (or `tsx src/server.ts`) on a private port (e.g. 3001) |
 | Frontend | `npm run build` (Vite) | Static `dist/` served by Nginx / CDN |
-| Database | — | Managed/self-hosted PostgreSQL 14+ |
+| Database |   | Managed/self-hosted PostgreSQL 14+ |
 
 A reverse proxy (Nginx) terminates TLS and routes `/api` and the WebSocket upgrade to the
 backend, and serves the frontend static files.
@@ -110,7 +110,7 @@ HTTP → HTTPS.
 
 ## 6. Production checklist
 
-- [ ] Strong `JWT_SECRET`, DB password, SMTP credentials — none committed to git.
+- [ ] Strong `JWT_SECRET`, DB password, SMTP credentials   none committed to git.
 - [ ] `NODE_ENV=production`, `CORS_ORIGIN`/`FRONTEND_URL` set to the real domain.
 - [ ] `VITE_API_URL` points to the public API; frontend rebuilt after changing it.
 - [ ] Database migrated, seeded (if needed), and backed up.

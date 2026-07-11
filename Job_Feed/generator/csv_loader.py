@@ -1,4 +1,4 @@
-"""
+"
 csv_loader.py
 =============
 Streaming/chunked readers for the real source CSVs. Applications (656MB,
@@ -9,13 +9,13 @@ selected candidate/job ID sets as they stream past.
 Sampling strategy (see select_candidates_and_jobs): candidates and jobs are
 NOT sampled independently. Complete_Candidate_Profile.csv already lists each
 candidate's own Applied_Jobs/Engaged_Jobs (real job IDs they interacted
-with) — sampling jobs first, then preferring candidates connected to those
+with)   sampling jobs first, then preferring candidates connected to those
 jobs, maximizes how much *real* application/engagement data survives the
 1000x1000 down-sample, per the project's "reuse real data" priority. A
 handful of independent candidates are still mixed in so the dataset also
 reflects candidates with no engagement on the selected jobs (a realistic,
 common case).
-"""
+"
 
 from __future__ import annotations
 
@@ -78,7 +78,7 @@ def select_candidates_and_jobs(n_jobs: int, n_candidates: int, seed: int) -> Sel
     chosen = connected_list[:n_candidates]
 
     if len(chosen) < n_candidates:
-        # Not enough connected candidates found — top up with independent random
+        # Not enough connected candidates found   top up with independent random
         # candidates so the final set is still exactly n_candidates.
         chosen_set = set(chosen)
         needed = n_candidates - len(chosen)
@@ -116,8 +116,8 @@ def select_candidates_and_jobs(n_jobs: int, n_candidates: int, seed: int) -> Sel
 def stream_filtered(csv_path, candidate_ids: Set[str], job_ids: Set[str],
                      candidate_col: str, job_col: str,
                      usecols: List[str] = None, chunksize: int = CHUNK_SIZE) -> pd.DataFrame:
-    """Stream a large CSV and keep only rows whose candidate/job id is in the
-    given sets. Returns the concatenated matches (small, by construction)."""
+    "Stream a large CSV and keep only rows whose candidate/job id is in the
+    given sets. Returns the concatenated matches (small, by construction)."
     matches = []
     for chunk in pd.read_csv(csv_path, usecols=usecols, chunksize=chunksize):
         hit = chunk[chunk[candidate_col].isin(candidate_ids) & chunk[job_col].isin(job_ids)]

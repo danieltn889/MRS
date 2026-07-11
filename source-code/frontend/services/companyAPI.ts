@@ -187,7 +187,7 @@ export const uploadCompanyBanner = async (bannerFile: File) => {
   }
 };
 
-// ✅ CORRECTED: Add company location with proper coordinate handling
+// ''CORRECTED: Add company location with proper coordinate handling
 export const addCompanyLocation = async (locationData: any) => {
   try {
     // Clean the location data before sending
@@ -207,7 +207,7 @@ export const addCompanyLocation = async (locationData: any) => {
   }
 };
 
-// ✅ CORRECTED: Update company location with proper coordinate handling
+// ''CORRECTED: Update company location with proper coordinate handling
 export const updateCompanyLocation = async (locationId: string, locationData: any) => {
   try {
     // Clean the location data before sending
@@ -248,7 +248,7 @@ export const getCompanyLocations = async () => {
     });
     const result = await handleResponse(response);
     
-    // ✅ Map snake_case from database to camelCase for frontend
+    // ''Map snake_case from database to camelCase for frontend
     if (result.data && Array.isArray(result.data)) {
       result.data = result.data.map((location: any) => ({
         id: location.id,
@@ -304,7 +304,7 @@ export const updateCompanyCulture = async (cultureData: any) => {
       body: JSON.stringify(payload),
     });
     
-    console.log('📥 Response status:', response.status);
+    console.log(' Response status:', response.status);
     
     return await handleResponse(response);
   } catch (error: any) {

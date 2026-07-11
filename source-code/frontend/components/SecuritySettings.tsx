@@ -265,7 +265,7 @@ export default function SecuritySettings({ onBack }) {
       )}
 
       {/* Active Sessions Tab */}
-      {activeTab === 'sessions' && (
+      {activeTab === 'sessions'&& (
         <>
           {/* Active Sessions Section */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -373,7 +373,7 @@ export default function SecuritySettings({ onBack }) {
                   <div className="flex items-center">
                     <AlertTriangle className="w-5 h-5 text-yellow-600 mr-2" />
                     <span className="text-yellow-800">
-                      This will terminate {otherSessions.length} active session{otherSessions.length !== 1 ? 's' : ''}.
+                      This will terminate {otherSessions.length} active session{otherSessions.length !== 1 ? 's': ''}.
                     </span>
                   </div>
                 </div>
@@ -400,7 +400,7 @@ export default function SecuritySettings({ onBack }) {
       )}
 
       {/* Login History Tab */}
-      {activeTab === 'history' && (
+      {activeTab === 'history'&& (
         <div className="space-y-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <div className="flex justify-between items-center mb-4">
@@ -504,7 +504,7 @@ export default function SecuritySettings({ onBack }) {
                                 ? 'bg-green-100 text-green-800'
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {entry.status === 'success' ? 'Successful' : 'Failed'}
+                              {entry.status === 'success'? 'Successful': 'Failed'}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -558,7 +558,7 @@ export default function SecuritySettings({ onBack }) {
             </div>
 
             <p className="text-gray-600 mb-4">
-              This will log you out from <strong>{otherSessions.length} device{otherSessions.length !== 1 ? 's' : ''}</strong> except this one.
+              This will log you out from <strong>{otherSessions.length} device{otherSessions.length !== 1 ? 's': ''}</strong> except this one.
               You will receive an email confirmation of this action.
             </p>
 
@@ -568,7 +568,7 @@ export default function SecuritySettings({ onBack }) {
               </label>
               <div className="relative">
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type={showPassword ? 'text': 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10"
@@ -606,7 +606,7 @@ export default function SecuritySettings({ onBack }) {
                 disabled={logoutLoading || !password.trim()}
                 className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {logoutLoading ? 'Logging out...' : 'Confirm Logout'}
+                {logoutLoading ? 'Logging out...': 'Confirm Logout'}
               </button>
             </div>
           </div>

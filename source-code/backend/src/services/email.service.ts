@@ -48,14 +48,14 @@ class EmailService {
       let emailHtml = html;
 
       // Deliverability: always send a multipart message with a plain-text part.
-      // HTML-only emails are far more likely to be flagged as spam — derive a text
+      // HTML-only emails are far more likely to be flagged as spam   derive a text
       // fallback from the HTML when one isn't supplied.
       const emailText = text || (emailHtml
         ? emailHtml
-            .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/&nbsp;/gi, ' ')
-            .replace(/\s+/g, ' ')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/gi, '')
+            .replace(/\s+/g, '')
             .trim()
         : undefined);
 
@@ -82,16 +82,16 @@ class EmailService {
         headers: {
           'List-Unsubscribe': listUnsubscribe,
           // One-click only works with an HTTPS endpoint that accepts POST.
-          ...(unsubUrl ? { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
+          ...(unsubUrl ? { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'} : {}),
         },
       };
 
-      console.log(`📨 [EmailService] Sending to ${to} — "${subject}"`);
+      console.log(`📨 [EmailService] Sending to ${to}   "${subject}"`);
       const info = await this.transporter.sendMail(mailOptions);
-      console.log(`✅ [EmailService] Sent OK: ${info.messageId} → ${to}`);
+      console.log(`''[EmailService] Sent OK: ${info.messageId} → ${to}`);
       logger.info(`Email sent successfully: ${info.messageId}`);
     } catch (error) {
-      console.error(`❌ [EmailService] FAILED sending to ${options.to}:`, (error as Error).message);
+      console.error(` [EmailService] FAILED sending to ${options.to}:`, (error as Error).message);
       logger.error('Error sending email:', error);
       throw error;
     }
@@ -171,7 +171,7 @@ class EmailService {
       submittedAt: string;
       taskNames: string[];
       githubUrl?: string | null;
-      recipientRole?: 'candidate' | 'company';
+      recipientRole?: 'candidate'| 'company';
       score?: number | null;
       passed?: boolean | null;
       scoreBreakdown?: Record<string, { score: number; weight: number; contribution?: string }> | null;
@@ -181,7 +181,7 @@ class EmailService {
 
     const tasksHtml = taskNames && taskNames.length
       ? `<ul style="margin:8px 0;padding-left:20px;color:#374151">${taskNames.map((t) => `<li>${t}</li>`).join('')}</ul>`
-      : '<p style="margin:8px 0;color:#6b7280">—</p>';
+      : '<p style="margin:8px 0;color:#6b7280"> </p>';
 
     const githubHtml = githubUrl
       ? `<tr><td style="padding:6px 0;color:#6b7280;width:160px">Repository</td><td style="padding:6px 0"><a href="${githubUrl}" style="color:#2563eb">${githubUrl}</a></td></tr>`
@@ -191,14 +191,14 @@ class EmailService {
     const categoryLabels: Record<string, string> = {
       quality: 'Code Quality', speed: 'Speed', behavioral: 'Behavioral', github: 'GitHub'
     };
-    const scoresHtml = recipientRole === 'candidate' && score != null
+    const scoresHtml = recipientRole === 'candidate'&& score != null
       ? `
         <div style="margin-top:20px;padding:16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px">
           <div style="text-align:center;margin-bottom:12px">
             <div style="font-size:32px;font-weight:800;color:#5b21b6">${Math.round(score)}%</div>
             <div style="margin-top:6px">
-              <span style="display:inline-block;padding:4px 14px;border-radius:999px;font-size:13px;font-weight:700;background:${passed ? '#dcfce7' : '#fee2e2'};color:${passed ? '#166534' : '#991b1b'}">
-                ${passed ? '✓ PASSED' : '✗ DID NOT PASS'}
+              <span style="display:inline-block;padding:4px 14px;border-radius:999px;font-size:13px;font-weight:700;background:${passed ? '#dcfce7': '#fee2e2'};color:${passed ? '#166534': '#991b1b'}">
+                ${passed ? '✓ PASSED': '✗ DID NOT PASS'}
               </span>
             </div>
           </div>
@@ -223,12 +223,12 @@ class EmailService {
       recipientRole === 'company'
         ? `<p style="color:#374151;margin:0 0 8px"><strong>${candidateName}</strong> has submitted the <strong>${simulationName}</strong> simulation. The submission is now under review.</p>`
         : `<p style="color:#374151;margin:0 0 8px">Hi <strong>${candidateName}</strong>,</p>
-           <p style="color:#374151;margin:0 0 8px">Thank you — your simulation has been <strong>submitted successfully</strong>. Here are your results.</p>`;
+           <p style="color:#374151;margin:0 0 8px">Thank you   your simulation has been <strong>submitted successfully</strong>. Here are your results.</p>`;
 
     const subject =
       recipientRole === 'company'
-        ? `New simulation submission — ${simulationName}`
-        : `Your results — ${simulationName}`;
+        ? `New simulation submission   ${simulationName}`
+        : `Your results   ${simulationName}`;
 
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
@@ -248,7 +248,7 @@ class EmailService {
             <div style="color:#6b7280;font-size:14px;margin-bottom:4px">Tasks completed</div>
             ${tasksHtml}
           </div>
-          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
         </div>
       </div>
       ${this.standardFooter()}`;
@@ -259,7 +259,7 @@ class EmailService {
   /**
    * Standard legitimacy footer for notification emails: sender identity, a "why you
    * received this" line, and a visible Unsubscribe link. Expected by CAN-SPAM and by
-   * Gmail/Yahoo bulk-sender rules — its absence is a common spam signal. Address and
+   * Gmail/Yahoo bulk-sender rules   its absence is a common spam signal. Address and
    * unsubscribe URL are env-driven (EMAIL_COMPANY_ADDRESS, EMAIL_UNSUBSCRIBE_URL).
    */
   private standardFooter(): string {
@@ -280,7 +280,7 @@ class EmailService {
 
   /**
    * Sent when a system admin creates a user account directly (Company/User
-   * Management screens) — includes the system-generated temporary password,
+   * Management screens)   includes the system-generated temporary password,
    * since this account was never self-registered.
    */
   async sendAdminCreatedAccountEmail(
@@ -315,7 +315,7 @@ class EmailService {
             <a href="${loginUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Log in</a>
           </div>
           <p style="color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:20px">For your security, please log in and change this password as soon as possible.</p>
-          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
         </div>
       </div>
       ${this.standardFooter()}`;
@@ -324,7 +324,7 @@ class EmailService {
   }
 
   /**
-   * Branded email sent to a candidate about their job application — covers the
+   * Branded email sent to a candidate about their job application   covers the
    * initial "received" confirmation, status changes, and withdrawal confirmations.
    */
   async sendApplicationStatusEmail(
@@ -335,7 +335,7 @@ class EmailService {
       companyName: string;
       statusLabel: string;
       applicationId: string;
-      kind?: 'received' | 'status' | 'withdrawn';
+      kind?: 'received'| 'status'| 'withdrawn';
       simulation?: {
         name?: string;
         scheduled?: boolean;
@@ -348,7 +348,7 @@ class EmailService {
   ): Promise<void> {
     const { candidateName, jobTitle, companyName, statusLabel, applicationId, kind = 'status', simulation } = data;
 
-    // Optional simulation/assessment block — included e.g. in the shortlisted email.
+    // Optional simulation/assessment block   included e.g. in the shortlisted email.
     const simBlock = simulation ? `
           <div style="margin-top:16px;padding:16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px">
             <h2 style="margin:0 0 8px;font-size:15px;color:#5b21b6">Simulation / Assessment</h2>
@@ -361,21 +361,21 @@ class EmailService {
             ${simulation.instructions ? `<p style="margin:10px 0 0;color:#4b5563;font-size:13px"><strong>Instructions:</strong> ${simulation.instructions}</p>` : ''}
             <p style="margin:10px 0 0;color:#4b5563;font-size:13px">${simulation.scheduled
               ? 'Please note: the simulation cannot be started before its scheduled start time.'
-              : 'A simulation is part of this role. You will receive the schedule and a link to begin — and you cannot start it before the scheduled time.'}</p>
+              : 'A simulation is part of this role. You will receive the schedule and a link to begin   and you cannot start it before the scheduled time.'}</p>
             <div style="margin-top:12px">
               <a href="${process.env.FRONTEND_URL || ''}/applications/${applicationId}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">View Simulation Details</a>
             </div>
           </div>` : '';
 
     const header =
-      kind === 'received' ? '✓ Application Received'
-        : kind === 'withdrawn' ? 'Application Withdrawn'
+      kind === 'received'? '✓ Application Received'
+        : kind === 'withdrawn'? 'Application Withdrawn'
           : 'Application Update';
 
     const intro =
       kind === 'received'
         ? `<p style="color:#374151;margin:0 0 8px">Hi <strong>${candidateName}</strong>,</p>
-           <p style="color:#374151;margin:0 0 8px">Thank you — your application for <strong>${jobTitle}</strong> at <strong>${companyName}</strong> has been <strong>received</strong>. You can track its status anytime from your dashboard.</p>`
+           <p style="color:#374151;margin:0 0 8px">Thank you   your application for <strong>${jobTitle}</strong> at <strong>${companyName}</strong> has been <strong>received</strong>. You can track its status anytime from your dashboard.</p>`
         : kind === 'withdrawn'
           ? `<p style="color:#374151;margin:0 0 8px">Hi <strong>${candidateName}</strong>,</p>
              <p style="color:#374151;margin:0 0 8px">This confirms that your application for <strong>${jobTitle}</strong> at <strong>${companyName}</strong> has been <strong>withdrawn</strong>. If this wasn't you, please contact support.</p>`
@@ -383,13 +383,13 @@ class EmailService {
              <p style="color:#374151;margin:0 0 8px">There's an update on your application for <strong>${jobTitle}</strong> at <strong>${companyName}</strong>.</p>`;
 
     const subject =
-      kind === 'received' ? `Application received — ${jobTitle}`
-        : kind === 'withdrawn' ? `Your application was withdrawn — ${jobTitle}`
-          : `Update on your application — ${jobTitle}`;
+      kind === 'received'? `Application received   ${jobTitle}`
+        : kind === 'withdrawn'? `Your application was withdrawn   ${jobTitle}`
+          : `Update on your application   ${jobTitle}`;
 
     const statusColor =
-      kind === 'withdrawn' ? '#6b7280'
-        : kind === 'received' ? '#166534'
+      kind === 'withdrawn'? '#6b7280'
+        : kind === 'received'? '#166534'
           : '#1d4ed8';
 
     const html = `
@@ -405,7 +405,7 @@ class EmailService {
             <tr><td style="padding:6px 0;color:#6b7280">Status</td><td style="padding:6px 0"><span style="color:${statusColor};font-weight:700">${statusLabel}</span></td></tr>
           </table>
           ${simBlock}
-          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
         </div>
       </div>
       ${this.standardFooter()}`;
@@ -428,7 +428,7 @@ class EmailService {
     }
   ): Promise<void> {
     const { recruiterName, candidateName, candidateEmail, jobTitle, applicationId, appliedAt } = data;
-    const subject = `New application — ${jobTitle}`;
+    const subject = `New application   ${jobTitle}`;
     const frontendUrl = process.env.FRONTEND_URL || '';
     const html = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
@@ -445,7 +445,7 @@ class EmailService {
             <tr><td style="padding:6px 0;color:#6b7280">Applied at</td><td style="padding:6px 0;color:#111827">${appliedAt}</td></tr>
           </table>
           ${frontendUrl ? `<div style="margin-top:20px"><a href="${frontendUrl}/applications/${applicationId}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Review Application</a></div>` : ''}
-          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
         </div>
       </div>
       ${this.standardFooter()}`;
@@ -454,7 +454,7 @@ class EmailService {
   }
 
   /**
-   * Send a candidate their full simulation result breakdown — used when a recruiter
+   * Send a candidate their full simulation result breakdown   used when a recruiter
    * selects candidates and sends results. Shows the final weighted score, the AI (70%)
    * and recruiter (30%) contributions, AI competencies, and per-task recruiter marks.
    */
@@ -474,8 +474,8 @@ class EmailService {
   ): Promise<void> {
     const { candidateName, jobTitle, companyName, finalScore, aiScore, recruiterAvg, passed, competencies = [], tasks = [] } = data;
 
-    const header = passed === true ? 'Congratulations — You Passed!' : 'Your Assessment Results';
-    const subject = passed === true ? `Congratulations — your results for ${jobTitle}` : `Your assessment results — ${jobTitle}`;
+    const header = passed === true ? 'Congratulations   You Passed!': 'Your Assessment Results';
+    const subject = passed === true ? `Congratulations   your results for ${jobTitle}` : `Your assessment results   ${jobTitle}`;
 
     const competenciesHtml = competencies.length
       ? `<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:6px">${competencies.map((c) => `<tr><td style="padding:4px 0;color:#6b7280">${c.label}</td><td style="padding:4px 0;text-align:right;color:#111827;font-weight:600">${Math.round(c.score)}%</td></tr>`).join('')}</table>` : '';
@@ -502,7 +502,7 @@ class EmailService {
           </table>
           ${competencies.length ? `<h3 style="font-size:14px;color:#5b21b6;margin:16px 0 0">AI Competency Scores</h3>${competenciesHtml}` : ''}
           ${tasks.length ? `<h3 style="font-size:14px;color:#5b21b6;margin:16px 0 0">Recruiter Task Evaluation (30%)</h3>${tasksHtml}` : ''}
-          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message — please do not reply.</p>
+          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
         </div>
       </div>
       ${this.standardFooter()}`;

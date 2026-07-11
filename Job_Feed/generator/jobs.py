@@ -1,4 +1,4 @@
-"""
+"
 jobs.py
 =======
 Builds companies + jobs + job_skills from real Complete_Job_Profile.csv
@@ -6,12 +6,12 @@ rows. Every field that exists in the CSV (title, institution, required
 education text, required field of study, experience years, applicant/
 engagement counts) is reused as-is; only fields entirely absent from the
 source (location, language requirements, description prose, salary,
-structured education_required JSON, ...) are generated — and generated
+structured education_required JSON, ...) are generated   and generated
 FROM the record's own real fields wherever possible (see faker_utils.py).
 
 Step 7 requirement: every job is forced active, posted in
 [JOB_POSTING_WINDOW_START, JOB_POSTING_WINDOW_END].
-"""
+"
 
 from __future__ import annotations
 
@@ -116,7 +116,7 @@ def build_job_tables(job_profile_df: pd.DataFrame, seed: int,
         title = str(row.get("Job_Title") or "Officer").strip()
         field_of_study = row.get("Required_Field_Of_Study")
         fields = taxonomy.extract_known_fields(field_of_study) if isinstance(field_of_study, str) else []
-        primary_field = fields[0] if fields else ""
+        primary_field = fields[0] if fields else 
 
         exp_years_raw = row.get("Required_Experience_Years")
         experience_years = int(exp_years_raw) if pd.notna(exp_years_raw) else 0
@@ -218,7 +218,7 @@ def build_job_tables(job_profile_df: pd.DataFrame, seed: int,
         # First real event for this job in job_status_history: draft -> active
         # at the moment it was posted. Nothing generates further transitions
         # (paused/closed/filled) since every generated job stays active for
-        # its whole lifetime per Step 7 — this is the one transition that
+        # its whole lifetime per Step 7   this is the one transition that
         # genuinely happened for every job, not an invented audit trail.
         status_history_rows.append({
             "id": mapping.deterministic_uuid("job_status_history", original_id),

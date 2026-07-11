@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
+"
 Configuration file for batch processing parameters
-"""
+"
 
 # Batch processing configuration
 BATCH_CONFIG = {
@@ -45,7 +45,7 @@ BATCH_CONFIG = {
 }
 
 def get_recommended_batch_size(total_projects: int) -> float:
-    """Get recommended batch percentage based on total project count"""
+    "Get recommended batch percentage based on total project count"
     if total_projects < 200:
         return BATCH_CONFIG['recommended_batch_sizes']['small']['batch_percentage']
     elif total_projects < 500:
@@ -56,7 +56,7 @@ def get_recommended_batch_size(total_projects: int) -> float:
         return BATCH_CONFIG['recommended_batch_sizes']['very_large']['batch_percentage']
 
 def get_batch_info(total_projects: int, batch_percentage: float = None) -> dict:
-    """Get batch processing information"""
+    "Get batch processing information"
     if batch_percentage is None:
         batch_percentage = get_recommended_batch_size(total_projects)
     

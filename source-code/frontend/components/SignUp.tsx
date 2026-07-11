@@ -62,7 +62,7 @@ const SignUp = ({ onSignupSuccess }) => {
   // Handle input changes with real-time validation
   const handleInputChange = async (e) => {
     const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
+    const newValue = type === 'checkbox'? checked : value;
     const newFormData = { ...formData, [name]: newValue };
     setFormData(newFormData);
 
@@ -142,11 +142,11 @@ const SignUp = ({ onSignupSuccess }) => {
 
   // Get password strength color and label
   const getPasswordStrengthDisplay = () => {
-    if (passwordStrength === 0) return { color: 'bg-gray-300', label: '', width: '0%' };
-    if (passwordStrength <= 40) return { color: 'bg-red-500', label: 'Weak', width: '25%' };
-    if (passwordStrength <= 60) return { color: 'bg-yellow-500', label: 'Fair', width: '50%' };
-    if (passwordStrength <= 80) return { color: 'bg-blue-500', label: 'Good', width: '75%' };
-    return { color: 'bg-green-500', label: 'Strong', width: '100%' };
+    if (passwordStrength === 0) return { color: 'bg-gray-300', label: '', width: '0%'};
+    if (passwordStrength <= 40) return { color: 'bg-red-500', label: 'Weak', width: '25%'};
+    if (passwordStrength <= 60) return { color: 'bg-yellow-500', label: 'Fair', width: '50%'};
+    if (passwordStrength <= 80) return { color: 'bg-blue-500', label: 'Good', width: '75%'};
+    return { color: 'bg-green-500', label: 'Strong', width: '100%'};
   };
 
   // Handle form submission
@@ -364,7 +364,7 @@ const SignUp = ({ onSignupSuccess }) => {
               onChange={handleInputChange}
               disabled={showRateLimitError}
               className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.firstName ? 'border-red-500' : ''
+                errors.firstName ? 'border-red-500': ''
               } disabled:bg-gray-100 disabled:cursor-not-allowed`}
               placeholder="John"
             />
@@ -389,7 +389,7 @@ const SignUp = ({ onSignupSuccess }) => {
               onChange={handleInputChange}
               disabled={showRateLimitError}
               className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.lastName ? 'border-red-500' : ''
+                errors.lastName ? 'border-red-500': ''
               } disabled:bg-gray-100 disabled:cursor-not-allowed`}
               placeholder="Doe"
             />
@@ -414,7 +414,7 @@ const SignUp = ({ onSignupSuccess }) => {
               onChange={handleInputChange}
               disabled={showRateLimitError}
               className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                errors.email ? 'border-red-500' : ''
+                errors.email ? 'border-red-500': ''
               } disabled:bg-gray-100 disabled:cursor-not-allowed`}
               placeholder="you@example.com"
             />
@@ -439,14 +439,14 @@ const SignUp = ({ onSignupSuccess }) => {
             </label>
             <div className="relative">
               <input
-                type={showPassword ? 'text' : 'password'}
+                type={showPassword ? 'text': 'password'}
                 id="password"
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
                 disabled={showRateLimitError}
                 className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10 ${
-                  errors.password ? 'border-red-500' : ''
+                  errors.password ? 'border-red-500': ''
                 } disabled:bg-gray-100 disabled:cursor-not-allowed`}
                 placeholder="Create a strong password"
               />
@@ -464,7 +464,7 @@ const SignUp = ({ onSignupSuccess }) => {
               <div className="mt-2">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-semibold text-gray-600">Strength:</span>
-                  <span className={`text-xs font-bold ${strengthLabel === 'Weak' ? 'text-red-600' : strengthLabel === 'Fair' ? 'text-yellow-600' : strengthLabel === 'Good' ? 'text-blue-600' : 'text-green-600'}`}>
+                  <span className={`text-xs font-bold ${strengthLabel === 'Weak'? 'text-red-600': strengthLabel === 'Fair'? 'text-yellow-600': strengthLabel === 'Good'? 'text-blue-600': 'text-green-600'}`}>
                     {strengthLabel}
                   </span>
                 </div>
@@ -495,10 +495,10 @@ const SignUp = ({ onSignupSuccess }) => {
                   { label: 'Special character (!@#$%^&*)', test: /[!@#$%^&*]/.test(formData.password) },
                 ].map((req) => (
                   <div key={req.label} className="flex items-center">
-                    <div className={`w-4 h-4 rounded-full mr-2 flex items-center justify-center ${req.test ? 'bg-green-500' : 'bg-gray-300'}`}>
+                    <div className={`w-4 h-4 rounded-full mr-2 flex items-center justify-center ${req.test ? 'bg-green-500': 'bg-gray-300'}`}>
                       {req.test && <span className="text-white text-xs">✓</span>}
                     </div>
-                    <span className={req.test ? 'text-green-700' : 'text-gray-600'}>{req.label}</span>
+                    <span className={req.test ? 'text-green-700': 'text-gray-600'}>{req.label}</span>
                   </div>
                 ))}
               </div>
@@ -512,14 +512,14 @@ const SignUp = ({ onSignupSuccess }) => {
             </label>
             <div className="relative">
               <input
-                type={showPasswordConfirm ? 'text' : 'password'}
+                type={showPasswordConfirm ? 'text': 'password'}
                 id="passwordConfirm"
                 name="passwordConfirm"
                 value={formData.passwordConfirm}
                 onChange={handleInputChange}
                 disabled={showRateLimitError}
                 className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10 ${
-                  errors.passwordConfirm ? 'border-red-500' : ''
+                  errors.passwordConfirm ? 'border-red-500': ''
                 } disabled:bg-gray-100 disabled:cursor-not-allowed`}
                 placeholder="Confirm your password"
               />
@@ -555,10 +555,10 @@ const SignUp = ({ onSignupSuccess }) => {
                 checked={formData.agreeTerms}
                 onChange={handleInputChange}
                 disabled={showRateLimitError}
-                className={`mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${errors.agreeTerms ? 'border-red-500' : ''} disabled:cursor-not-allowed`}
+                className={`mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500 ${errors.agreeTerms ? 'border-red-500': ''} disabled:cursor-not-allowed`}
               />
               <span className="ml-3 text-sm text-gray-700">
-                I agree to the{' '}
+                I agree to the{''}
                 <a href="#" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline font-semibold">
                   Terms & Conditions
                 </a>
@@ -594,7 +594,7 @@ const SignUp = ({ onSignupSuccess }) => {
 
           {/* Sign In Link */}
           <p className="text-center text-sm text-gray-600 mt-4">
-            Already have an account?{' '}
+            Already have an account?{''}
             <a href="#" className="text-blue-600 hover:underline font-semibold">
               Sign in
             </a>

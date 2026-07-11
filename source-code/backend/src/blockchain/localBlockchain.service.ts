@@ -50,7 +50,7 @@ export class LocalBlockchainService {
       this.provider
     );
     console.log(`🔗 Connected to local blockchain`);
-    console.log(`👤 Wallet: ${this.wallet.address}`);
+    console.log(` Wallet: ${this.wallet.address}`);
     
     const balance = await this.wallet.getBalance();
     console.log(`💰 Balance: ${ethers.utils.formatEther(balance)} ETH`);
@@ -61,7 +61,7 @@ export class LocalBlockchainService {
       throw new Error('Service not initialized. Call initialize() first.');
     }
     
-    console.log('📝 Deploying contract...');
+    console.log(' Deploying contract...');
     
     const factory = new ethers.ContractFactory(abi, bytecode, this.wallet);
     const contract = await factory.deploy();
@@ -74,7 +74,7 @@ export class LocalBlockchainService {
     const addressPath = path.join(__dirname, '../../contract.address');
     fs.writeFileSync(addressPath, this.contractAddress);
     
-    console.log(`✅ Contract deployed: ${this.contractAddress}`);
+    console.log(`''Contract deployed: ${this.contractAddress}`);
     return this.contractAddress;
   }
 
@@ -91,7 +91,7 @@ export class LocalBlockchainService {
       throw new Error('Contract not deployed. Call deployContract() first.');
     }
 
-    console.log('📝 Storing simulation on blockchain...');
+    console.log(' Storing simulation on blockchain...');
     
     const tx = await this.contract.storeResult(
       data.sessionId,
@@ -107,7 +107,7 @@ export class LocalBlockchainService {
     console.log(`⏳ Transaction sent: ${tx.hash}`);
     const receipt = await tx.wait();
     
-    console.log(`✅ Stored on blockchain!`);
+    console.log(`''Stored on blockchain!`);
     console.log(`   TX: ${receipt.transactionHash}`);
     console.log(`   Block: ${receipt.blockNumber}`);
     
@@ -138,7 +138,7 @@ export class LocalBlockchainService {
     
     const tx = await this.contract.verifyResult(sessionId, { gasLimit: 100000 });
     await tx.wait();
-    console.log(`✅ Simulation ${sessionId} verified on blockchain`);
+    console.log(`''Simulation ${sessionId} verified on blockchain`);
     return true;
   }
 

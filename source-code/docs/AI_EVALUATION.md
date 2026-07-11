@@ -13,20 +13,20 @@ Primary implementation: `backend/src/controllers/simulation.controller.ts`
 
 When a candidate submits a simulation (`POST /api/v1/simulations/sessions/:id/submit`):
 
-1. **Validate & guard** — session ownership, not already submitted, minimum 3 minutes spent.
-2. **Evaluate** (`calculateFullSessionScores`) — synchronous; computes all scores.
+1. **Validate & guard**   session ownership, not already submitted, minimum 3 minutes spent.
+2. **Evaluate** (`calculateFullSessionScores`)   synchronous; computes all scores.
    Progress is streamed to the candidate over Socket.IO as `evaluation_progress` events
    (stages: *Saving → Analyzing repository → Communication → Code quality → Technical →
    AI feedback → Finalizing → Complete*).
-3. **Persist** in one transaction — `simulation_sessions` (status, answers, score,
+3. **Persist** in one transaction   `simulation_sessions` (status, answers, score,
    `submission_results` JSONB), `simulations`, `evaluations`, `evaluation_sections`,
    `evaluation_behavioral_metrics`, `evaluation_ai_feedback`, and (if enabled)
    `blockchain_records`.
-4. **Audit** — append a `simulation_submitted` block to the audit chain.
-5. **Notify** — send a confirmation email (candidate + company) and persist notifications.
-6. **Respond** — return the full `submission_results` object including `emailSent`.
+4. **Audit**   append a `simulation_submitted` block to the audit chain.
+5. **Notify**   send a confirmation email (candidate + company) and persist notifications.
+6. **Respond**   return the full `submission_results` object including `emailSent`.
 
-The progress events make the evaluation **transparent** — the candidate sees each stage
+The progress events make the evaluation **transparent**   the candidate sees each stage
 rather than an opaque wait. The live overlay is `frontend/components/SimulationExecutor/EvaluationProgress.tsx`.
 
 ---
@@ -88,7 +88,7 @@ conditionals, loops, returns, error handling, classes, imports, lines of code, a
 language, producing a `codeQuality` score and feature breakdown used by the Technical score.
 
 > Note: the backend computes the categories above. The results UI **only displays scores the
-> backend actually computes** — it does not fabricate categories that are not evaluated.
+> backend actually computes**   it does not fabricate categories that are not evaluated.
 
 ---
 

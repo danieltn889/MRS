@@ -15,11 +15,11 @@ async function main() {
   
   // Get signers (Ganache accounts)
   const [deployer, candidate] = await hre.ethers.getSigners();
-  console.log(`👤 Deployer: ${deployer.address}`);
-  console.log(`👤 Candidate: ${candidate.address}`);
+  console.log(` Deployer: ${deployer.address}`);
+  console.log(` Candidate: ${candidate.address}`);
   
   // Store a simulation result
-  console.log("\n📝 Storing simulation result...");
+  console.log("\n Storing simulation result...");
   const sessionId = "test-session-001";
   
   const tx = await simulation.storeResult(
@@ -33,7 +33,7 @@ async function main() {
   );
   
   await tx.wait();
-  console.log(`✅ Stored result for session: ${sessionId}`);
+  console.log(`''Stored result for session: ${sessionId}`);
   console.log(`   Transaction: ${tx.hash}`);
   
   // Get the result
@@ -45,7 +45,7 @@ async function main() {
   console.log(`   Verified: ${result.verified}`);
   
   // Verify the result
-  console.log("\n✅ Verifying simulation result...");
+  console.log("\n''Verifying simulation result...");
   const verifyTx = await simulation.verifyResult(sessionId);
   await verifyTx.wait();
   console.log(`   Verified! Transaction: ${verifyTx.hash}`);

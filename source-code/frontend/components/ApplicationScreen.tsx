@@ -34,7 +34,7 @@ export const getJobMatches = async (candidateId) => {
   try {
     const response = await fetch(`${API_GATEWAY_URL}/match`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json'},
       body: JSON.stringify({ candidate_id: candidateId }),
     });
     const data = await response.json();
@@ -198,7 +198,7 @@ const JobMatch = ({ onBack }) => {
   
   const formatNumber = (value) => { 
     if (!value) return '0'; 
-    const num = typeof value === 'string' ? parseFloat(value) : value; 
+    const num = typeof value === 'string'? parseFloat(value) : value; 
     return num.toLocaleString(); 
   };
   
@@ -370,7 +370,7 @@ const JobMatch = ({ onBack }) => {
           <div>
             <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2"><Zap className="w-8 h-8 text-blue-600" />AI Job Matches</h1>
             <p className="text-gray-600 mt-2">AI-powered job recommendations using WordNet semantic matching</p>
-            {candidateInfo && (<div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500"><span>👤 {candidateInfo.name}</span><span>📊 {candidateInfo.level}</span><span>💼 {candidateInfo.total_experience_years} years experience</span><span>🎯 Skills: {candidateInfo.skills?.join(', ')}</span></div>)}
+            {candidateInfo && (<div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-500"><span> {candidateInfo.name}</span><span>📊 {candidateInfo.level}</span><span> {candidateInfo.total_experience_years} years experience</span><span>''Skills: {candidateInfo.skills?.join(', ')}</span></div>)}
           </div>
           <button onClick={onBack} className="px-4 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg">← Back to Dashboard</button>
         </div>
@@ -387,7 +387,7 @@ const JobMatch = ({ onBack }) => {
         <div className="flex flex-wrap items-center gap-4 mb-6">
           <Filter className="w-5 h-5 text-gray-600" /><span className="text-sm font-medium text-gray-700">Filter by match:</span>
           <div className="flex flex-wrap gap-2">
-            {[{ id: 'all', label: 'All', count: matches.length, color: 'gray' },{ id: 'high', label: 'Excellent (90%+)', count: matches.filter(m => m.matchScore >= 90).length, color: 'green' },{ id: 'medium', label: 'Good (75-89%)', count: matches.filter(m => m.matchScore >= 75 && m.matchScore < 90).length, color: 'blue' },{ id: 'low', label: 'Fair (<75%)', count: matches.filter(m => m.matchScore < 75).length, color: 'yellow' }].map(f => (<button key={f.id} onClick={() => setFilter(f.id)} className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === f.id ? `bg-${f.color === 'green' ? 'green' : f.color === 'blue' ? 'blue' : f.color === 'yellow' ? 'yellow' : 'gray'}-600 text-white` : `bg-gray-100 text-gray-700 hover:bg-gray-200`}`}>{f.label} ({f.count})</button>))}
+            {[{ id: 'all', label: 'All', count: matches.length, color: 'gray'},{ id: 'high', label: 'Excellent (90%+)', count: matches.filter(m => m.matchScore >= 90).length, color: 'green'},{ id: 'medium', label: 'Good (75-89%)', count: matches.filter(m => m.matchScore >= 75 && m.matchScore < 90).length, color: 'blue'},{ id: 'low', label: 'Fair (<75%)', count: matches.filter(m => m.matchScore < 75).length, color: 'yellow'}].map(f => (<button key={f.id} onClick={() => setFilter(f.id)} className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${filter === f.id ? `bg-${f.color === 'green'? 'green': f.color === 'blue'? 'blue': f.color === 'yellow'? 'yellow': 'gray'}-600 text-white` : `bg-gray-100 text-gray-700 hover:bg-gray-200`}`}>{f.label} ({f.count})</button>))}
           </div>
         </div>
       </div>
@@ -421,13 +421,13 @@ const JobMatch = ({ onBack }) => {
                     </div>
                   </div>
                   <p className="text-gray-700 mb-4 line-clamp-2">{match.description}</p>
-                  <div className="flex flex-wrap gap-2 mb-4">{match.skills.slice(0, 6).map((skill, index) => (<span key={index} className={`px-2 py-1 text-xs rounded-full ${match.matchedSkills.includes(skill) ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-gray-100 text-gray-600'}`}>{skill}{match.matchedSkills.includes(skill) && ' ✓'}</span>))}</div>
-                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-4"><h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2"><CheckCircle className="w-4 h-4" />AI Match Analysis</h4><ul className="text-sm space-y-1">{match.matchReasons.slice(0, 4).map((reason, index) => (<li key={index} className="flex items-start gap-2">{reason.type === 'positive' && <ThumbsUp className="w-4 h-4 text-green-600 mt-0.5" />}{reason.type === 'warning' && <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5" />}{reason.type === 'improvement' && <Info className="w-4 h-4 text-blue-600 mt-0.5" />}<span className={reason.type === 'positive' ? 'text-green-800' : reason.type === 'warning' ? 'text-yellow-800' : 'text-blue-800'}>{reason.text}</span></li>))}</ul></div>
+                  <div className="flex flex-wrap gap-2 mb-4">{match.skills.slice(0, 6).map((skill, index) => (<span key={index} className={`px-2 py-1 text-xs rounded-full ${match.matchedSkills.includes(skill) ? 'bg-green-100 text-green-800 border border-green-300': 'bg-gray-100 text-gray-600'}`}>{skill}{match.matchedSkills.includes(skill) && '✓'}</span>))}</div>
+                  <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-4"><h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2"><CheckCircle className="w-4 h-4" />AI Match Analysis</h4><ul className="text-sm space-y-1">{match.matchReasons.slice(0, 4).map((reason, index) => (<li key={index} className="flex items-start gap-2">{reason.type === 'positive'&& <ThumbsUp className="w-4 h-4 text-green-600 mt-0.5" />}{reason.type === 'warning'&& <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5" />}{reason.type === 'improvement'&& <Info className="w-4 h-4 text-blue-600 mt-0.5" />}<span className={reason.type === 'positive'? 'text-green-800': reason.type === 'warning'? 'text-yellow-800': 'text-blue-800'}>{reason.text}</span></li>))}</ul></div>
                   <div className="flex flex-wrap gap-3 text-xs"><span className="px-2 py-1 bg-gray-100 rounded">Skills: {match.criteriaScores.skills_match}%</span><span className="px-2 py-1 bg-gray-100 rounded">Experience: {match.criteriaScores.experience_years_match}%</span><span className="px-2 py-1 bg-gray-100 rounded">Level: {match.criteriaScores.experience_level_match}%</span><span className="px-2 py-1 bg-gray-100 rounded">Salary: {match.criteriaScores.salary_match}%</span></div>
                 </div>
                 <div className="flex flex-col gap-2 lg:min-w-[200px]">
                   <button onClick={() => handleViewDetails(match)} className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"><ExternalLink className="w-4 h-4" />View Details</button>
-                  <button onClick={() => handleSaveJob(match.id)} className="w-full px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2"><Bookmark className="w-4 h-4" />{savedJobs.has(match.id) ? 'Saved' : 'Save Job'}</button>
+                  <button onClick={() => handleSaveJob(match.id)} className="w-full px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 flex items-center justify-center gap-2"><Bookmark className="w-4 h-4" />{savedJobs.has(match.id) ? 'Saved': 'Save Job'}</button>
                   <button onClick={() => handleApply(match)} className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">Apply Now<ChevronRight className="w-4 h-4" /></button>
                 </div>
               </div>

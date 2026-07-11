@@ -17,7 +17,7 @@ export interface Job extends BaseEntity {
   department?: string;
   team?: string;
   job_type: JobType;
-  work_arrangement: 'remote' | 'hybrid' | 'onsite' | 'flexible';
+  work_arrangement: 'remote'| 'hybrid'| 'onsite'| 'flexible';
   locations?: JobLocation[];
   description: string;
   summary?: string;
@@ -34,7 +34,7 @@ export interface Job extends BaseEntity {
   salary_min?: number;
   salary_max?: number;
   salary_currency: string;
-  salary_period: 'hour' | 'month' | 'year';
+  salary_period: 'hour'| 'month'| 'year';
   salary_visible: boolean;
   
   // CORRECTED: benefits should have specific type
@@ -46,7 +46,7 @@ export interface Job extends BaseEntity {
   
   experience_min?: number;
   experience_max?: number;
-  experience_level: 'entry' | 'mid' | 'senior' | 'lead' | 'executive';
+  experience_level: 'entry'| 'mid'| 'senior'| 'lead'| 'executive';
   
   // CORRECTED: education_required should have specific type
   education_required?: EducationRequirement;
@@ -98,7 +98,7 @@ export interface JobLocation {
   postal_code?: string;
   address?: string;
   is_remote?: boolean;
-  remote_type?: 'fully_remote' | 'hybrid' | 'onsite_required';
+  remote_type?: 'fully_remote'| 'hybrid'| 'onsite_required';
   latitude?: number;
   longitude?: number;
 }
@@ -109,14 +109,14 @@ export interface JobRequirements {
   required_certifications?: string[];
   required_languages?: Array<{
     language: string;
-    proficiency: 'basic' | 'conversational' | 'professional' | 'native';
+    proficiency: 'basic'| 'conversational'| 'professional'| 'native';
   }>;
   specific_requirements?: string[];
   nice_to_have?: string[];
 }
 
 export interface JobBenefit {
-  type: 'health' | 'dental' | 'vision' | 'retirement' | 'pto' | 'remote' | 'equity' | 'bonus' | 'education' | 'wellness' | 'other';
+  type: 'health'| 'dental'| 'vision'| 'retirement'| 'pto'| 'remote'| 'equity'| 'bonus'| 'education'| 'wellness'| 'other';
   name: string;
   description?: string;
   is_mandatory?: boolean;
@@ -128,7 +128,7 @@ export interface JobSkill {
   name: string;
   proficiency_level: 1 | 2 | 3 | 4 | 5;
   is_required: boolean;
-  importance: 'nice-to-have' | 'preferred' | 'required';
+  importance: 'nice-to-have'| 'preferred'| 'required';
   years_experience_required?: number;
 }
 
@@ -158,7 +158,7 @@ export interface EducationRequirement {
 export interface LanguageRequirement {
   id?: string;
   name: string;
-  proficiency: 'basic' | 'conversational' | 'professional' | 'native';
+  proficiency: 'basic'| 'conversational'| 'professional'| 'native';
   is_required: boolean;
 }
 
@@ -172,7 +172,7 @@ export interface ExperienceRequirementItem {
 export interface ScreeningQuestion {
   id?: string;
   question: string;
-  type: 'text' | 'multiple_choice' | 'yes_no' | 'number' | 'date' | 'file';
+  type: 'text'| 'multiple_choice'| 'yes_no'| 'number'| 'date'| 'file';
   required: boolean;
   options?: string[];
   max_length?: number;
@@ -184,7 +184,7 @@ export interface ScreeningQuestion {
 }
 
 export interface JobDocument {
-  type: 'job_description' | 'requirements' | 'benefits' | 'company_info' | 'other';
+  type: 'job_description'| 'requirements'| 'benefits'| 'company_info'| 'other';
   name: string;
   url: string;
   key: string;
@@ -221,7 +221,7 @@ export interface SavedJob {
   saved_at: TIMESTAMP;
   notes?: string;
   tags?: string[];
-  priority: 'high' | 'medium' | 'low';
+  priority: 'high'| 'medium'| 'low';
   folder?: string;
   notified: boolean;
   user?: User;
@@ -265,22 +265,22 @@ export interface JobFilters {
   company_id?: UUID[];
   status?: JobStatus[];
   job_type?: JobType[];
-  work_arrangement?: ('remote' | 'hybrid' | 'onsite' | 'flexible')[];
+  work_arrangement?: ('remote'| 'hybrid'| 'onsite'| 'flexible')[];
   location?: string[];
   department?: string[];
-  experience_level?: ('entry' | 'mid' | 'senior' | 'lead' | 'executive')[];
+  experience_level?: ('entry'| 'mid'| 'senior'| 'lead'| 'executive')[];
   salary_min?: number;
   salary_max?: number;
   tags?: string[];
-  date_posted?: 'today' | 'week' | 'month' | 'any';
+  date_posted?: 'today'| 'week'| 'month'| 'any';
   remote_only?: boolean;
   skills?: string[];
   hide_expired?: boolean;
 }
 
 export interface JobSortOptions {
-  field: 'relevance' | 'date' | 'salary' | 'applications' | 'title';
-  direction: 'asc' | 'desc';
+  field: 'relevance'| 'date'| 'salary'| 'applications'| 'title';
+  direction: 'asc'| 'desc';
 }
 
 export interface JobStats {
@@ -354,12 +354,12 @@ export interface UpdateJobDTO extends Partial<CreateJobDTO> {
 
 export function isJobActive(job: Job): boolean {
   // Use type assertion to compare with string literal
-  return (job.status as string) === 'active' && 
+  return (job.status as string) === 'active'&& 
          (!job.expires_at || new Date(job.expires_at) > new Date());
 }
 
 export function isJobRemote(job: Job): boolean {
-  return job.work_arrangement === 'remote' || 
+  return job.work_arrangement === 'remote'|| 
          (job.locations?.some(loc => loc.is_remote === true) ?? false);
 }
 
@@ -367,8 +367,8 @@ export function getJobSalary(job: Job): string {
   if (!job.salary_min && !job.salary_max) return 'Salary not specified';
   
   const currency = job.salary_currency || 'USD';
-  const period = job.salary_period === 'year' ? '/year' : 
-                 job.salary_period === 'month' ? '/month' : '/hour';
+  const period = job.salary_period === 'year'? '/year': 
+                 job.salary_period === 'month'? '/month': '/hour';
   
   if (job.salary_min && job.salary_max) {
     return `${currency} ${job.salary_min.toLocaleString()} - ${job.salary_max.toLocaleString()}${period}`;
@@ -392,8 +392,8 @@ export function getMatchingScore(job: Job, userSkills: { skill_id: UUID; profici
   let maxScore = 0;
   
   job.skills_required.forEach(requiredSkill => {
-    const weight = requiredSkill.importance === 'required' ? 3 :
-                   requiredSkill.importance === 'preferred' ? 2 : 1;
+    const weight = requiredSkill.importance === 'required'? 3 :
+                   requiredSkill.importance === 'preferred'? 2 : 1;
     maxScore += weight;
     
     const userSkill = userSkills.find(s => s.skill_id === requiredSkill.skill_id);

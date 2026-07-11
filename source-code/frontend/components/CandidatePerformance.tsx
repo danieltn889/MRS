@@ -153,12 +153,12 @@ interface CandidatePerformanceProps {
 }
 
 /* ── Helpers ── */
-const getScoreColor = (v: number) => v >= 80 ? '#16a34a' : v >= 60 ? '#d97706' : '#dc2626';
-const getScoreBg = (v: number) => v >= 80 ? '#dcfce7' : v >= 60 ? '#fef9c3' : '#fee2e2';
+const getScoreColor = (v: number) => v >= 80 ? '#16a34a': v >= 60 ? '#d97706': '#dc2626';
+const getScoreBg = (v: number) => v >= 80 ? '#dcfce7': v >= 60 ? '#fef9c3': '#fee2e2';
 
 const formatDate = (d?: string) => {
   if (!d) return 'N/A';
-  return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'});
 };
 
 const formatTime = (s?: number) => {
@@ -176,18 +176,18 @@ const ScoreArc: React.FC<{ score: number; size?: number }> = ({ score, size = 80
   const color = getScoreColor(score);
   return (
     <div style={{ position: 'relative', width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)'}}>
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="#e2e8f0" strokeWidth={8} />
         <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={8}
           strokeDasharray={circ} strokeDashoffset={off} strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset .6s ease' }} />
+          style={{ transition: 'stroke-dashoffset .6s ease'}} />
       </svg>
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{score}</span>
-        <span style={{ fontSize: 9, color: '#94a3b8' }}>/100</span>
+        <span style={{ fontSize: 9, color: '#94a3b8'}}>/100</span>
       </div>
     </div>
   );
@@ -200,8 +200,8 @@ const MetricBar: React.FC<{ label: string; value: number }> = ({ label, value })
       <span style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>{label}</span>
       <span style={{ fontSize: 12, fontWeight: 700, color: getScoreColor(value) }}>{Math.round(value)}%</span>
     </div>
-    <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
-      <div style={{ height: '100%', width: `${value}%`, background: getScoreColor(value), borderRadius: 3, transition: 'width .5s ease' }} />
+    <div style={{ height: 6, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden'}}>
+      <div style={{ height: '100%', width: `${value}%`, background: getScoreColor(value), borderRadius: 3, transition: 'width .5s ease'}} />
     </div>
   </div>
 );
@@ -232,18 +232,18 @@ const SessionCard: React.FC<{ session: ApiCandidateResponse; onViewReport?: (id:
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1 }}>
           <div style={{
             width: 40, height: 40, borderRadius: 10,
-            background: isCompleted ? '#dcfce7' : '#fef3c7',
+            background: isCompleted ? '#dcfce7': '#fef3c7',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 700, fontSize: 14,
-            color: isCompleted ? '#15803d' : '#b45309',
+            color: isCompleted ? '#15803d': '#b45309',
           }}>
             {score}
           </div>
           <div>
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#0f172a'}}>
               Session {sessionId?.slice(0, 8)}...
             </div>
-            <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap'}}>
               <span style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Clock size={11} /> {formatTime(session.session?.time_spent)}
               </span>
@@ -253,8 +253,8 @@ const SessionCard: React.FC<{ session: ApiCandidateResponse; onViewReport?: (id:
               <span style={{
                 padding: '2px 8px',
                 borderRadius: 12,
-                background: isCompleted ? '#dcfce7' : '#fef3c7',
-                color: isCompleted ? '#15803d' : '#b45309',
+                background: isCompleted ? '#dcfce7': '#fef3c7',
+                color: isCompleted ? '#15803d': '#b45309',
                 fontSize: 10,
                 fontWeight: 600,
               }}>
@@ -444,22 +444,22 @@ const CandidateCard: React.FC<{
         background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
         borderBottom: '1px solid #e2e8f0',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap'}}>
           <div style={{
             width: 48, height: 48, borderRadius: '50%',
-            background: rank === 1 ? 'linear-gradient(135deg,#fbbf24,#f59e0b)' :
-                        rank === 2 ? 'linear-gradient(135deg,#94a3b8,#64748b)' :
-                        rank === 3 ? 'linear-gradient(135deg,#cd7f32,#a0522d)' : '#e2e8f0',
+            background: rank === 1 ? 'linear-gradient(135deg,#fbbf24,#f59e0b)':
+                        rank === 2 ? 'linear-gradient(135deg,#94a3b8,#64748b)':
+                        rank === 3 ? 'linear-gradient(135deg,#cd7f32,#a0522d)': '#e2e8f0',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 800, fontSize: 20,
-            color: rank <= 3 ? '#fff' : '#475569',
+            color: rank <= 3 ? '#fff': '#475569',
           }}>
             {rank <= 3 ? ['🥇','🥈','🥉'][rank-1] : rank}
           </div>
 
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
-            background: candidate.bestPassed ? '#6366f1' : '#ef4444',
+            background: candidate.bestPassed ? '#6366f1': '#ef4444',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontWeight: 800, fontSize: 22, color: '#fff',
           }}>
@@ -470,7 +470,7 @@ const CandidateCard: React.FC<{
             <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>
               {candidateName}
             </h2>
-            <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 16, marginTop: 4, flexWrap: 'wrap'}}>
               <span style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Mail size={12} /> {candidate.candidateInfo?.email || 'No email'}
               </span>
@@ -489,18 +489,18 @@ const CandidateCard: React.FC<{
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               padding: '6px 16px', borderRadius: 30, fontSize: 13, fontWeight: 700,
-              background: candidate.bestPassed ? '#dcfce7' : '#fee2e2',
-              color: candidate.bestPassed ? '#15803d' : '#dc2626',
+              background: candidate.bestPassed ? '#dcfce7': '#fee2e2',
+              color: candidate.bestPassed ? '#15803d': '#dc2626',
             }}>
               {candidate.bestPassed ? <CheckCircle size={14} /> : <XCircle size={14} />}
-              {candidate.bestPassed ? 'PASSED' : 'FAILED'}
+              {candidate.bestPassed ? 'PASSED': 'FAILED'}
             </span>
           </div>
         </div>
       </div>
 
       {/* Body Section */}
-      <div style={{ padding: '24px' }}>
+      <div style={{ padding: '24px'}}>
         
         {/* Job & Company Row */}
         <div style={{
@@ -514,12 +514,12 @@ const CandidateCard: React.FC<{
         }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>POSITION</div>
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>{job?.title || 'N/A'}</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: '#0f172a'}}>{job?.title || 'N/A'}</div>
             <div style={{ fontSize: 13, color: '#475569', marginTop: 2 }}>{company?.name || 'N/A'}</div>
           </div>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>JOB DETAILS</div>
-            <div style={{ fontSize: 13, color: '#0f172a' }}>
+            <div style={{ fontSize: 13, color: '#0f172a'}}>
               <span style={{ fontWeight: 500 }}>Type:</span> {job?.type || 'N/A'}
             </div>
             <div style={{ fontSize: 13, color: '#0f172a', marginTop: 2 }}>
@@ -531,7 +531,7 @@ const CandidateCard: React.FC<{
           </div>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>COMPENSATION</div>
-            <div style={{ fontSize: 13, color: '#0f172a' }}>
+            <div style={{ fontSize: 13, color: '#0f172a'}}>
               <DollarSign size={12} style={{ display: 'inline', marginRight: 4 }} />
               {job?.salary_min && job?.salary_max ? `$${job.salary_min} - $${job.salary_max}` : 'Not specified'}
             </div>
@@ -542,7 +542,7 @@ const CandidateCard: React.FC<{
           </div>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', marginBottom: 6 }}>APPLICATION</div>
-            <div style={{ fontSize: 13, color: '#0f172a' }}>#{bestSession.application?.number || 'N/A'}</div>
+            <div style={{ fontSize: 13, color: '#0f172a'}}>#{bestSession.application?.number || 'N/A'}</div>
             <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
               Applied: {formatDate(bestSession.application?.applied_at)}
             </div>
@@ -580,16 +580,16 @@ const CandidateCard: React.FC<{
         <div style={{ marginBottom: 28, padding: 16, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12, fontSize: 13, color: '#475569', lineHeight: 1.7 }}>
           <button
             onClick={() => setShowCalc(s => !s)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 14, fontWeight: 700, color: '#5b21b6' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 14, fontWeight: 700, color: '#5b21b6'}}
           >
-            {showCalc ? '▲ Hide how this score is calculated' : '▼ How this score is calculated'}
+            {showCalc ? '▲ Hide how this score is calculated': '▼ How this score is calculated'}
           </button>
           {showCalc && (
             <div style={{ marginTop: 10 }}>
               <div><strong>1. Each task (0–100):</strong> (Completion + Time + Quality + Answer-quality) ÷ 4.</div>
-              <div><strong>2. Competencies (0–100):</strong> Punctuality, Speed, Technical, Adaptability, Communication, Collaboration, Initiative, Attention to Detail — each scored by the AI from the candidate's work, chat, time and GitHub.</div>
+              <div><strong>2. Competencies (0–100):</strong> Punctuality, Speed, Technical, Adaptability, Communication, Collaboration, Initiative, Attention to Detail   each scored by the AI from the candidate's work, chat, time and GitHub.</div>
               <div><strong>3. Composites:</strong> Quality = (Technical + Punctuality + Adaptability) ÷ 3 · Behavioral = (Adaptability + Communication) ÷ 2.</div>
-              <div style={{ marginTop: 4, color: '#0f172a' }}><strong>4. Overall Score = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</strong> (weights from the practical assessment rubric; defaults shown). Pass mark default 70%.</div>
+              <div style={{ marginTop: 4, color: '#0f172a'}}><strong>4. Overall Score = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</strong> (weights from the practical assessment rubric; defaults shown). Pass mark default 70%.</div>
             </div>
           )}
         </div>
@@ -609,15 +609,15 @@ const CandidateCard: React.FC<{
             <Shield size={20} color={getScoreColor(score)} />
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, color: getScoreColor(score) }}>
-                Overall Score: {score}% — {score >= 80 ? 'Excellent' : score >= 60 ? 'Good' : score >= 40 ? 'Fair' : 'Needs Improvement'}
+                Overall Score: {score}%   {score >= 80 ? 'Excellent': score >= 60 ? 'Good': score >= 40 ? 'Fair': 'Needs Improvement'}
               </div>
               <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
-                {candidate.bestPassed ? '✓ Candidate met the passing threshold' : '✗ Candidate did not meet the passing threshold'}
+                {candidate.bestPassed ? '✓ Candidate met the passing threshold': '✗ Candidate did not meet the passing threshold'}
               </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            {/* ✅ CHAT BUTTON - NOW USING simulationRecordId */}
+            {/* ''CHAT BUTTON - NOW USING simulationRecordId */}
             <button
               onClick={() => simulationRecordId && sessionId && onOpenChat?.(simulationRecordId, sessionId, candidateName)}
               style={{
@@ -667,8 +667,8 @@ const CandidateCard: React.FC<{
 const CandidatePerformance: React.FC<CandidatePerformanceProps> = ({ simulation, onBack, onViewReport }) => {
   const [groupedCandidates, setGroupedCandidates] = useState<GroupedCandidate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<'all' | 'passed' | 'failed'>('all');
-  const [sortBy, setSortBy] = useState<'score' | 'date' | 'name'>('score');
+  const [filter, setFilter] = useState<'all'| 'passed'| 'failed'>('all');
+  const [sortBy, setSortBy] = useState<'score'| 'date'| 'name'>('score');
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [chatModal, setChatModal] = useState<{ simulationRecordId: string; sessionId: string; candidateName: string } | null>(null);
@@ -693,7 +693,7 @@ const CandidatePerformance: React.FC<CandidatePerformanceProps> = ({ simulation,
     try {
       setLoading(true);
       setError(null);
-      const response = await simulationAPI.getSimulationCandidates(simulation.id, { page: 1, limit: 100, status: 'all' });
+      const response = await simulationAPI.getSimulationCandidates(simulation.id, { page: 1, limit: 100, status: 'all'});
       
       let data: ApiCandidateResponse[] = [];
       if (response?.data && Array.isArray(response.data)) data = response.data;
@@ -755,7 +755,7 @@ const CandidatePerformance: React.FC<CandidatePerformanceProps> = ({ simulation,
   };
 
   const displayed = groupedCandidates
-    .filter(g => filter === 'all' ? true : filter === 'passed' ? g.bestPassed : !g.bestPassed)
+    .filter(g => filter === 'all'? true : filter === 'passed'? g.bestPassed : !g.bestPassed)
     .filter(g => {
       if (!searchTerm) return true;
       const t = searchTerm.toLowerCase();
@@ -777,7 +777,7 @@ const CandidatePerformance: React.FC<CandidatePerformanceProps> = ({ simulation,
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f1f5f9' }}>
+    <div style={{ minHeight: '100vh', background: '#f1f5f9'}}>
       {/* Chat Modal */}
       {chatModal && (
         <ChatModal
@@ -790,8 +790,8 @@ const CandidatePerformance: React.FC<CandidatePerformanceProps> = ({ simulation,
       )}
 
       {/* Header */}
-      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 32px' }}>
+      <div style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)'}}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 32px'}}>
           <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.1)', color: '#cbd5e1', cursor: 'pointer', fontSize: 13, marginBottom: 20 }}>
             <ArrowLeft size={14} /> Back
           </button>
@@ -799,25 +799,25 @@ const CandidatePerformance: React.FC<CandidatePerformanceProps> = ({ simulation,
           <p style={{ color: '#a5b4fc', fontSize: 14, marginTop: 6 }}>{simulation?.title}</p>
           
           <div style={{ display: 'flex', gap: 24, marginTop: 20 }}>
-            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>{stats.total}</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Candidates</span></div>
-            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>{stats.sessions}</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Sessions</span></div>
-            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>{stats.passed}</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Passed</span></div>
-            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff' }}>{stats.avgScore}%</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Avg Score</span></div>
+            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff'}}>{stats.total}</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Candidates</span></div>
+            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff'}}>{stats.sessions}</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Sessions</span></div>
+            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff'}}>{stats.passed}</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Passed</span></div>
+            <div><span style={{ fontSize: 24, fontWeight: 800, color: '#fff'}}>{stats.avgScore}%</span><span style={{ color: '#94a3b8', marginLeft: 6 }}>Avg Score</span></div>
           </div>
         </div>
       </div>
 
       {/* Toolbar */}
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '12px 32px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '12px 32px', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap'}}>
           <div style={{ position: 'relative', flex: 1, maxWidth: 260 }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8'}} />
             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search..." style={{ width: '100%', padding: '7px 12px 7px 32px', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 13 }} />
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {(['all','passed','failed'] as const).map(f => (
-              <button key={f} onClick={() => setFilter(f)} style={{ padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: filter === f ? '#6366f1' : '#f1f5f9', color: filter === f ? '#fff' : '#64748b' }}>
-                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+              <button key={f} onClick={() => setFilter(f)} style={{ padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, background: filter === f ? '#6366f1': '#f1f5f9', color: filter === f ? '#fff': '#64748b'}}>
+                {f === 'all'? 'All': f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </div>
@@ -826,19 +826,19 @@ const CandidatePerformance: React.FC<CandidatePerformanceProps> = ({ simulation,
             <option value="date">Sort by Date</option>
             <option value="name">Sort by Name</option>
           </select>
-          <button onClick={fetchCandidates} style={{ padding: '5px 10px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', cursor: 'pointer' }}><RefreshCw size={14} /></button>
-          <span style={{ fontSize: 12, color: '#64748b', marginLeft: 'auto' }}>{displayed.length} candidates</span>
+          <button onClick={fetchCandidates} style={{ padding: '5px 10px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', cursor: 'pointer'}}><RefreshCw size={14} /></button>
+          <span style={{ fontSize: 12, color: '#64748b', marginLeft: 'auto'}}>{displayed.length} candidates</span>
         </div>
       </div>
 
       {/* Results */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 32px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 32px'}}>
         {loading && <div style={{ textAlign: 'center', padding: 60 }}>Loading...</div>}
-        {error && <div style={{ textAlign: 'center', padding: 60, color: '#dc2626' }}>{error}</div>}
+        {error && <div style={{ textAlign: 'center', padding: 60, color: '#dc2626'}}>{error}</div>}
         {!loading && !error && displayed.length === 0 && (
           <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 16 }}>
             <Users size={48} color="#cbd5e1" />
-            <p style={{ marginTop: 12, color: '#64748b' }}>No candidates found</p>
+            <p style={{ marginTop: 12, color: '#64748b'}}>No candidates found</p>
           </div>
         )}
         {displayed.map((candidate, i) => (

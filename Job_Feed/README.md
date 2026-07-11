@@ -42,7 +42,7 @@ pip install -r requirements.txt
 
 ## How the script connects to your CSVs
 
-The script never hardcodes file paths — it builds them from `--data-dir`
+The script never hardcodes file paths   it builds them from `--data-dir`
 (default `./data`) inside `RecommenderConfig`:
 
 ```python
@@ -74,7 +74,7 @@ python hybrid_job_recommender.py --run --data-dir ./data --output-dir ./outputs 
 
 If a file is missing or a required column (e.g. `Candidate_ID`, `Job_ID`)
 isn't found, `DataLoader._require` raises a clear error naming the file
-and the columns it did find — so you'll see immediately if a column got
+and the columns it did find   so you'll see immediately if a column got
 renamed somewhere upstream, rather than a cryptic KeyError deep in the
 pipeline.
 
@@ -120,7 +120,7 @@ python hybrid_job_recommender.py --run --data-dir ./data --candidate-id C000123 
 ```
 
 This uses the same fitted models but skips the CSV export, printing a small
-table for just that candidate — the pattern you'd wrap in an API endpoint.
+table for just that candidate   the pattern you'd wrap in an API endpoint.
 
 ## Class map
 
@@ -143,13 +143,13 @@ table for just that candidate — the pattern you'd wrap in an API endpoint.
 Embeddings + biases trained with a weighted `BCEWithLogitsLoss` over
 observed interactions (weighted by implicit-feedback strength: View=1 ...
 Hired=10) plus randomly sampled negatives. Functionally similar to ALS
-for pure user-item factorization, but differentiable — you can later feed
+for pure user-item factorization, but differentiable   you can later feed
 in side features (e.g. concatenate a candidate/job content embedding into
 the same forward pass) without switching libraries or approaches.
 
 **Why batched scoring, not one full `n_candidates x n_jobs` matrix.**
 At the stated scale (~322K candidates x ~6.9K jobs) a single dense score
-matrix is ~2.2 billion floats (~9 GB in float32) — and the pipeline needs
+matrix is ~2.2 billion floats (~9 GB in float32)   and the pipeline needs
 three of them (content, collaborative, behavior) plus the combined final
 score. `RecommendationEngine.generate_all_recommendations` processes
 candidates in configurable batches (`candidate_batch_size`, default
@@ -186,7 +186,7 @@ value per pair.
 **Why the CLI has both a full-population run and a single-candidate path.**
 `generate_all_recommendations` is the batch/offline job (e.g. nightly
 cron regenerating everyone's feed). `recommend_for_candidate` reuses the
-same fitted models for on-demand scoring — the shape you'd put behind a
+same fitted models for on-demand scoring   the shape you'd put behind a
 `/recommendations/{candidate_id}` endpoint without retraining anything.
 
 ## Evaluation
@@ -201,7 +201,7 @@ that were also used to train the collaborative and behavior models, so
 its numbers are an optimistic sanity check, not a true generalization
 estimate. For a real evaluation, time-split the interaction data (train
 on events before date `T`, hold out events after `T` as ground truth) and
-retrain on the training split only — the `Evaluator` class itself doesn't
+retrain on the training split only   the `Evaluator` class itself doesn't
 need to change, only what you feed it as `ground_truth`.
 
 ## Scaling notes for the real dataset sizes
@@ -213,7 +213,7 @@ need to change, only what you feed it as `ground_truth`.
 - **IDs:** mapped to dense integer indices once (`Preprocessor`) so every
   downstream structure (sparse matrices, PyTorch embeddings) works on
   small integers instead of repeatedly hashing/joining on strings.
-- **Interaction matrix:** stored as `scipy.sparse.csr_matrix` — at
+- **Interaction matrix:** stored as `scipy.sparse.csr_matrix`   at
   322K x 6.9K with a few million nonzeros this is megabytes, not
   gigabytes.
 - **Negative sampling:** drawn on-the-fly per training example rather
@@ -236,14 +236,14 @@ need to change, only what you feed it as `ground_truth`.
    features) trained on the same held-out labels used for evaluation.
 4. **Side-feature-enriched matrix factorization:** concatenate the
    content feature vector (or a PCA/embedding of it) into the PyTorch
-   model's forward pass as an additional term — turns pure collaborative
+   model's forward pass as an additional term   turns pure collaborative
    filtering into a lightweight hybrid neural model in one place.
 5. **Approximate nearest-neighbor scoring** (e.g. FAISS) if the job
    catalog grows well beyond ~7K, to avoid full batched matmuls per
    candidate batch.
 6. **Diversity / business-rule re-ranking** after `HybridRanker` (e.g.
    cap jobs per institution in a single feed, boost recently-posted
-   jobs) — a natural place to add a `PostProcessor` class without
+   jobs)   a natural place to add a `PostProcessor` class without
    touching the scoring models.
 7. **Model persistence in a serving path:** `CollaborativeModel.save`/
    `load` are provided; extend `RecommendationEngine` with a

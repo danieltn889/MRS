@@ -51,7 +51,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
   useEffect(() => {
     if (isEditing && editTextareaRef.current) {
       const el = document.getElementById(`chat-msg-${message.id}`);
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center'});
       setTimeout(() => {
         editTextareaRef.current?.focus();
         editTextareaRef.current?.select();
@@ -81,7 +81,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     if (!message.reply_to) return;
     const el = document.getElementById(`chat-msg-${message.reply_to}`);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.scrollIntoView({ behavior: 'smooth', block: 'center'});
       el.classList.add('ring-2', 'ring-blue-400', 'ring-offset-1', 'ring-offset-gray-900');
       setTimeout(() =>
         el.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-1', 'ring-offset-gray-900'),
@@ -150,17 +150,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
     );
   };
 
-  // ✅ NEW: Determine alignment classes based on who sent the message
+  // ''NEW: Determine alignment classes based on who sent the message
   const alignmentClasses = isMe 
-    ? 'justify-end' // Your messages on the RIGHT
-    : 'justify-start'; // Others' messages on the LEFT
+    ? 'justify-end'// Your messages on the RIGHT
+    : 'justify-start'; // Others'messages on the LEFT
 
   const bubbleClasses = isMe
-    ? 'bg-blue-600 border border-blue-500 rounded-l-lg rounded-br-lg' // Your messages - blue on right
+    ? 'bg-blue-600 border border-blue-500 rounded-l-lg rounded-br-lg'// Your messages - blue on right
     : 'bg-gray-700 border border-gray-600 rounded-r-lg rounded-bl-lg'; // Others - gray on left
 
-  const textColorClasses = isMe ? 'text-white' : 'text-gray-100';
-  const timeColorClasses = isMe ? 'text-blue-200' : 'text-gray-400';
+  const textColorClasses = isMe ? 'text-white': 'text-gray-100';
+  const timeColorClasses = isMe ? 'text-blue-200': 'text-gray-400';
 
   return (
     <div
@@ -174,16 +174,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         {parentMsg && (
           <button
             onClick={scrollToParent}
-            className={`w-full text-left mb-2 pb-2 border-b ${isMe ? 'border-blue-700' : 'border-gray-600'} hover:bg-white/5 rounded px-2 py-1.5 -mx-1 transition-colors`}
+            className={`w-full text-left mb-2 pb-2 border-b ${isMe ? 'border-blue-700': 'border-gray-600'} hover:bg-white/5 rounded px-2 py-1.5 -mx-1 transition-colors`}
             title="Click to jump to original message"
           >
             <div className="flex items-center gap-1 mb-0.5">
               <Reply size={10} className="text-blue-400 flex-shrink-0" />
               <span className="text-xs text-blue-400 font-medium">{parentAuthor}</span>
-              <span className={`text-xs ${isMe ? 'text-blue-300' : 'text-gray-500'} ml-auto`}>↑ jump</span>
+              <span className={`text-xs ${isMe ? 'text-blue-300': 'text-gray-500'} ml-auto`}>↑ jump</span>
             </div>
             <div className="text-xs text-gray-400 italic pl-2 border-l-2 border-blue-500 line-clamp-2 break-words">
-              {parentText.substring(0, 120)}{parentText.length > 120 ? '…' : ''}
+              {parentText.substring(0, 120)}{parentText.length > 120 ? '…': ''}
             </div>
           </button>
         )}
@@ -192,16 +192,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
         <div className="p-2.5">
           {/* Header with author name and time */}
           <div className="flex items-center justify-between mb-1 gap-2">
-            <span className={`text-xs font-semibold flex items-center gap-1 ${isMe ? 'text-blue-200' : 'text-blue-300'}`}>
+            <span className={`text-xs font-semibold flex items-center gap-1 ${isMe ? 'text-blue-200': 'text-blue-300'}`}>
               <User size={10} />
               {authorName}
-              {message.author?.user_type === 'recruiter' && (
+              {message.author?.user_type === 'recruiter'&& (
                 <span className="text-xs bg-purple-700 px-1.5 py-0.5 rounded ml-1">Recruiter</span>
               )}
-              {message.author?.user_type === 'company_admin' && (
+              {message.author?.user_type === 'company_admin'&& (
                 <span className="text-xs bg-purple-700 px-1.5 py-0.5 rounded ml-1">Admin</span>
               )}
-              {message.author?.user_type === 'candidate' && (
+              {message.author?.user_type === 'candidate'&& (
                 <span className="text-xs bg-green-700 px-1.5 py-0.5 rounded ml-1">Candidate</span>
               )}
             </span>
@@ -244,7 +244,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({
                 value={editContent}
                 onChange={(e) => onEditChange(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === 'Enter'&& !e.shiftKey) {
                     e.preventDefault();
                     onSaveEdit();
                   }

@@ -34,12 +34,12 @@ const NON_WITHDRAWABLE_STATUSES = ['hired', 'withdrawn', 'rejected'];
 
 /**
  * Best-effort side effects for an application status change: an in-app notification
- * and an email to the candidate. Never throws — a notification/email failure must
+ * and an email to the candidate. Never throws   a notification/email failure must
  * not break the underlying status update. Call AFTER the DB transaction commits.
  */
 async function notifyCandidateOfApplication(
   applicationId: string,
-  opts: { title: string; status?: string; statusLabel?: string; jobId?: string; emailKind?: 'received' | 'status' | 'withdrawn'; includeSimulation?: boolean }
+  opts: { title: string; status?: string; statusLabel?: string; jobId?: string; emailKind?: 'received'| 'status'| 'withdrawn'; includeSimulation?: boolean }
 ): Promise<void> {
   try {
     const info = await dbQuery(
@@ -60,7 +60,7 @@ async function notifyCandidateOfApplication(
     const companyName = row.company_name || 'the company';
 
     // When relevant (e.g. on shortlisting), include this job's simulation details if
-    // one exists — reuses simulations (per-application instance) and simulation_templates
+    // one exists   reuses simulations (per-application instance) and simulation_templates
     // (per-job). No new schema.
     let simulation: any = undefined;
     if (opts.includeSimulation) {
@@ -79,7 +79,7 @@ async function notifyCandidateOfApplication(
         if (simRes.rows[0]) {
           simulation = { ...simRes.rows[0], scheduled: true };
         } else {
-          // No instance yet — fall back to the job's active simulation template so we
+          // No instance yet   fall back to the job's active simulation template so we
           // can tell the candidate a simulation is part of the role.
           const tplRes = await dbQuery(
             `SELECT st.name, st.duration_minutes, st.instructions
@@ -212,7 +212,7 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
       whereConditions.push(`a.user_id = $${paramIndex}`);
       params.push(authReq.user!.id);
       paramIndex++;
-    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
+    } else if (authReq.user!.user_type === 'recruiter'|| authReq.user!.user_type === 'company_admin') {
       // Recruiters see applications for jobs they created or their company
       let jobIdsQuery;
       let queryParams;
@@ -247,7 +247,7 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
       paramIndex++;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM applications a ${whereClause}`;
@@ -258,17 +258,17 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
     const applicationsQuery = `
       SELECT
         a.id, a.applied_at, a.status,
-        a.submitted_data->>'coverLetter' as cover_letter,
-        a.submitted_data->>'expectedSalary' as expected_salary,
-        a.submitted_data->>'noticePeriod' as notice_period,
-        a.submitted_data->>'portfolioUrl' as portfolio_url,
-        a.submitted_data->>'linkedinUrl' as linkedin_url,
-        a.submitted_data->>'githubUrl' as github_url,
-        a.submitted_data->>'availability' as availability,
+        a.submitted_data->>'coverLetter'as cover_letter,
+        a.submitted_data->>'expectedSalary'as expected_salary,
+        a.submitted_data->>'noticePeriod'as notice_period,
+        a.submitted_data->>'portfolioUrl'as portfolio_url,
+        a.submitted_data->>'linkedinUrl'as linkedin_url,
+        a.submitted_data->>'githubUrl'as github_url,
+        a.submitted_data->>'availability'as availability,
         a.match_score, a.application_number, a.updated_at,
         j.id as job_id, j.title as job_title,
         COALESCE(
-          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
+          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city'IS NOT NULL),
           'Remote'
         ) as job_location,
         j.job_type, j.experience_level, j.salary_min, j.salary_max, j.salary_currency,
@@ -329,7 +329,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     const { id } = req.params;
 
     console.log('🔍 [Get Application] Starting request for application:', id);
-    console.log('👤 Current user:', {
+    console.log(' Current user:', {
       id: authReq.user?.id,
       email: authReq.user?.email,
       user_type: authReq.user?.user_type
@@ -351,7 +351,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
         j.work_arrangement,
         j.created_by as job_created_by,
         COALESCE(
-          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
+          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city'IS NOT NULL),
           'Remote'
         ) as job_location,
         c.id as company_id,
@@ -422,7 +422,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     const applicationResult = await dbQuery(applicationQuery, [id]);
 
     if (applicationResult.rows.length === 0) {
-      console.log('❌ Application not found:', id);
+      console.log(' Application not found:', id);
       return res.status(404).json({
         success: false,
         message: 'Application not found'
@@ -448,7 +448,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
       // Candidates can only view their own applications
       const isOwner = application.candidate_id === authReq.user!.id;
       hasPermission = isOwner;
-      permissionReason = isOwner ? 'Candidate is owner' : 'Candidate is not the application owner';
+      permissionReason = isOwner ? 'Candidate is owner': 'Candidate is not the application owner';
       console.log(`🔐 Candidate permission check: ${permissionReason}`);
 
     } else if (authReq.user!.user_type === 'company_admin') {
@@ -493,7 +493,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
     console.log(`📊 Final permission result: ${hasPermission} - ${permissionReason}`);
 
     if (!hasPermission) {
-      console.log('❌ Access denied for user:', {
+      console.log(' Access denied for user:', {
         userId: authReq.user!.id,
         userType: authReq.user!.user_type,
         applicationId: id,
@@ -503,7 +503,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to view this application',
-        debug: process.env.NODE_ENV === 'development' ? {
+        debug: process.env.NODE_ENV === 'development'? {
           userType: authReq.user!.user_type,
           userId: authReq.user!.id,
           applicationCandidateId: application.candidate_id,
@@ -514,16 +514,16 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
       });
     }
 
-    console.log('✅ Permission granted, fetching timeline...');
+    console.log('Permission granted, fetching timeline...');
 
     // Get application timeline
     const timelineQuery = `
       SELECT
         id,
         event_type,
-        event_data->>'description' as event_description,
-        event_data->>'old_status' as old_status,
-        event_data->>'new_status' as new_status,
+        event_data->>'description'as event_description,
+        event_data->>'old_status'as old_status,
+        event_data->>'new_status'as new_status,
         created_at,
         created_by,
         metadata
@@ -683,7 +683,7 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
       }))
     };
 
-    console.log('✅ Successfully fetched application details');
+    console.log('Successfully fetched application details');
 
     return res.json({
       success: true,
@@ -692,12 +692,12 @@ router.get('/:id', [protect, param('id').isUUID(), validateRequest], async (req:
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    console.error('❌ Get application error:', errorMessage);
+    console.error(' Get application error:', errorMessage);
 
     return res.status(500).json({
       success: false,
       message: 'Failed to fetch application',
-      error: process.env.NODE_ENV === 'development' ? errorMessage : undefined
+      error: process.env.NODE_ENV === 'development'? errorMessage : undefined
     });
   }
 });
@@ -722,7 +722,7 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
       whereConditions.push(`a.user_id = $${paramIndex}`);
       params.push(authReq.user!.id);
       paramIndex++;
-    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
+    } else if (authReq.user!.user_type === 'recruiter'|| authReq.user!.user_type === 'company_admin') {
       // Recruiters see applications for jobs they created or their company
       let jobIdsQuery;
       let queryParams;
@@ -757,7 +757,7 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
       paramIndex++;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM applications a ${whereClause}`;
@@ -768,17 +768,17 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
     const applicationsQuery = `
       SELECT
         a.id, a.applied_at, a.status,
-        a.submitted_data->>'coverLetter' as cover_letter,
-        a.submitted_data->>'expectedSalary' as expected_salary,
-        a.submitted_data->>'noticePeriod' as notice_period,
-        a.submitted_data->>'portfolioUrl' as portfolio_url,
-        a.submitted_data->>'linkedinUrl' as linkedin_url,
-        a.submitted_data->>'githubUrl' as github_url,
-        a.submitted_data->>'availability' as availability,
+        a.submitted_data->>'coverLetter'as cover_letter,
+        a.submitted_data->>'expectedSalary'as expected_salary,
+        a.submitted_data->>'noticePeriod'as notice_period,
+        a.submitted_data->>'portfolioUrl'as portfolio_url,
+        a.submitted_data->>'linkedinUrl'as linkedin_url,
+        a.submitted_data->>'githubUrl'as github_url,
+        a.submitted_data->>'availability'as availability,
         a.match_score, a.application_number, a.updated_at,
         j.id as job_id, j.title as job_title,
         COALESCE(
-          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city' IS NOT NULL),
+          (SELECT string_agg(elem->>'city', ', ') FROM jsonb_array_elements(j.locations) AS elem WHERE elem->>'city'IS NOT NULL),
           'Remote'
         ) as job_location,
         j.job_type, j.experience_level, j.salary_min, j.salary_max, j.salary_currency,
@@ -873,11 +873,11 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
       // Candidates can only withdraw their own applications
       hasPermission = application.user_id === authReq.user!.id;
       allowedStatuses = ['withdrawn'];
-    } else if (authReq.user!.user_type === 'recruiter' || authReq.user!.user_type === 'company_admin') {
+    } else if (authReq.user!.user_type === 'recruiter'|| authReq.user!.user_type === 'company_admin') {
       // A recruiter/company_admin may manage applications for jobs at THEIR company.
       // Accept any of the existing relationships: the user belongs to the job's
       // company (req.user.company_id, set by auth middleware), created the job,
-      // is a company_team member, or created the company. Reuses existing data —
+      // is a company_team member, or created the company. Reuses existing data  
       // no new fields.
       const userCompanyId = authReq.user!.company_id ? String(authReq.user!.company_id) : null;
       const jobCompanyId = application.company_id ? String(application.company_id) : null;
@@ -925,8 +925,8 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
     }
 
     // A candidate cannot withdraw once the application is final (offer accepted /
-    // hired) or already withdrawn/rejected — explain why clearly.
-    if (status === 'withdrawn' && authReq.user!.user_type === 'candidate'
+    // hired) or already withdrawn/rejected   explain why clearly.
+    if (status === 'withdrawn'&& authReq.user!.user_type === 'candidate'
         && NON_WITHDRAWABLE_STATUSES.includes(application.status)) {
       await client.query('ROLLBACK');
       const reason = application.status === 'hired'
@@ -936,14 +936,14 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
     }
 
     // Block withdrawal if the job application period has closed or the job is no longer active.
-    if (status === 'withdrawn' && authReq.user!.user_type === 'candidate') {
+    if (status === 'withdrawn'&& authReq.user!.user_type === 'candidate') {
       const jobStatusResult = await client.query(
         `SELECT status, expires_at FROM jobs WHERE id = $1`,
         [application.job_id]
       );
       const jobRow = jobStatusResult.rows[0];
       const isJobExpired = jobRow?.expires_at && new Date(jobRow.expires_at) < new Date();
-      if (!jobRow || jobRow.status !== 'active' || isJobExpired) {
+      if (!jobRow || jobRow.status !== 'active'|| isJobExpired) {
         await client.query('ROLLBACK');
         return res.status(409).json({
           success: false,
@@ -1045,13 +1045,13 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
         status,
         statusLabel: label,
         jobId: application.job_id,
-        emailKind: status === 'withdrawn' ? 'withdrawn' : 'status',
+        emailKind: status === 'withdrawn'? 'withdrawn': 'status',
         // Include the simulation details in the shortlisted email (spec §9–11).
         includeSimulation: status === 'shortlisted',
       });
 
       // On withdrawal, also notify the recruiter who owns the job.
-      if (status === 'withdrawn' && application.created_by && application.created_by !== authReq.user!.id) {
+      if (status === 'withdrawn'&& application.created_by && application.created_by !== authReq.user!.id) {
         await NotificationService.create({
           userId: application.created_by,
           type: 'application_withdrawn',
@@ -1133,7 +1133,7 @@ router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (r
 
     // A candidate cannot withdraw once the application is final (e.g. an offer has
     // been accepted / hired) or already withdrawn/rejected. Explain why clearly.
-    if (authReq.user!.user_type === 'candidate' && NON_WITHDRAWABLE_STATUSES.includes(application.status)) {
+    if (authReq.user!.user_type === 'candidate'&& NON_WITHDRAWABLE_STATUSES.includes(application.status)) {
       await client.query('ROLLBACK');
       const reason = application.status === 'hired'
         ? 'This application can no longer be withdrawn because an offer has already been accepted.'
@@ -1141,7 +1141,7 @@ router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (r
       return res.status(409).json({ success: false, message: reason });
     }
 
-    // Soft delete — record who withdrew, when, and why.
+    // Soft delete   record who withdrew, when, and why.
     await client.query(
       `UPDATE applications
          SET status = 'withdrawn', withdrawn_at = NOW(), withdrawn_by = $2,
@@ -1239,7 +1239,7 @@ router.post('/:id/send-results', [protect, authorize('recruiter', 'company_admin
     );
     const row = info.rows[0];
     if (!row || !row.email) {
-      return res.status(404).json({ success: false, message: 'Candidate email not found' });
+      return res.status(404).json({ success: false, message: 'Candidate email not found'});
     }
 
     const isPass = passed === true || passed === 'true';
@@ -1258,15 +1258,15 @@ router.post('/:id/send-results', [protect, authorize('recruiter', 'company_admin
 
     // Persist the recruiter's decision so it survives a reload and is visible in the
     // Status column: pass → hired (selected), fail → rejected. Reuses the existing
-    // applications.status field — no new schema. Records a timeline entry too.
+    // applications.status field   no new schema. Records a timeline entry too.
     await dbQuery(
       `UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2`,
-      [isPass ? 'hired' : 'rejected', id]
+      [isPass ? 'hired': 'rejected', id]
     );
     await dbQuery(
       `INSERT INTO application_timeline (application_id, event_type, event_data, created_by)
        VALUES ($1, 'status_changed', $2, $3)`,
-      [id, JSON.stringify({ description: `Results sent — marked ${isPass ? 'passed (hired)' : 'failed (rejected)'}`, new_status: isPass ? 'hired' : 'rejected' }), authReq.user!.id]
+      [id, JSON.stringify({ description: `Results sent   marked ${isPass ? 'passed (hired)': 'failed (rejected)'}`, new_status: isPass ? 'hired': 'rejected'}), authReq.user!.id]
     ).catch(() => {});
 
     // Best-effort in-app notification too.
@@ -1274,16 +1274,16 @@ router.post('/:id/send-results', [protect, authorize('recruiter', 'company_admin
       userId: (await dbQuery('SELECT user_id FROM applications WHERE id = $1', [id])).rows[0]?.user_id,
       type: 'simulation_results',
       category: 'application',
-      title: passed ? 'You passed the assessment' : 'Your assessment results are available',
-      content: `${row.job_title || 'Your role'} — overall ${Math.round(Number(finalScore) || 0)}%`,
+      title: passed ? 'You passed the assessment': 'Your assessment results are available',
+      content: `${row.job_title || 'Your role'}   overall ${Math.round(Number(finalScore) || 0)}%`,
       data: { applicationId: id, url: `/?view=application-history` },
     });
 
     logger.info(`Results email sent for application ${id} by ${authReq.user!.id}`);
-    return res.json({ success: true, message: 'Results sent to candidate' });
+    return res.json({ success: true, message: 'Results sent to candidate'});
   } catch (error) {
     logger.error('Send results error:', error);
-    return res.status(500).json({ success: false, message: 'Failed to send results' });
+    return res.status(500).json({ success: false, message: 'Failed to send results'});
   }
 });
 
@@ -1372,8 +1372,8 @@ router.post(
 
     try {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('📝 [APPLICATION SUBMISSION] Starting...');
-      console.log(`👤 User ID: ${authReq.user!.id}`);
+      console.log(' [APPLICATION SUBMISSION] Starting...');
+      console.log(` User ID: ${authReq.user!.id}`);
       console.log(`📧 User Email: ${authReq.user!.email}`);
       console.log(`📋 Job ID: ${req.body.jobId}`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
@@ -1400,7 +1400,7 @@ router.post(
       );
 
       if (jobResult.rows.length === 0) {
-        console.log('❌ Job not found or not active');
+        console.log(' Job not found or not active');
         await client.query('ROLLBACK');
         return res.status(404).json({
           success: false,
@@ -1411,9 +1411,9 @@ router.post(
       const job = jobResult.rows[0];
       const hasTemplates = parseInt(job.template_count) > 0;
 
-      console.log(`✅ Job found: "${job.title}" (ID: ${job.id})`);
+      console.log(`''Job found: "${job.title}" (ID: ${job.id})`);
       console.log(`📊 Template count: ${job.template_count}`);
-      console.log(`🎯 Has templates: ${hasTemplates}`);
+      console.log(`''Has templates: ${hasTemplates}`);
 
       // Get ALL simulation templates for this job - SELECTING ALL FIELDS
       let simulations: SimulationTemplate[] = [];
@@ -1529,7 +1529,7 @@ router.post(
 
         // Log simulation details with more info
         simulations.forEach((sim, index) => {
-          console.log(`  📌 Simulation ${index + 1}: "${sim.name}"`);
+          console.log(`  ''Simulation ${index + 1}: "${sim.name}"`);
           console.log(`     - Type: ${sim.type}, Difficulty: ${sim.difficulty}, Duration: ${sim.durationMinutes}min`);
           console.log(`     - Tasks: ${sim.tasks?.length || 0}, Skills: ${sim.skillsAssessed?.length || 0}`);
           console.log(`     - Public: ${sim.isPublic}, Active: ${sim.isActive}`);
@@ -1553,8 +1553,8 @@ router.post(
         const existingApp = existingApplication.rows[0];
         console.log(`📋 Existing application found: ${existingApp.id} (status: ${existingApp.status})`);
 
-        if (existingApp.status !== 'withdrawn' && existingApp.status !== 'rejected') {
-          console.log('❌ User already applied with active status');
+        if (existingApp.status !== 'withdrawn'&& existingApp.status !== 'rejected') {
+          console.log(' User already applied with active status');
           await client.query('ROLLBACK');
           return res.status(400).json({
             success: false,
@@ -1587,10 +1587,10 @@ router.post(
           );
           applicationId = updateResult.rows[0].id;
           isNewApplication = false;
-          console.log(`✅ Application updated successfully: ${applicationId}`);
+          console.log(`''Application updated successfully: ${applicationId}`);
         }
       } else {
-        console.log('📝 Creating new application...');
+        console.log(' Creating new application...');
 
         // Create new application
         const applicationResult = await client.query(
@@ -1611,19 +1611,19 @@ router.post(
         );
         applicationId = applicationResult.rows[0].id;
         isNewApplication = true;
-        console.log(`✅ New application created successfully: ${applicationId}`);
+        console.log(`''New application created successfully: ${applicationId}`);
       }
 
       await client.query('COMMIT');
       console.log('💾 Database transaction committed successfully');
 
-      // Tell the hybrid recommender an application happened — a strong positive
+      // Tell the hybrid recommender an application happened   a strong positive
       // signal for both the behavior model (recency-weighted interest profile)
       // and collaborative filtering (this candidate x job interaction).
       RecommendationSyncService.queueEvent({
         event_type: 'recommendation_update',
         entity_type: 'applications',
-        operation: isNewApplication ? 'insert' : 'update',
+        operation: isNewApplication ? 'insert': 'update',
         candidate_id: authReq.user!.id,
         job_id: jobId,
         entity_id: applicationId,
@@ -1641,7 +1641,7 @@ router.post(
              VALUES ($1, 'application_submitted', $2, $3)`,
             [
               applicationId,
-              JSON.stringify({ description: 'Application submitted', new_status: 'submitted' }),
+              JSON.stringify({ description: 'Application submitted', new_status: 'submitted'}),
               authReq.user!.id,
             ]
           );
@@ -1676,7 +1676,7 @@ router.post(
         hasSimulationTemplates: hasTemplates,
         simulationTemplates: simulations,
         totalTemplates: simulations.length,
-        nextStep: hasTemplates ? 'view_simulations' : 'awaiting_review',
+        nextStep: hasTemplates ? 'view_simulations': 'awaiting_review',
         message: ''
       };
 
@@ -1684,11 +1684,11 @@ router.post(
 
       // Add contextual messages based on templates availability
       if (hasTemplates && simulations.length > 0) {
-        console.log(`🎯 ${simulations.length} simulation(s) available for this job`);
+        console.log(`''${simulations.length} simulation(s) available for this job`);
 
         if (simulations.length === 1) {
           const sim = simulations[0]!;
-          console.log(`📌 Single simulation: "${sim.name}"`);
+          console.log(`''Single simulation: "${sim.name}"`);
 
           responseData.action = {
             type: 'start',
@@ -1702,10 +1702,10 @@ router.post(
             category: sim.category,
             totalTasks: sim.totalTasks || sim.tasks?.length || 0
           };
-          responseData.message = `✅ Application submitted! This job requires a simulation. Please start "${sim.name}" to complete your application.`;
-          console.log(`✅ Response: Single simulation - "${sim.name}"`);
+          responseData.message = `''Application submitted! This job requires a simulation. Please start "${sim.name}" to complete your application.`;
+          console.log(`''Response: Single simulation - "${sim.name}"`);
         } else {
-          console.log(`📌 Multiple simulations (${simulations.length}):`);
+          console.log(`''Multiple simulations (${simulations.length}):`);
           simulations.forEach((sim, index) => {
             console.log(`  ${index + 1}. "${sim.name}" (${sim.difficulty}, ${sim.durationMinutes}min, ${sim.tasks?.length || 0} tasks)`);
           });
@@ -1727,20 +1727,20 @@ router.post(
               url: `/api/v1/simulations/start-session?simulationId=${sim.id}&applicationId=${applicationId}`
             }))
           };
-          responseData.message = `✅ Application submitted! This job requires a simulation. Please choose one of ${simulations.length} available simulations to complete your application.`;
-          console.log(`✅ Response: Multiple simulations available`);
+          responseData.message = `''Application submitted! This job requires a simulation. Please choose one of ${simulations.length} available simulations to complete your application.`;
+          console.log(`''Response: Multiple simulations available`);
         }
       } else {
         console.log('ℹ️ No simulation required for this position');
-        responseData.message = '✅ Application submitted successfully! No simulation required for this position.';
+        responseData.message = 'Application submitted successfully! No simulation required for this position.';
         responseData.nextStep = 'awaiting_review';
       }
 
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`✅ Application submission completed successfully`);
+      console.log(`''Application submission completed successfully`);
       console.log(`📋 Application ID: ${applicationId}`);
       console.log(`🆕 New application: ${isNewApplication}`);
-      console.log(`🎯 Next step: ${responseData.nextStep}`);
+      console.log(`''Next step: ${responseData.nextStep}`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       return res.status(isNewApplication ? 201 : 200).json({
@@ -1750,8 +1750,8 @@ router.post(
 
     } catch (error) {
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('❌ [ERROR] Application submission failed');
-      console.error('❌ Error details:', error);
+      console.log(' [ERROR] Application submission failed');
+      console.error(' Error details:', error);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       await client.query('ROLLBACK');
@@ -2155,7 +2155,7 @@ router.get('/recruiter/feed', [protect, authorize('recruiter', 'company_admin'),
        FROM applications a
        JOIN jobs j ON a.job_id = j.id
        JOIN users u ON a.user_id = u.id
-       WHERE ${whereConditions.join(' AND ')}
+       WHERE ${whereConditions.join('AND ')}
        ORDER BY a.applied_at DESC`,
       params
     );
@@ -2222,7 +2222,7 @@ router.post('/recruiter/bulk', [protect, authorize('recruiter', 'company_admin')
     for (const appId of applicationIds) {
       await client.query(
         'UPDATE applications SET status = $1, rejection_reason = $2, updated_at = NOW() WHERE id = $3',
-        [newStatus, action === 'reject' ? rejectionReason : null, appId]
+        [newStatus, action === 'reject'? rejectionReason : null, appId]
       );
     }
 
@@ -2509,7 +2509,7 @@ router.get('/recruiter/export', [protect, authorize('recruiter', 'company_admin'
        JOIN jobs j ON a.job_id = j.id
        JOIN companies c ON j.company_id = c.id
        JOIN users u ON a.user_id = u.id
-       WHERE ${whereConditions.join(' AND ')}
+       WHERE ${whereConditions.join('AND ')}
        ORDER BY a.applied_at DESC`,
       params
     );
@@ -2560,7 +2560,7 @@ router.get('/recruiter/sources', [protect, authorize('recruiter', 'company_admin
       `SELECT a.source, COUNT(*) as count
        FROM applications a
        JOIN jobs j ON a.job_id = j.id
-       WHERE ${whereConditions.join(' AND ')}
+       WHERE ${whereConditions.join('AND ')}
        GROUP BY a.source
        ORDER BY count DESC`,
       params

@@ -202,7 +202,7 @@ const AdvancedCandidateSearch = ({ onBack }: AdvancedCandidateSearchProps) => {
 
       console.log('🔍 Fetching applications with params:', searchParams);
       const response = await applicationAPI.getApplications(searchParams) as ApiResponse;
-      console.log('📥 Applications response:', response);
+      console.log(' Applications response:', response);
 
       let applicationsArray: ApiApplication[] = [];
       
@@ -219,7 +219,7 @@ const AdvancedCandidateSearch = ({ onBack }: AdvancedCandidateSearchProps) => {
         const headline = app.headline || '';
         const jobTitle = app.job_title || '';
         
-        const yearMatch = (headline + ' ' + jobTitle).match(/(\d+)\+?\s*(?:years?|yrs?)/i);
+        const yearMatch = (headline + ''+ jobTitle).match(/(\d+)\+?\s*(?:years?|yrs?)/i);
         if (yearMatch) {
           experienceYears = parseInt(yearMatch[1], 10);
         }
@@ -532,7 +532,7 @@ const AdvancedCandidateSearch = ({ onBack }: AdvancedCandidateSearchProps) => {
       ])
     ].map(row => row.join(',')).join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const blob = new Blob([csvContent], { type: 'text/csv'});
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -920,7 +920,7 @@ const AdvancedCandidateSearch = ({ onBack }: AdvancedCandidateSearchProps) => {
                   </div>
                   <div className="flex flex-col items-end space-y-2">
                     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(candidate.status)}`}>
-                      {candidate.status?.replace(/_/g, ' ').toUpperCase()}
+                      {candidate.status?.replace(/_/g, '').toUpperCase()}
                     </span>
                     <div className="flex items-center space-x-1">
                       <Star size={14} className="text-yellow-500" />
@@ -1003,8 +1003,8 @@ const AdvancedCandidateSearch = ({ onBack }: AdvancedCandidateSearchProps) => {
                           {candidate.phone}
                         </p>
                       )}
-                      {candidate.availability && candidate.availability !== 'not_specified' && (
-                        <p><strong>Availability:</strong> {candidate.availability.replace('_', ' ')}</p>
+                      {candidate.availability && candidate.availability !== 'not_specified'&& (
+                        <p><strong>Availability:</strong> {candidate.availability.replace('_', '')}</p>
                       )}
                       {candidate.languages.length > 0 && (
                         <p><strong>Languages:</strong> {candidate.languages.join(', ')}</p>
@@ -1052,7 +1052,7 @@ const AdvancedCandidateSearch = ({ onBack }: AdvancedCandidateSearchProps) => {
                       className="px-3 py-1 bg-gray-100 text-gray-700 text-sm rounded hover:bg-gray-200 flex items-center space-x-1"
                     >
                       <Eye size={14} />
-                      <span>{isExpanded ? 'Show Less' : 'Show More'}</span>
+                      <span>{isExpanded ? 'Show Less': 'Show More'}</span>
                     </button>
                     <button
                       onClick={() => handleViewApplication(candidate.id)}

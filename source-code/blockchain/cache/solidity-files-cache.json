@@ -21,7 +21,7 @@
                 "evm.methodIdentifiers",
                 "metadata"
               ],
-              "": [
+              : [
                 "ast"
               ]
             }

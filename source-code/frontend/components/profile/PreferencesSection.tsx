@@ -107,8 +107,8 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
   const isProfileComplete = completionStatus?.isComplete || false;
   const completionSections = completionStatus?.sections || {};
 
-  const [salaryErrors, setSalaryErrors] = useState<{ min: string; max: string; range: string }>({ min: '', max: '', range: '' });
-  const [saveStatus,  setSaveStatus]    = useState<'idle' | 'success' | 'error'>('idle');
+  const [salaryErrors, setSalaryErrors] = useState<{ min: string; max: string; range: string }>({ min: '', max: '', range: ''});
+  const [saveStatus,  setSaveStatus]    = useState<'idle'| 'success'| 'error'>('idle');
   const [saveMessage, setSaveMessage]   = useState('');
 
   const [customInputs, setCustomInputs] = useState({
@@ -165,9 +165,9 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     values.map((value) => value.trim()).filter(Boolean)
   ));
 
-  // ✅ UPDATED: Validate salary - allow either min OR max independently
+  // ''UPDATED: Validate salary - allow either min OR max independently
   const validateSalary = (min: string, max: string): { min: string; max: string; range: string } => {
-    const errors = { min: '', max: '', range: '' };
+    const errors = { min: '', max: '', range: ''};
     
     // If both are empty, it's valid (optional)
     if (!min && !max) {
@@ -191,16 +191,16 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     if (minVal !== null && maxVal !== null) {
       if (minVal > maxVal) {
         errors.max = 'Maximum must be greater than the minimum';
-        errors.range = 'Range is inverted — the maximum is below the minimum';
+        errors.range = 'Range is inverted   the maximum is below the minimum';
       } else if (minVal === maxVal) {
-        errors.range = 'Minimum equals maximum — a range gives employers more flexibility';
+        errors.range = 'Minimum equals maximum   a range gives employers more flexibility';
       }
     }
     
     return errors;
   };
 
-  const handleSalaryChange = (field: 'salaryMin' | 'salaryMax', value: string) => {
+  const handleSalaryChange = (field: 'salaryMin'| 'salaryMax', value: string) => {
     const next = { ...formData, [field]: value };
     setFormData(next);
     setSalaryErrors(validateSalary(next.salaryMin, next.salaryMax));
@@ -214,7 +214,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     // Validate salary before submit
     const errs = validateSalary(formData.salaryMin, formData.salaryMax);
     setSalaryErrors(errs);
-    if (errs.min || errs.max || errs.range === 'Range is inverted — the maximum is below the minimum') {
+    if (errs.min || errs.max || errs.range === 'Range is inverted   the maximum is below the minimum') {
       setSaveStatus('error');
       setSaveMessage('Please fix the salary range errors before saving.');
       return;
@@ -254,14 +254,14 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
     } catch (error: any) {
       console.error('Error updating preferences:', error);
       setSaveStatus('error');
-      setSaveMessage('Failed to save: ' + (error.message || 'Unknown error'));
+      setSaveMessage('Failed to save: '+ (error.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleCheckboxChange = (
-    field: keyof Pick<FormData, 'preferredJobTypes' | 'preferredLocations' | 'preferredLanguages'>, 
+    field: keyof Pick<FormData, 'preferredJobTypes'| 'preferredLocations'| 'preferredLanguages'>, 
     value: string, 
     checked: boolean
   ): void => {
@@ -282,8 +282,8 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
   };
 
   const addCustomValue = (
-    field: 'preferredLocations' | 'preferredLanguages',
-    inputKey: 'location' | 'language'
+    field: 'preferredLocations'| 'preferredLanguages',
+    inputKey: 'location'| 'language'
   ): void => {
     const value = customInputs[inputKey].trim();
     if (!value) return;
@@ -298,7 +298,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
   };
 
   const removeValue = (
-    field: 'preferredLocations' | 'preferredLanguages',
+    field: 'preferredLocations'| 'preferredLanguages',
     value: string
   ): void => {
     setFormData({
@@ -309,8 +309,8 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
 
   const renderTagInput = (
     label: string,
-    field: 'preferredLocations' | 'preferredLanguages',
-    inputKey: 'location' | 'language',
+    field: 'preferredLocations'| 'preferredLanguages',
+    inputKey: 'location'| 'language',
     placeholder: string,
     commonValues: string[] = []
   ) => (
@@ -393,7 +393,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
       {!isProfileComplete && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <div className="text-yellow-600 mt-0.5">⚠️</div>
+            <div className="text-yellow-600 mt-0.5"></div>
             <div>
               <h3 className="text-sm font-medium text-yellow-800">Complete your profile first</h3>
               <p className="text-sm text-yellow-700 mt-1">
@@ -418,7 +418,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
-              ⚠ Incomplete
+               Incomplete
             </span>
           )}
         </div>
@@ -464,7 +464,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
           commonLanguages
         )}
 
-        {/* ✅ Salary Range - Now OPTIONAL - Can set either min OR max independently */}
+        {/* ''Salary Range - Now OPTIONAL - Can set either min OR max independently */}
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-3">
             Salary Expectations <span className="text-xs font-normal text-gray-400">(Optional - set either minimum or maximum)</span>
@@ -481,7 +481,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
                   value={formData.salaryMin}
                   onChange={e => handleSalaryChange('salaryMin', e.target.value)}
                   className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-                    salaryErrors.min ? 'border-red-400 bg-red-50' : 'border-gray-300'
+                    salaryErrors.min ? 'border-red-400 bg-red-50': 'border-gray-300'
                   }`}
                   placeholder="Set minimum only"
                   min="0"
@@ -526,27 +526,27 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
               return (
                 <div className="mt-3 flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-500">
                   <Info size={15} className="text-gray-400 shrink-0" />
-                  Salary not set — employers won't see a salary expectation on your profile.
+                  Salary not set   employers won't see a salary expectation on your profile.
                 </div>
               );
             }
 
-            // ✅ Only MINIMUM set
+            // ''Only MINIMUM set
             if (min !== null && max === null) {
               return (
                 <div className="mt-3 flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
                   <Info size={15} className="shrink-0" />
-                  Minimum set to <strong>{cur} {fmt(min)}</strong> — employers will see this as your minimum expectation.
+                  Minimum set to <strong>{cur} {fmt(min)}</strong>   employers will see this as your minimum expectation.
                 </div>
               );
             }
 
-            // ✅ Only MAXIMUM set
+            // ''Only MAXIMUM set
             if (max !== null && min === null) {
               return (
                 <div className="mt-3 flex items-center gap-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700">
                   <Info size={15} className="shrink-0" />
-                  Maximum set to <strong>{cur} {fmt(max)}</strong> — employers will see this as your maximum expectation.
+                  Maximum set to <strong>{cur} {fmt(max)}</strong>   employers will see this as your maximum expectation.
                 </div>
               );
             }
@@ -556,7 +556,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
               const isError = salaryErrors.range.includes('inverted');
               return (
                 <div className={`mt-3 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium ${
-                  isError ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-amber-50 border border-amber-200 text-amber-700'
+                  isError ? 'bg-red-50 border border-red-200 text-red-700': 'bg-amber-50 border border-amber-200 text-amber-700'
                 }`}>
                   <AlertCircle size={15} className="shrink-0" />
                   {salaryErrors.range}
@@ -564,7 +564,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
               );
             }
 
-            // ✅ Both set - valid range
+            // ''Both set - valid range
             if (min !== null && max !== null && min <= max) {
               return (
                 <div className="mt-4 px-4 py-4 bg-green-50 border border-green-200 rounded-xl">
@@ -600,10 +600,10 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
           </label>
           <div className="space-y-2">
             {[
-              { value: 'remote_only', label: 'Remote work only' },
-              { value: 'office_only', label: 'Office work only' },
-              { value: 'hybrid', label: 'Hybrid (mix of remote and office)' },
-              { value: 'flexible', label: 'Flexible' }
+              { value: 'remote_only', label: 'Remote work only'},
+              { value: 'office_only', label: 'Office work only'},
+              { value: 'hybrid', label: 'Hybrid (mix of remote and office)'},
+              { value: 'flexible', label: 'Flexible'}
             ].map((option) => (
               <label key={option.value} className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -651,7 +651,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
               <option value="available_soon">Available soon</option>
             </select>
 
-            {formData.availabilityStatus === 'available_soon' && (
+            {formData.availabilityStatus === 'available_soon'&& (
               <div>
                 <label className="block text-sm text-gray-600 mb-1">Available starting</label>
                 <input
@@ -667,13 +667,13 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
         </div>
 
         {/* Save status banner */}
-        {saveStatus !== 'idle' && (
+        {saveStatus !== 'idle'&& (
           <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium ${
             saveStatus === 'success'
               ? 'bg-green-50 border border-green-200 text-green-800'
               : 'bg-red-50 border border-red-200 text-red-800'
           }`}>
-            {saveStatus === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            {saveStatus === 'success'? <CheckCircle size={16} /> : <AlertCircle size={16} />}
             <span className="flex-1">{saveMessage}</span>
             <button onClick={() => setSaveStatus('idle')}><X size={14} /></button>
           </div>

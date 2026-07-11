@@ -54,7 +54,7 @@ const githubAPI = {
 
   // Get repository tree
   getTree: async (owner: string, repo: string, treeSha: string, recursive: boolean = false) => {
-    const url = `${API_BASE_URL}/github/repo/${owner}/${repo}/git/trees/${treeSha}${recursive ? '?recursive=true' : ''}`;
+    const url = `${API_BASE_URL}/github/repo/${owner}/${repo}/git/trees/${treeSha}${recursive ? '?recursive=true': ''}`;
     const response = await fetch(url, {
       method: 'GET',
       headers: getAuthHeaders(),

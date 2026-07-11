@@ -40,8 +40,8 @@ interface SimulationExecutorProps {
   simulationId?: string;
 }
 
-type TabType = 'workspace' | 'chat' | 'github';
-type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
+type TabType = 'workspace'| 'chat'| 'github';
+type SyncStatus = 'idle'| 'syncing'| 'success'| 'error';
 
 // Inner component that uses the GitHub context
 const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
@@ -54,14 +54,14 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const sessionId = propSimulationId || urlSessionId || '';
   const currentUserType = (user as any)?.userType || (user as any)?.user_type || '';
   const isCompanyReviewer =
-    currentUserType === 'company_admin' ||
-    currentUserType === 'recruiter' ||
+    currentUserType === 'company_admin'||
+    currentUserType === 'recruiter'||
     currentUserType === 'system_admin';
 
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     if (typeof window === 'undefined') return 'workspace';
     const tab = new URLSearchParams(window.location.search).get('tab');
-    return tab === 'chat' || tab === 'github' || tab === 'workspace' ? tab : 'workspace';
+    return tab === 'chat'|| tab === 'github'|| tab === 'workspace'? tab : 'workspace';
   });
   const [shouldInitialize, setShouldInitialize] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(true);
@@ -71,7 +71,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const [showGitHubStatsModal, setShowGitHubStatsModal] = useState(false);
   const [statsTaskIndex, setStatsTaskIndex] = useState<number | null>(null);
 
-  // Task guide state — shown in chat when a task is selected
+  // Task guide state   shown in chat when a task is selected
   const [taskGuide, setTaskGuide] = useState<{ taskIndex: number; title: string; instructions: string; description: string } | null>(null);
 
   // Per-task time alert (non-blocking toast)
@@ -96,7 +96,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     url.searchParams.set('tab', tab);
     window.history.replaceState(null, '', url.toString());
 
-    if (tab === 'workspace' || tab === 'github') {
+    if (tab === 'workspace'|| tab === 'github') {
       void refreshCurrentRepoFromGitHub();
     }
   };
@@ -140,8 +140,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   // Get the SIMULATION ID from the session
   const simulationIdForChat = session?.simulationId;
 
-  // Extract priority mode from session — must be after session is declared
-  const priorityMode: 'sequential' | 'parallel' | 'weighted' =
+  // Extract priority mode from session   must be after session is declared
+  const priorityMode: 'sequential'| 'parallel'| 'weighted'=
     (session as any)?.passFailCriteria?.taskPriority?.mode ||
     (session as any)?.simulationData?.passFailCriteria?.taskPriority?.mode ||
     'parallel';
@@ -450,10 +450,10 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const handleUpdateTaskProgress = async (taskIndex: number, data: any) => {
-    console.log(`📝 [SimulationExecutor] Updating task ${taskIndex}:`, data);
+    console.log(` [SimulationExecutor] Updating task ${taskIndex}:`, data);
 
     if (isStartingTaskRef.current && data.status === 'in_progress') {
-      console.log('⚠️ Skipping update while starting task');
+      console.log(' Skipping update while starting task');
       return;
     }
 
@@ -466,14 +466,14 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         }
       }
     } catch (error) {
-      console.error(`❌ Failed to update task ${taskIndex}:`, error);
+      console.error(` Failed to update task ${taskIndex}:`, error);
     }
   };
 
   // Manual save with debounce
   const handleSaveProgress = async () => {
     if (isStartingTaskRef.current) {
-      console.log('⚠️ Skipping save progress while starting task');
+      console.log(' Skipping save progress while starting task');
       return;
     }
 
@@ -602,7 +602,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
     if (sessionAnswers && selectedTaskIndex !== null) {
       const savedAnswer = sessionAnswers[selectedTaskIndex];
       if (savedAnswer) {
-        console.log('📝 Restoring saved answer for task:', selectedTaskIndex, savedAnswer);
+        console.log(' Restoring saved answer for task:', selectedTaskIndex, savedAnswer);
         setTaskCompletionDraft(prev => ({
           ...prev,
           completed: savedAnswer.completed || false,
@@ -636,7 +636,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
   useEffect(() => {
     if (session?.currentTaskIndex !== undefined && selectedTaskIndex === null) {
-      console.log('🎯 Initializing selectedTaskIndex from session:', session.currentTaskIndex);
+      console.log('Initializing selectedTaskIndex from session:', session.currentTaskIndex);
       setSelectedTaskIndex(session.currentTaskIndex);
       setGlobalTaskIndex(session.currentTaskIndex);
       if (tasks[session.currentTaskIndex]) {
@@ -661,11 +661,11 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         const branch = githubRepo.branchName || 'main';
 
         loadRepository(owner, repo, githubRepo.repoUrl, branch).catch((err) => {
-          console.error('❌ Failed to auto-load GitHub repo from session:', err);
+          console.error(' Failed to auto-load GitHub repo from session:', err);
         });
       } else {
         loadRepositoryFromUrl(githubRepo.repoUrl).catch((err) => {
-          console.error('❌ Failed to auto-load GitHub repo from session:', err);
+          console.error(' Failed to auto-load GitHub repo from session:', err);
         });
       }
     }
@@ -697,7 +697,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   }, [loading, session, startTimer, hasValidId]);
 
   useEffect(() => {
-    if (activeTab === 'chat' && unreadCount > 0) {
+    if (activeTab === 'chat'&& unreadCount > 0) {
       markAsRead();
     }
   }, [activeTab, unreadCount, markAsRead]);
@@ -750,7 +750,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
   const isExistingSession = session && (session.timeSpent > 0 || session.currentTaskIndex > 0 || Object.keys(session.progress || {}).length > 0);
 
-  if (!isCompanyReviewer && showStartDialog && session?.status !== 'completed' && session?.status !== 'submitted' && !isExistingSession) {
+  if (!isCompanyReviewer && showStartDialog && session?.status !== 'completed'&& session?.status !== 'submitted'&& !isExistingSession) {
     const sessionMaxAttempts = (session as any)?.settings?.maxAttempts || (session as any)?.simulationData?.settings?.maxAttempts;
     const sessionAttemptNumber = (session as any)?.attemptNumber || (session as any)?.attempt_number;
     return (
@@ -770,7 +770,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
   // Find this section (around line 380-400) and replace it:
 
-  if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'completed' || session?.status === 'submitted')) {
+  if (!isCompanyReviewer && !showPostSubmitDialog && (session?.status === 'completed'|| session?.status === 'submitted')) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
         <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700 text-center">
@@ -802,9 +802,9 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
   const handleCompleteTask = async () => {
     if (selectedTaskIndex === null) return;
-    console.log('✅ Completing task:', selectedTaskIndex);
+    console.log('Completing task:', selectedTaskIndex);
     await updateTaskProgress(selectedTaskIndex, {
-      status: taskCompletionDraft.completed ? 'completed' : 'in_progress',
+      status: taskCompletionDraft.completed ? 'completed': 'in_progress',
       answer: {
         completed: taskCompletionDraft.completed,
         comment: taskCompletionDraft.comment,
@@ -856,9 +856,9 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const tabs = [
-    { id: 'workspace' as TabType, label: 'Workspace', icon: <Layout size={14} /> },
-    { id: 'chat' as TabType, label: 'Chat', icon: <MessageCircle size={14} />, badge: unreadCount },
-    { id: 'github' as TabType, label: 'GitHub Analytics', icon: <Github size={14} /> },
+    { id: 'workspace'as TabType, label: 'Workspace', icon: <Layout size={14} /> },
+    { id: 'chat'as TabType, label: 'Chat', icon: <MessageCircle size={14} />, badge: unreadCount },
+    { id: 'github'as TabType, label: 'GitHub Analytics', icon: <Github size={14} /> },
   ];
 
   const isOverallLoading = isFileSystemLoading || isRepoLoading;
@@ -870,12 +870,12 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   const qualityScore = stats?.scores?.overall || (fileCount > 0 ? 65 : 0);
 
   const syncStatusTyped = (syncStatus as SyncStatus) || 'idle';
-  const isSyncing = syncStatusTyped === 'syncing' || githubPushStatus === 'syncing' || githubPullStatus === 'syncing';
+  const isSyncing = syncStatusTyped === 'syncing'|| githubPushStatus === 'syncing'|| githubPullStatus === 'syncing';
 
   const getSyncButtonClass = () => {
     if (isSyncing) return 'bg-yellow-600/20 text-yellow-400 border-yellow-600';
-    if (syncStatusTyped === 'success' || githubPushStatus === 'success' || githubPullStatus === 'success') return 'bg-green-600/20 text-green-400 border-green-600';
-    if (syncStatusTyped === 'error' || githubPushStatus === 'error' || githubPullStatus === 'error') return 'bg-red-600/20 text-red-400 border-red-600';
+    if (syncStatusTyped === 'success'|| githubPushStatus === 'success'|| githubPullStatus === 'success') return 'bg-green-600/20 text-green-400 border-green-600';
+    if (syncStatusTyped === 'error'|| githubPushStatus === 'error'|| githubPullStatus === 'error') return 'bg-red-600/20 text-red-400 border-red-600';
     return 'bg-gray-700 text-gray-300 hover:bg-gray-600 border-gray-600';
   };
 
@@ -889,8 +889,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const handleSelectTask = async (idx: number) => {
-    console.log('📌 Task clicked - index:', idx);
-    console.log('📌 Task title:', tasks[idx]?.title);
+    console.log('Task clicked - index:', idx);
+    console.log('Task title:', tasks[idx]?.title);
 
     setSelectedTaskIndex(idx);
     setCurrentTask(tasks[idx]);
@@ -935,7 +935,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
   };
 
   const handleOpenCompletion = (idx: number) => {
-    console.log('✅ Opening completion dialog for task:', idx);
+    console.log('Opening completion dialog for task:', idx);
     setSelectedTaskIndex(idx);
     setShowTaskCompletionDialog(true);
   };
@@ -1004,7 +1004,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
               {tab.label}
               {tab.badge !== undefined && tab.badge > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
-                  {tab.badge > 99 ? '99+' : tab.badge}
+                  {tab.badge > 99 ? '99+': tab.badge}
                 </span>
               )}
             </button>
@@ -1020,7 +1020,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
             title="Push all files to your local PC"
           >
             <UploadCloud size={13} />
-            {syncStatusTyped === 'syncing' ? 'Pushing...' : syncStatusTyped === 'success' ? '✓ Pushed!' : 'Push to PC'}
+            {syncStatusTyped === 'syncing'? 'Pushing...': syncStatusTyped === 'success'? '✓ Pushed!': 'Push to PC'}
           </button>
 
           <button
@@ -1030,7 +1030,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
             title="Pull all files from your local PC"
           >
             <Download size={13} />
-            {syncStatusTyped === 'syncing' ? 'Pulling...' : syncStatusTyped === 'success' ? '✓ Pulled!' : 'Pull from PC'}
+            {syncStatusTyped === 'syncing'? 'Pulling...': syncStatusTyped === 'success'? '✓ Pulled!': 'Pull from PC'}
           </button>
 
           <div className="w-px h-5 bg-gray-600 mx-1" />
@@ -1088,8 +1088,8 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
           </button>
 
           {displayMessage && (
-            <span className={`text-xs ${syncStatusTyped === 'success' || githubPushStatus === 'success' || githubPullStatus === 'success' ? 'text-green-400' :
-              syncStatusTyped === 'error' || githubPushStatus === 'error' || githubPullStatus === 'error' ? 'text-red-400' :
+            <span className={`text-xs ${syncStatusTyped === 'success'|| githubPushStatus === 'success'|| githubPullStatus === 'success'? 'text-green-400':
+              syncStatusTyped === 'error'|| githubPushStatus === 'error'|| githubPullStatus === 'error'? 'text-red-400':
                 'text-yellow-400'
               } ml-1`}>
               {displayMessage}
@@ -1100,7 +1100,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
 
       <div className="flex-1 overflow-hidden min-h-0">
         {/* WORKSPACE TAB */}
-        {activeTab === 'workspace' && (
+        {activeTab === 'workspace'&& (
           <div className="flex flex-col h-full overflow-hidden">
 
             <TaskList
@@ -1181,7 +1181,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
                     currentRepo={currentRepo}
                     taskRepositories={getReposForAllTasks()}
                     onRefreshRepo={handleRefreshGitHubStats}
-                    // ✅ NEW PROPS - These make the buttons work!
+                    // ''NEW PROPS - These make the buttons work!
                     onOpenChat={() => {
                       console.log('💬 Opening chat from TaskContent');
                       handleTabChange('chat');
@@ -1217,9 +1217,9 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         )}
 
         {/* CHAT TAB */}
-        {activeTab === 'chat' && (
+        {activeTab === 'chat'&& (
           <div className="h-full flex flex-col overflow-hidden">
-            {/* Task Guide Banner — shown when a task is selected */}
+            {/* Task Guide Banner   shown when a task is selected */}
             {taskGuide && (
               <div className="bg-gray-800 border-b border-gray-600 px-4 py-3 flex-shrink-0">
                 <div className="flex items-start justify-between gap-3">
@@ -1227,13 +1227,13 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-bold text-blue-400 uppercase tracking-wide">
                         Task {taskGuide.taskIndex + 1} of {tasks.length}
-                        {priorityMode === 'sequential' && (
+                        {priorityMode === 'sequential'&& (
                           <span className="ml-2 text-red-400">· Sequential</span>
                         )}
-                        {priorityMode === 'parallel' && (
+                        {priorityMode === 'parallel'&& (
                           <span className="ml-2 text-green-400">· Parallel</span>
                         )}
-                        {priorityMode === 'weighted' && (
+                        {priorityMode === 'weighted'&& (
                           <span className="ml-2 text-yellow-400">· Weighted</span>
                         )}
                       </span>
@@ -1244,16 +1244,16 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
                     )}
                     {taskGuide.instructions && (
                       <div className="mt-2 p-2 bg-red-900/30 border border-red-700/50 rounded text-xs text-red-300">
-                        <span className="font-semibold text-red-400">⚠ Instructions: </span>
+                        <span className="font-semibold text-red-400"> Instructions: </span>
                         {taskGuide.instructions}
                       </div>
                     )}
-                    {priorityMode === 'sequential' && taskGuide.taskIndex > 0 && (
+                    {priorityMode === 'sequential'&& taskGuide.taskIndex > 0 && (
                       <p className="text-xs text-red-400 mt-1.5">
                         🔒 You must fully complete Task {taskGuide.taskIndex} before this task unlocks.
                       </p>
                     )}
-                    {priorityMode === 'parallel' && (
+                    {priorityMode === 'parallel'&& (
                       <p className="text-xs text-green-400 mt-1.5">
                         ✓ You can work on any task in any order.
                       </p>
@@ -1289,13 +1289,13 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
               onFocusMessages={markAsRead}
               currentUserId={user?.id}
               currentUserEmail={user?.email}
-              isSessionClosed={session?.status === 'completed' || session?.status === 'submitted'}
+              isSessionClosed={session?.status === 'completed'|| session?.status === 'submitted'}
             />
           </div>
         )}
 
         {/* GITHUB ANALYTICS TAB */}
-        {activeTab === 'github' && (
+        {activeTab === 'github'&& (
           <div className="h-full overflow-y-auto p-4">
             <div className="max-w-6xl mx-auto">
               <div className="mb-4">
@@ -1319,7 +1319,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
         )}
       </div>
 
-      {/* ⏰ Per-task time elapsed — non-blocking toast */}
+      {/* ⏰ Per-task time elapsed   non-blocking toast */}
       {taskTimeAlert && (
         <div className="fixed bottom-6 right-6 z-50 max-w-sm w-full animate-in slide-in-from-bottom-4 duration-300">
           <div className="bg-amber-900 border-2 border-amber-500 rounded-xl shadow-2xl p-4">
@@ -1330,11 +1330,11 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
                   Time's up for this task!
                 </p>
                 <p className="text-amber-200 text-xs mt-1 leading-relaxed">
-                  The <span className="font-semibold text-amber-100">{taskTimeAlert.duration} minute</span> limit for{' '}
+                  The <span className="font-semibold text-amber-100">{taskTimeAlert.duration} minute</span> limit for{''}
                   <span className="font-semibold text-amber-100">"{taskTimeAlert.taskTitle}"</span> has elapsed.
                 </p>
                 <p className="text-amber-300 text-xs mt-1.5">
-                  You can still continue working — this does not stop your session.
+                  You can still continue working   this does not stop your session.
                 </p>
               </div>
               <button
@@ -1349,7 +1349,7 @@ const SimulationExecutorInner: React.FC<SimulationExecutorProps> = ({
             <div className="mt-3 h-1 bg-amber-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-amber-400 rounded-full"
-                style={{ animation: 'shrinkWidth 20s linear forwards' }}
+                style={{ animation: 'shrinkWidth 20s linear forwards'}}
               />
             </div>
             <p className="text-amber-500 text-[10px] mt-1 text-right">Dismisses in 20 s</p>

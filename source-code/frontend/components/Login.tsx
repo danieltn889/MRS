@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader, CheckCircle, Clock } from 'lucide-react';
+import { Mail, Eye, EyeOff, AlertCircle, Loader, CheckCircle, Clock, Zap, Shield, Brain, Target, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { loginUser, resendVerificationEmail } from '../services/authAPI';
 import { useAuth } from '../context/AuthContext';
 
 interface LoginState {
-  status: 'idle' | 'loading' | 'success' | 'error' | 'unverified' | 'locked' | 'invalid_password' | 'rate_limit';
+  status: 'idle'| 'loading'| 'success'| 'error'| 'unverified'| 'locked'| 'invalid_password'| 'rate_limit';
   message: string;
   code?: string;
   attemptsRemaining?: number;
@@ -36,7 +36,7 @@ const Login: React.FC = () => {
   const [lockoutCountdown, setLockoutCountdown] = useState(0);
   const [isResendingEmail, setIsResendingEmail] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
-  const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [resendStatus, setResendStatus] = useState<'idle'| 'loading'| 'success'| 'error'>('idle');
 
   // Email validation regex
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -44,7 +44,7 @@ const Login: React.FC = () => {
   // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target;
-    const newValue = type === 'checkbox' ? checked : value;
+    const newValue = type === 'checkbox'? checked : value;
 
     setFormData((prev) => ({
       ...prev,
@@ -110,10 +110,10 @@ const Login: React.FC = () => {
       // Update auth context
       login(result.user, result.token);
 
-      // ✅ Get redirect path and CLEAR it from sessionStorage
+      // ''Get redirect path and CLEAR it from sessionStorage
       let redirectUrl = sessionStorage.getItem('redirectAfterLogin');
       
-      // ✅ Clear immediately after reading
+      // ''Clear immediately after reading
       if (redirectUrl) {
         sessionStorage.removeItem('redirectAfterLogin');
       }
@@ -148,11 +148,11 @@ const Login: React.FC = () => {
       let minutesRemaining = undefined;
 
       // Check for rate limit error
-      if (errorCode === 'RATE_LIMIT_EXCEEDED' || error.statusCode === 429) {
+      if (errorCode === 'RATE_LIMIT_EXCEEDED'|| error.statusCode === 429) {
         newStatus = 'rate_limit';
       }
       // Check for unverified account
-      else if (errorCode === 'ACCOUNT_UNVERIFIED' || 
+      else if (errorCode === 'ACCOUNT_UNVERIFIED'|| 
           errorMessage.toLowerCase().includes('not verified') ||
           errorMessage.toLowerCase().includes('verify')) {
         newStatus = 'unverified';
@@ -205,16 +205,6 @@ const Login: React.FC = () => {
     }
   };
 
-  // Handle close modal
-  const handleCloseModal = () => {
-    // ✅ Clear redirect if modal is closed without login
-    const redirectUrl = sessionStorage.getItem('redirectAfterLogin');
-    if (redirectUrl) {
-      sessionStorage.removeItem('redirectAfterLogin');
-    }
-    navigate('/');
-  };
-
   // Render error state with specific handling
   const renderErrorContent = () => {
     switch (loginState.code) {
@@ -226,7 +216,7 @@ const Login: React.FC = () => {
             </p>
             {resendMessage && (
               <div className={`p-3 rounded-lg text-sm font-medium ${
-                resendStatus === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+                resendStatus === 'success'? 'bg-green-50 text-green-700 border border-green-200': 'bg-red-50 text-red-700 border border-red-200'
               }`}>
                 {resendMessage}
               </div>
@@ -241,7 +231,7 @@ const Login: React.FC = () => {
                   <Loader className="w-4 h-4 animate-spin" />
                   Sending...
                 </>
-              ) : resendStatus === 'success' ? (
+              ) : resendStatus === 'success'? (
                 <>
                   <CheckCircle className="w-4 h-4" />
                   Sent!
@@ -262,7 +252,7 @@ const Login: React.FC = () => {
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 flex items-center gap-2">
               <Clock className="w-5 h-5 text-yellow-600" />
               <span className="text-sm font-medium text-yellow-800">
-                Try again in {lockoutCountdown} second{lockoutCountdown !== 1 ? 's' : ''}
+                Try again in {lockoutCountdown} second{lockoutCountdown !== 1 ? 's': ''}
               </span>
             </div>
             <button
@@ -282,7 +272,7 @@ const Login: React.FC = () => {
             <p className="text-sm text-gray-600">
               {loginState.attemptsRemaining !== undefined && loginState.attemptsRemaining > 0
                 ? `Incorrect password. ${loginState.attemptsRemaining} attempt${
-                    loginState.attemptsRemaining !== 1 ? 's' : ''
+                    loginState.attemptsRemaining !== 1 ? 's': ''
                   } remaining.`
                 : 'Incorrect password. Your account has been locked for security.'}
             </p>
@@ -325,19 +315,71 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen flex">
+      {/* Left panel - brand/info. Only kicks in at xl (1280px+): at lg (1024px) a
+          50/50 split left the form column too narrow (input placeholders were
+          getting clipped)   below xl the form gets the full width instead. */}
+      <div className="hidden xl:flex xl:w-5/12 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 relative overflow-hidden flex-col justify-center px-16 text-white">
+        <div className="absolute top-0 left-1/3 w-96 h-96 bg-white/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-white/10 rounded-full blur-3xl" />
+
+        <div className="relative z-10 max-w-md">
+          <div className="flex items-center gap-2.5 mb-10">
+            <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <Zap className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-extrabold text-xl tracking-tight">SimuHire Rwanda</span>
+          </div>
+
+          <h1 className="text-4xl font-extrabold leading-tight mb-4 tracking-tight">
+            MIFOTRA Recruitment System
+          </h1>
+          <p className="text-blue-100 text-lg leading-relaxed mb-10">
+            Empower smarter hiring decisions with AI-driven assessments, real-world job simulations,
+            and trusted verification tools designed to connect organisations with skilled and qualified talent.
+          </p>
+
+          <div className="space-y-4">
+            {[
+              { icon: Brain, text: 'AI-powered behavioral analytics'},
+              { icon: Shield, text: 'Blockchain-verified credentials'},
+              { icon: Target, text: 'Real work practical assessments'},
+            ].map(({ icon: Icon, text }) => (
+              <div key={text} className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center backdrop-blur-sm flex-shrink-0">
+                  <Icon className="w-4 h-4 text-white" />
+                </div>
+                <span className="text-blue-50">{text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel - login form */}
+      <div className="w-full xl:w-7/12 xl:ml-auto flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-100 xl:bg-none">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8"
+        className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 xl:shadow-none xl:max-w-sm"
       >
+        {/* Back to Home */}
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-6"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back to Home
+        </button>
+
         {/* Header */}
         <div className="text-center mb-8">
           <motion.div
             initial={{ scale: 0 }}
             animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: 'spring' }}
+            transition={{ delay: 0.2, type: 'spring'}}
             className="inline-block p-3 bg-blue-50 rounded-full mb-4"
           >
             <Mail className="w-6 h-6 text-blue-600" />
@@ -348,7 +390,7 @@ const Login: React.FC = () => {
 
         {/* Success State */}
         <AnimatePresence>
-          {loginState.status === 'success' && (
+          {loginState.status === 'success'&& (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -365,7 +407,7 @@ const Login: React.FC = () => {
 
         {/* Error State */}
         <AnimatePresence>
-          {(loginState.status === 'error' || loginState.status === 'unverified' || loginState.status === 'locked' || loginState.status === 'invalid_password' || loginState.status === 'rate_limit') && (
+          {(loginState.status === 'error'|| loginState.status === 'unverified'|| loginState.status === 'locked'|| loginState.status === 'invalid_password'|| loginState.status === 'rate_limit') && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -392,69 +434,63 @@ const Login: React.FC = () => {
         >
           {/* Email Field */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              Email Address *
             </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
-              <input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="you@example.com"
-                value={formData.email}
-                onChange={handleInputChange}
-                autoComplete="email"
-                disabled={loginState.status === 'loading'}
-                className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
-                  formData.email && !isValidEmail
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-gray-300 bg-white'
-                } disabled:bg-gray-100 disabled:cursor-not-allowed`}
-              />
-              {formData.email && !isValidEmail && (
-                <p className="text-xs text-red-600 mt-1">Please enter a valid email address</p>
-              )}
-            </div>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="you@example.com"
+              value={formData.email}
+              onChange={handleInputChange}
+              autoComplete="email"
+              disabled={loginState.status === 'loading'}
+              className={`mt-1 block w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${
+                formData.email && !isValidEmail ? 'border-red-300': 'border-gray-300'
+              } disabled:bg-gray-100 disabled:cursor-not-allowed`}
+            />
+            {formData.email && !isValidEmail && (
+              <p className="mt-1 text-sm text-red-600 flex items-center">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                Please enter a valid email address
+              </p>
+            )}
           </div>
 
           {/* Password Field */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+              Password *
             </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+            <div className="relative mt-1">
               <input
                 id="password"
                 name="password"
-                type={showPassword ? 'text' : 'password'}
+                type={showPassword ? 'text': 'password'}
                 placeholder="Enter your password"
                 value={formData.password}
                 onChange={handleInputChange}
                 autoComplete="current-password"
                 disabled={loginState.status === 'loading'}
                 maxLength={72}
-                className="w-full pl-10 pr-12 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="block w-full px-3 py-2 pr-10 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loginState.status === 'loading'}
-                className="absolute right-3 top-3 text-gray-400 hover:text-gray-600 disabled:cursor-not-allowed"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 disabled:cursor-not-allowed"
               >
-                {showPassword ? (
-                  <EyeOff className="w-5 h-5" />
-                ) : (
-                  <Eye className="w-5 h-5" />
-                )}
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
               </button>
-              {formData.password && formData.password.length < 8 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Password must be at least 8 characters
-                </p>
-              )}
             </div>
+            {formData.password && formData.password.length < 8 && (
+              <p className="mt-1 text-sm text-red-600 flex items-center">
+                <AlertCircle className="h-4 w-4 mr-1" />
+                Password must be at least 8 characters
+              </p>
+            )}
           </div>
 
           {/* Remember Me Checkbox */}
@@ -476,8 +512,8 @@ const Login: React.FC = () => {
 
           {/* Submit Button */}
           <motion.button
-            whileHover={{ scale: isFormValid && loginState.status !== 'loading' ? 1.02 : 1 }}
-            whileTap={{ scale: isFormValid && loginState.status !== 'loading' ? 0.98 : 1 }}
+            whileHover={{ scale: isFormValid && loginState.status !== 'loading'? 1.02 : 1 }}
+            whileTap={{ scale: isFormValid && loginState.status !== 'loading'? 0.98 : 1 }}
             type="submit"
             disabled={!isFormValid}
             className={`w-full py-2.5 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all ${
@@ -486,7 +522,7 @@ const Login: React.FC = () => {
                 : 'bg-gray-200 text-gray-500 cursor-not-allowed'
             }`}
           >
-            {loginState.status === 'loading' ? (
+            {loginState.status === 'loading'? (
               <>
                 <Loader className="w-5 h-5 animate-spin" />
                 Logging in...
@@ -526,6 +562,7 @@ const Login: React.FC = () => {
           </p>
         </motion.div>
       </motion.div>
+      </div>
     </div>
   );
 };

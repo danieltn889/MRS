@@ -51,7 +51,7 @@ interface PrivacySectionProps {
   onUpdate: () => void;
 }
 
-type ProfileVisibility = 'public' | 'connections_only' | 'private';
+type ProfileVisibility = 'public'| 'connections_only'| 'private';
 
 interface PrivacyFormData {
   profileVisibility: ProfileVisibility;
@@ -77,7 +77,7 @@ type SectionVisibilityKey =
 // HELPER FUNCTIONS
 // =====================================================
 const toProfileVisibility = (value: string | undefined): ProfileVisibility => {
-  if (value === 'public' || value === 'connections_only' || value === 'private') {
+  if (value === 'public'|| value === 'connections_only'|| value === 'private') {
     return value;
   }
   return 'public';
@@ -157,7 +157,7 @@ const PrivacySection: React.FC<PrivacySectionProps> = ({ profile, onUpdate }) =>
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error updating privacy settings:', error);
-      alert('Error updating privacy settings: ' + errorMessage);
+      alert('Error updating privacy settings: '+ errorMessage);
     } finally {
       setLoading(false);
     }
@@ -178,9 +178,9 @@ const PrivacySection: React.FC<PrivacySectionProps> = ({ profile, onUpdate }) =>
           </label>
           <div className="space-y-3">
             {[
-              { value: 'public' as const, label: 'Public', description: 'Anyone can view your profile' },
-              { value: 'connections_only' as const, label: 'Connections Only', description: 'Only approved connections can view your profile' },
-              { value: 'private' as const, label: 'Private', description: 'Only you can view your profile' }
+              { value: 'public'as const, label: 'Public', description: 'Anyone can view your profile'},
+              { value: 'connections_only'as const, label: 'Connections Only', description: 'Only approved connections can view your profile'},
+              { value: 'private'as const, label: 'Private', description: 'Only you can view your profile'}
             ].map((option) => (
               <label key={option.value} className="flex items-start gap-3 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                 <input
@@ -214,11 +214,11 @@ const PrivacySection: React.FC<PrivacySectionProps> = ({ profile, onUpdate }) =>
 
           <div className="space-y-3">
             {[
-              { key: 'showEducation' as SectionVisibilityKey, label: 'Education', description: 'Your educational background and qualifications' },
-              { key: 'showWorkExperience' as SectionVisibilityKey, label: 'Work Experience', description: 'Your professional experience and career history' },
-              { key: 'showSkills' as SectionVisibilityKey, label: 'Skills', description: 'Your technical and professional skills' },
-              { key: 'showPortfolio' as SectionVisibilityKey, label: 'Portfolio & Links', description: 'Your portfolio websites and professional links' },
-              { key: 'showResume' as SectionVisibilityKey, label: 'Resume', description: 'Your uploaded resume files' }
+              { key: 'showEducation'as SectionVisibilityKey, label: 'Education', description: 'Your educational background and qualifications'},
+              { key: 'showWorkExperience'as SectionVisibilityKey, label: 'Work Experience', description: 'Your professional experience and career history'},
+              { key: 'showSkills'as SectionVisibilityKey, label: 'Skills', description: 'Your technical and professional skills'},
+              { key: 'showPortfolio'as SectionVisibilityKey, label: 'Portfolio & Links', description: 'Your portfolio websites and professional links'},
+              { key: 'showResume'as SectionVisibilityKey, label: 'Resume', description: 'Your uploaded resume files'}
             ].map((section) => (
               <div key={section.key} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                 <div className="flex items-center gap-3">
@@ -354,7 +354,7 @@ const PrivacySection: React.FC<PrivacySectionProps> = ({ profile, onUpdate }) =>
             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
             <Save size={18} />
-            {loading ? 'Saving...' : 'Save Privacy Settings'}
+            {loading ? 'Saving...': 'Save Privacy Settings'}
           </button>
         </div>
       </form>

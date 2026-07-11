@@ -51,13 +51,13 @@ export interface ParsedChatMessage {
 }
 
 export const parseChatMessage = (message: any): ParsedChatMessage => {
-  if (!message) return { text: '', attachments: [], raw: '' };
+  if (!message) return { text: '', attachments: [], raw: ''};
 
-  const raw = typeof message === 'string' ? message : JSON.stringify(message);
+  const raw = typeof message === 'string'? message : JSON.stringify(message);
   let text = '';
   let attachments: ChatAttachment[] = [];
 
-  let current: any = typeof message === 'string' ? message : JSON.stringify(message);
+  let current: any = typeof message === 'string'? message : JSON.stringify(message);
   const maxDepth = 20;
   let depth = 0;
 
@@ -90,7 +90,7 @@ export const parseChatMessage = (message: any): ParsedChatMessage => {
       }
     }
 
-    if (current && typeof current === 'object' && !Array.isArray(current)) {
+    if (current && typeof current === 'object'&& !Array.isArray(current)) {
       if (
         attachments.length === 0 &&
         Array.isArray(current.attachments) &&
@@ -117,7 +117,7 @@ export const parseChatMessage = (message: any): ParsedChatMessage => {
     break;
   }
 
-  if (typeof text === 'string' && (text.trim().startsWith('{') || text.trim().startsWith('['))) {
+  if (typeof text === 'string'&& (text.trim().startsWith('{') || text.trim().startsWith('['))) {
     try {
       const lastAttempt = JSON.parse(text);
       if (lastAttempt?.attachments && attachments.length === 0) {
@@ -231,7 +231,7 @@ export function useChat(simulationId: string | null, currentUserId?: string, ses
       detail: { title, body, message: msg }
     }));
 
-    if (!('Notification' in window)) return;
+    if (!('Notification'in window)) return;
     if (Notification.permission === 'granted') {
       new Notification(title, { body });
     } else if (Notification.permission === 'default') {
@@ -246,7 +246,7 @@ export function useChat(simulationId: string | null, currentUserId?: string, ses
   const scrollToBottom = useCallback(() => {
     setTimeout(() => {
       if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end'});
       }
     }, 100);
   }, []);
@@ -258,10 +258,10 @@ export function useChat(simulationId: string | null, currentUserId?: string, ses
     try {
       setLoadingMore(true);
       const response = sessionId
-        ? await simulationAPI.getChatMessagesWithReplies(sessionId, { limit: 50, offset: loadOffset, filter: 'all' })
+        ? await simulationAPI.getChatMessagesWithReplies(sessionId, { limit: 50, offset: loadOffset, filter: 'all'})
         : await simulationAPI.getChatMessagesWithRepliesBySimulation(
             simulationId,
-            { limit: 50, offset: loadOffset, filter: 'all' }
+            { limit: 50, offset: loadOffset, filter: 'all'}
           );
 
       if (response.success) {
@@ -308,10 +308,10 @@ export function useChat(simulationId: string | null, currentUserId?: string, ses
     if (!simulationId) return;
     try {
       const response = sessionId
-        ? await simulationAPI.getChatMessagesWithReplies(sessionId, { limit: 50, offset: 0, filter: 'all' })
+        ? await simulationAPI.getChatMessagesWithReplies(sessionId, { limit: 50, offset: 0, filter: 'all'})
         : await simulationAPI.getChatMessagesWithRepliesBySimulation(
             simulationId,
-            { limit: 50, offset: 0, filter: 'all' }
+            { limit: 50, offset: 0, filter: 'all'}
           );
       if (response.success) {
         const apiMessages: ChatMessage[] = response.data?.messages || [];
@@ -334,16 +334,16 @@ export function useChat(simulationId: string | null, currentUserId?: string, ses
     }
   }, [simulationId, sessionId]);
 
-  // ✅ MANUAL REFRESH - User clicks refresh button
+  // ''MANUAL REFRESH - User clicks refresh button
   const manualRefresh = useCallback(async () => {
     if (!simulationId) return;
     setIsRefreshing(true);
     console.log('🔄 Manual chat refresh triggered by user');
     try {
       await loadMessagesMerge();
-      console.log('✅ Chat refresh completed');
+      console.log('Chat refresh completed');
     } catch (error) {
-      console.error('❌ Chat refresh failed:', error);
+      console.error(' Chat refresh failed:', error);
     } finally {
       setIsRefreshing(false);
     }
@@ -637,7 +637,7 @@ export function useChat(simulationId: string | null, currentUserId?: string, ses
     if (simulationId) loadMessages(0, false);
   }, [simulationId, loadMessages]);
 
-  // ❌ REMOVED AUTO-REFRESH INTERVAL - No more automatic polling!
+  //  REMOVED AUTO-REFRESH INTERVAL - No more automatic polling!
   // The useEffect below has been removed to stop automatic API calls
   /*
   useEffect(() => {

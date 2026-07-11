@@ -9,7 +9,7 @@ import {
   type VerifyReport,
 } from '../services/blockchainAPI';
 
-const short = (h?: string | null) => (h ? `${h.slice(0, 10)}…${h.slice(-6)}` : '—');
+const short = (h?: string | null) => (h ? `${h.slice(0, 10)}…${h.slice(-6)}` : ' ');
 
 const BlockchainExplorer: React.FC = () => {
   const [stats, setStats] = useState<{ totalBlocks: number; lastBlock: ChainBlock | null } | null>(null);
@@ -63,7 +63,7 @@ const BlockchainExplorer: React.FC = () => {
   };
 
   const handleVerifyBlock = async (id: string) => {
-    setBlockVerify((prev) => ({ ...prev, [id]: 'loading' }));
+    setBlockVerify((prev) => ({ ...prev, [id]: 'loading'}));
     try {
       const r = await verifyBlock(id);
       setBlockVerify((prev) => ({ ...prev, [id]: { valid: r.valid, reasons: r.reasons } }));
@@ -95,16 +95,16 @@ const BlockchainExplorer: React.FC = () => {
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <div className="text-xs uppercase text-gray-400 mb-1">Total Blocks</div>
           <div className="text-3xl font-extrabold text-gray-900 flex items-center gap-2">
-            <Box size={22} className="text-blue-500" /> {stats?.totalBlocks ?? '—'}
+            <Box size={22} className="text-blue-500" /> {stats?.totalBlocks ?? ' '}
           </div>
         </div>
         <div className="rounded-xl border border-gray-200 bg-white p-5">
           <div className="text-xs uppercase text-gray-400 mb-1">Last Block</div>
           <div className="text-sm font-mono text-gray-700 mt-2">
-            {stats?.lastBlock ? `#${stats.lastBlock.block_number} · ${short(stats.lastBlock.current_hash)}` : '—'}
+            {stats?.lastBlock ? `#${stats.lastBlock.block_number} · ${short(stats.lastBlock.current_hash)}` : ' '}
           </div>
         </div>
-        <div className={`rounded-xl border p-5 ${report ? (report.valid ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200 bg-white'}`}>
+        <div className={`rounded-xl border p-5 ${report ? (report.valid ? 'border-green-200 bg-green-50': 'border-red-200 bg-red-50') : 'border-gray-200 bg-white'}`}>
           <div className="text-xs uppercase text-gray-400 mb-1">Chain Integrity</div>
           {report ? (
             report.valid ? (
@@ -131,7 +131,7 @@ const BlockchainExplorer: React.FC = () => {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
           >
             {verifying ? <Loader2 size={16} className="animate-spin" /> : <ShieldCheck size={16} />}
-            {verifying ? 'Verifying…' : 'Verify Chain'}
+            {verifying ? 'Verifying…': 'Verify Chain'}
           </button>
         </div>
 
@@ -140,7 +140,7 @@ const BlockchainExplorer: React.FC = () => {
             <div className="rounded-lg bg-gray-50 p-3"><div className="text-xl font-bold text-gray-900">{report.totalBlocks}</div><div className="text-xs text-gray-500">Blocks</div></div>
             <div className="rounded-lg bg-green-50 p-3"><div className="text-xl font-bold text-green-700">{report.verifiedCount}</div><div className="text-xs text-gray-500">Verified</div></div>
             <div className="rounded-lg bg-red-50 p-3"><div className="text-xl font-bold text-red-700">{report.failedCount}</div><div className="text-xs text-gray-500">Failed</div></div>
-            <div className="rounded-lg bg-gray-50 p-3"><div className="text-xl font-bold text-gray-900">{report.firstInvalidBlockNumber ?? '—'}</div><div className="text-xs text-gray-500">First Invalid</div></div>
+            <div className="rounded-lg bg-gray-50 p-3"><div className="text-xl font-bold text-gray-900">{report.firstInvalidBlockNumber ?? ' '}</div><div className="text-xs text-gray-500">First Invalid</div></div>
           </div>
         )}
         {report && report.issues.length > 0 && (
@@ -200,7 +200,7 @@ const BlockchainExplorer: React.FC = () => {
                       <td className="px-4 py-3 font-mono text-gray-400">{short(b.prev_hash)}</td>
                       <td className="px-4 py-3 text-gray-500">{new Date(b.timestamp).toLocaleString()}</td>
                       <td className="px-4 py-3">
-                        {v === 'loading' ? (
+                        {v === 'loading'? (
                           <Loader2 size={16} className="animate-spin text-gray-400" />
                         ) : v ? (
                           v.valid ? (

@@ -5,8 +5,13 @@ import {
   File, Image, FileArchive, Search
 } from 'lucide-react';
 import { addWorkExperience, updateWorkExperience, deleteWorkExperience, uploadCandidateDocument, getSkillsList } from '../../services/candidateAPI';
+import { getCountries, getProvinces, getDistricts, getSectors, getCells, getVillages, Country } from '../../services/locationsAPI';
+import Combobox, { ComboboxOption } from '../common/Combobox';
 import ConfirmDialog from './ConfirmDialog';
 import { extractDocxText } from '../../utils/documentTextExtractor';
+import { resolveFileUrl } from '../../utils/fileUrl';
+
+const toLocationOptions = (values: string[]): ComboboxOption[] => values.map(v => ({ label: v, value: v }));
 
 // =====================================================
 // TYPE DEFINITIONS
@@ -19,6 +24,13 @@ interface WorkExperienceItem {
   employment_type?: string;
   location?: string;
   location_type?: string;
+  is_rwandan?: boolean | null;
+  country?: string;
+  province?: string;
+  district?: string;
+  sector?: string;
+  cell?: string;
+  village?: string;
   start_date?: string;
   end_date?: string | null;
   is_current?: boolean;
@@ -49,6 +61,13 @@ interface FormData {
   employmentType: string;
   location: string;
   locationType: string;
+  isRwandan: '' | 'yes' | 'no';
+  country: string;
+  province: string;
+  district: string;
+  sector: string;
+  cell: string;
+  village: string;
   startDate: string;
   endDate: string;
   isCurrent: boolean;
@@ -124,6 +143,13 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     employmentType: 'full-time',
     location: '',
     locationType: 'onsite',
+    isRwandan: '',
+    country: '',
+    province: '',
+    district: '',
+    sector: '',
+    cell: '',
+    village: '',
     startDate: '',
     endDate: '',
     isCurrent: false,
@@ -135,12 +161,79 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     displayOrder: 0
   });
   const [loading, setLoading] = useState<boolean>(false);
+
+  // Cascading Rwanda location dropdown data (same pattern as CandidateSignUp.tsx)
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [provinces, setProvinces] = useState<string[]>([]);
+  const [districts, setDistricts] = useState<string[]>([]);
+  const [sectors,   setSectors]   = useState<string[]>([]);
+  const [cells,     setCells]     = useState<string[]>([]);
+  const [villages,  setVillages]  = useState<string[]>([]);
+  const [loadingLevel, setLoadingLevel] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (formData.isRwandan === 'yes' && provinces.length === 0) {
+      setLoadingLevel(s => ({ ...s, provinces: true }));
+      getProvinces().then(setProvinces).catch(() => {}).finally(() => setLoadingLevel(s => ({ ...s, provinces: false })));
+    }
+    if (formData.isRwandan === 'no' && countries.length === 0) {
+      getCountries().then(setCountries).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.isRwandan]);
+
+  useEffect(() => {
+    if (!formData.province) { setDistricts([]); return; }
+    setLoadingLevel(s => ({ ...s, districts: true }));
+    getDistricts(formData.province).then(setDistricts).catch(() => setDistricts([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, districts: false })));
+  }, [formData.province]);
+
+  useEffect(() => {
+    if (!formData.district) { setSectors([]); return; }
+    setLoadingLevel(s => ({ ...s, sectors: true }));
+    getSectors(formData.district).then(setSectors).catch(() => setSectors([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, sectors: false })));
+  }, [formData.district]);
+
+  useEffect(() => {
+    if (!formData.district || !formData.sector) { setCells([]); return; }
+    setLoadingLevel(s => ({ ...s, cells: true }));
+    getCells(formData.district, formData.sector).then(setCells).catch(() => setCells([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, cells: false })));
+  }, [formData.district, formData.sector]);
+
+  useEffect(() => {
+    if (!formData.district || !formData.sector || !formData.cell) { setVillages([]); return; }
+    setLoadingLevel(s => ({ ...s, villages: true }));
+    getVillages(formData.district, formData.sector, formData.cell).then(setVillages).catch(() => setVillages([]))
+      .finally(() => setLoadingLevel(s => ({ ...s, villages: false })));
+  }, [formData.district, formData.sector, formData.cell]);
+
+  const handleIsRwandanChange = (value: 'yes' | 'no') => {
+    setFormData(prev => ({
+      ...prev,
+      isRwandan: value,
+      province: '', district: '', sector: '', cell: '', village: '',
+      country: '',
+    }));
+  };
+  const handleProvinceChange = (value: string) =>
+    setFormData(prev => ({ ...prev, province: value, district: '', sector: '', cell: '', village: '' }));
+  const handleDistrictChange = (value: string) =>
+    setFormData(prev => ({ ...prev, district: value, sector: '', cell: '', village: '' }));
+  const handleSectorChange = (value: string) =>
+    setFormData(prev => ({ ...prev, sector: value, cell: '', village: '' }));
+  const handleCellChange = (value: string) =>
+    setFormData(prev => ({ ...prev, cell: value, village: '' }));
+  const handleVillageChange = (value: string) =>
+    setFormData(prev => ({ ...prev, village: value }));
   // Skills used in this role + autocomplete suggestions from the skills catalog.
   const [skillCatalog, setSkillCatalog] = useState<string[]>([]);
   const [skillQuery, setSkillQuery] = useState<string>('');
   const [showSkillSuggest, setShowSkillSuggest] = useState<boolean>(false);
   const [dateError, setDateError] = useState<string>('');
-  const [proofUploadStatus, setProofUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  const [proofUploadStatus, setProofUploadStatus] = useState<'idle'| 'uploading'| 'success'| 'error'>('idle');
   const [proofUploadProgress, setProofUploadProgress] = useState<number>(0);
   const [proofUploadMessage, setProofUploadMessage] = useState<string>('');
   const [viewingProofFile, setViewingProofFile] = useState<ProofFile | null>(null);
@@ -161,6 +254,13 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       employmentType: 'full-time',
       location: '',
       locationType: 'onsite',
+      isRwandan: '',
+      country: '',
+      province: '',
+      district: '',
+      sector: '',
+      cell: '',
+      village: '',
       startDate: '',
       endDate: '',
       isCurrent: false,
@@ -186,7 +286,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
         const res: any = await getSkillsList();
         const list = res?.data || (Array.isArray(res) ? res : []);
         const names = Array.from(new Set(
-          list.map((s: any) => (typeof s === 'string' ? s : s?.name)).filter(Boolean)
+          list.map((s: any) => (typeof s === 'string'? s : s?.name)).filter(Boolean)
         )) as string[];
         setSkillCatalog(names);
       } catch { /* suggestions are optional */ }
@@ -336,7 +436,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
   };
 
   // =====================================================
-  // ✅ UPDATED: handleSubmit - only sends the fields you want
+  // ''UPDATED: handleSubmit - only sends the fields you want
   // =====================================================
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -354,10 +454,10 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       const truncatedTitle = truncateTitle(formData.title);
       
       if (formData.title.length > 100) {
-        console.warn(`⚠️ Title truncated from ${formData.title.length} to 100 characters: ${truncatedTitle}`);
+        console.warn(` Title truncated from ${formData.title.length} to 100 characters: ${truncatedTitle}`);
       }
 
-      // ✅ Build submit data with only the fields you want
+      // ''Build submit data with only the fields you want
       const submitData: any = {
         company: formData.company,
         title: truncatedTitle,
@@ -367,16 +467,36 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
         isCurrent: formData.isCurrent,
       };
 
-      // ✅ Add optional fields only if they have values
+      // ''Add optional fields only if they have values
       if (formData.companyId) submitData.company_id = formData.companyId;
-      if (formData.location) submitData.location = formData.location;
       if (formData.endDate && !formData.isCurrent) submitData.endDate = formData.endDate;
+
+      // Structured location- Rwanda hierarchy or country/city, same pattern
+      // as the candidate's own profile. `location` stays the free-text
+      // display fallback: the joined chain for Rwanda, or the typed city for
+      // everywhere else.
+      if (formData.isRwandan === 'yes') {
+        submitData.isRwandan = true;
+        submitData.province = formData.province;
+        submitData.district = formData.district;
+        submitData.sector = formData.sector;
+        submitData.cell = formData.cell;
+        submitData.village = formData.village;
+        submitData.location = [formData.village, formData.cell, formData.sector, formData.district, formData.province]
+          .filter(Boolean).join(', ');
+      } else if (formData.isRwandan === 'no') {
+        submitData.isRwandan = false;
+        submitData.country = formData.country;
+        submitData.location = formData.location;
+      } else if (formData.location) {
+        submitData.location = formData.location;
+      }
       if (formData.industry) submitData.industry = formData.industry;
       if (formData.reasonForLeaving) submitData.reasonForLeaving = formData.reasonForLeaving;
       if (formData.skills.length) submitData.skills = formData.skills;
       if (formData.displayOrder) submitData.displayOrder = formData.displayOrder;
 
-      // ✅ Upload proof files for real so they persist and can be viewed/downloaded,
+      // ''Upload proof files for real so they persist and can be viewed/downloaded,
       // then store their references in the `attachments` JSONB column.
       const uploadedProofFiles: ProofFile[] = [];
       for (const file of formData.proofFiles) {
@@ -395,7 +515,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       // Keep previously-saved proof files and append the newly uploaded ones.
       submitData.attachments = [...formData.existingProofFiles, ...uploadedProofFiles];
       // Short label kept in the (VARCHAR) verification_method column for context.
-      submitData.verificationMethod = submitData.attachments.length > 0 ? 'work_proof' : '';
+      submitData.verificationMethod = submitData.attachments.length > 0 ? 'work_proof': '';
 
       if (editingId) {
         await updateWorkExperience(editingId, submitData);
@@ -410,14 +530,14 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error saving work experience:', error);
-      alert('Error saving work experience: ' + errorMessage);
+      alert('Error saving work experience: '+ errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   // =====================================================
-  // ✅ UPDATED: handleEdit - only loads the fields you want
+  // ''UPDATED: handleEdit - only loads the fields you want
   // =====================================================
   const handleEdit = (exp: WorkExperienceItem): void => {
     setFormData({
@@ -427,6 +547,13 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       employmentType: exp.employment_type || 'full-time',
       location: exp.location || '',
       locationType: exp.location_type || 'onsite',
+      isRwandan: exp.is_rwandan === true ? 'yes' : exp.is_rwandan === false ? 'no' : '',
+      country: exp.is_rwandan ? '' : (exp.country || ''),
+      province: exp.province || '',
+      district: exp.district || '',
+      sector: exp.sector || '',
+      cell: exp.cell || '',
+      village: exp.village || '',
       startDate: exp.start_date ? exp.start_date.split('T')[0] : '',
       endDate: exp.end_date ? exp.end_date.split('T')[0] : '',
       isCurrent: exp.is_current || false,
@@ -451,7 +578,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error deleting work experience:', error);
-      alert('Error deleting work experience: ' + errorMessage);
+      alert('Error deleting work experience: '+ errorMessage);
     } finally {
       setDeleting(false);
     }
@@ -466,7 +593,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
   const getYear = (dateValue?: string | null): string => {
     if (!dateValue) return 'N/A';
     const date = new Date(dateValue);
-    return isNaN(date.getTime()) ? 'N/A' : date.getFullYear().toString();
+    return isNaN(date.getTime()) ? 'N/A': date.getFullYear().toString();
   };
 
   // Proof files now live in the `attachments` JSONB column. Older entries may
@@ -501,7 +628,8 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
     if (!isOffice) return;
 
     const url = file.file_url
-      || (() => { const f = formData.proofFiles.find(pf => pf.name === file.file_name); return f ? URL.createObjectURL(f) : null; })();
+      ? resolveFileUrl(file.file_url)
+      : (() => { const f = formData.proofFiles.find(pf => pf.name === file.file_name); return f ? URL.createObjectURL(f) : null; })();
     if (!url) return;
 
     setDocxPreviewLoading(true);
@@ -543,7 +671,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
       // Persisted file: download directly from its stored URL.
       if (file.file_url) {
         const link = document.createElement('a');
-        link.href = file.file_url;
+        link.href = resolveFileUrl(file.file_url);
         link.download = file.file_name;
         link.target = '_blank';
         document.body.appendChild(link);
@@ -561,7 +689,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
 
   // Build a previewable URL for the file (persisted URL, or an in-memory object URL).
   const getProofPreviewUrl = (file: ProofFile): string | null => {
-    if (file.file_url) return file.file_url;
+    if (file.file_url) return resolveFileUrl(file.file_url);
     const uploadedFile = formData.proofFiles.find(f => f.name === file.file_name);
     return uploadedFile ? URL.createObjectURL(uploadedFile) : null;
   };
@@ -677,7 +805,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
 
       {isAdding && (
         <div className="bg-gray-50 p-6 rounded-lg border">
-          <h3 className="text-lg font-medium mb-4">{editingId ? 'Edit Work Experience' : 'Add Work Experience'}</h3>
+          <h3 className="text-lg font-medium mb-4">{editingId ? 'Edit Work Experience': 'Add Work Experience'}</h3>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -702,8 +830,8 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                   placeholder="e.g., Senior Software Engineer"
                   maxLength={250}
                 />
-                <p className={`text-xs mt-1 ${formData.title.length > 100 ? 'text-orange-500' : 'text-gray-400'}`}>
-                  {formData.title.length}/100 characters {formData.title.length > 100 && '⚠️ Will be shortened'}
+                <p className={`text-xs mt-1 ${formData.title.length > 100 ? 'text-orange-500': 'text-gray-400'}`}>
+                  {formData.title.length}/100 characters {formData.title.length > 100 && ' Will be shortened'}
                 </p>
               </div>
             </div>
@@ -738,17 +866,97 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="e.g., Kigali, Rwanda"
-                />
+            {/* Location- same Rwanda hierarchy / country+city pattern as the candidate's own profile */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <p className="block text-sm font-medium text-gray-700 mb-2">Was this role based in Rwanda?</p>
+              <div className="flex gap-3 mb-3">
+                {(['yes', 'no'] as const).map(opt => (
+                  <button
+                    key={opt} type="button"
+                    onClick={() => handleIsRwandanChange(opt)}
+                    className={`px-4 py-2 rounded-md border text-sm font-medium ${
+                      formData.isRwandan === opt ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {opt === 'yes' ? 'Yes' : 'No'}
+                  </button>
+                ))}
               </div>
+
+              {formData.isRwandan === 'yes' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Province</label>
+                    <Combobox
+                      value={formData.province} onChange={handleProvinceChange}
+                      options={toLocationOptions(provinces)} placeholder="Select province"
+                      loading={loadingLevel.provinces} allowFreeText={false}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">District</label>
+                    <Combobox
+                      value={formData.district} onChange={handleDistrictChange}
+                      options={toLocationOptions(districts)} placeholder="Select district"
+                      disabled={!formData.province} loading={loadingLevel.districts} allowFreeText={false}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+                    <Combobox
+                      value={formData.sector} onChange={handleSectorChange}
+                      options={toLocationOptions(sectors)} placeholder="Select sector"
+                      disabled={!formData.district} loading={loadingLevel.sectors} allowFreeText={false}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Cell</label>
+                    <Combobox
+                      value={formData.cell} onChange={handleCellChange}
+                      options={toLocationOptions(cells)} placeholder="Select cell"
+                      disabled={!formData.sector} loading={loadingLevel.cells} allowFreeText={false}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Village (Umudugudu)</label>
+                    <Combobox
+                      value={formData.village} onChange={handleVillageChange}
+                      options={toLocationOptions(villages)} placeholder="Select village"
+                      disabled={!formData.cell} loading={loadingLevel.villages} allowFreeText={false}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {formData.isRwandan === 'no' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Country</label>
+                    <Combobox
+                      value={formData.country} onChange={(v) => setFormData(prev => ({ ...prev, country: v }))}
+                      options={countries.map(c => ({ label: c.name, value: c.name }))}
+                      placeholder="Search or type the country" allowFreeText
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={(e) => setFormData({...formData, location: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g., Nairobi"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!formData.isRwandan && (
+                <p className="text-xs text-gray-500">Answer above to set the location for this role.</p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Industry</label>
                 <input
@@ -759,9 +967,6 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                   placeholder="e.g., Technology"
                 />
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
                 <input
@@ -795,7 +1000,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 type="checkbox"
                 id="isCurrent"
                 checked={formData.isCurrent}
-                onChange={(e) => setFormData({...formData, isCurrent: e.target.checked, endDate: e.target.checked ? '' : formData.endDate})}
+                onChange={(e) => setFormData({...formData, isCurrent: e.target.checked, endDate: e.target.checked ? '': formData.endDate})}
                 className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <label htmlFor="isCurrent" className="text-sm text-gray-700 cursor-pointer">I currently work here</label>
@@ -814,7 +1019,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
               </div>
             )}
 
-            {/* Skills used in this role — auto-search + suggestions from the catalog */}
+            {/* Skills used in this role   auto-search + suggestions from the catalog */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Skills used in this role</label>
               {formData.skills.length > 0 && (
@@ -873,25 +1078,25 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                 disabled={proofUploadStatus === 'uploading'}
                 className="inline-flex items-center gap-2 px-4 py-2 border border-dashed border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
-                {proofUploadStatus === 'uploading' ? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}
-                {proofUploadStatus === 'uploading' ? 'Uploading proof...' : 'Upload proof'}
+                {proofUploadStatus === 'uploading'? <Loader size={16} className="animate-spin" /> : <Upload size={16} />}
+                {proofUploadStatus === 'uploading'? 'Uploading proof...': 'Upload proof'}
               </button>
               <p className="mt-1 text-xs text-gray-500">Employment letter, contract, recommendation, payslip, or certificate. Max 3 files, 10MB each.</p>
 
-              {proofUploadStatus !== 'idle' && (
+              {proofUploadStatus !== 'idle'&& (
                 <div className={`mt-3 rounded-lg border px-3 py-2 ${
-                  proofUploadStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' :
-                  proofUploadStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' :
+                  proofUploadStatus === 'error'? 'bg-red-50 border-red-200 text-red-700':
+                  proofUploadStatus === 'success'? 'bg-green-50 border-green-200 text-green-700':
                   'bg-blue-50 border-blue-200 text-blue-700'
                 }`}>
                   <div className="flex items-center gap-2 text-sm">
-                    {proofUploadStatus === 'uploading' && <Loader size={16} className="animate-spin" />}
-                    {proofUploadStatus === 'success' && <CheckCircle size={16} />}
-                    {proofUploadStatus === 'error' && <AlertCircle size={16} />}
+                    {proofUploadStatus === 'uploading'&& <Loader size={16} className="animate-spin" />}
+                    {proofUploadStatus === 'success'&& <CheckCircle size={16} />}
+                    {proofUploadStatus === 'error'&& <AlertCircle size={16} />}
                     <span className="flex-1">{proofUploadMessage}</span>
-                    {proofUploadStatus === 'uploading' && <span className="text-xs font-medium">{proofUploadProgress}%</span>}
+                    {proofUploadStatus === 'uploading'&& <span className="text-xs font-medium">{proofUploadProgress}%</span>}
                   </div>
-                  {proofUploadStatus === 'uploading' && (
+                  {proofUploadStatus === 'uploading'&& (
                     <div className="mt-2 h-2 overflow-hidden rounded-full bg-blue-100">
                       <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${proofUploadProgress}%` }} />
                     </div>
@@ -939,7 +1144,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
 
             <div className="flex gap-3 pt-4">
               <button type="submit" disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                <Save size={18} /> {loading ? 'Saving...' : 'Save'}
+                <Save size={18} /> {loading ? 'Saving...': 'Save'}
               </button>
               <button type="button" onClick={handleCancel} className="flex items-center gap-2 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors">
                 <X size={18} /> Cancel
@@ -981,7 +1186,7 @@ const WorkExperienceSection: React.FC<WorkExperienceSectionProps> = ({ profile, 
                     <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
                       <div className="flex items-center gap-1">
                         <Calendar size={16} />
-                        {getYear(exp.start_date)} - {exp.is_current ? 'Present' : getYear(exp.end_date)}
+                        {getYear(exp.start_date)} - {exp.is_current ? 'Present': getYear(exp.end_date)}
                       </div>
                       {exp.location && (
                         <div className="flex items-center gap-1">

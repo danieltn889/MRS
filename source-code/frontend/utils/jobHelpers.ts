@@ -9,7 +9,7 @@ interface CriteriaScores {
 }
 
 interface MatchReason {
-  type: 'positive' | 'warning' | 'improvement';
+  type: 'positive'| 'warning'| 'improvement';
   text: string;
 }
 
@@ -250,7 +250,7 @@ interface TransformedMatch {
 
 export const formatNumber = (value: string | number | undefined | null): string => {
   if (!value) return '0';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
+  const num = typeof value === 'string'? parseFloat(value) : value;
   return num.toLocaleString();
 };
 
@@ -378,11 +378,11 @@ export const transformMatchData = (
   
   let salaryDisplay = 'Salary not specified';
   if (salaryMin && salaryMax) {
-    salaryDisplay = `${salaryCurrency} ${formatNumberFn(salaryMin)} - ${formatNumberFn(salaryMax)} ${salaryPeriod === 'year' ? '/year' : salaryPeriod === 'month' ? '/month' : ''}`;
+    salaryDisplay = `${salaryCurrency} ${formatNumberFn(salaryMin)} - ${formatNumberFn(salaryMax)} ${salaryPeriod === 'year'? '/year': salaryPeriod === 'month'? '/month': ''}`;
   } else if (salaryMin) {
-    salaryDisplay = `${salaryCurrency} ${formatNumberFn(salaryMin)}+ ${salaryPeriod === 'year' ? '/year' : '/month'}`;
+    salaryDisplay = `${salaryCurrency} ${formatNumberFn(salaryMin)}+ ${salaryPeriod === 'year'? '/year': '/month'}`;
   } else if (salaryMax) {
-    salaryDisplay = `${salaryCurrency} Up to ${formatNumberFn(salaryMax)} ${salaryPeriod === 'year' ? '/year' : '/month'}`;
+    salaryDisplay = `${salaryCurrency} Up to ${formatNumberFn(salaryMax)} ${salaryPeriod === 'year'? '/year': '/month'}`;
   }
   
   // Build location display
@@ -435,18 +435,18 @@ export const transformMatchData = (
     matchReasons.push({ type: 'improvement', text: `Gap skills: ${missingSkillsList.slice(0, 3).join(', ')}` });
   }
   if (expMatch >= 90) {
-    matchReasons.push({ type: 'positive', text: 'Your experience meets the requirement' });
+    matchReasons.push({ type: 'positive', text: 'Your experience meets the requirement'});
   } else if (expBD && expBD.gap_years && expBD.gap_years > 0) {
     matchReasons.push({ type: 'warning', text: `${expBD.gap_years.toFixed(1)} yrs short of experience requirement` });
   }
   if (qualsMatch >= 80) {
-    matchReasons.push({ type: 'positive', text: 'Your qualifications align with the role' });
+    matchReasons.push({ type: 'positive', text: 'Your qualifications align with the role'});
   }
   if (qualsBD && qualsBD.best_matched_field) {
     matchReasons.push({ type: 'positive', text: `Qualification match: ${qualsBD.best_matched_field}` });
   }
   if (prefsMatch < 60 && prefsMatch > 0) {
-    matchReasons.push({ type: 'warning', text: 'Job type or location may not match your preferences' });
+    matchReasons.push({ type: 'warning', text: 'Job type or location may not match your preferences'});
   }
   
   // Date handling
@@ -463,10 +463,10 @@ export const transformMatchData = (
   // Match level stars
   const matchLevel = match.match_level || '';
   let matchStars = '⭐⭐⭐';
-  if (matchLevel.includes('Excellent')) matchStars = '🌟🌟🌟🌟🌟';
-  else if (matchLevel.includes('Strong')) matchStars = '🌟🌟🌟🌟';
-  else if (matchLevel.includes('Good')) matchStars = '🌟🌟🌟';
-  else if (matchLevel.includes('Partial')) matchStars = '🌟🌟';
+  if (matchLevel.includes('Excellent')) matchStars = '';
+  else if (matchLevel.includes('Strong')) matchStars = '';
+  else if (matchLevel.includes('Good')) matchStars = '';
+  else if (matchLevel.includes('Partial')) matchStars = '';
   else matchStars = '⭐';
   
   return {

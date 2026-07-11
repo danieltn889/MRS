@@ -19,7 +19,7 @@ CREATE TABLE users (
     email              CITEXT UNIQUE NOT NULL,
     password_hash      VARCHAR(255) NOT NULL,
     user_type          VARCHAR(50) NOT NULL CHECK (user_type IN ('candidate', 'recruiter', 'company_admin', 'system_admin')),
-    status             VARCHAR(50) DEFAULT 'unverified' CHECK (status IN ('unverified', 'verified', 'active', 'locked', 'suspended', 'deleted')),
+    status             VARCHAR(50) DEFAULT 'unverified'CHECK (status IN ('unverified', 'verified', 'active', 'locked', 'suspended', 'deleted')),
     verification_token VARCHAR(255),
     verification_code  VARCHAR(10),
     token_expiry       TIMESTAMP WITH TIME ZONE,
@@ -152,6 +152,7 @@ CREATE TABLE candidate_profiles (
     website_url         TEXT,
     willing_to_relocate BOOLEAN DEFAULT FALSE,
     willing_to_travel   BOOLEAN DEFAULT FALSE,
+    years_experience    INTEGER,
     notice_period_days  INTEGER,
     current_salary      JSONB,
     expected_salary     JSONB,
@@ -189,6 +190,69 @@ CREATE INDEX idx_candidate_names        ON candidate_profiles(first_name, last_n
 CREATE INDEX idx_candidate_location     ON candidate_profiles(country, city);
 CREATE INDEX idx_candidate_completion   ON candidate_profiles(profile_completion);
 CREATE INDEX idx_candidate_availability ON candidate_profiles((availability->>'status'));
+
+-- Rwanda administrative location (nullable   only populated when is_rwandan = true).
+-- Non-Rwandan candidates keep using the pre-existing country/city columns above.
+ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS years_experience INTEGER;
+ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS is_rwandan BOOLEAN;
+ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS province    VARCHAR(100);
+ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS district    VARCHAR(100);
+ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS sector      VARCHAR(100);
+ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS cell        VARCHAR(100);
+ALTER TABLE candidate_profiles ADD COLUMN IF NOT EXISTS village     VARCHAR(100);
+
+-- =====================================================
+-- RWANDA ADMINISTRATIVE LOCATION HIERARCHY (Candidate Signup)
+-- =====================================================
+-- One row per village, carrying its full ancestor chain (province..village).
+-- Denormalized on purpose: cascading-dropdown lookups and hierarchy validation
+-- are both a single indexed SELECT instead of a 5-table join. Seeded once from
+-- backend/src/db/data/rwanda-locations.json (MIT-licensed public dataset) by
+-- src/db/seed.ts   see seedRwandaLocations().
+CREATE TABLE IF NOT EXISTS rw_locations (
+    id             BIGSERIAL PRIMARY KEY,
+    province_code  VARCHAR(20)  NOT NULL,
+    province_name  VARCHAR(100) NOT NULL,
+    district_code  VARCHAR(20)  NOT NULL,
+    district_name  VARCHAR(100) NOT NULL,
+    sector_code    VARCHAR(20)  NOT NULL,
+    sector_name    VARCHAR(100) NOT NULL,
+    cell_code      VARCHAR(20)  NOT NULL,
+    cell_name      VARCHAR(100) NOT NULL,
+    village_code   VARCHAR(20)  NOT NULL UNIQUE,
+    village_name   VARCHAR(100) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_rw_locations_province ON rw_locations(province_name);
+CREATE INDEX IF NOT EXISTS idx_rw_locations_district ON rw_locations(district_name);
+CREATE INDEX IF NOT EXISTS idx_rw_locations_sector   ON rw_locations(district_name, sector_name);
+CREATE INDEX IF NOT EXISTS idx_rw_locations_cell      ON rw_locations(sector_name, cell_name);
+CREATE INDEX IF NOT EXISTS idx_rw_locations_chain     ON rw_locations(province_name, district_name, sector_name, cell_name, village_name);
+
+-- =====================================================
+-- CANDIDATE IDENTITY DOCUMENTS (Signup Verification)
+-- =====================================================
+-- File contents are NEVER stored here (or under the publicly-served
+-- backend/uploads/ static mount)   document_front/document_back hold an
+-- internal storage key resolved only via an authenticated, ownership-checked
+-- endpoint. See backend/src/routes/v1/candidate.routes.ts identity document
+-- routes and backend/private-uploads/identity-documents/.
+CREATE TABLE IF NOT EXISTS candidate_documents (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    candidate_id        UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    document_type       VARCHAR(20) NOT NULL CHECK (document_type IN ('national_id', 'passport')),
+    document_number     VARCHAR(50) NOT NULL,
+    document_front      TEXT NOT NULL,
+    document_back       TEXT,
+    verification_status VARCHAR(20) NOT NULL DEFAULT 'pending'
+                         CHECK (verification_status IN ('pending', 'verified', 'rejected')),
+    created_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_candidate_documents_number
+    ON candidate_documents (document_type, document_number);
+CREATE INDEX IF NOT EXISTS idx_candidate_documents_candidate ON candidate_documents(candidate_id);
 
 CREATE TABLE education (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -229,6 +293,16 @@ CREATE TABLE work_experience (
     employment_type     VARCHAR(100) CHECK (employment_type IN ('full-time', 'part-time', 'contract', 'internship', 'freelance', 'self-employed')),
     location            VARCHAR(255),
     location_type       VARCHAR(50) CHECK (location_type IN ('onsite', 'hybrid', 'remote')),
+    -- Structured location, same shape as candidate_profiles: Rwanda hierarchy
+    -- when is_rwandan, else country/city. `location` above is kept as a
+    -- free-text fallback for legacy rows / display.
+    is_rwandan          BOOLEAN,
+    country             VARCHAR(100),
+    province            VARCHAR(100),
+    district            VARCHAR(100),
+    sector              VARCHAR(100),
+    cell                VARCHAR(100),
+    village             VARCHAR(100),
     start_date          DATE NOT NULL,
     end_date            DATE,
     is_current          BOOLEAN DEFAULT FALSE,
@@ -253,6 +327,19 @@ CREATE INDEX idx_experience_user    ON work_experience(user_id);
 CREATE INDEX idx_experience_dates   ON work_experience(start_date, end_date);
 CREATE INDEX idx_experience_company ON work_experience(company);
 CREATE INDEX idx_experience_current ON work_experience(is_current);
+
+-- Same structured location as candidate_profiles, mirrored onto
+-- work_experience (per-role location, since a candidate's jobs may span
+-- different provinces/countries). IF NOT EXISTS here because the CREATE
+-- TABLE above already defines these for fresh databases; this covers
+-- already-existing ones re-running the migration.
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS is_rwandan BOOLEAN;
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS country    VARCHAR(100);
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS province   VARCHAR(100);
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS district   VARCHAR(100);
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS sector     VARCHAR(100);
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS cell       VARCHAR(100);
+ALTER TABLE work_experience ADD COLUMN IF NOT EXISTS village    VARCHAR(100);
 
 CREATE TABLE skills (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -393,7 +480,7 @@ CREATE TABLE companies (
     banner_url            TEXT,
     banner_key            VARCHAR(255),
     social_links          JSONB,
-    verification_status   VARCHAR(50) DEFAULT 'pending' CHECK (verification_status IN ('pending', 'verified', 'rejected', 'expired')),
+    verification_status   VARCHAR(50) DEFAULT 'pending'CHECK (verification_status IN ('pending', 'verified', 'rejected', 'expired')),
     verification_badge    BOOLEAN DEFAULT FALSE,
     verification_level    VARCHAR(50),
     verified_at           TIMESTAMP WITH TIME ZONE,
@@ -466,7 +553,7 @@ CREATE TABLE team_invitations (
     email            CITEXT NOT NULL,
     role             VARCHAR(50) NOT NULL CHECK (role IN ('admin', 'recruiter', 'reviewer', 'viewer')),
     invitation_token VARCHAR(255) UNIQUE NOT NULL,
-    status           VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
+    status           VARCHAR(50) DEFAULT 'pending'CHECK (status IN ('pending', 'accepted', 'expired', 'revoked')),
     expires_at       TIMESTAMP WITH TIME ZONE NOT NULL,
     accepted_at      TIMESTAMP WITH TIME ZONE,
     accepted_by      UUID REFERENCES users(id),
@@ -499,7 +586,7 @@ CREATE TABLE company_team (
     photo_key          VARCHAR(255),
     social_links       JSONB,
     linkedin_url       TEXT,
-    role               VARCHAR(50) NOT NULL DEFAULT 'recruiter' CHECK (role IN ('admin', 'recruiter', 'reviewer', 'viewer')),
+    role               VARCHAR(50) NOT NULL DEFAULT 'recruiter'CHECK (role IN ('admin', 'recruiter', 'reviewer', 'viewer')),
     permissions        JSONB DEFAULT '{"can_post_jobs": true, "can_view_candidates": true, "can_manage_team": false, "can_edit_company": false}'::JSONB,
     display_on_profile BOOLEAN DEFAULT TRUE,
     is_leadership      BOOLEAN DEFAULT FALSE,
@@ -604,7 +691,7 @@ CREATE TABLE company_verification (
     submitted_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     reviewed_at        TIMESTAMP WITH TIME ZONE,
     reviewed_by        UUID REFERENCES users(id),
-    status             VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'info_needed')),
+    status             VARCHAR(50) DEFAULT 'pending'CHECK (status IN ('pending', 'approved', 'rejected', 'info_needed')),
     rejection_reason   TEXT,
     reviewer_notes     TEXT,
     expires_at         TIMESTAMP WITH TIME ZONE,
@@ -702,8 +789,8 @@ CREATE TABLE jobs (
     }'::JSONB,
     skill_experience_requirements JSONB DEFAULT '{}'::JSONB,
     ai_match_required_score       INTEGER DEFAULT 70 CHECK (ai_match_required_score BETWEEN 0 AND 100),
-    status                        VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft', 'pending', 'active', 'open', 'inactive', 'paused', 'closed', 'filled', 'archived', 'expired')),
-    visibility                    VARCHAR(50) DEFAULT 'public' CHECK (visibility IN ('public', 'internal', 'confidential', 'unlisted')),
+    status                        VARCHAR(50) DEFAULT 'draft'CHECK (status IN ('draft', 'pending', 'active', 'open', 'inactive', 'paused', 'closed', 'filled', 'archived', 'expired')),
+    visibility                    VARCHAR(50) DEFAULT 'public'CHECK (visibility IN ('public', 'internal', 'confidential', 'unlisted')),
     published_at                  TIMESTAMP WITH TIME ZONE,
     expires_at                    TIMESTAMP WITH TIME ZONE,
     paused_at                     TIMESTAMP WITH TIME ZONE,
@@ -763,7 +850,7 @@ CREATE TABLE saved_jobs (
 CREATE INDEX idx_saved_jobs_user     ON saved_jobs(user_id);
 CREATE INDEX idx_saved_jobs_saved_at ON saved_jobs(saved_at);
 
--- Personalized job feed — activity tracking (previously only applied ad hoc via
+-- Personalized job feed   activity tracking (previously only applied ad hoc via
 -- migrations/feed_tables.sql; folded in here so `npm run migrate` alone is complete).
 CREATE TABLE job_views (
     id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -801,7 +888,7 @@ CREATE TABLE feed_scores (
 );
 CREATE INDEX idx_feed_scores_candidate ON feed_scores(candidate_id, score DESC);
 
--- Job status audit trail — previously only applied ad hoc via
+-- Job status audit trail   previously only applied ad hoc via
 -- queries/2026_job_status_history.sql; folded in here for the same reason.
 CREATE TABLE job_status_history (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -833,7 +920,7 @@ CREATE TABLE applications (
     job_id             UUID NOT NULL REFERENCES jobs(id)  ON DELETE CASCADE,
     user_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     application_number VARCHAR(50) UNIQUE,
-    status             VARCHAR(50) DEFAULT 'submitted' CHECK (status IN ('submitted', 'under_review', 'shortlisted', 'interview', 'assessment', 'reference_check', 'offer', 'hired', 'rejected', 'withdrawn', 'on_hold')),
+    status             VARCHAR(50) DEFAULT 'submitted'CHECK (status IN ('submitted', 'under_review', 'shortlisted', 'interview', 'assessment', 'reference_check', 'offer', 'hired', 'rejected', 'withdrawn', 'on_hold')),
     current_stage      VARCHAR(100),
     applied_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -896,7 +983,7 @@ CREATE TABLE application_assignments (
     assigned_by    UUID REFERENCES users(id),
     assigned_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     role           VARCHAR(100),
-    status         VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'completed', 'removed')),
+    status         VARCHAR(50) DEFAULT 'active'CHECK (status IN ('active', 'completed', 'removed')),
     notes          TEXT,
     UNIQUE(application_id, assignee_id),
     CONSTRAINT no_self_assignment CHECK (assignee_id != assigned_by)
@@ -914,7 +1001,7 @@ CREATE TABLE application_reminders (
     description     TEXT,
     reminder_time   TIMESTAMP WITH TIME ZONE NOT NULL,
     recurrence      VARCHAR(50),
-    status          VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'acknowledged', 'cancelled', 'failed')),
+    status          VARCHAR(50) DEFAULT 'pending'CHECK (status IN ('pending', 'sent', 'acknowledged', 'cancelled', 'failed')),
     sent_at         TIMESTAMP WITH TIME ZONE,
     acknowledged_at TIMESTAMP WITH TIME ZONE,
     created_at      TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -1026,7 +1113,7 @@ CREATE TABLE simulations (
     job_id                UUID REFERENCES jobs(id),
     user_id               UUID NOT NULL REFERENCES users(id),
     external_id           VARCHAR(255),
-    status                VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'paused', 'completed', 'expired', 'cancelled', 'failed')),
+    status                VARCHAR(50) DEFAULT 'scheduled'CHECK (status IN ('scheduled', 'in_progress', 'paused', 'completed', 'expired', 'cancelled', 'failed')),
     scheduled_at          TIMESTAMP WITH TIME ZONE,
     started_at            TIMESTAMP WITH TIME ZONE,
     completed_at          TIMESTAMP WITH TIME ZONE,
@@ -1128,13 +1215,13 @@ CREATE TABLE simulation_sessions (
     id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     simulation_id  UUID NOT NULL REFERENCES simulations(id) ON DELETE CASCADE,
     user_id        UUID NOT NULL REFERENCES users(id),
-    session_type   VARCHAR(50) DEFAULT 'candidate' CHECK (session_type IN ('candidate', 'preview', 'practice', 'test')),
+    session_type   VARCHAR(50) DEFAULT 'candidate'CHECK (session_type IN ('candidate', 'preview', 'practice', 'test')),
     application_id UUID REFERENCES applications(id),
     started_at     TIMESTAMP WITH TIME ZONE,
     completed_at   TIMESTAMP WITH TIME ZONE,
     paused_at      TIMESTAMP WITH TIME ZONE,
     resumed_at     TIMESTAMP WITH TIME ZONE,
-    status         VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'paused', 'completed', 'expired', 'cancelled', 'failed')),
+    status         VARCHAR(50) DEFAULT 'scheduled'CHECK (status IN ('scheduled', 'in_progress', 'paused', 'completed', 'expired', 'cancelled', 'failed')),
     time_limit     INTEGER,
     time_remaining INTEGER,
     time_spent     INTEGER DEFAULT 0,
@@ -1169,7 +1256,7 @@ CREATE TABLE chat_messages (
     session_id   UUID NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     user_id      UUID NOT NULL REFERENCES users(id),
     message      TEXT NOT NULL,
-    message_type VARCHAR(50) DEFAULT 'text' CHECK (message_type IN ('text', 'system', 'notification')),
+    message_type VARCHAR(50) DEFAULT 'text'CHECK (message_type IN ('text', 'system', 'notification')),
     timestamp    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     is_read      BOOLEAN DEFAULT FALSE,
     recipient_id UUID REFERENCES users(id),   -- merged from ALTER
@@ -1189,7 +1276,7 @@ CREATE TABLE session_task_progress (
     id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     session_id        UUID NOT NULL REFERENCES simulation_sessions(id) ON DELETE CASCADE,
     task_index        INTEGER NOT NULL,
-    status            VARCHAR(50) DEFAULT 'not_started' CHECK (status IN ('not_started', 'in_progress', 'completed')),
+    status            VARCHAR(50) DEFAULT 'not_started'CHECK (status IN ('not_started', 'in_progress', 'completed')),
     started_at        TIMESTAMP WITH TIME ZONE,
     completed_at      TIMESTAMP WITH TIME ZONE,
     time_spent        INTEGER DEFAULT 0,
@@ -1220,7 +1307,7 @@ CREATE TABLE scheduled_simulations (
     simulation_id  UUID NOT NULL REFERENCES simulations(id)  ON DELETE CASCADE,
     user_id        UUID NOT NULL REFERENCES users(id),
     scheduled_at   TIMESTAMP WITH TIME ZONE NOT NULL,
-    status         VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled', 'missed')),
+    status         VARCHAR(50) DEFAULT 'scheduled'CHECK (status IN ('scheduled', 'completed', 'cancelled', 'missed')),
     created_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at     TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -1351,7 +1438,7 @@ CREATE TABLE blockchain_credentials (
     timestamp          TIMESTAMP WITH TIME ZONE,
     issuer             VARCHAR(255),
     issuer_did         VARCHAR(255),
-    status             VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'revoked', 'expired', 'suspended')),
+    status             VARCHAR(50) DEFAULT 'active'CHECK (status IN ('active', 'revoked', 'expired', 'suspended')),
     expires_at         TIMESTAMP WITH TIME ZONE,
     revoked_at         TIMESTAMP WITH TIME ZONE,
     revoked_reason     TEXT,
@@ -1536,7 +1623,7 @@ CREATE TABLE wallet_addresses (
     address       VARCHAR(255) NOT NULL,
     private_key   TEXT,
     is_primary    BOOLEAN DEFAULT FALSE,
-    status        VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'used', 'expired', 'revoked')),
+    status        VARCHAR(50) DEFAULT 'active'CHECK (status IN ('active', 'used', 'expired', 'revoked')),
     used_at       TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at    TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -1696,9 +1783,9 @@ CREATE TABLE notifications (
     title          VARCHAR(255) NOT NULL,
     content        TEXT,
     data           JSONB,
-    priority       VARCHAR(20) DEFAULT 'normal' CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
+    priority       VARCHAR(20) DEFAULT 'normal'CHECK (priority IN ('low', 'normal', 'high', 'urgent')),
     channels       TEXT[],
-    status         VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'sent', 'delivered', 'read', 'failed', 'cancelled')),
+    status         VARCHAR(50) DEFAULT 'pending'CHECK (status IN ('pending', 'sent', 'delivered', 'read', 'failed', 'cancelled')),
     sent_at        TIMESTAMP WITH TIME ZONE,
     delivered_at   TIMESTAMP WITH TIME ZONE,
     read_at        TIMESTAMP WITH TIME ZONE,
@@ -1747,7 +1834,7 @@ CREATE TABLE notification_preferences (
         "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
     }'::JSONB,
     updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    CONSTRAINT valid_email_prefs CHECK (email ? 'application_updates' AND email ? 'simulation_reminders')
+    CONSTRAINT valid_email_prefs CHECK (email ? 'application_updates'AND email ? 'simulation_reminders')
 );
 
 CREATE TABLE email_tracking (
@@ -1839,7 +1926,7 @@ CREATE TABLE webhooks (
     events       TEXT[] NOT NULL,
     secret       VARCHAR(255),
     headers      JSONB,
-    status       VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'paused', 'failed', 'disabled')),
+    status       VARCHAR(50) DEFAULT 'active'CHECK (status IN ('active', 'paused', 'failed', 'disabled')),
     retry_policy JSONB DEFAULT '{
         "max_attempts": 3,
         "initial_delay": 1000,
@@ -1957,7 +2044,7 @@ CREATE TABLE subscriptions (
     company_id             UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     plan_id                UUID REFERENCES subscription_plans(id),
     stripe_subscription_id VARCHAR(255),
-    status                 VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'trialing', 'unpaid')),
+    status                 VARCHAR(50) DEFAULT 'active'CHECK (status IN ('active', 'past_due', 'canceled', 'incomplete', 'incomplete_expired', 'trialing', 'unpaid')),
     billing_cycle          VARCHAR(50) CHECK (billing_cycle IN ('monthly', 'yearly')),
     started_at             TIMESTAMP WITH TIME ZONE NOT NULL,
     current_period_start   TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -2058,7 +2145,7 @@ CREATE TABLE support_tickets (
     description          TEXT NOT NULL,
     category             VARCHAR(100) CHECK (category IN ('technical', 'billing', 'account', 'feature_request', 'bug', 'other')),
     priority             VARCHAR(50) CHECK (priority IN ('low', 'normal', 'high', 'critical')),
-    status               VARCHAR(50) DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'waiting', 'resolved', 'closed')),
+    status               VARCHAR(50) DEFAULT 'open'CHECK (status IN ('open', 'in_progress', 'waiting', 'resolved', 'closed')),
     attachments          JSONB DEFAULT '[]'::JSONB,
     assigned_to          UUID REFERENCES users(id),
     resolved_at          TIMESTAMP WITH TIME ZONE,
@@ -2097,7 +2184,7 @@ CREATE TABLE bug_reports (
     browser_info       JSONB,
     device_info        JSONB,
     attachments        JSONB DEFAULT '[]'::JSONB,
-    status             VARCHAR(50) DEFAULT 'new' CHECK (status IN ('new', 'in_progress', 'fixed', 'cannot_reproduce', 'wont_fix')),
+    status             VARCHAR(50) DEFAULT 'new'CHECK (status IN ('new', 'in_progress', 'fixed', 'cannot_reproduce', 'wont_fix')),
     assigned_to        UUID REFERENCES users(id),
     fixed_in_version   VARCHAR(50),
     created_at         TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -2111,7 +2198,7 @@ CREATE TABLE feature_suggestions (
     description TEXT NOT NULL,
     category    VARCHAR(100),
     votes       INTEGER DEFAULT 0,
-    status      VARCHAR(50) DEFAULT 'under_review' CHECK (status IN ('under_review', 'planned', 'in_development', 'launched', 'declined')),
+    status      VARCHAR(50) DEFAULT 'under_review'CHECK (status IN ('under_review', 'planned', 'in_development', 'launched', 'declined')),
     admin_notes TEXT,
     created_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at  TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -2160,7 +2247,7 @@ CREATE TABLE evaluations (
     quality_weight            INTEGER DEFAULT 40 CHECK (quality_weight    BETWEEN 0 AND 100),
     speed_weight              INTEGER DEFAULT 30 CHECK (speed_weight      BETWEEN 0 AND 100),
     behavioral_weight         INTEGER DEFAULT 30 CHECK (behavioral_weight BETWEEN 0 AND 100),
-    status                    VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'reviewed')),
+    status                    VARCHAR(20) NOT NULL DEFAULT 'pending'CHECK (status IN ('pending', 'completed', 'reviewed')),
     completed_at              TIMESTAMP WITH TIME ZONE,
     reviewed_at               TIMESTAMP WITH TIME ZONE,
     reviewer_id               UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -2306,7 +2393,7 @@ CREATE TABLE github_simulation_repos (
     repo_url         TEXT NOT NULL,
     branch_name      VARCHAR(255),
     created_by       UUID REFERENCES users(id),
-    status           VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
+    status           VARCHAR(50) DEFAULT 'active'CHECK (status IN ('active', 'archived', 'deleted')),
     commit_count     INTEGER DEFAULT 0,
     pr_opened_at     TIMESTAMP WITH TIME ZONE,
     pr_url           TEXT,
@@ -2327,7 +2414,7 @@ CREATE INDEX idx_github_repos_lookup                ON github_simulation_repos(s
 CREATE UNIQUE INDEX idx_unique_repo_per_session
     ON github_simulation_repos(simulation_id, candidate_id, session_id) WHERE status = 'active';
 CREATE UNIQUE INDEX idx_unique_active_repo_no_session
-    ON github_simulation_repos(simulation_id, candidate_id) WHERE status = 'active' AND session_id IS NULL;
+    ON github_simulation_repos(simulation_id, candidate_id) WHERE status = 'active'AND session_id IS NULL;
 
 CREATE TABLE github_repo_analysis (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -2364,7 +2451,7 @@ CREATE TABLE github_submissions (
     repo_owner     VARCHAR(100) NOT NULL,
     repo_name      VARCHAR(255) NOT NULL,
     repo_url       TEXT NOT NULL,
-    status         VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'analyzing', 'completed', 'failed')),
+    status         VARCHAR(50) DEFAULT 'pending'CHECK (status IN ('pending', 'analyzing', 'completed', 'failed')),
     analysis_data  JSONB,
     completed_at   TIMESTAMP WITH TIME ZONE,
     failure_reason TEXT,
@@ -2385,7 +2472,7 @@ CREATE TABLE task_dependencies (
     simulation_id      UUID NOT NULL REFERENCES simulations(id)      ON DELETE CASCADE,
     task_id            UUID NOT NULL REFERENCES simulation_tasks(id),
     depends_on_task_id UUID NOT NULL REFERENCES simulation_tasks(id),
-    dependency_type    VARCHAR(50) DEFAULT 'completion' CHECK (dependency_type IN (
+    dependency_type    VARCHAR(50) DEFAULT 'completion'CHECK (dependency_type IN (
         'completion', 'score_minimum', 'time_spent',
         'github_repo', 'github_pr', 'github_commit', 'order'
     )),
@@ -2489,7 +2576,7 @@ SELECT
     u.email,
     COUNT(DISTINCT j.id)                                                AS total_jobs,
     COUNT(DISTINCT a.id)                                                AS total_applications,
-    COUNT(DISTINCT CASE WHEN a.status = 'hired' THEN a.id END)         AS total_hires,
+    COUNT(DISTINCT CASE WHEN a.status = 'hired'THEN a.id END)         AS total_hires,
     AVG(EXTRACT(EPOCH FROM (a.updated_at - a.applied_at)) / 86400)     AS avg_time_to_hire,
     COUNT(DISTINCT s.id)                                                AS total_simulations
 FROM users u
@@ -2537,12 +2624,12 @@ SELECT
     j.title,
     j.company_id,
     COUNT(DISTINCT a.id)                                                        AS total_applications,
-    COUNT(DISTINCT CASE WHEN a.status = 'submitted'    THEN a.id END)          AS submitted,
-    COUNT(DISTINCT CASE WHEN a.status = 'under_review' THEN a.id END)          AS under_review,
-    COUNT(DISTINCT CASE WHEN a.status = 'shortlisted'  THEN a.id END)          AS shortlisted,
-    COUNT(DISTINCT CASE WHEN a.status = 'interview'    THEN a.id END)          AS in_interview,
-    COUNT(DISTINCT CASE WHEN a.status = 'offer'        THEN a.id END)          AS offers,
-    COUNT(DISTINCT CASE WHEN a.status = 'hired'        THEN a.id END)          AS hires,
+    COUNT(DISTINCT CASE WHEN a.status = 'submitted'   THEN a.id END)          AS submitted,
+    COUNT(DISTINCT CASE WHEN a.status = 'under_review'THEN a.id END)          AS under_review,
+    COUNT(DISTINCT CASE WHEN a.status = 'shortlisted' THEN a.id END)          AS shortlisted,
+    COUNT(DISTINCT CASE WHEN a.status = 'interview'   THEN a.id END)          AS in_interview,
+    COUNT(DISTINCT CASE WHEN a.status = 'offer'       THEN a.id END)          AS offers,
+    COUNT(DISTINCT CASE WHEN a.status = 'hired'       THEN a.id END)          AS hires,
     AVG(EXTRACT(EPOCH FROM (a.updated_at - a.applied_at)) / 86400)             AS avg_days_in_process
 FROM jobs j
 LEFT JOIN applications a ON j.id = a.job_id
@@ -2567,6 +2654,10 @@ CREATE TRIGGER update_users_updated_at
 
 CREATE TRIGGER update_candidate_profiles_updated_at
     BEFORE UPDATE ON candidate_profiles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_candidate_documents_updated_at
+    BEFORE UPDATE ON candidate_documents
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_companies_updated_at
@@ -2608,7 +2699,7 @@ BEGIN
     INTO sequence_number
     FROM applications
     WHERE application_number LIKE year_prefix || '-%';
-    NEW.application_number := year_prefix || '-' || LPAD(sequence_number::TEXT, 6, '0');
+    NEW.application_number := year_prefix || '-'|| LPAD(sequence_number::TEXT, 6, '0');
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -2622,7 +2713,7 @@ CREATE TRIGGER generate_application_number_trigger
 CREATE OR REPLACE FUNCTION update_job_application_count()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'INSERT' THEN
+    IF TG_OP = 'INSERT'THEN
         UPDATE jobs
         SET application_count = application_count + 1
         WHERE id = NEW.job_id;
@@ -2637,7 +2728,7 @@ BEGIN
             VALUES (NEW.job_id, 1, NOW());
         END IF;
 
-    ELSIF TG_OP = 'DELETE' THEN
+    ELSIF TG_OP = 'DELETE'THEN
         UPDATE jobs
         SET application_count = GREATEST(application_count - 1, 0)
         WHERE id = OLD.job_id;
@@ -2709,16 +2800,16 @@ BEGIN
         WHERE td.task_id = p_task_id
     LOOP
         CASE v_dependency.dependency_type
-            WHEN 'completion' THEN
-                IF v_dependency.status != 'completed' THEN v_prerequisites_met := FALSE; END IF;
-            WHEN 'score_minimum' THEN
+            WHEN 'completion'THEN
+                IF v_dependency.status != 'completed'THEN v_prerequisites_met := FALSE; END IF;
+            WHEN 'score_minimum'THEN
                 IF COALESCE(v_dependency.score, 0) < v_dependency.min_score_required THEN v_prerequisites_met := FALSE; END IF;
-            WHEN 'time_spent' THEN
+            WHEN 'time_spent'THEN
                 IF COALESCE(v_dependency.time_spent, 0) < v_dependency.min_time_spent THEN v_prerequisites_met := FALSE; END IF;
-            WHEN 'github_repo' THEN
+            WHEN 'github_repo'THEN
                 IF v_dependency.github_commit_url IS NULL THEN v_prerequisites_met := FALSE; END IF;
-            WHEN 'order' THEN
-                IF v_dependency.status != 'completed' THEN v_prerequisites_met := FALSE; END IF;
+            WHEN 'order'THEN
+                IF v_dependency.status != 'completed'THEN v_prerequisites_met := FALSE; END IF;
             ELSE NULL;
         END CASE;
 
@@ -2735,7 +2826,7 @@ DECLARE
     v_next_task         RECORD;
     v_prerequisites_met BOOLEAN;
 BEGIN
-    IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
+    IF NEW.status = 'completed'AND OLD.status != 'completed'THEN
         FOR v_next_task IN
             SELECT stp.id, stp.task_index
             FROM session_task_progress stp
@@ -2774,7 +2865,7 @@ BEGIN
                        )
                      LIMIT 1),
                     'not_started', 'available',
-                    'Auto-unlocked by completion of task index ' || NEW.task_index,
+                    'Auto-unlocked by completion of task index '|| NEW.task_index,
                     jsonb_build_object('triggered_by_task_index', NEW.task_index)
                 );
             END IF;
@@ -2810,7 +2901,7 @@ BEGIN
     tasks_array := NEW.tasks;
     
     -- If tasks is a string (during insert/update from API), parse it
-    IF jsonb_typeof(tasks_array) = 'string' THEN
+    IF jsonb_typeof(tasks_array) = 'string'THEN
         BEGIN
             tasks_array := tasks_array::JSONB;
         EXCEPTION WHEN OTHERS THEN
@@ -2819,7 +2910,7 @@ BEGIN
     END IF;
     
     -- Extract duration from each task
-    IF jsonb_typeof(tasks_array) = 'array' THEN
+    IF jsonb_typeof(tasks_array) = 'array'THEN
         FOR task_index IN 0..jsonb_array_length(tasks_array) - 1 LOOP
             task_record := tasks_array->task_index;
             task_duration := (task_record->>'duration')::INTEGER;
@@ -2878,7 +2969,7 @@ DECLARE
     candidate_id TEXT;
     job_id TEXT;
 BEGIN
-    full_row := CASE WHEN TG_OP = 'DELETE' THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
+    full_row := CASE WHEN TG_OP = 'DELETE'THEN to_jsonb(OLD) ELSE to_jsonb(NEW) END;
     entity_id := COALESCE(
         full_row->>'id',
         full_row->>'user_id',
@@ -2893,12 +2984,12 @@ BEGIN
         full_row->>'id'
     );
 
-    -- pg_notify() hard-caps payloads at 8000 bytes — embedding the FULL row
+    -- pg_notify() hard-caps payloads at 8000 bytes   embedding the FULL row
     -- (to_jsonb(NEW)) blew past that for jobs/applications with long text
     -- fields (description, notes, feedback...), hard-failing the triggering
     -- UPDATE with "payload string too long". The realtime listener
     -- (hybrid_job_recommender.py) only ever reads a handful of scalar
-    -- fields from this nested payload — never the full row — so only those
+    -- fields from this nested payload   never the full row   so only those
     -- are kept; anything else it needs, it re-fetches by id.
     row_data := jsonb_build_object(
         'candidate_id', full_row->>'candidate_id',
@@ -2980,7 +3071,7 @@ BEGIN
     tasks_array := NEW.tasks;
     
     -- If tasks is a string (during insert/update from API), parse it
-    IF jsonb_typeof(tasks_array) = 'string' THEN
+    IF jsonb_typeof(tasks_array) = 'string'THEN
         BEGIN
             tasks_array := tasks_array::JSONB;
         EXCEPTION WHEN OTHERS THEN
@@ -2989,7 +3080,7 @@ BEGIN
     END IF;
     
     -- Extract duration from each task
-    IF jsonb_typeof(tasks_array) = 'array' THEN
+    IF jsonb_typeof(tasks_array) = 'array'THEN
         FOR task_index IN 0..jsonb_array_length(tasks_array) - 1 LOOP
             task_record := tasks_array->task_index;
             task_duration := (task_record->>'duration')::INTEGER;

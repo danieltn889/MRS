@@ -36,7 +36,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
 
   // Email ONE candidate their full results breakdown (passed=true marks them as
   // chosen). Reuses the existing email service via POST /applications/:id/send-results
-  // — no new schema. Returns true on success.
+  //   no new schema. Returns true on success.
   const postResults = async (candidate: any, passed: boolean): Promise<boolean> => {
     if (!candidate?.application_id) return false;
     const token = localStorage.getItem('authToken');
@@ -49,7 +49,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
       { label: 'Collaboration', score: parseFloat(candidate.collaboration_score) || 0 },
       { label: 'Initiative', score: parseFloat(candidate.initiative_score) || 0 },
     ];
-    // task_progress may arrive as an array or a JSON string — normalize both.
+    // task_progress may arrive as an array or a JSON string   normalize both.
     let tp: any = candidate.task_progress;
     if (typeof tp === 'string') { try { tp = JSON.parse(tp); } catch { tp = []; } }
     const tasks = (Array.isArray(tp) ? tp : []).map((t: any, i: number) => ({
@@ -74,7 +74,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
   // persisted (pass → hired, fail → rejected) so it shows on reload; refresh after.
   const sendResultsToSelected = async (passed: boolean) => {
     if (selectedIds.size === 0) { alert('Select at least one candidate first.'); return; }
-    if (!window.confirm(`Email ${selectedIds.size} selected candidate(s) and mark them as ${passed ? 'PASSED (hired)' : 'FAILED (rejected)'}?`)) return;
+    if (!window.confirm(`Email ${selectedIds.size} selected candidate(s) and mark them as ${passed ? 'PASSED (hired)': 'FAILED (rejected)'}?`)) return;
     setSending(true);
     let ok = 0, fail = 0;
     for (const id of Array.from(selectedIds)) {
@@ -89,11 +89,11 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
 
   // Send results to the single candidate open in the details modal.
   const sendResultsForOne = async (candidate: any, passed: boolean) => {
-    if (!window.confirm(`Email this candidate and mark as ${passed ? 'PASSED (hired)' : 'FAILED (rejected)'}?`)) return;
+    if (!window.confirm(`Email this candidate and mark as ${passed ? 'PASSED (hired)': 'FAILED (rejected)'}?`)) return;
     setSending(true);
     const ok = await postResults(candidate, passed);
     setSending(false);
-    alert(ok ? 'Results sent to the candidate.' : 'Failed to send results.');
+    alert(ok ? 'Results sent to the candidate.': 'Failed to send results.');
     loadCandidates();
   };
 
@@ -109,7 +109,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
       const result = await getJobCandidatesComplete(jobId, {
         sortBy,
         sortOrder,
-        status: filterStatus === 'all' ? undefined : filterStatus,
+        status: filterStatus === 'all'? undefined : filterStatus,
         limit: 100
       });
       
@@ -140,7 +140,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
 
   // Final = ALWAYS 70% AI + 30% recruiter task average. Reuses existing data:
   // simulation_overall_score (AI) and per-task recruiter scores (simulation_tasks.score).
-  // The recruiter average is over EVERY task in the simulation — a task that has not
+  // The recruiter average is over EVERY task in the simulation   a task that has not
   // been scored counts as 0 (the recruiter is expected to score every task).
   const computeWeighted = (candidate: any) => {
     const aiScore = parseFloat(candidate.simulation_overall_score) || 0;
@@ -165,13 +165,13 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 500 }}>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center'}}>
           <div style={{
             width: 48, height: 48, borderRadius: '50%',
             border: '3px solid #e2e8f0', borderTopColor: '#2563eb',
             animation: 'spin 0.8s linear infinite', margin: '0 auto 16px',
           }} />
-          <p style={{ color: '#64748b' }}>Loading candidate results...</p>
+          <p style={{ color: '#64748b'}}>Loading candidate results...</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
@@ -206,10 +206,10 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
             <ArrowLeft size={18} /> Back to Jobs
           </button>
           <div>
-            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: '#0f172a' }}>
+            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: '#0f172a'}}>
               {jobTitle}
             </h1>
-            <p style={{ fontSize: 14, color: '#64748b', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 14, color: '#64748b', margin: '4px 0 0'}}>
               Candidate Results & Performance Analysis
             </p>
           </div>
@@ -229,7 +229,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <Users size={20} color="#2563eb" />
-            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{stats.total_applicants || 0}</span>
+            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a'}}>{stats.total_applicants || 0}</span>
           </div>
           <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Total Candidates</p>
         </div>
@@ -240,7 +240,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <BarChart3 size={20} color="#8b5cf6" />
-            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{stats.simulations?.with_simulation || 0}</span>
+            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a'}}>{stats.simulations?.with_simulation || 0}</span>
           </div>
           <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Completed Practical Assessments</p>
         </div>
@@ -251,7 +251,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <TrendingUp size={20} color="#22c55e" />
-            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{Math.round(stats.scores?.average || 0)}%</span>
+            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a'}}>{Math.round(stats.scores?.average || 0)}%</span>
           </div>
           <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Average Score</p>
         </div>
@@ -262,7 +262,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <Award size={20} color="#fbbf24" />
-            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a' }}>{Math.round(stats.scores?.max || 0)}%</span>
+            <span style={{ fontSize: 24, fontWeight: 700, color: '#0f172a'}}>{Math.round(stats.scores?.max || 0)}%</span>
           </div>
           <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>Top Score</p>
         </div>
@@ -297,7 +297,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#64748b' }}>Sort by:</span>
+          <span style={{ fontSize: 13, color: '#64748b'}}>Sort by:</span>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
@@ -332,56 +332,56 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
           borderRadius: 16, border: '1px solid #e2e8f0'
         }}>
           <Users size={48} color="#cbd5e1" style={{ marginBottom: 16 }} />
-          <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: '#0f172a' }}>No candidates yet</p>
-          <p style={{ color: '#64748b' }}>Candidates who apply to this job will appear here.</p>
+          <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 8, color: '#0f172a'}}>No candidates yet</p>
+          <p style={{ color: '#64748b'}}>Candidates who apply to this job will appear here.</p>
         </div>
       ) : (
-        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+        <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden'}}>
           {/* Select candidates and email them their results */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', flexWrap: 'wrap', gap: 12 }}>
-            <span style={{ fontSize: 13, color: '#64748b' }}>
+            <span style={{ fontSize: 13, color: '#64748b'}}>
               {selectedIds.size > 0 ? `${selectedIds.size} candidate(s) selected` : 'Tick candidates, then Pass or Fail them (emails + saves the decision)'}
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={() => sendResultsToSelected(true)}
                 disabled={sending || selectedIds.size === 0}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: (sending || selectedIds.size === 0) ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: selectedIds.size === 0 ? '#cbd5e1' : '#16a34a' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: (sending || selectedIds.size === 0) ? 'not-allowed': 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: selectedIds.size === 0 ? '#cbd5e1': '#16a34a'}}
               >
-                <Award size={16} /> {sending ? 'Sending…' : `Pass & Email (${selectedIds.size})`}
+                <Award size={16} /> {sending ? 'Sending…': `Pass & Email (${selectedIds.size})`}
               </button>
               <button
                 onClick={() => sendResultsToSelected(false)}
                 disabled={sending || selectedIds.size === 0}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: (sending || selectedIds.size === 0) ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: selectedIds.size === 0 ? '#cbd5e1' : '#dc2626' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: (sending || selectedIds.size === 0) ? 'not-allowed': 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: selectedIds.size === 0 ? '#cbd5e1': '#dc2626'}}
               >
-                {sending ? 'Sending…' : `Fail & Email (${selectedIds.size})`}
+                {sending ? 'Sending…': `Fail & Email (${selectedIds.size})`}
               </button>
             </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto'}}>
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1200 }}>
               <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                  <th style={{ padding: '14px 8px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0'}}>
+                  <th style={{ padding: '14px 8px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>
                     <input
                       type="checkbox"
                       title="Select all"
                       checked={candidates.length > 0 && selectedIds.size === candidates.length}
                       onChange={(e) => setSelectedIds(e.target.checked ? new Set(candidates.map((c) => c.application_id)) : new Set())}
-                      style={{ width: 16, height: 16, cursor: 'pointer' }}
+                      style={{ width: 16, height: 16, cursor: 'pointer'}}
                     />
                   </th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Rank</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Candidate</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Tasks Score (100%)</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Recruiter (30%)</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Practical Assessment Score (100%)</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>AI (70%)</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Overall Score</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Applied</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Status</th>
-                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b' }}>Actions</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Rank</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Candidate</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Tasks Score (100%)</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Recruiter (30%)</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Practical Assessment Score (100%)</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>AI (70%)</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Overall Score</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Applied</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Status</th>
+                  <th style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#64748b'}}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -396,16 +396,16 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   const appliedDate = candidate.applied_at ? new Date(candidate.applied_at).toLocaleDateString() : 'N/A';
                   
                   return (
-                    <tr key={candidate.candidate_id || idx} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '14px 8px', textAlign: 'center' }}>
+                    <tr key={candidate.candidate_id || idx} style={{ borderBottom: '1px solid #f1f5f9'}}>
+                      <td style={{ padding: '14px 8px', textAlign: 'center'}}>
                         <input
                           type="checkbox"
                           checked={selectedIds.has(candidate.application_id)}
                           onChange={() => toggleSelect(candidate.application_id)}
-                          style={{ width: 16, height: 16, cursor: 'pointer' }}
+                          style={{ width: 16, height: 16, cursor: 'pointer'}}
                         />
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
                         {idx < 3 ? (
                           getRankIcon(idx + 1)
                         ) : (
@@ -418,7 +418,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                           </span>
                         )}
                       </td>
-                      <td style={{ padding: '14px 16px', cursor: 'pointer' }} onClick={() => setSelectedCandidate(candidate)} title="View candidate details">
+                      <td style={{ padding: '14px 16px', cursor: 'pointer'}} onClick={() => setSelectedCandidate(candidate)} title="View candidate details">
                         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                           <div style={{
                             width: 44, height: 44, borderRadius: '50%',
@@ -429,52 +429,52 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                             {candidate.first_name?.[0] || candidate.candidate_name?.[0] || 'C'}
                           </div>
                           <div>
-                            <div style={{ fontWeight: 600, color: '#0f172a' }}>
+                            <div style={{ fontWeight: 600, color: '#0f172a'}}>
                               {candidate.candidate_name || `${candidate.first_name} ${candidate.last_name}`}
                             </div>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>{candidate.candidate_email}</div>
+                            <div style={{ fontSize: 12, color: '#64748b'}}>{candidate.candidate_email}</div>
                             {candidate.headline && (
                               <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{candidate.headline}</div>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
+                        <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap'}}>
                           {candidate.task_progress && candidate.task_progress.map((task: any, i: number) => (
                             <div
                               key={i}
                               title={`Task ${i + 1}: ${task.score || 0}% - ${task.status}`}
                               style={{
                                 width: 32, height: 32, borderRadius: 8,
-                                background: task.status === 'completed' ? getScoreColor(task.score || 0) : '#f1f5f9',
+                                background: task.status === 'completed'? getScoreColor(task.score || 0) : '#f1f5f9',
                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                                 fontSize: 12, fontWeight: 600,
-                                color: task.status === 'completed' ? '#fff' : '#94a3b8'
+                                color: task.status === 'completed'? '#fff': '#94a3b8'
                               }}
                             >
                               {task.score ? Math.round(task.score) : i + 1}
                             </div>
                           ))}
                         </div>
-                        <div style={{ fontSize: 11, marginTop: 4, color: '#64748b' }}>
+                        <div style={{ fontSize: 11, marginTop: 4, color: '#64748b'}}>
                           {taskCount}/{totalTasks} Tasks
                         </div>
                         <div style={{ fontSize: 11, fontWeight: 700, color: getScoreColor(w.recruiterAvg) }}>
                           {w.recruiterAvg.toFixed(2)}%
                           {w.scoredCount < w.totalTasks && (
-                            <span style={{ fontWeight: 500, color: '#f59e0b' }}> · {w.scoredCount}/{w.totalTasks} scored</span>
+                            <span style={{ fontWeight: 500, color: '#f59e0b'}}> · {w.scoredCount}/{w.totalTasks} scored</span>
                           )}
                         </div>
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
                         <span style={{ fontSize: 18, fontWeight: 700, color: getScoreColor(w.recruiterAvg) }}>
                           {(w.recruiterAvg * 0.30).toFixed(1)}
                         </span>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{Math.round(w.recruiterAvg)}% × 30%</div>
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
-                        {candidate.simulation_status === 'completed' ? (
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
+                        {candidate.simulation_status === 'completed'? (
                           <div>
                             <span style={{
                               fontSize: 20, fontWeight: 600, color: getScoreColor(simScore)
@@ -486,16 +486,16 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                             </div>
                           </div>
                         ) : (
-                          <span style={{ fontSize: 12, color: '#94a3b8' }}>Not started</span>
+                          <span style={{ fontSize: 12, color: '#94a3b8'}}>Not started</span>
                         )}
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
                         <span style={{ fontSize: 18, fontWeight: 700, color: getScoreColor(w.aiScore) }}>
                           {(w.aiScore * 0.70).toFixed(1)}
                         </span>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{Math.round(w.aiScore)}% × 70%</div>
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
                         <div>
                           <span style={{
                             fontSize: 28, fontWeight: 700, color: getScoreColor(overallScore)
@@ -508,41 +508,41 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                           <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
                             70% AI · 30% Recruiter
                             {w.scoredCount < w.totalTasks && (
-                              <span style={{ color: '#f59e0b' }}> · {w.scoredCount}/{w.totalTasks} scored</span>
+                              <span style={{ color: '#f59e0b'}}> · {w.scoredCount}/{w.totalTasks} scored</span>
                             )}
                           </div>
                         </div>
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, color: '#64748b' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center', fontSize: 12, color: '#64748b'}}>
                         {appliedDate}
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
                         <span style={{
                           display: 'inline-block', padding: '4px 12px', borderRadius: 20,
                           fontSize: 11, fontWeight: 500,
-                          background: candidate.application_status === 'hired' ? '#dcfce7' :
-                                     candidate.application_status === 'under_review' ? '#fff3e3' :
-                                     candidate.application_status === 'shortlisted' ? '#e0e7ff' :
-                                     candidate.application_status === 'interview' ? '#fef3c7' :
-                                     candidate.application_status === 'offer' ? '#dcfce7' :
-                                     candidate.application_status === 'rejected' ? '#fee2e2' : '#f1f5f9',
-                          color: candidate.application_status === 'hired' ? '#15803d' :
-                                 candidate.application_status === 'under_review' ? '#b45309' :
-                                 candidate.application_status === 'shortlisted' ? '#4338ca' :
-                                 candidate.application_status === 'interview' ? '#92400e' :
-                                 candidate.application_status === 'offer' ? '#15803d' :
-                                 candidate.application_status === 'rejected' ? '#b91c1c' : '#475569'
+                          background: candidate.application_status === 'hired'? '#dcfce7':
+                                     candidate.application_status === 'under_review'? '#fff3e3':
+                                     candidate.application_status === 'shortlisted'? '#e0e7ff':
+                                     candidate.application_status === 'interview'? '#fef3c7':
+                                     candidate.application_status === 'offer'? '#dcfce7':
+                                     candidate.application_status === 'rejected'? '#fee2e2': '#f1f5f9',
+                          color: candidate.application_status === 'hired'? '#15803d':
+                                 candidate.application_status === 'under_review'? '#b45309':
+                                 candidate.application_status === 'shortlisted'? '#4338ca':
+                                 candidate.application_status === 'interview'? '#92400e':
+                                 candidate.application_status === 'offer'? '#15803d':
+                                 candidate.application_status === 'rejected'? '#b91c1c': '#475569'
                         }}>
-                          {candidate.application_status === 'under_review' ? 'Review' :
-                           candidate.application_status === 'shortlisted' ? 'Shortlisted' :
-                           candidate.application_status === 'interview' ? 'Interview' :
-                           candidate.application_status === 'offer' ? 'Offer' :
-                           candidate.application_status === 'hired' ? 'Hired' :
-                           candidate.application_status === 'rejected' ? 'Rejected' :
+                          {candidate.application_status === 'under_review'? 'Review':
+                           candidate.application_status === 'shortlisted'? 'Shortlisted':
+                           candidate.application_status === 'interview'? 'Interview':
+                           candidate.application_status === 'offer'? 'Offer':
+                           candidate.application_status === 'hired'? 'Hired':
+                           candidate.application_status === 'rejected'? 'Rejected':
                            candidate.application_status || 'Applied'}
                         </span>
                       </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'center'}}>
                         <button
                           onClick={() => setSelectedCandidate(candidate)}
                           style={{
@@ -615,15 +615,15 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   {selectedCandidate.first_name?.[0] || selectedCandidate.candidate_name?.[0] || 'C'}
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f172a' }}>
+                  <h4 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: '#0f172a'}}>
                     {selectedCandidate.candidate_name || `${selectedCandidate.first_name} ${selectedCandidate.last_name}`}
                   </h4>
-                  <p style={{ margin: '4px 0 0', color: '#64748b' }}>{selectedCandidate.candidate_email}</p>
+                  <p style={{ margin: '4px 0 0', color: '#64748b'}}>{selectedCandidate.candidate_email}</p>
                   {selectedCandidate.headline && (
-                    <p style={{ margin: '8px 0 0', fontSize: 13, color: '#475569' }}>{selectedCandidate.headline}</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 13, color: '#475569'}}>{selectedCandidate.headline}</p>
                   )}
                   {selectedCandidate.summary && (
-                    <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>{selectedCandidate.summary.substring(0, 150)}...</p>
+                    <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b'}}>{selectedCandidate.summary.substring(0, 150)}...</p>
                   )}
                 </div>
               </div>
@@ -638,7 +638,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   <div style={{ fontSize: 28, fontWeight: 700, color: getScoreColor(computeWeighted(selectedCandidate).weighted) }}>
                     {Math.round(computeWeighted(selectedCandidate).weighted)}%
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Overall Score</div>
+                  <div style={{ fontSize: 12, color: '#64748b'}}>Overall Score</div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>70% AI · 30% Recruiter</div>
                 </div>
                 <div style={{ textAlign: 'center', padding: 16, background: '#f8fafc', borderRadius: 16 }}>
@@ -646,7 +646,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   <div style={{ fontSize: 28, fontWeight: 700, color: getScoreColor(parseFloat(selectedCandidate.simulation_overall_score)) }}>
                     {Math.round(parseFloat(selectedCandidate.simulation_overall_score))}%
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Practical Assessment Score</div>
+                  <div style={{ fontSize: 12, color: '#64748b'}}>Practical Assessment Score</div>
                   <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
                     {selectedCandidate.tasks_completed_count}/{selectedCandidate.total_tasks_count} tasks
                   </div>
@@ -656,43 +656,43 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   <div style={{ fontSize: 28, fontWeight: 700, color: getScoreColor(parseFloat(selectedCandidate.candidate_completion_rate)) }}>
                     {Math.round(parseFloat(selectedCandidate.candidate_completion_rate))}%
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b' }}>Completion Rate</div>
+                  <div style={{ fontSize: 12, color: '#64748b'}}>Completion Rate</div>
                 </div>
               </div>
 
-              {/* Send this candidate their results — pass/fail decision is saved and emailed */}
+              {/* Send this candidate their results   pass/fail decision is saved and emailed */}
               <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <span style={{ fontSize: 12, color: '#64748b' }}>
-                  Current decision: <strong style={{ color: selectedCandidate.application_status === 'hired' ? '#16a34a' : selectedCandidate.application_status === 'rejected' ? '#dc2626' : '#475569' }}>
-                    {selectedCandidate.application_status === 'hired' ? 'Passed (hired)' : selectedCandidate.application_status === 'rejected' ? 'Failed (rejected)' : (selectedCandidate.application_status || '—')}
-                  </strong> — you can change or resend.
+                <span style={{ fontSize: 12, color: '#64748b'}}>
+                  Current decision: <strong style={{ color: selectedCandidate.application_status === 'hired'? '#16a34a': selectedCandidate.application_status === 'rejected'? '#dc2626': '#475569'}}>
+                    {selectedCandidate.application_status === 'hired'? 'Passed (hired)': selectedCandidate.application_status === 'rejected'? 'Failed (rejected)': (selectedCandidate.application_status || ' ')}
+                  </strong>   you can change or resend.
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     onClick={() => sendResultsForOne(selectedCandidate, true)}
                     disabled={sending}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: sending ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: '#16a34a' }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: sending ? 'not-allowed': 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: '#16a34a'}}
                   >
-                    <Award size={16} /> {sending ? 'Sending…' : 'Pass & Email'}
+                    <Award size={16} /> {sending ? 'Sending…': 'Pass & Email'}
                   </button>
                   <button
                     onClick={() => sendResultsForOne(selectedCandidate, false)}
                     disabled={sending}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: sending ? 'not-allowed' : 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: '#dc2626' }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, border: 'none', cursor: sending ? 'not-allowed': 'pointer', fontWeight: 600, fontSize: 13, color: '#fff', background: '#dc2626'}}
                   >
-                    {sending ? 'Sending…' : 'Fail & Email'}
+                    {sending ? 'Sending…': 'Fail & Email'}
                   </button>
                 </div>
               </div>
 
               {/* How the score is calculated */}
               <div style={{ marginBottom: 24, padding: 16, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 12 }}>
-                <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#5b21b6' }}>
-                  <Brain size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: '#5b21b6'}}>
+                  <Brain size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle'}} />
                   How this score is calculated
                 </h5>
                 <p style={{ fontSize: 13, color: '#475569', margin: '0 0 8px', lineHeight: 1.6 }}>
-                  The <strong>Practical Assessment</strong> score is generated automatically by AI when the candidate <strong>submits</strong> the practical assessment — a weighted blend of code/answer <strong>Quality</strong>, <strong>Speed</strong> (time efficiency), <strong>Behavioral</strong> competencies (communication, problem-solving, punctuality…) and <strong>GitHub</strong> practices.
+                  The <strong>Practical Assessment</strong> score is generated automatically by AI when the candidate <strong>submits</strong> the practical assessment   a weighted blend of code/answer <strong>Quality</strong>, <strong>Speed</strong> (time efficiency), <strong>Behavioral</strong> competencies (communication, problem-solving, punctuality…) and <strong>GitHub</strong> practices.
                 </p>
                 <p style={{ fontSize: 13, color: '#475569', margin: '0 0 8px', lineHeight: 1.6 }}>
                   The <strong>Overall</strong> combines that AI score with the recruiter's task evaluation:
@@ -700,7 +700,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                 {(() => {
                   const w = computeWeighted(selectedCandidate);
                   return (
-                    <div style={{ fontSize: 13, color: '#0f172a', background: '#fff', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 13, color: '#0f172a', background: '#fff', borderRadius: 8, padding: '10px 12px'}}>
                       AI Practical Assessment <strong>{Math.round(w.aiScore)}%</strong> × 70% = <strong>{(w.aiScore * 0.7).toFixed(1)}</strong>
                       &nbsp;+&nbsp;
                       Recruiter Tasks <strong>{Math.round(w.recruiterAvg)}%</strong> × 30% = <strong>{(w.recruiterAvg * 0.3).toFixed(1)}</strong>
@@ -714,74 +714,74 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   onClick={() => setShowCalc((s) => !s)}
                   style={{ marginTop: 10, background: 'none', border: 'none', color: '#7c3aed', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}
                 >
-                  {showCalc ? '▲ Hide full calculation' : '▼ Show full calculation'}
+                  {showCalc ? '▲ Hide full calculation': '▼ Show full calculation'}
                 </button>
 
                 {showCalc && (
                   <div style={{ marginTop: 10, fontSize: 12, color: '#475569', lineHeight: 1.7 }}>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 0 — Trigger:</strong> When the candidate <strong>submits</strong> the session, the AI evaluation runs over their task progress, chat, time data and GitHub repo.
+                    <p style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 0   Trigger:</strong> When the candidate <strong>submits</strong> the session, the AI evaluation runs over their task progress, chat, time data and GitHub repo.
                     </p>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 1 — Each task (0–100):</strong> four sub-scores per task — <em>completion</em> (100 done / partial / 0), <em>time</em> (taken vs limit), <em>quality</em> (code/essay quality), <em>answer-quality</em> (code ≤50 + essay ≤50 + completeness ≤30, normalized).<br />
-                      <span style={{ fontFamily: 'monospace' }}>Task overall = (completion + time + quality + answer-quality) ÷ 4</span>
+                    <p style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 1   Each task (0–100):</strong> four sub-scores per task   <em>completion</em> (100 done / partial / 0), <em>time</em> (taken vs limit), <em>quality</em> (code/essay quality), <em>answer-quality</em> (code ≤50 + essay ≤50 + completeness ≤30, normalized).<br />
+                      <span style={{ fontFamily: 'monospace'}}>Task overall = (completion + time + quality + answer-quality) ÷ 4</span>
                     </p>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 2 — Aggregate task metrics:</strong><br />
-                      <span style={{ fontFamily: 'monospace' }}>completionRate = completed ÷ total × 100</span><br />
-                      <span style={{ fontFamily: 'monospace' }}>averageTaskScore = Σ(task overall) ÷ total</span><br />
-                      <span style={{ fontFamily: 'monospace' }}>overallTaskPercentage = pointsEarned ÷ (total×100) × 100</span>
+                    <p style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 2   Aggregate task metrics:</strong><br />
+                      <span style={{ fontFamily: 'monospace'}}>completionRate = completed ÷ total × 100</span><br />
+                      <span style={{ fontFamily: 'monospace'}}>averageTaskScore = Σ(task overall) ÷ total</span><br />
+                      <span style={{ fontFamily: 'monospace'}}>overallTaskPercentage = pointsEarned ÷ (total×100) × 100</span>
                     </p>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 3 — Competency scores (0–100):</strong>
-                      <br />• <strong>Punctuality</strong> — weighted on-time + partial credit across tasks ÷ total weight.
-                      <br />• <strong>Speed</strong> — time-efficiency, weighted across tasks (fast within limit → high).
-                      <br />• <strong>Technical</strong> — average quality of the technical tasks (default 50 if none).
-                      <br />• <strong>Adaptability</strong> — base − abandonment penalty + creativity bonus (clamped 0–100).
-                      <br />• <strong>Communication</strong> — from chat analysis.
-                      <br />• <strong>Collaboration</strong> — volume (msgs) + balance (msg ratio × 30) + responsiveness (≤30), capped 100.
-                      <br />• <strong>GitHub</strong> — repo analysis (commits, structure, practices).
+                    <p style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 3   Competency scores (0–100):</strong>
+                      <br />• <strong>Punctuality</strong>   weighted on-time + partial credit across tasks ÷ total weight.
+                      <br />• <strong>Speed</strong>   time-efficiency, weighted across tasks (fast within limit → high).
+                      <br />• <strong>Technical</strong>   average quality of the technical tasks (default 50 if none).
+                      <br />• <strong>Adaptability</strong>   base − abandonment penalty + creativity bonus (clamped 0–100).
+                      <br />• <strong>Communication</strong>   from chat analysis.
+                      <br />• <strong>Collaboration</strong>   volume (msgs) + balance (msg ratio × 30) + responsiveness (≤30), capped 100.
+                      <br />• <strong>GitHub</strong>   repo analysis (commits, structure, practices).
                     </p>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 4 — Composites:</strong><br />
-                      <span style={{ fontFamily: 'monospace' }}>Quality = (Technical + Punctuality + Adaptability) ÷ 3</span><br />
-                      <span style={{ fontFamily: 'monospace' }}>Behavioral = (Adaptability + Communication) ÷ 2</span>
+                    <p style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 4   Composites:</strong><br />
+                      <span style={{ fontFamily: 'monospace'}}>Quality = (Technical + Punctuality + Adaptability) ÷ 3</span><br />
+                      <span style={{ fontFamily: 'monospace'}}>Behavioral = (Adaptability + Communication) ÷ 2</span>
                     </p>
-                    <div style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 5 — AI Practical Assessment Overall</strong> (weights from the rubric; defaults):
+                    <div style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 5   AI Practical Assessment Overall</strong> (weights from the rubric; defaults):
                       <table style={{ borderCollapse: 'collapse', margin: '4px 0', fontSize: 12 }}>
                         <tbody>
-                          <tr><td style={{ padding: '1px 16px 1px 0' }}>Quality</td><td><strong>0.60</strong></td></tr>
-                          <tr><td style={{ padding: '1px 16px 1px 0' }}>Speed</td><td><strong>0.15</strong></td></tr>
-                          <tr><td style={{ padding: '1px 16px 1px 0' }}>Behavioral</td><td><strong>0.10</strong></td></tr>
-                          <tr><td style={{ padding: '1px 16px 1px 0' }}>GitHub</td><td><strong>0.15</strong></td></tr>
+                          <tr><td style={{ padding: '1px 16px 1px 0'}}>Quality</td><td><strong>0.60</strong></td></tr>
+                          <tr><td style={{ padding: '1px 16px 1px 0'}}>Speed</td><td><strong>0.15</strong></td></tr>
+                          <tr><td style={{ padding: '1px 16px 1px 0'}}>Behavioral</td><td><strong>0.10</strong></td></tr>
+                          <tr><td style={{ padding: '1px 16px 1px 0'}}>GitHub</td><td><strong>0.15</strong></td></tr>
                         </tbody>
                       </table>
-                      <span style={{ fontFamily: 'monospace' }}>AI Overall = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</span>
+                      <span style={{ fontFamily: 'monospace'}}>AI Overall = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15</span>
                       <div style={{ marginTop: 2 }}>This is the <strong>Practical Assessment Score</strong> column.</div>
                     </div>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 6 — Pass / Fail:</strong> passed = AI Overall ≥ passingScore (rubric's passingScore, default 70).
+                    <p style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 6   Pass / Fail:</strong> passed = AI Overall ≥ passingScore (rubric's passingScore, default 70).
                     </p>
-                    <div style={{ margin: '0 0 6px', padding: 8, background: '#fff', borderRadius: 8, border: '1px solid #ddd6fe' }}>
-                      <strong style={{ color: '#7c3aed' }}>How the recruiter marks tasks (the 30%):</strong>
-                      <br />• The recruiter reviews each <strong>submitted task</strong> only — not the AI competencies.
+                    <div style={{ margin: '0 0 6px', padding: 8, background: '#fff', borderRadius: 8, border: '1px solid #ddd6fe'}}>
+                      <strong style={{ color: '#7c3aed'}}>How the recruiter marks tasks (the 30%):</strong>
+                      <br />• The recruiter reviews each <strong>submitted task</strong> only   not the AI competencies.
                       <br />• Each task gets a score from <strong>0–100%</strong> plus an optional comment (saved per task).
-                      <br />• The system <strong>auto-averages</strong> all task scores — a task left unscored counts as <strong>0</strong>.
-                      <br /><span style={{ fontFamily: 'monospace' }}>Recruiter Task Avg = Σ(task scores) ÷ total tasks</span>
+                      <br />• The system <strong>auto-averages</strong> all task scores   a task left unscored counts as <strong>0</strong>.
+                      <br /><span style={{ fontFamily: 'monospace'}}>Recruiter Task Avg = Σ(task scores) ÷ total tasks</span>
                       <br />• That average is the recruiter's contribution; the AI provides the other 70%. The recruiter always has the final decision.
                     </div>
-                    <p style={{ margin: '0 0 6px' }}>
-                      <strong style={{ color: '#7c3aed' }}>Step 7 — Final platform Overall (the table):</strong><br />
-                      <span style={{ fontFamily: 'monospace' }}>Final = AI Practical Assessment × 70% + Recruiter Task Avg × 30%</span> — recruiter avg = Σ(per-task recruiter scores) ÷ total (unscored = 0).
+                    <p style={{ margin: '0 0 6px'}}>
+                      <strong style={{ color: '#7c3aed'}}>Step 7   Final platform Overall (the table):</strong><br />
+                      <span style={{ fontFamily: 'monospace'}}>Final = AI Practical Assessment × 70% + Recruiter Task Avg × 30%</span>   recruiter avg = Σ(per-task recruiter scores) ÷ total (unscored = 0).
                     </p>
                     <div style={{ margin: '6px 0', padding: 8, background: '#fff', borderRadius: 8 }}>
-                      <strong>Worked example</strong> — Quality 85, Speed 70, Behavioral 60, GitHub 50:<br />
+                      <strong>Worked example</strong>   Quality 85, Speed 70, Behavioral 60, GitHub 50:<br />
                       AI = 85×.60 + 70×.15 + 60×.10 + 50×.15 = 51 + 10.5 + 6 + 7.5 = <strong>75%</strong><br />
                       Recruiter avg 80% → 80×.30 = <strong>24</strong> · AI 75×.70 = <strong>52.5</strong> → Final = <strong>76.5%</strong>
                     </div>
                     <div style={{ marginTop: 8, padding: 10, background: '#fff', borderRadius: 8 }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4, color: '#0f172a' }}>This candidate's competency scores (AI):</div>
+                      <div style={{ fontWeight: 600, marginBottom: 4, color: '#0f172a'}}>This candidate's competency scores (AI):</div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 4 }}>
                         <span>Punctuality: <strong>{Math.round(parseFloat(selectedCandidate.punctuality_score) || 0)}%</strong></span>
                         <span>Communication: <strong>{Math.round(parseFloat(selectedCandidate.communication_score) || 0)}%</strong></span>
@@ -792,24 +792,24 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                       </div>
                     </div>
 
-                    {/* AI score composition (Quality/Speed/Behavioral/GitHub) — read from the
+                    {/* AI score composition (Quality/Speed/Behavioral/GitHub)   read from the
                         stored evaluation result if present; reuses submission_results, no new data. */}
                     {(() => {
                       const sr = selectedCandidate.submission_results || {};
                       const wb = sr.weighted_breakdown || sr.weightedScores || (sr.scores && sr.scores.weighted_breakdown) || null;
                       const comps = [
-                        { key: 'quality', label: 'Quality' },
-                        { key: 'speed', label: 'Speed' },
-                        { key: 'behavioral', label: 'Behavioral' },
-                        { key: 'github', label: 'GitHub' },
+                        { key: 'quality', label: 'Quality'},
+                        { key: 'speed', label: 'Speed'},
+                        { key: 'behavioral', label: 'Behavioral'},
+                        { key: 'github', label: 'GitHub'},
                       ];
                       const rows = wb ? comps.filter((c) => wb[c.key]) : [];
                       if (!rows.length) return null;
                       return (
                         <div style={{ marginTop: 8, padding: 10, background: '#fff', borderRadius: 8 }}>
-                          <div style={{ fontWeight: 600, marginBottom: 4, color: '#0f172a' }}>AI Practical Assessment composition:</div>
+                          <div style={{ fontWeight: 600, marginBottom: 4, color: '#0f172a'}}>AI Practical Assessment composition:</div>
                           {rows.map((c) => (
-                            <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <div key={c.key} style={{ display: 'flex', justifyContent: 'space-between'}}>
                               <span>{c.label}</span>
                               <span><strong>{Math.round(Number(wb[c.key].score))}%</strong> × {wb[c.key].weight} = <strong>{wb[c.key].contribution}</strong></span>
                             </div>
@@ -823,13 +823,13 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
 
               {/* Sub-scores */}
               <div style={{ marginBottom: 24 }}>
-                <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#0f172a' }}>
-                  <PieChart size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#0f172a'}}>
+                  <PieChart size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle'}} />
                   Performance Metrics
                 </h5>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 12 }}>
-                    <span style={{ fontSize: 13, color: '#64748b' }}>
+                    <span style={{ fontSize: 13, color: '#64748b'}}>
                       <Clock size={12} style={{ display: 'inline', marginRight: 4 }} /> Punctuality
                     </span>
                     <span style={{ fontWeight: 600, color: getScoreColor(parseFloat(selectedCandidate.punctuality_score)) }}>
@@ -837,7 +837,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 12 }}>
-                    <span style={{ fontSize: 13, color: '#64748b' }}>
+                    <span style={{ fontSize: 13, color: '#64748b'}}>
                       <MessageSquare size={12} style={{ display: 'inline', marginRight: 4 }} /> Communication
                     </span>
                     <span style={{ fontWeight: 600, color: getScoreColor(parseFloat(selectedCandidate.communication_score)) }}>
@@ -845,7 +845,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 12 }}>
-                    <span style={{ fontSize: 13, color: '#64748b' }}>
+                    <span style={{ fontSize: 13, color: '#64748b'}}>
                       <Code size={12} style={{ display: 'inline', marginRight: 4 }} /> Problem Solving
                     </span>
                     <span style={{ fontWeight: 600, color: getScoreColor(parseFloat(selectedCandidate.problem_solving_score)) }}>
@@ -853,7 +853,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 12 }}>
-                    <span style={{ fontSize: 13, color: '#64748b' }}>
+                    <span style={{ fontSize: 13, color: '#64748b'}}>
                       <Zap size={12} style={{ display: 'inline', marginRight: 4 }} /> Adaptability
                     </span>
                     <span style={{ fontWeight: 600, color: getScoreColor(parseFloat(selectedCandidate.adaptability_score)) }}>
@@ -861,7 +861,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 12 }}>
-                    <span style={{ fontSize: 13, color: '#64748b' }}>
+                    <span style={{ fontSize: 13, color: '#64748b'}}>
                       <Heart size={12} style={{ display: 'inline', marginRight: 4 }} /> Collaboration
                     </span>
                     <span style={{ fontWeight: 600, color: getScoreColor(parseFloat(selectedCandidate.collaboration_score)) }}>
@@ -869,7 +869,7 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#f8fafc', borderRadius: 12 }}>
-                    <span style={{ fontSize: 13, color: '#64748b' }}>
+                    <span style={{ fontSize: 13, color: '#64748b'}}>
                       <Zap size={12} style={{ display: 'inline', marginRight: 4 }} /> Initiative
                     </span>
                     <span style={{ fontWeight: 600, color: getScoreColor(parseFloat(selectedCandidate.initiative_score)) }}>
@@ -885,24 +885,24 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                   padding: 16, background: '#fef3c7', borderRadius: 16,
                   marginBottom: 16, border: '1px solid #fde68a'
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#92400e' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#92400e'}}>
                     <Brain size={14} style={{ display: 'inline', marginRight: 6 }} /> AI Assessment
                   </div>
                   <p style={{ fontSize: 13, margin: 0, color: '#78350f', lineHeight: 1.5 }}>
-                    {typeof selectedCandidate.ai_feedback.summary === 'string' 
+                    {typeof selectedCandidate.ai_feedback.summary === 'string'
                       ? selectedCandidate.ai_feedback.summary.replace(/"/g, '')
                       : 'AI feedback available'}
                   </p>
                   {selectedCandidate.ai_feedback.strengths && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: 12, fontWeight: 500, color: '#92400e', marginBottom: 4 }}>Strengths:</div>
-                      <div style={{ fontSize: 12, color: '#78350f' }}>{selectedCandidate.ai_feedback.strengths}</div>
+                      <div style={{ fontSize: 12, color: '#78350f'}}>{selectedCandidate.ai_feedback.strengths}</div>
                     </div>
                   )}
                   {selectedCandidate.ai_feedback.recommendations && selectedCandidate.ai_feedback.recommendations.length > 0 && (
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: 12, fontWeight: 500, color: '#92400e', marginBottom: 4 }}>Recommendations:</div>
-                      <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12, color: '#78350f' }}>
+                      <ul style={{ margin: 0, paddingLeft: 20, fontSize: 12, color: '#78350f'}}>
                         {selectedCandidate.ai_feedback.recommendations.slice(0, 3).map((rec: string, i: number) => (
                           <li key={i}>{rec}</li>
                         ))}
@@ -915,8 +915,8 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
               {/* Behavioral Metrics */}
               {selectedCandidate.behavioral_metrics && selectedCandidate.behavioral_metrics.length > 0 && (
                 <div style={{ marginBottom: 24 }}>
-                  <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#0f172a' }}>
-                    <MessageSquare size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                  <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#0f172a'}}>
+                    <MessageSquare size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle'}} />
                     Behavioral Metrics
                   </h5>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
@@ -925,12 +925,12 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                         padding: '8px 12px', background: '#f8fafc', borderRadius: 12,
                         flex: '1 1 auto', minWidth: 150
                       }}>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>{metric.metric}</div>
+                        <div style={{ fontSize: 11, color: '#64748b'}}>{metric.metric}</div>
                         <div style={{ fontSize: 20, fontWeight: 700, color: getScoreColor(metric.score) }}>
                           {Math.round(metric.score)}%
                         </div>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
-                          {typeof metric.description === 'string' 
+                          {typeof metric.description === 'string'
                             ? metric.description.replace(/"/g, '').substring(0, 60)
                             : ''}...
                         </div>
@@ -943,8 +943,8 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
               {/* Task Details */}
               {selectedCandidate.task_progress && selectedCandidate.task_progress.length > 0 && (
                 <div>
-                  <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#0f172a' }}>
-                    <CheckCircle size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                  <h5 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: '#0f172a'}}>
+                    <CheckCircle size={16} style={{ display: 'inline', marginRight: 6, verticalAlign: 'middle'}} />
                     Task Performance
                   </h5>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -957,19 +957,19 @@ const CandidatesResultsScreen: React.FC<CandidatesResultsScreenProps> = ({ jobId
                           <span style={{ fontWeight: 600, fontSize: 13 }}>Task {i + 1}: {task.task_title}</span>
                           <span style={{
                             padding: '2px 8px', borderRadius: 12,
-                            background: task.status === 'completed' ? '#dcfce7' : '#fef3c7',
+                            background: task.status === 'completed'? '#dcfce7': '#fef3c7',
                             fontSize: 11, fontWeight: 500,
-                            color: task.status === 'completed' ? '#15803d' : '#92400e'
+                            color: task.status === 'completed'? '#15803d': '#92400e'
                           }}>
-                            {task.status === 'completed' ? '✓ Completed' : task.status === 'in_progress' ? 'In Progress' : 'Not Started'}
+                            {task.status === 'completed'? '✓ Completed': task.status === 'in_progress'? 'In Progress': 'Not Started'}
                           </span>
                         </div>
-                        <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#64748b' }}>
+                        <div style={{ display: 'flex', gap: 16, fontSize: 12, color: '#64748b'}}>
                           <span>Score: <strong style={{ color: getScoreColor(task.score) }}>{task.score || 0}%</strong></span>
                           <span>Time: {task.time_spent_formatted || `${Math.floor(task.time_spent_seconds / 60)}m`}</span>
                         </div>
                         {task.feedback && (
-                          <div style={{ fontSize: 12, color: '#475569', marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0' }}>
+                          <div style={{ fontSize: 12, color: '#475569', marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0'}}>
                             {task.feedback}
                           </div>
                         )}

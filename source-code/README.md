@@ -1,6 +1,6 @@
-# V-WES — Virtual Workspace for Recruitment & Culture-Fit Evaluation
+# MRS   Virtual Workspace for Recruitment & Culture-Fit Evaluation
 
-V-WES is a multi-tenant virtual work-simulation platform for recruitment and culture-fit
+MRS is a multi-tenant virtual work-simulation platform for recruitment and culture-fit
 evaluation. It combines realistic work tasks, AI-based behavioural and code analysis,
 recruiter/admin dashboards, real-time chat & notifications, and a tamper-evident
 blockchain/audit-chain layer that lets results be independently verified.
@@ -116,7 +116,7 @@ Frontend internals: `frontend/{components,pages,services,context,utils}`.
 | PostgreSQL | 14+ (default local port **8090**) |
 | Git | any recent version |
 | Python | 3.10+ (only for the AI/ML microservices) |
-| Hardhat | optional — only for the on-chain Ethereum layer |
+| Hardhat | optional   only for the on-chain Ethereum layer |
 
 Redis and Docker are **not required**.
 
@@ -221,13 +221,13 @@ proxy. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 ## Running tests
 
 ```bash
-# Backend — audit-chain hash/verification unit tests (Node test runner via tsx)
+# Backend   audit-chain hash/verification unit tests (Node test runner via tsx)
 cd backend && npm run test:audit-chain
 
-# Backend — type-check
+# Backend   type-check
 cd backend && npm run type-check
 
-# Frontend — type-check
+# Frontend   type-check
 cd frontend && npx tsc --noEmit
 ```
 
@@ -246,12 +246,12 @@ request/response examples: [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md
 
 ## Further documentation
 
-- [docs/BLOCKCHAIN.md](docs/BLOCKCHAIN.md) — audit chain & Ethereum verification
-- [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md) — evaluation flow & scoring
-- [docs/DATABASE.md](docs/DATABASE.md) — schema, relationships, migrations
-- [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md) — endpoint reference
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — deployment guide
-- [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) — contributing & conventions
+- [docs/BLOCKCHAIN.md](docs/BLOCKCHAIN.md)   audit chain & Ethereum verification
+- [docs/AI_EVALUATION.md](docs/AI_EVALUATION.md)   evaluation flow & scoring
+- [docs/DATABASE.md](docs/DATABASE.md)   schema, relationships, migrations
+- [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)   endpoint reference
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)   deployment guide
+- [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)   contributing & conventions
 - [frontend/README.md](frontend/README.md) / [backend/README.md](backend/README.md)
 
 ---
@@ -265,5 +265,5 @@ request/response examples: [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md
 | Frontend calls fail (CORS/404) | `VITE_API_URL` must point to the backend (`http://localhost:3001/api/v1`); `CORS_ORIGIN` must include the frontend origin. |
 | Sockets not connecting | Confirm the backend is up; the client derives the socket URL from `VITE_API_URL` unless `VITE_SOCKET_URL` is set. |
 | Emails not sending | Configure `SMTP_*`; failures are logged and never block submission. |
-| AI scores are 0 / missing | `GROQ_API_KEY` / AI microservices unavailable — evaluation degrades gracefully. |
+| AI scores are 0 / missing | `GROQ_API_KEY` / AI microservices unavailable   evaluation degrades gracefully. |
 | Blockchain tx is null | `USE_BLOCKCHAIN` not `true` or no node at `BLOCKCHAIN_RPC_URL`; the audit chain still works. |

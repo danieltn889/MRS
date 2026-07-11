@@ -22,11 +22,11 @@ interface TaskListProps {
   onStartTask?: (index: number) => void;       // For Start button
   onOpenGitHubStats?: (taskIndex: number) => void;
   hasGitHubRepoForTask?: (taskIndex: number) => boolean;
-  // ✅ NEW PROPS
+  // ''NEW PROPS
   onOpenChat?: () => void;
   onOpenGitHubAnalytics?: (taskIndex: number) => void;
   unreadCount?: number;
-  priorityMode?: 'sequential' | 'parallel' | 'weighted';
+  priorityMode?: 'sequential'| 'parallel'| 'weighted';
   elapsedTasks?: Set<number>;
 }
 
@@ -39,14 +39,14 @@ const TaskList: React.FC<TaskListProps> = ({
   onStartTask,
   onOpenGitHubStats,
   hasGitHubRepoForTask,
-  // ✅ NEW PROPS
+  // ''NEW PROPS
   onOpenChat,
   onOpenGitHubAnalytics,
   unreadCount = 0,
   priorityMode,
   elapsedTasks,
 }) => {
-  const getTaskStatus = (index: number): 'not_started' | 'in_progress' | 'completed' => {
+  const getTaskStatus = (index: number): 'not_started'| 'in_progress'| 'completed'=> {
     const progress = taskProgress.find(p => p.task_index === index);
     const status = progress?.status || 'not_started';
     
@@ -81,7 +81,7 @@ const TaskList: React.FC<TaskListProps> = ({
   const handleCompleteClick = (e: React.MouseEvent, index: number) => {
     e.stopPropagation();
     e.preventDefault();
-    console.log('✅ Opening completion dialog for task:', index);
+    console.log('Opening completion dialog for task:', index);
     onOpenCompletion(index);
   };
 
@@ -97,7 +97,7 @@ const TaskList: React.FC<TaskListProps> = ({
     onOpenGitHubStats?.(taskIndex);
   };
 
-  // ✅ Handle Chat button click
+  // ''Handle Chat button click
   const handleChatClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -105,7 +105,7 @@ const TaskList: React.FC<TaskListProps> = ({
     onOpenChat?.();
   };
 
-  // ✅ Handle GitHub Analytics button click
+  // ''Handle GitHub Analytics button click
   const handleGitHubAnalyticsClick = (e: React.MouseEvent, taskIndex: number) => {
     e.stopPropagation();
     e.preventDefault();
@@ -114,7 +114,7 @@ const TaskList: React.FC<TaskListProps> = ({
   };
 
   // Get status icon and color
-  const getStatusIcon = (status: 'not_started' | 'in_progress' | 'completed') => {
+  const getStatusIcon = (status: 'not_started'| 'in_progress'| 'completed') => {
     switch (status) {
       case 'completed':
         return <CheckCircle size={12} className="text-green-400 flex-shrink-0" />;
@@ -125,7 +125,7 @@ const TaskList: React.FC<TaskListProps> = ({
     }
   };
 
-  const getStatusColor = (status: 'not_started' | 'in_progress' | 'completed', isActive: boolean) => {
+  const getStatusColor = (status: 'not_started'| 'in_progress'| 'completed', isActive: boolean) => {
     if (isActive) return 'bg-blue-600 text-white shadow-md ring-1 ring-blue-400';
     
     switch (status) {
@@ -160,7 +160,7 @@ const TaskList: React.FC<TaskListProps> = ({
           </div>
         </div>
 
-        {/* ✅ CHAT BUTTON */}
+        {/* ''CHAT BUTTON */}
         <button
           onClick={handleChatClick}
           className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium transition-all duration-200 shadow-md flex-shrink-0"
@@ -170,12 +170,12 @@ const TaskList: React.FC<TaskListProps> = ({
           Chat
           {unreadCount > 0 && (
             <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full animate-pulse">
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {unreadCount > 99 ? '99+': unreadCount}
             </span>
           )}
         </button>
 
-        {/* ✅ GITHUB ANALYTICS BUTTON */}
+        {/* ''GITHUB ANALYTICS BUTTON */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -211,11 +211,11 @@ const TaskList: React.FC<TaskListProps> = ({
             <div
               key={i}
               onClick={() => !locked && handleTaskClick(i)}
-              title={locked ? `Complete Task ${i} first (Sequential mode)` : timeElapsed ? `⏰ Time elapsed — ${task.title}` : task.title}
+              title={locked ? `Complete Task ${i} first (Sequential mode)` : timeElapsed ? `⏰ Time elapsed   ${task.title}` : task.title}
               className={`
                 flex items-center gap-1 px-2 py-1 rounded-lg transition-all duration-200 flex-shrink-0
-                ${locked ? 'cursor-not-allowed opacity-50 border border-red-700/40' : 'cursor-pointer'}
-                ${timeElapsed && !locked ? 'ring-2 ring-amber-500 ring-offset-1 ring-offset-gray-800' : ''}
+                ${locked ? 'cursor-not-allowed opacity-50 border border-red-700/40': 'cursor-pointer'}
+                ${timeElapsed && !locked ? 'ring-2 ring-amber-500 ring-offset-1 ring-offset-gray-800': ''}
                 ${getStatusColor(status, isActive)}
               `}
             >
@@ -227,7 +227,7 @@ const TaskList: React.FC<TaskListProps> = ({
                 {taskLabel}
               </span>
 
-              {/* ⏰ Time-elapsed badge — persists after toast dismisses */}
+              {/* ⏰ Time-elapsed badge   persists after toast dismisses */}
               {timeElapsed && (
                 <span
                   className="flex-shrink-0 text-[10px] font-bold text-amber-300 bg-amber-800/70 px-1 py-0.5 rounded leading-none"
@@ -237,14 +237,14 @@ const TaskList: React.FC<TaskListProps> = ({
                 </span>
               )}
 
-              {/* ✅ GitHub Stats Button (per task) - shows if repo exists */}
+              {/* ''GitHub Stats Button (per task) - shows if repo exists */}
               {hasRepo && (
                 <button
                   onClick={(e) => handleGitHubStatsClick(e, i)}
                   className={`
                     text-xs px-0.5 py-0.5 rounded transition-colors flex-shrink-0
                     ${isActive 
-                      ? 'bg-purple-500 text-white hover:bg-purple-400' 
+                      ? 'bg-purple-500 text-white hover:bg-purple-400'
                       : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
                     }
                   `}
@@ -254,13 +254,13 @@ const TaskList: React.FC<TaskListProps> = ({
                 </button>
               )}
               
-              {/* ✅ GitHub Analytics Button (per task) */}
+              {/* ''GitHub Analytics Button (per task) */}
               <button
                 onClick={(e) => handleGitHubAnalyticsClick(e, i)}
                 className={`
                   text-xs px-0.5 py-0.5 rounded transition-colors flex-shrink-0
                   ${isActive 
-                    ? 'bg-purple-500 text-white hover:bg-purple-400' 
+                    ? 'bg-purple-500 text-white hover:bg-purple-400'
                     : 'bg-purple-700 text-purple-200 hover:bg-purple-600'
                   }
                 `}
@@ -316,23 +316,23 @@ const TaskList: React.FC<TaskListProps> = ({
         })}
       </div>
 
-      {/* ✅ Helpful Info Bar */}
+      {/* ''Helpful Info Bar */}
       <div className="mt-1.5 pt-1.5 border-t border-gray-700 flex items-center gap-4 text-[10px] text-gray-500 flex-wrap">
-        {priorityMode === 'sequential' && (
+        {priorityMode === 'sequential'&& (
           <span className="flex items-center gap-1 text-red-400 font-medium">
             <Lock size={10} />
-            Sequential — finish each task before starting the next
+            Sequential   finish each task before starting the next
           </span>
         )}
-        {priorityMode === 'parallel' && (
+        {priorityMode === 'parallel'&& (
           <span className="flex items-center gap-1 text-green-400 font-medium">
             <Play size={10} />
-            Parallel — start any task at any time
+            Parallel   start any task at any time
           </span>
         )}
-        {priorityMode === 'weighted' && (
+        {priorityMode === 'weighted'&& (
           <span className="flex items-center gap-1 text-yellow-400 font-medium">
-            ⚖ Weighted — tasks have custom importance
+            ⚖ Weighted   tasks have custom importance
           </span>
         )}
         <span className="flex items-center gap-1">

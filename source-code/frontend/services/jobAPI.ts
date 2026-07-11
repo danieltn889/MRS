@@ -490,7 +490,7 @@ export const applyToJob = async (jobId: string, applicationData: any) => {
 
 export const getJobCandidatesWithMatches = async (jobId: string, params: any = {}) => {
   try {
-    const { page = 1, limit = 20, sortBy = 'match_score', sortOrder = 'DESC' } = params;
+    const { page = 1, limit = 20, sortBy = 'match_score', sortOrder = 'DESC'} = params;
     
     const queryParams = new URLSearchParams({
       page: page.toString(),

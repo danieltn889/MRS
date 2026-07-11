@@ -30,7 +30,7 @@ export class EvaluationController {
       const evaluationResult = await pool.query(evaluationQuery, [candidateId, simulationId]);
 
       if (evaluationResult.rows.length === 0) {
-        res.status(404).json({ error: 'Evaluation not found' });
+        res.status(404).json({ error: 'Evaluation not found'});
         return;
       }
 
@@ -208,7 +208,7 @@ export class EvaluationController {
 
     } catch (error) {
       logger.error('Error fetching evaluation:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error'});
     }
   }
 
@@ -228,7 +228,7 @@ export class EvaluationController {
       const result = await pool.query(updateQuery, [status, reviewerId, candidateId, simulationId]);
 
       if (result.rows.length === 0) {
-        res.status(404).json({ error: 'Evaluation not found' });
+        res.status(404).json({ error: 'Evaluation not found'});
         return;
       }
 
@@ -236,7 +236,7 @@ export class EvaluationController {
 
     } catch (error) {
       logger.error('Error updating evaluation status:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error'});
     }
   }
 
@@ -257,7 +257,7 @@ export class EvaluationController {
       // Get user's company ID for permission checks
       let companyId: string | null = null;
       
-      if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
         const teamResult = await DatabaseService.query(
           'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
           [req.user.id]
@@ -312,7 +312,7 @@ export class EvaluationController {
       }
       
       const whereClause = whereConditions.length > 0 
-        ? `WHERE ${whereConditions.join(' AND ')}`
+        ? `WHERE ${whereConditions.join('AND ')}`
         : '';
       
       // Main query - Use users and candidate_profiles instead of candidates
@@ -521,7 +521,7 @@ export class EvaluationController {
       ResponseService.paginated(res, formattedResults, paginationResponse);
       
     } catch (error: any) {
-      console.error('❌ [getEvaluations] Error:', {
+      console.error(' [getEvaluations] Error:', {
         message: error.message,
         stack: error.stack,
         code: error.code,
@@ -537,7 +537,7 @@ export class EvaluationController {
       const { evaluationId } = req.params;
 
       if (!evaluationId) {
-        res.status(400).json({ error: 'Evaluation ID is required' });
+        res.status(400).json({ error: 'Evaluation ID is required'});
         return;
       }
 
@@ -578,7 +578,7 @@ export class EvaluationController {
 
     } catch (error) {
       logger.error('Error generating AI feedback:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error'});
     }
   }
 
@@ -645,7 +645,7 @@ export class EvaluationController {
 
     } catch (error) {
       logger.error('Error calculating benchmarks:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error'});
     }
   }
 
@@ -657,7 +657,7 @@ export class EvaluationController {
       // Validate weights sum to 100
       const totalWeight = Object.values(weights).reduce((sum: number, weight: any) => sum + weight, 0);
       if (totalWeight !== 100) {
-        res.status(400).json({ error: 'Weights must sum to 100' });
+        res.status(400).json({ error: 'Weights must sum to 100'});
         return;
       }
 
@@ -669,11 +669,11 @@ export class EvaluationController {
 
       await pool.query(insertQuery, [JSON.stringify(weights)]);
 
-      res.json({ message: 'AI scoring weights updated successfully' });
+      res.json({ message: 'AI scoring weights updated successfully'});
 
     } catch (error) {
       logger.error('Error updating AI scoring weights:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error'});
     }
   }
 
@@ -691,11 +691,11 @@ export class EvaluationController {
 
       await pool.query(insertQuery, [companyId, standards]);
 
-      res.json({ message: 'Communication standards updated successfully' });
+      res.json({ message: 'Communication standards updated successfully'});
 
     } catch (error) {
       logger.error('Error updating communication standards:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error'});
     }
   }
 
@@ -713,11 +713,11 @@ export class EvaluationController {
 
       await pool.query(insertQuery, [companyId, JSON.stringify(thresholds)]);
 
-      res.json({ message: 'Minimum score thresholds updated successfully' });
+      res.json({ message: 'Minimum score thresholds updated successfully'});
 
     } catch (error) {
       logger.error('Error updating minimum scores:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error'});
     }
   }
 

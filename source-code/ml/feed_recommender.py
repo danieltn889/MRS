@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-SimuHire Rwanda — Personalized Job Feed Recommender  (Dynamic Semantic v4.1)
+SimuHire Rwanda- Personalized Job Feed Recommender  (Dynamic Semantic v4.1)
 =============================================================================
 No hardcoded word lists. Vocabulary built at runtime from real job data.
 
 Text processing (two modes):
-  process()          → lemma + stem  (for TF-IDF, Jaccard — exact normalized overlap)
-  process_semantic() → lemma only    (for spaCy vectors — stems break word embeddings)
+  process()          → lemma + stem  (for TF-IDF, Jaccard- exact normalized overlap)
+  process_semantic() → lemma only    (for spaCy vectors- stems break word embeddings)
 
 Per-token pipeline:
   1. Lowercase + strip punctuation
@@ -89,13 +89,13 @@ def _spacy_doc(text: str):
 class DynamicTextProcessor:
     """
     Two vocab modes:
-      canonical_vocab   — built from JOB skills/titles only
+      canonical_vocab  - built from JOB skills/titles only
                           used for fuzzy typo correction of candidate input
-      reference_vocab   — built from all data (for any other vocab lookups)
+      reference_vocab  - built from all data (for any other vocab lookups)
 
     Two processing modes:
-      process()          — lemma + stem   → for TF-IDF / Jaccard
-      process_semantic() — lemma only     → for spaCy (stems like "engin" have no vectors)
+      process()         - lemma + stem   → for TF-IDF / Jaccard
+      process_semantic()- lemma only     → for spaCy (stems like "engin" have no vectors)
     """
 
     def __init__(self):
@@ -182,15 +182,15 @@ class DynamicTextProcessor:
         return result
 
     def process_list(self, items: List[str]) -> str:
-        """Stemmed text blob from a list of skills — for TF-IDF."""
+        """Stemmed text blob from a list of skills- for TF-IDF."""
         return " ".join(self.process(s) for s in items if s.strip())
 
     def process_list_semantic(self, items: List[str]) -> str:
-        """Lemmatized text blob from a list of skills — for spaCy."""
+        """Lemmatized text blob from a list of skills- for spaCy."""
         return " ".join(self.process_semantic(s) for s in items if s.strip())
 
     def token_set(self, items: List[str]) -> set:
-        """Stemmed token set from a list — for Jaccard similarity."""
+        """Stemmed token set from a list- for Jaccard similarity."""
         tokens: set = set()
         for item in items:
             tokens.update(self.process(item).split())
@@ -200,7 +200,7 @@ class DynamicTextProcessor:
 _processor = DynamicTextProcessor()
 
 # ── APP ──────────────────────────────────────────────────────
-app = FastAPI(title="Job Feed Recommender — Dynamic Semantic", version="4.1.0")
+app = FastAPI(title="Job Feed Recommender- Dynamic Semantic", version="4.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # ── DATA MODELS ──────────────────────────────────────────────
@@ -211,28 +211,33 @@ class CandidateProfile(BaseModel):
     education_level: Optional[str] = ""
     preferred_job_titles: List[str] = []
     preferred_locations: List[str] = []
+    # Actual residence (Rwanda province/district/sector/cell/village joined
+    # into one string, or "city country" for non-Rwandans) -- distinct from
+    # preferred_locations (where the candidate said they'd LIKE to work).
+    # Optional/additive so callers that don't send it keep working as-is.
+    home_location: Optional[str] = ""
 
 class ViewedJob(BaseModel):
     job_id: str
     title: str
     skills: List[str] = []
     category: Optional[str] = ""
-    # Additive/optional — enables BehaviorModel's 60-day recency decay for
+    # Additive/optional- enables BehaviorModel's 60-day recency decay for
     # this interaction; absent (None) is treated as "no decay" rather than
     # raising, since older callers won't send this.
     interacted_at: Optional[str] = None
 
-# SavedJob carries the same fields — saved = stronger signal than viewed
+# SavedJob carries the same fields- saved = stronger signal than viewed
 SavedJob = ViewedJob
 
 class CandidateActivity(BaseModel):
     search_queries: List[str] = []
     viewed_jobs: List[ViewedJob] = []
     saved_jobs: List[SavedJob] = []      # full job details of saved jobs
-    saved_job_ids: List[str] = []        # IDs only — for save_bonus
+    saved_job_ids: List[str] = []        # IDs only- for save_bonus
     applied_job_ids: List[str] = []
     ignored_job_ids: List[str] = []
-    # Additive/optional — full job snapshots (same shape as viewed_jobs/
+    # Additive/optional- full job snapshots (same shape as viewed_jobs/
     # saved_jobs) for interaction types the previous 3-function design had
     # no way to represent at all. Default empty so existing callers that
     # only send applied_job_ids (bare IDs, used for the same-job penalty
@@ -253,7 +258,7 @@ class JobListing(BaseModel):
     category: Optional[str] = ""
     posted_at: Optional[str] = None
     application_count: Optional[int] = 0
-    # Additive/optional fields — used by BehaviorModel's 17-pair content
+    # Additive/optional fields- used by BehaviorModel's 17-pair content
     # learning (build_job_document) whenever the caller provides them;
     # automatically skipped otherwise, never raise. Defaults keep every
     # existing caller sending today's payload shape unaffected.
@@ -280,7 +285,7 @@ class ScoredJob(BaseModel):
     job_id: str
     total_score: float
     breakdown: Dict[str, float]
-    # Additive/optional — BehaviorModel's explainability output (matched
+    # Additive/optional- BehaviorModel's explainability output (matched
     # terms per pair + corrected_terms). None for the ignored-job short
     # circuit in score_job(); existing consumers that only read total_score/
     # breakdown are unaffected.
@@ -300,14 +305,14 @@ EXPERIENCE_RANGES = {
     "senior": (5, 10), "lead": (8, 20), "manager": (5, 20),
 }
 
-# ── SIMILARITY LAYER A — JACCARD (stemmed token sets) ────────
+# ── SIMILARITY LAYER A- JACCARD (stemmed token sets) ────────
 
 def _jaccard(set_a: set, set_b: set) -> float:
     if not set_a and not set_b:
         return 0.0
     return len(set_a & set_b) / len(set_a | set_b)
 
-# ── SIMILARITY LAYER B — TF-IDF (stemmed text) ───────────────
+# ── SIMILARITY LAYER B- TF-IDF (stemmed text) ───────────────
 
 def _tfidf_sim(a: str, b: str) -> float:
     if not a.strip() or not b.strip():
@@ -320,7 +325,7 @@ def _tfidf_sim(a: str, b: str) -> float:
         return 0.0
 
 def _tfidf_sim_char(a: str, b: str) -> float:
-    """Character 3-4-gram TF-IDF — used for BehaviorModel's 'skills' pair so
+    """Character 3-4-gram TF-IDF- used for BehaviorModel's 'skills' pair so
     'Phyton'/'Reatc'/'Djanggo' still overlap 'Python'/'React'/'Django' on
     shared character shingles, on top of the existing fuzzy-correction/
     semantic typo tolerance."""
@@ -333,13 +338,13 @@ def _tfidf_sim_char(a: str, b: str) -> float:
     except Exception:
         return 0.0
 
-# ── SIMILARITY LAYER C — spaCy SEMANTIC (lemmatized, no stem) ─
+# ── SIMILARITY LAYER C- spaCy SEMANTIC (lemmatized, no stem) ─
 
 def _semantic_sim(a: str, b: str) -> float:
     """
     Uses lemmatized text (real English words) so spaCy can find GloVe vectors.
     'engineer' ≈ 'developer', 'analyst' ≈ 'scientist', 'software' ≈ 'developer'.
-    Stems like 'engin' have NO vectors and score 0 — that's why we use lemma here.
+    Stems like 'engin' have NO vectors and score 0- that's why we use lemma here.
     """
     if not a.strip() or not b.strip():
         return 0.0
@@ -422,7 +427,7 @@ def _days_since(posted_at: Optional[str]) -> float:
 
 def profile_match(candidate: CandidateProfile, job: JobListing) -> float:
     """40% of total."""
-    # Skills — Jaccard (stemmed) + smart match (TF-IDF + semantic) + TF-IDF
+    # Skills- Jaccard (stemmed) + smart match (TF-IDF + semantic) + TF-IDF
     c_set = _processor.token_set(candidate.skills)
     j_set = _processor.token_set(job.skills_required)
     jac   = _jaccard(c_set, j_set)
@@ -445,16 +450,21 @@ def profile_match(candidate: CandidateProfile, job: JobListing) -> float:
         exp = 0.5
     exp_score = exp * 0.25
 
-    # Location
+    # Location -- preferred_locations (where the candidate wants to work) and
+    # home_location (their actual residence, added so a candidate who never
+    # set a preference still gets scored against jobs near where they live)
+    # are both eligible matches; either one hitting counts as a location fit.
     job_loc = (job.location or "").lower()
     pref    = [l.lower() for l in candidate.preferred_locations]
+    if candidate.home_location:
+        pref = pref + [candidate.home_location.lower()]
     if not job_loc or not pref:                                          loc = 0.5
     elif any(p in job_loc or job_loc in p for p in pref):               loc = 1.0
     elif "remote" in job_loc or any("remote" in p for p in pref):       loc = 0.8
     else:                                                                loc = 0.1
     loc_score = loc * 0.15
 
-    # Title — hybrid semantic
+    # Title- hybrid semantic
     title_score = _hybrid_text_sim(
         " ".join(candidate.preferred_job_titles),
         job.title
@@ -469,7 +479,7 @@ def profile_match(candidate: CandidateProfile, job: JobListing) -> float:
 # (search/view/save/apply/interview/offer/hire), weighted by interaction
 # type and 60-day recency decay, comparing the FULL textual content of every
 # job (17 fields) instead of just title/skills/category. Reuses the
-# existing DynamicTextProcessor/TF-IDF/spaCy pipeline — no new NLP system.
+# existing DynamicTextProcessor/TF-IDF/spaCy pipeline- no new NLP system.
 # profile_match() is untouched: it keeps matching the candidate's explicit
 # declared profile; this only learns from historical interactions.
 
@@ -480,7 +490,7 @@ PAIRS = [
     "department", "industry", "company_name",
 ]
 CHAR_NGRAM_PAIRS = {"skills"}
-# Company name is a weak signal (~2-5% influence) — candidates care about
+# Company name is a weak signal (~2-5% influence)- candidates care about
 # skills/technologies/location/responsibilities/experience/title far more
 # than a specific employer, though repeated interactions with the same
 # company still nudge this pair's own similarity up naturally.
@@ -494,7 +504,7 @@ INTERACTION_WEIGHTS = {
 
 
 def build_job_document(job) -> Dict[str, str]:
-    """Joins every available field into one per-pair text document — works
+    """Joins every available field into one per-pair text document- works
     for both full JobListing instances and the lighter ViewedJob snapshots
     recorded on CandidateActivity (viewed/saved/applied/interviewed/offered/
     hired). Fields absent from whichever model `job` actually is are skipped
@@ -535,7 +545,7 @@ def build_job_document(job) -> Dict[str, str]:
 
 def _decay_weight(base_weight: float, interacted_at: Optional[str]) -> float:
     """60-day half-life recency decay. No timestamp available (older callers,
-    or search queries which have none at all) — treat as full weight rather
+    or search queries which have none at all)- treat as full weight rather
     than penalizing for missing data."""
     if not interacted_at:
         return base_weight
@@ -549,7 +559,7 @@ def _decay_weight(base_weight: float, interacted_at: Optional[str]) -> float:
 
 class BehaviorModel:
     """Unified behavior-learning component. See module docstring above for
-    the full rationale; in short — one weighted average over every
+    the full rationale; in short- one weighted average over every
     interaction, each compared against the target job using the SAME
     TF-IDF/spaCy pipeline the rest of this file already uses."""
 
@@ -590,7 +600,7 @@ class BehaviorModel:
         (search queries, etc.) got fuzzy-corrected toward the canonical job
         vocabulary. Scoring itself is already typo-tolerant via character
         n-grams + semantic similarity + this same fuzzy correction inside
-        process()/process_semantic() — this is purely for the output."""
+        process()/process_semantic()- this is purely for the output."""
         corrected: Dict[str, str] = {}
         for doc in docs:
             for text in doc.values():
@@ -612,7 +622,7 @@ class BehaviorModel:
             if not q or not q.strip():
                 continue
             # job_searches-style queries have no associated job to pull rich
-            # content from — approximate as a title+skills-only pseudo
+            # content from- approximate as a title+skills-only pseudo
             # document (same technique used for search in the ML hybrid
             # recommender), no time decay (no per-query timestamp exists).
             interactions.append(({"title": q, "skills": q}, INTERACTION_WEIGHTS["search"], q))
@@ -697,7 +707,7 @@ def score_job(job, candidate, activity, all_jobs) -> ScoredJob:
     # breakdown components for backward compatibility with existing
     # consumers, but all three are now derived from the SAME unified
     # BehaviorModel score (learned from complete job content across every
-    # interaction type — search/view/save/apply/interview/offer/hire)
+    # interaction type- search/view/save/apply/interview/offer/hire)
     # instead of 3 independently-computed functions. Splitting it 20/10/10
     # (their original weight allocation) is mathematically identical to a
     # single 40%-weighted behavior term.
@@ -729,7 +739,7 @@ def score_job(job, candidate, activity, all_jobs) -> ScoredJob:
 
 @app.post("/score", response_model=FeedResponse)
 async def score_feed(req: FeedRequest):
-    # Canonical vocab from JOB data only — candidate typos get corrected toward these terms
+    # Canonical vocab from JOB data only- candidate typos get corrected toward these terms
     canonical_job_sources = (
         [j.skills_required for j in req.jobs] +
         [[j.title] for j in req.jobs] +
@@ -761,7 +771,7 @@ async def score_feed(req: FeedRequest):
 @app.get("/health")
 async def health():
     # Health demo: canonical vocab from CORRECT words only
-    # Simulates a job having React/Python/JavaScript — candidate typos get corrected toward these
+    # Simulates a job having React/Python/JavaScript- candidate typos get corrected toward these
     correct_terms = [["React", "Python", "JavaScript", "engineer", "developer",
                       "data scientist", "analyst", "software"]]
     _processor.build_canonical_vocab(*correct_terms)

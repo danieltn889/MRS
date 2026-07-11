@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 
 // Define the sync status type - MUST match parent
-export type SyncStatus = 'idle' | 'syncing' | 'success' | 'error';
+export type SyncStatus = 'idle'| 'syncing'| 'success'| 'error';
 
 interface GitHubDetailsSidebarProps {
   currentRepo: any;
@@ -54,7 +54,7 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
   onClose,
   onRefresh,
 }) => {
-  // Start with every section collapsed — expand on demand (click) only.
+  // Start with every section collapsed   expand on demand (click) only.
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   
   // Extract all stats
@@ -96,9 +96,9 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
       {/* Status Message Bar */}
       {displayMessage && (
         <div className={`p-3 border-b flex items-start gap-2 text-xs flex-shrink-0 ${
-          syncStatusTyped === 'syncing' ? 'bg-yellow-900/20 border-yellow-700/30 text-yellow-300' :
-          syncStatusTyped === 'success' ? 'bg-green-900/20 border-green-700/30 text-green-300' :
-          syncStatusTyped === 'error' ? 'bg-red-900/20 border-red-700/30 text-red-300' :
+          syncStatusTyped === 'syncing'? 'bg-yellow-900/20 border-yellow-700/30 text-yellow-300':
+          syncStatusTyped === 'success'? 'bg-green-900/20 border-green-700/30 text-green-300':
+          syncStatusTyped === 'error'? 'bg-red-900/20 border-red-700/30 text-red-300':
           'bg-gray-700/50 border-gray-600/30 text-gray-300'
         }`}>
           {isSyncing && <div className="animate-spin rounded-full h-3 w-3 border-b border-current flex-shrink-0 mt-0.5" />}
@@ -142,7 +142,7 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                 </p>
               )}
               <p className="text-gray-500 text-xs mt-1">
-                📁 {fileCount} files · 📂 {folderCount} folders
+                 {fileCount} files · 📂 {folderCount} folders
               </p>
               
               {/* REFRESH BUTTON */}
@@ -151,12 +151,12 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                 disabled={githubPushStatus === 'syncing'}
                 className="w-full mt-3 py-1.5 text-xs text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors flex items-center justify-center gap-2 bg-gray-800/50 hover:bg-gray-700"
               >
-                <RefreshCw size={11} className={githubPushStatus === 'syncing' ? 'animate-spin' : ''} />
-                {githubPushStatus === 'syncing' ? 'Refreshing...' : 'Refresh All Stats'}
+                <RefreshCw size={11} className={githubPushStatus === 'syncing'? 'animate-spin': ''} />
+                {githubPushStatus === 'syncing'? 'Refreshing...': 'Refresh All Stats'}
               </button>
             </div>
 
-            {/* Social engagement (Stars/Forks/Watchers) removed — not relevant to candidate code review. */}
+            {/* Social engagement (Stars/Forks/Watchers) removed   not relevant to candidate code review. */}
 
             {/* ===== ISSUES SECTION - EXPANDABLE WITH FULL DETAILS ===== */}
             <div className="bg-gray-750 rounded-lg overflow-hidden border border-gray-700">
@@ -170,16 +170,16 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                   <span className="text-gray-500 text-[10px]">({openIssues} open / {closedIssues} closed)</span>
                   <span className="text-green-400 text-[9px]">{issueResolutionRate}% resolved</span>
                 </div>
-                {expandedSection === 'issues' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {expandedSection === 'issues'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
               
-              {expandedSection === 'issues' && (
+              {expandedSection === 'issues'&& (
                 <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-96 overflow-y-auto">
                   {recentIssues.length > 0 ? (
                     recentIssues.slice(0, 15).map((issue: any, idx: number) => (
                       <div key={idx} className="p-2 hover:bg-gray-800/50">
                         <div className="flex items-start gap-2">
-                          {issue.state === 'open' ? (
+                          {issue.state === 'open'? (
                             <AlertCircle size={12} className="text-red-400 mt-0.5 flex-shrink-0" />
                           ) : (
                             <CheckCircle size={12} className="text-green-400 mt-0.5 flex-shrink-0" />
@@ -209,13 +209,13 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                               <div className="flex flex-wrap gap-1 mt-1">
                                 {issue.labels.slice(0, 3).map((label: any, lidx: number) => (
                                   <span key={lidx} className="text-[7px] px-1 py-0.5 rounded-full" 
-                                        style={{ backgroundColor: `#${label.color}`, color: '#000' }}>
+                                        style={{ backgroundColor: `#${label.color}`, color: '#000'}}>
                                     {label.name}
                                   </span>
                                 ))}
                               </div>
                             )}
-                            {issue.state === 'closed' && issue.closed_at && (
+                            {issue.state === 'closed'&& issue.closed_at && (
                               <p className="text-green-600/70 text-[8px] mt-1">✓ Closed {new Date(issue.closed_at).toLocaleDateString()}</p>
                             )}
                           </div>
@@ -241,10 +241,10 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                   <span className="text-gray-500 text-[10px]">({openPRs} open / {mergedPRs} merged / {closedPRs} closed)</span>
                   <span className="text-purple-400 text-[9px]">{mergeRate}% merged</span>
                 </div>
-                {expandedSection === 'prs' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {expandedSection === 'prs'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
               
-              {expandedSection === 'prs' && (
+              {expandedSection === 'prs'&& (
                 <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-96 overflow-y-auto">
                   {recentPRs.length > 0 ? (
                     recentPRs.slice(0, 15).map((pr: any, idx: number) => (
@@ -252,7 +252,7 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                         <div className="flex items-start gap-2">
                           {pr.merged_at ? (
                             <GitPullRequest size={12} className="text-purple-400 mt-0.5 flex-shrink-0" />
-                          ) : pr.state === 'closed' ? (
+                          ) : pr.state === 'closed'? (
                             <XCircle size={12} className="text-red-400 mt-0.5 flex-shrink-0" />
                           ) : (
                             <GitPullRequest size={12} className="text-green-400 mt-0.5 flex-shrink-0" />
@@ -284,7 +284,7 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                             {pr.merged_at && (
                               <p className="text-purple-400 text-[8px] mt-1">✓ Merged {new Date(pr.merged_at).toLocaleDateString()}</p>
                             )}
-                            {pr.state === 'closed' && !pr.merged_at && pr.closed_at && (
+                            {pr.state === 'closed'&& !pr.merged_at && pr.closed_at && (
                               <p className="text-red-400/70 text-[8px] mt-1">✗ Closed {new Date(pr.closed_at).toLocaleDateString()}</p>
                             )}
                           </div>
@@ -312,10 +312,10 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                     <span className="text-blue-400 text-[9px]">{avgCommitsPerWeek.toFixed(1)}/week avg</span>
                   )}
                 </div>
-                {expandedSection === 'commits' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {expandedSection === 'commits'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
               
-              {expandedSection === 'commits' && (
+              {expandedSection === 'commits'&& (
                 <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-96 overflow-y-auto">
                   {recentCommits.length > 0 ? (
                     recentCommits.slice(0, 20).map((commit: any, idx: number) => (
@@ -387,10 +387,10 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                   <span className="text-gray-300 text-xs font-medium">Contributors</span>
                   <span className="text-gray-500 text-[10px]">({contributorCount} people)</span>
                 </div>
-                {expandedSection === 'contributors' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {expandedSection === 'contributors'? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
               
-              {expandedSection === 'contributors' && (
+              {expandedSection === 'contributors'&& (
                 <div className="border-t border-gray-700 divide-y divide-gray-700 max-h-64 overflow-y-auto">
                   {topContributors.length > 0 ? (
                     topContributors.slice(0, 15).map((contributor: any, idx: number) => (
@@ -435,7 +435,7 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
                   ))}
                 </div>
                 {primaryLanguage && (
-                  <p className="text-gray-500 text-[9px]">🎯 Primary: <span className="text-gray-300">{primaryLanguage}</span></p>
+                  <p className="text-gray-500 text-[9px]">''Primary: <span className="text-gray-300">{primaryLanguage}</span></p>
                 )}
               </div>
             )}
@@ -448,7 +448,7 @@ export const GitHubDetailsSidebar: React.FC<GitHubDetailsSidebarProps> = ({
               <div className="mb-2">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-gray-400 text-[10px]">Overall</span>
-                  <span className={`text-base font-bold ${qualityScore >= 70 ? 'text-green-400' : qualityScore >= 40 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  <span className={`text-base font-bold ${qualityScore >= 70 ? 'text-green-400': qualityScore >= 40 ? 'text-yellow-400': 'text-red-400'}`}>
                     {qualityScore}%
                   </span>
                 </div>

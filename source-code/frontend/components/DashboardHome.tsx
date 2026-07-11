@@ -51,9 +51,9 @@ interface AIMatch {
   matchScore?: number;
   matcherScore?: number | null;
   hybridScore?: number | null;
-  scoreSource?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+  scoreSource?: 'matcher+hybrid'| 'matcher-only'| 'hybrid-only';
   reasons?: string[];
-  // Full profile-matcher 4-factor breakdown — null/absent fields when
+  // Full profile-matcher 4-factor breakdown   null/absent fields when
   // scoreSource is "hybrid-only" (the matcher never scored this job).
   matchLevel?: string;
   criteriaScores?: {
@@ -62,18 +62,34 @@ interface AIMatch {
     experience_match?: number | null;
     preferences_match?: number | null;
   };
+  // Actual per-factor weights used AFTER redistribution (a factor the job
+  // doesn't require is excluded, weight 0, its share redistributed across
+  // the applicable factors) -- the real math behind criteriaScores' points.
+  factorWeightsUsed?: { skills?: number; qualifications?: number; experience?: number; preferences?: number };
+  excludedFactors?: string[];
   skillsBreakdown?: {
     matched_skills?: string[];
     missing_skills?: string[];
     total_required?: number;
     total_matched?: number;
+    applicable?: boolean;
+    note?: string | null;
   };
   qualificationsBreakdown?: any;
   experienceBreakdown?: any;
   preferencesBreakdown?: any;
   // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown from
-  // the hybrid recommender — null/absent when scoreSource is "matcher-only".
+  // the hybrid recommender   null/absent when scoreSource is "matcher-only".
   hybridDetail?: any;
+  // False only for scoreSource "matcher+hybrid" (Content excluded from
+  // hybridScore there, to avoid double-counting against the matcher's own
+  // profile-vs-job fit). True for "hybrid-only", meaningless for "matcher-only".
+  hybridContentIncluded?: boolean;
+  // Outer matcher/hybrid split actually used for THIS candidate's whole feed
+  // (shifts from the 70/30 default based on how much of hybrid's score is
+  // genuinely personalized -- see combined_score_candidate()'s
+  // personalization_ratio logic). Same for every job in one feed response.
+  outerWeightsUsed?: { matcher: number; hybrid: number };
   rawJob?: any;
   benefits?: string[];
   tags?: string[];
@@ -98,7 +114,7 @@ interface Simulation {
   title: string;
   description: string;
   duration: number;
-  status: 'completed' | 'in_progress' | 'not_started';
+  status: 'completed'| 'in_progress'| 'not_started';
   score?: number;
   companyName: string;
   jobTitle: string;
@@ -144,7 +160,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
   const [allJobs, setAllJobs] = useState<any[]>([]);
   const [aiMatches, setAiMatches] = useState<AIMatch[]>([]);
 
-  // ✅ Three distinct loading phases so we never show stale UI
+  // ''Three distinct loading phases so we never show stale UI
   // pageLoading  = true while we don't know ANYTHING yet (first paint)
   // profileLoading = true while fetching profile/completion data
   // matchesLoading  = true while AI matching is in-flight
@@ -174,19 +190,19 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     additional: DEFAULT_ADDITIONAL_STATS
   });
   const [statsLoading, setStatsLoading] = useState(true);
-  const [withdrawalNotif, setWithdrawalNotif] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
+  const [withdrawalNotif, setWithdrawalNotif] = useState<{ type: 'success'| 'error'| 'info'; message: string } | null>(null);
 
   // Check user type
   const userTypeValue = user?.userType || user?.user_type || '';
-  const isCompanyUser = userTypeValue === 'recruiter' ||
-    userTypeValue === 'company_admin' ||
-    userTypeValue === 'company' ||
-    userTypeValue === 'Company Admin' ||
+  const isCompanyUser = userTypeValue === 'recruiter'||
+    userTypeValue === 'company_admin'||
+    userTypeValue === 'company'||
+    userTypeValue === 'Company Admin'||
     userTypeValue === 'Recruiter';
   const isSystemAdmin = userTypeValue === 'system_admin';
   const [platformStats, setPlatformStats] = useState<PlatformStats | null>(null);
 
-  // ✅ Derive completion percentage from state (used for display only)
+  // ''Derive completion percentage from state (used for display only)
   const completionPercentage = completionStatus?.completionPercentage ||
     fullCandidateProfile?.profile?.profile_completion ||
     0;
@@ -235,7 +251,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
         });
       }
     } catch (error) {
-      console.error('❌ Error fetching company dashboard stats:', error);
+      console.error(' Error fetching company dashboard stats:', error);
     } finally {
       setStatsLoading(false);
     }
@@ -249,7 +265,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       const res = await getPlatformStats();
       if (res.success) setPlatformStats(res.data);
     } catch (error) {
-      console.error('❌ Error fetching platform stats:', error);
+      console.error(' Error fetching platform stats:', error);
     } finally {
       setStatsLoading(false);
     }
@@ -259,7 +275,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
   // DashboardHome/index.tsx - Replace the handleWithdrawApplication function
 
-  const showNotif = (type: 'success' | 'error' | 'info', message: string) => {
+  const showNotif = (type: 'success'| 'error'| 'info', message: string) => {
     setWithdrawalNotif({ type, message });
     setTimeout(() => setWithdrawalNotif(null), 6000);
   };
@@ -282,7 +298,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
         }
 
         const response = await fetch(`${API_BASE_URL}/applications`, {
-          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json'}
         });
 
         if (response.ok) {
@@ -319,7 +335,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
   };
 
-  // ✅ Fetch AI job matches — accepts percentage directly to avoid stale state reads
+  // ''Fetch AI job matches   accepts percentage directly to avoid stale state reads
   const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 300000) => {
     let timeoutId: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise((_, reject) => {
@@ -335,14 +351,15 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
   };
 
-  // ✅ KEY FIX: accept resolvedPercentage as param so we don't rely on stale state
+  // ''KEY FIX: accept resolvedPercentage as param so we don't rely on stale state
   const fetchAiJobMatches = async (resolvedPercentage: number) => {
     if (isCompanyUser) return;
 
+    // Jobs are always shown regardless of profile completion   an incomplete
+    // profile just means matches are less personalized. The completion
+    // reminder is a banner above the list (see isProfileReady), not a gate.
     if (resolvedPercentage < 80) {
-      console.log(`⚠️ Profile ${resolvedPercentage}% not complete enough (< 80%)`);
-      setJobError(`📝 Complete your profile (${resolvedPercentage}%) to unlock AI-powered job matches!`);
-      return;
+      console.log(` Profile ${resolvedPercentage}% complete   fetching jobs anyway, matches may be less personalized`);
     }
 
     const candidateId = user?.id;
@@ -358,14 +375,14 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       console.log('📊 Fetching combined feed (matcher+hybrid) for candidate:', candidateId);
       const data = await fetchWithTimeout(getJobMatchesFromAI(candidateId));
 
-      // candidateInfo (name/level/skills) already comes from fetchFullCandidateProfile —
+      // candidateInfo (name/level/skills) already comes from fetchFullCandidateProfile  
       // the combined feed has no "candidate" field, only scored jobs.
       if (data && data.success && data.matches) {
         const transformedMatches = data.matches.map((match: any) => {
           const jobData = match.job || {};
           const companyData = jobData.company || {};
           // Real 4-factor breakdown from the matcher (skills/quals/experience/
-          // preferences) — null when score_source is "hybrid-only", i.e. the
+          // preferences)   null when score_source is "hybrid-only", i.e. the
           // matcher had no data for this job at all, not a real 0.
           const matcherBD = match.matcher_breakdown || null;
           const criteriaScores = matcherBD?.criteria_scores || {};
@@ -383,7 +400,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             workArrangement: jobData.work_arrangement || 'Onsite',
             description: jobData.description,
             requirements: jobData.qualifications ? [jobData.qualifications] : [],
-            skills: jobData.skills_required?.map((s: any) => typeof s === 'string' ? s : s.name) || [],
+            skills: jobData.skills_required?.map((s: any) => typeof s === 'string'? s : s.name) || [],
             screeningQuestions: jobData.screening_questions || [],
             expiresAt: jobData.expires_at,
             publishedAt: jobData.published_at,
@@ -403,19 +420,25 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
               experience_match: criteriaScores.experience_match ?? null,
               preferences_match: criteriaScores.preferences_match ?? null
             },
+            factorWeightsUsed: matcherBD?.factor_weights_used || null,
+            excludedFactors: matcherBD?.excluded_factors || [],
             skillsBreakdown: {
               matched_skills: skillsBD.matched_skills || [],
               missing_skills: skillsBD.missing_skills || [],
               total_required: skillsBD.total_required || 0,
-              total_matched: skillsBD.total_matched || 0
+              total_matched: skillsBD.total_matched || 0,
+              applicable: skillsBD.applicable ?? true,
+              note: skillsBD.note ?? null
             },
             qualificationsBreakdown: matcherBD?.qualifications_breakdown || null,
             experienceBreakdown: matcherBD?.experience_breakdown || null,
             preferencesBreakdown: matcherBD?.preferences_breakdown || null,
             // Behavior/Collaborative/Freshness/Popularity/Business-rules
-            // breakdown from the hybrid recommender — null when score_source
+            // breakdown from the hybrid recommender   null when score_source
             // is "matcher-only" (hybrid had no data for this job).
             hybridDetail: match.hybrid_detail || null,
+            hybridContentIncluded: match.hybrid_content_included ?? null,
+            outerWeightsUsed: data.weights_used || null,
 
             rawJob: jobData,
             benefits: jobData.benefits || [],
@@ -435,7 +458,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           };
         });
 
-        console.log('✅ Transformed matches:', transformedMatches.length, `(cold_start=${data.cold_start}, matcher_available=${data.matcher_available})`);
+        console.log('Transformed matches:', transformedMatches.length, `(cold_start=${data.cold_start}, matcher_available=${data.matcher_available})`);
         setAiMatches(transformedMatches);
         setJobError(null);
       } else {
@@ -451,7 +474,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
   };
 
-  // ✅ Returns the resolved percentage so loadData can pass it to fetchAiJobMatches directly
+  // ''Returns the resolved percentage so loadData can pass it to fetchAiJobMatches directly
   const fetchFullCandidateProfile = async (): Promise<number> => {
     if (isCompanyUser) return 0;
 
@@ -497,7 +520,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           skills: allSkills.slice(0, 5)
         });
 
-        // ✅ Also fetch completion status and return the resolved percentage
+        // ''Also fetch completion status and return the resolved percentage
         const statusResponse = await getProfileCompletionStatus();
         if (statusResponse.success && statusResponse.data) {
           setCompletionStatus(statusResponse.data);
@@ -526,7 +549,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           title: sim.simulationName,
           description: sim.description,
           duration: sim.duration,
-          status: sim.completedAt ? 'completed' : (sim.startedAt ? 'in_progress' : 'not_started'),
+          status: sim.completedAt ? 'completed': (sim.startedAt ? 'in_progress': 'not_started'),
           score: sim.score,
           companyName: sim.companyName,
           jobTitle: sim.jobTitle,
@@ -539,7 +562,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     }
   };
 
-  // ✅ MAIN DATA LOADER — sequential, passes resolved percentage directly
+  // ''MAIN DATA LOADER   sequential, passes resolved percentage directly
   useEffect(() => {
     const loadData = async () => {
       if (!user?.id) {
@@ -576,7 +599,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       ]);
       setProfileLoading(false);
 
-      // Step 2: now we know the real percentage — decide what to do
+      // Step 2: now we know the real percentage   decide what to do
       // pageLoading ends here so the profile sidebar already renders
       setPageLoading(false);
 
@@ -631,7 +654,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
   const handleViewDetails = (match: AIMatch) => {
     // JobViewModal itself tracks the view now (on mount, keyed on job id) so
-    // every caller gets it for free — calling trackView here too would
+    // every caller gets it for free   calling trackView here too would
     // double-count this specific open.
     setSelectedMatch(match);
     setShowDetails(true);
@@ -864,7 +887,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
   // ── CANDIDATE VIEW ────────────────────────────────────────────────────────
 
-  // ✅ While we don't know profile yet, show a single full-page skeleton
+  // ''While we don't know profile yet, show a single full-page skeleton
   // This prevents ANY flash of wrong content
   if (pageLoading || profileLoading) {
     return (
@@ -898,11 +921,11 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       {/* Withdrawal / action notification toast */}
       {withdrawalNotif && (
         <div className={`fixed top-4 right-4 z-50 flex items-start gap-3 px-4 py-3 rounded-xl shadow-lg max-w-sm border text-sm font-medium transition-all
-          ${withdrawalNotif.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' :
-            withdrawalNotif.type === 'info'    ? 'bg-blue-50 border-blue-200 text-blue-800' :
+          ${withdrawalNotif.type === 'success'? 'bg-green-50 border-green-200 text-green-800':
+            withdrawalNotif.type === 'info'   ? 'bg-blue-50 border-blue-200 text-blue-800':
                                                  'bg-red-50 border-red-200 text-red-800'}`}>
-          {withdrawalNotif.type === 'success' ? <CheckCircle size={18} className="shrink-0 mt-0.5 text-green-600" /> :
-           withdrawalNotif.type === 'info'    ? <Info size={18} className="shrink-0 mt-0.5 text-blue-600" /> :
+          {withdrawalNotif.type === 'success'? <CheckCircle size={18} className="shrink-0 mt-0.5 text-green-600" /> :
+           withdrawalNotif.type === 'info'   ? <Info size={18} className="shrink-0 mt-0.5 text-blue-600" /> :
                                                 <XCircle size={18} className="shrink-0 mt-0.5 text-red-600" />}
           <span className="flex-1">{withdrawalNotif.message}</span>
           <button onClick={() => setWithdrawalNotif(null)} className="shrink-0 opacity-60 hover:opacity-100">
@@ -915,17 +938,17 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
         <div className="lg:col-span-3 w-full">
           <div className="mb-8">
 
-            {/* ── Banner area: profile incomplete OR AI match banner ── */}
-            {!isProfileReady ? (
+            {/* ── Banner area: soft profile-completion reminder (never blocks the job list) + AI match banner ── */}
+            {!isProfileReady && (
               <div className="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-lg p-6 mb-6 text-white">
                 <div className="flex items-start gap-4">
                   <div className="bg-white/20 p-3 rounded-full flex-shrink-0">
                     <AlertCircle className="w-6 h-6" />
                   </div>
                   <div className="flex-1">
-                    <h3 className="font-semibold text-lg">Complete Your Profile to Unlock AI Matches</h3>
+                    <h3 className="font-semibold text-lg">Complete Your Profile for Better Job Matches</h3>
                     <p className="text-sm text-yellow-100 mt-1">
-                      Your profile is {completionPercentage}% complete. Please reach at least 80% to see personalized job matches.
+                      Your profile is {completionPercentage}% complete. Complete it to get a job feed fitted to your profile and interests.
                     </p>
                     <div className="mt-3 flex items-center gap-4">
                       <div className="flex-1 max-w-xs">
@@ -944,23 +967,23 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
                   </div>
                 </div>
               </div>
-            ) : (
-              <AIMatchBanner
-                matchFilter={matchFilter}
-                onSetMatchFilter={setMatchFilter}
-                aiMatchesCount={aiMatches.filter(m => (m.matchScore || 0) >= 90).length}
-                appliedJobsCount={appliedJobs.length}
-                filteredMatchesLength={displayJobs.length}
-              />
             )}
 
-            {/* Candidate info strip — only when matches are loaded */}
+            <AIMatchBanner
+              matchFilter={matchFilter}
+              onSetMatchFilter={setMatchFilter}
+              aiMatchesCount={aiMatches.filter(m => (m.matchScore || 0) >= 90).length}
+              appliedJobsCount={appliedJobs.length}
+              filteredMatchesLength={displayJobs.length}
+            />
+
+            {/* Candidate info strip   only when matches are loaded */}
             {candidateInfo && aiMatches.length > 0 && (
               <div className="bg-blue-50 rounded-lg p-3 mb-4 text-sm text-gray-700">
-                <span className="font-medium">👤 {candidateInfo.name}</span> •
+                <span className="font-medium"> {candidateInfo.name}</span> •
                 <span className="ml-2">📊 {candidateInfo.level}</span> •
-                <span className="ml-2">💼 {candidateInfo.total_experience_years} years exp</span> •
-                <span className="ml-2">🎯 Skills: {candidateInfo.skills?.slice(0, 5).join(', ')}</span>
+                <span className="ml-2"> {candidateInfo.total_experience_years} years exp</span> •
+                <span className="ml-2">''Skills: {candidateInfo.skills?.slice(0, 5).join(', ')}</span>
               </div>
             )}
 
@@ -968,7 +991,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
 
             {/* ── Main content area ── */}
             {matchesLoading ? (
-              // AI matching in progress — show spinner ONLY here, not the "no matches" empty state
+              // AI matching in progress   show spinner ONLY here, not the "no matches" empty state
               <div className="flex items-center justify-center py-12 gap-3">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 flex-shrink-0" />
                 <div>
@@ -977,21 +1000,15 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
                 </div>
               </div>
             ) : jobError ? (
-              <div className={`text-center py-12 rounded-lg ${!isProfileReady ? 'bg-yellow-50' : 'bg-red-50'}`}>
-                <AlertCircle className={`w-12 h-12 mx-auto mb-3 ${!isProfileReady ? 'text-yellow-500' : 'text-red-500'}`} />
-                <p className={`${!isProfileReady ? 'text-yellow-700' : 'text-red-600'}`}>{jobError}</p>
-                {!isProfileReady ? (
-                  <button onClick={() => onViewChange?.('profile')} className="mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">
-                    Complete Profile Now
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => fetchAiJobMatches(completionPercentage)}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Retry
-                  </button>
-                )}
+              <div className="text-center py-12 rounded-lg bg-red-50">
+                <AlertCircle className="w-12 h-12 mx-auto mb-3 text-red-500" />
+                <p className="text-red-600">{jobError}</p>
+                <button
+                  onClick={() => fetchAiJobMatches(completionPercentage)}
+                  className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             ) : displayJobs.length === 0 && aiMatches.length === 0 ? (
               <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -1044,16 +1061,7 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
           ) : (
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">Profile Progress</h3>
-              {completionPercentage < 80 && (
-                <div className="bg-yellow-50 border-2 border-yellow-400 rounded-lg p-3 mb-4">
-                  <p className="text-xs font-semibold text-yellow-700">
-                    ⚠️ {80 - completionPercentage}% more needed for AI matches
-                  </p>
-                  <div className="w-full bg-yellow-200 rounded-full h-1.5 mt-2">
-                    <div className="bg-yellow-600 h-1.5 rounded-full transition-all duration-500" style={{ width: `${completionPercentage}%` }} />
-                  </div>
-                </div>
-              )}
+              
               <ProfileProgressRing
                 percentage={completionPercentage}
                 sections={completionStatus?.sections}
@@ -1067,8 +1075,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
                   }`}
               >
                 {completionPercentage < 80
-                  ? `⚠️ Complete Profile (${completionPercentage}%)`
-                  : completionPercentage === 100 ? 'Update Profile' : 'Complete Profile'}
+                  ? ` Complete Profile (${completionPercentage}%)`
+                  : completionPercentage === 100 ? 'Update Profile': 'Complete Profile'}
               </button>
             </div>
           )}
@@ -1095,17 +1103,17 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
               setAppliedJobs(prev => [...prev, selectedMatchForApply.id]);
             }
 
-            // ✅ Check if we need to navigate to simulation
-            if (data?.action === 'start-simulation' && data?.view === 'simulation') {
+            // ''Check if we need to navigate to simulation
+            if (data?.action === 'start-simulation'&& data?.view === 'simulation') {
               // Close the modal
               setShowApplicationModal(false);
               setSelectedMatchForApply(null);
-              // ✅ Navigate to simulation view using the onViewChange prop
+              // ''Navigate to simulation view using the onViewChange prop
               onViewChange?.('simulation');
               return;
             }
 
-            // Leave the modal open in BOTH cases — it shows the simulation prompt when
+            // Leave the modal open in BOTH cases   it shows the simulation prompt when
             // the job has one, or the "no simulation yet, you'll be notified" notice when
             // it doesn't. The modal closes itself when the candidate dismisses it (onClose).
           }}
@@ -1138,11 +1146,15 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             score_source: selectedMatchForApply.scoreSource,
             reasons: selectedMatchForApply.reasons,
             criteria_scores: selectedMatchForApply.criteriaScores,
+            factor_weights_used: selectedMatchForApply.factorWeightsUsed,
+            excluded_factors: selectedMatchForApply.excludedFactors,
             skills_breakdown: selectedMatchForApply.skillsBreakdown,
             qualifications_breakdown: selectedMatchForApply.qualificationsBreakdown,
             experience_breakdown: selectedMatchForApply.experienceBreakdown,
             preferences_breakdown: selectedMatchForApply.preferencesBreakdown,
-            hybrid_detail: selectedMatchForApply.hybridDetail
+            hybrid_detail: selectedMatchForApply.hybridDetail,
+            hybrid_content_included: selectedMatchForApply.hybridContentIncluded,
+            outer_weights_used: selectedMatchForApply.outerWeightsUsed
           }}
           requiredDocuments={[{ name: 'Resume', is_required: true }, { name: 'Cover Letter', is_required: false }]}
         />

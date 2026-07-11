@@ -33,8 +33,8 @@ const AIMatchBanner: React.FC<AIMatchBannerProps> = ({
           <button
             onClick={() => onSetMatchFilter('all')}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              matchFilter === 'all' 
-                ? 'bg-white text-blue-600' 
+              matchFilter === 'all'
+                ? 'bg-white text-blue-600'
                 : 'bg-white/20 text-white hover:bg-white/30'
             }`}
           >
@@ -43,8 +43,8 @@ const AIMatchBanner: React.FC<AIMatchBannerProps> = ({
           <button
             onClick={() => onSetMatchFilter('applied')}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              matchFilter === 'applied' 
-                ? 'bg-white text-green-600' 
+              matchFilter === 'applied'
+                ? 'bg-white text-green-600'
                 : 'bg-white/20 text-white hover:bg-white/30'
             }`}
           >
@@ -53,8 +53,8 @@ const AIMatchBanner: React.FC<AIMatchBannerProps> = ({
           <button
             onClick={() => onSetMatchFilter('high')}
             className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              matchFilter === 'high' 
-                ? 'bg-white text-green-600' 
+              matchFilter === 'high'
+                ? 'bg-white text-green-600'
                 : 'bg-white/20 text-white hover:bg-white/30'
             }`}
           >

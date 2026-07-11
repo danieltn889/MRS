@@ -24,7 +24,7 @@ export const GitHubCallback = () => {
 
     setStatusMsg('Exchanging code for token...');
 
-    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const isProduction = window.location.hostname !== 'localhost'&& window.location.hostname !== '127.0.0.1';
     const apiBase = isProduction
       ? `${window.location.origin}/api/v1`
       : (import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1');
@@ -32,7 +32,7 @@ export const GitHubCallback = () => {
     // Call backend directly and show raw response
     fetch(`${apiBase}/github/auth/callback`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json'},
       body: JSON.stringify({ 
         code, 
         redirect_uri: `${window.location.origin}/auth/github/callback` 
@@ -55,17 +55,17 @@ export const GitHubCallback = () => {
           avatarUrl: data.avatarUrl,
           token: data.token,
         }, window.location.origin);
-        setStatusMsg(`✅ Connected as ${data.username} - closing...`);
+        setStatusMsg(`''Connected as ${data.username} - closing...`);
       } else {
         setErrorMsg(`Error: ${data.error || data.message || JSON.stringify(data)}`);
-        window.opener?.postMessage({ type: 'github_oauth_error' }, window.location.origin);
+        window.opener?.postMessage({ type: 'github_oauth_error'}, window.location.origin);
       }
       setTimeout(() => window.close(), 3000);
     })
     .catch(err => {
       setErrorMsg(`Network error: ${err.message}`);
       setStatusMsg('Failed to reach backend');
-      window.opener?.postMessage({ type: 'github_oauth_error' }, window.location.origin);
+      window.opener?.postMessage({ type: 'github_oauth_error'}, window.location.origin);
       setTimeout(() => window.close(), 3000);
     });
   }, []);

@@ -14,7 +14,7 @@ import CompanyProjects from './CompanyProjects';
 
 // ─── Toast types ─────────────────────────────────────────────────────────────
 
-export type ToastType = 'success' | 'error' | 'info';
+export type ToastType = 'success'| 'error'| 'info';
 
 export interface Toast {
   id: string;
@@ -54,14 +54,14 @@ interface CompanyProfileData {
 
 const ToastItem: React.FC<{ toast: Toast; onDismiss: (id: string) => void }> = ({ toast, onDismiss }) => {
   useEffect(() => {
-    const t = setTimeout(() => onDismiss(toast.id), toast.type === 'error' ? 8000 : 5000);
+    const t = setTimeout(() => onDismiss(toast.id), toast.type === 'error'? 8000 : 5000);
     return () => clearTimeout(t);
   }, [toast.id, toast.type, onDismiss]);
 
   const styles = {
-    success: { bar: 'bg-green-500', bg: 'bg-white border-green-200', icon: <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />, title: 'text-green-800' },
-    error:   { bar: 'bg-red-500',   bg: 'bg-white border-red-200',   icon: <AlertCircle   className="h-5 w-5 text-red-500   flex-shrink-0 mt-0.5" />, title: 'text-red-800'   },
-    info:    { bar: 'bg-blue-500',  bg: 'bg-white border-blue-200',  icon: <Info           className="h-5 w-5 text-blue-500  flex-shrink-0 mt-0.5" />, title: 'text-blue-800'  },
+    success: { bar: 'bg-green-500', bg: 'bg-white border-green-200', icon: <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />, title: 'text-green-800'},
+    error:   { bar: 'bg-red-500',   bg: 'bg-white border-red-200',   icon: <AlertCircle   className="h-5 w-5 text-red-500   flex-shrink-0 mt-0.5" />, title: 'text-red-800'  },
+    info:    { bar: 'bg-blue-500',  bg: 'bg-white border-blue-200',  icon: <Info           className="h-5 w-5 text-blue-500  flex-shrink-0 mt-0.5" />, title: 'text-blue-800' },
   }[toast.type];
 
   return (
@@ -123,7 +123,7 @@ const CompanyProfile: React.FC = () => {
     }
   };
 
-  // Global notify callback — passed down to every sub-component
+  // Global notify callback   passed down to every sub-component
   const notify = useCallback<NotifyFn>((type, title, message, details) => {
     const id = `${Date.now()}-${Math.random()}`;
     setToasts(prev => [...prev, { id, type, title, message, details, timestamp: new Date() }]);
@@ -134,11 +134,11 @@ const CompanyProfile: React.FC = () => {
   }, []);
 
   const tabs = [
-    { id: 'profile',   label: 'Company Profile', icon: Building2, description: 'Basic information & branding' },
-    { id: 'locations', label: 'Locations',        icon: MapPin,    description: 'Office locations & addresses' },
-    { id: 'culture',   label: 'Culture & Values', icon: Heart,     description: 'Company culture & values'    },
-    { id: 'team',      label: 'Team Members',     icon: Users,     description: 'Team & leadership'          },
-    { id: 'projects',  label: 'Projects',         icon: Briefcase, description: 'Projects & achievements'    },
+    { id: 'profile',   label: 'Company Profile', icon: Building2, description: 'Basic information & branding'},
+    { id: 'locations', label: 'Locations',        icon: MapPin,    description: 'Office locations & addresses'},
+    { id: 'culture',   label: 'Culture & Values', icon: Heart,     description: 'Company culture & values'   },
+    { id: 'team',      label: 'Team Members',     icon: Users,     description: 'Team & leadership'         },
+    { id: 'projects',  label: 'Projects',         icon: Briefcase, description: 'Projects & achievements'   },
   ];
 
   const renderTabContent = () => {
@@ -237,12 +237,12 @@ const CompanyProfile: React.FC = () => {
                       }`}
                     >
                       <div className={`h-8 w-8 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors ${
-                        active ? 'bg-blue-600' : 'bg-gray-100'
+                        active ? 'bg-blue-600': 'bg-gray-100'
                       }`}>
-                        <Icon className={`h-4 w-4 ${active ? 'text-white' : 'text-gray-500'}`} />
+                        <Icon className={`h-4 w-4 ${active ? 'text-white': 'text-gray-500'}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium truncate ${active ? 'text-blue-700' : 'text-gray-800'}`}>
+                        <p className={`text-sm font-medium truncate ${active ? 'text-blue-700': 'text-gray-800'}`}>
                           {tab.label}
                         </p>
                         <p className="text-xs text-gray-400 truncate">{tab.description}</p>

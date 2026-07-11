@@ -165,13 +165,13 @@ export interface ChatTranscript extends BaseEntity {
 export interface SimulationSession extends BaseEntity {
   simulation_id: UUID;
   user_id: UUID;
-  session_type: 'candidate' | 'preview' | 'practice' | 'test';
+  session_type: 'candidate'| 'preview'| 'practice'| 'test';
   application_id?: UUID;
   started_at?: TIMESTAMP;
   completed_at?: TIMESTAMP;
   paused_at?: TIMESTAMP;
   resumed_at?: TIMESTAMP;
-  status: 'scheduled' | 'in_progress' | 'paused' | 'completed' | 'expired' | 'cancelled' | 'failed';
+  status: 'scheduled'| 'in_progress'| 'paused'| 'completed'| 'expired'| 'cancelled'| 'failed';
   time_limit?: number;
   time_remaining?: number;
   time_spent: number;
@@ -216,7 +216,7 @@ export interface ScheduledSimulation extends BaseEntity {
   simulation_id: UUID;
   user_id: UUID;
   scheduled_at: TIMESTAMP;
-  status: 'scheduled' | 'completed' | 'cancelled' | 'missed';
+  status: 'scheduled'| 'completed'| 'cancelled'| 'missed';
   created_at: TIMESTAMP;
   updated_at: TIMESTAMP;
 

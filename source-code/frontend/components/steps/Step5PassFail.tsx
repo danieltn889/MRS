@@ -106,7 +106,7 @@ const Step5PassFail: React.FC<Props> = ({
   };
 
   // Toggle task between mandatory and optional (MUTUALLY EXCLUSIVE)
-  const toggleTaskCategory = (taskId: string, category: 'mandatory' | 'optional') => {
+  const toggleTaskCategory = (taskId: string, category: 'mandatory'| 'optional') => {
     const currentMandatory = taskPriority.mandatoryTasks || [];
     const currentOptional = taskPriority.optionalTasks || [];
     
@@ -211,9 +211,9 @@ const Step5PassFail: React.FC<Props> = ({
           </label>
           <div className="grid grid-cols-3 gap-2">
             {[
-              { value: 'sequential' as const, label: 'Sequential', desc: 'Must finish each before starting next' },
-              { value: 'parallel' as const, label: 'Parallel', desc: 'Start any task at any time' },
-              { value: 'weighted' as const, label: 'Weighted', desc: 'Assign custom importance' },
+              { value: 'sequential'as const, label: 'Sequential', desc: 'Must finish each before starting next'},
+              { value: 'parallel'as const, label: 'Parallel', desc: 'Start any task at any time'},
+              { value: 'weighted'as const, label: 'Weighted', desc: 'Assign custom importance'},
             ].map((mode) => (
               <button
                 key={mode.value}
@@ -232,7 +232,7 @@ const Step5PassFail: React.FC<Props> = ({
         </div>
 
         {/* Weight Distribution (only for weighted mode) */}
-        {taskPriority.mode === 'weighted' && (
+        {taskPriority.mode === 'weighted'&& (
           <div className="mt-3 space-y-3">
             <label className="text-sm font-medium text-gray-700 block">
               Weight Distribution
@@ -242,7 +242,7 @@ const Step5PassFail: React.FC<Props> = ({
                 <input
                   type="radio"
                   checked={taskPriority.weightDistribution === 'equal'}
-                  onChange={() => updateTaskPriority({ weightDistribution: 'equal' })}
+                  onChange={() => updateTaskPriority({ weightDistribution: 'equal'})}
                   className="text-purple-600 focus:ring-purple-500"
                 />
                 <span className="text-sm text-gray-700">Equal weights</span>
@@ -251,7 +251,7 @@ const Step5PassFail: React.FC<Props> = ({
                 <input
                   type="radio"
                   checked={taskPriority.weightDistribution === 'custom'}
-                  onChange={() => updateTaskPriority({ weightDistribution: 'custom' })}
+                  onChange={() => updateTaskPriority({ weightDistribution: 'custom'})}
                   className="text-purple-600 focus:ring-purple-500"
                 />
                 <span className="text-sm text-gray-700">Custom weights</span>
@@ -259,7 +259,7 @@ const Step5PassFail: React.FC<Props> = ({
             </div>
 
             {/* Custom weight sliders */}
-            {taskPriority.weightDistribution === 'custom' && simulation.tasks.length > 0 && (
+            {taskPriority.weightDistribution === 'custom'&& simulation.tasks.length > 0 && (
               <div className="mt-3 space-y-3">
                 {simulation.tasks.map(task => (
                   <div key={task.id} className="flex items-center gap-4 p-2 bg-gray-50 rounded-lg">
@@ -286,7 +286,7 @@ const Step5PassFail: React.FC<Props> = ({
                           : 'bg-gray-100 text-gray-500'
                       }`}
                     >
-                      {taskPriority.taskWeights?.[task.id] && taskPriority.taskWeights[task.id] > 0 ? 'Active' : 'Inactive'}
+                      {taskPriority.taskWeights?.[task.id] && taskPriority.taskWeights[task.id] > 0 ? 'Active': 'Inactive'}
                     </button>
                   </div>
                 ))}
@@ -302,7 +302,7 @@ const Step5PassFail: React.FC<Props> = ({
           </label>
 
           {simulation.tasks.length === 0 ? (
-            <p className="text-xs text-gray-400 italic">No tasks available — add tasks in Step 3 first.</p>
+            <p className="text-xs text-gray-400 italic">No tasks available   add tasks in Step 3 first.</p>
           ) : (
             <>
               {/* Unassigned pool */}
@@ -314,7 +314,7 @@ const Step5PassFail: React.FC<Props> = ({
                 if (unassigned.length === 0) return null;
                 return (
                   <div>
-                    <p className="text-xs text-gray-500 mb-1.5">Unassigned — click <strong>M</strong> or <strong>O</strong> to categorize:</p>
+                    <p className="text-xs text-gray-500 mb-1.5">Unassigned   click <strong>M</strong> or <strong>O</strong> to categorize:</p>
                     <div className="space-y-1 border border-dashed border-gray-300 rounded-lg p-2 bg-gray-50">
                       {unassigned.map(task => (
                         <div key={task.id} className="flex items-center gap-2 text-xs p-1.5 rounded bg-white border border-gray-200">
@@ -366,7 +366,7 @@ const Step5PassFail: React.FC<Props> = ({
                     )}
                   </div>
                   {(taskPriority.mandatoryTasks?.length || 0) === 0 && (
-                    <p className="text-xs text-red-500">⚠️ No mandatory tasks selected</p>
+                    <p className="text-xs text-red-500"> No mandatory tasks selected</p>
                   )}
                 </div>
 
@@ -420,7 +420,7 @@ const Step5PassFail: React.FC<Props> = ({
             <span className="font-medium ml-1 text-blue-600">{taskPriority.optionalTasks?.length || 0}</span>
           </div>
           
-          {taskPriority.mode === 'weighted' && (
+          {taskPriority.mode === 'weighted'&& (
             <div className="text-xs">
               <span className="text-gray-500">Active Weights:</span>
               <span className="font-medium ml-1">
@@ -434,7 +434,7 @@ const Step5PassFail: React.FC<Props> = ({
         {taskPriority.mandatoryTasks?.length === 0 && simulation.tasks.length > 0 && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mt-2">
             <p className="text-xs text-yellow-700">
-              ⚠️ No tasks are marked as mandatory. Consider making at least one task mandatory for the simulation to be meaningful.
+               No tasks are marked as mandatory. Consider making at least one task mandatory for the simulation to be meaningful.
             </p>
           </div>
         )}
@@ -443,7 +443,7 @@ const Step5PassFail: React.FC<Props> = ({
         {(taskPriority.mandatoryTasks?.length + taskPriority.optionalTasks?.length) === simulation.tasks.length && simulation.tasks.length > 0 && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 mt-2">
             <p className="text-xs text-green-700">
-              ✅ All {simulation.tasks.length} tasks have been assigned!
+              ''All {simulation.tasks.length} tasks have been assigned!
             </p>
           </div>
         )}
@@ -497,11 +497,11 @@ const Step5PassFail: React.FC<Props> = ({
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Time Limit Required:</span>
-            <span className="font-semibold">{timeManagement.completionRequired ? 'Yes' : 'No'}</span>
+            <span className="font-semibold">{timeManagement.completionRequired ? 'Yes': 'No'}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Time Bonus:</span>
-            <span className="font-semibold">{timeManagement.timeBonus ? 'Enabled' : 'Disabled'}</span>
+            <span className="font-semibold">{timeManagement.timeBonus ? 'Enabled': 'Disabled'}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Mandatory Tasks:</span>

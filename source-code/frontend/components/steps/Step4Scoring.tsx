@@ -8,9 +8,9 @@ interface Props {
 }
 
 const WEIGHT_CONFIG = [
-  { key: 'qualityWeight'    as keyof ScoringConfig, label: 'Quality',    icon: Award,  color: '#7c3aed', bg: '#f5f3ff', defaultWeight: 70 },
-  { key: 'speedWeight'      as keyof ScoringConfig, label: 'Speed',      icon: Zap,    color: '#2563eb', bg: '#eff6ff', defaultWeight: 20 },
-  { key: 'behavioralWeight' as keyof ScoringConfig, label: 'Behavioral', icon: Brain,  color: '#0891b2', bg: '#ecfeff', defaultWeight: 10 },
+  { key: 'qualityWeight'   as keyof ScoringConfig, label: 'Quality',    icon: Award,  color: '#7c3aed', bg: '#f5f3ff', defaultWeight: 70 },
+  { key: 'speedWeight'     as keyof ScoringConfig, label: 'Speed',      icon: Zap,    color: '#2563eb', bg: '#eff6ff', defaultWeight: 20 },
+  { key: 'behavioralWeight'as keyof ScoringConfig, label: 'Behavioral', icon: Brain,  color: '#0891b2', bg: '#ecfeff', defaultWeight: 10 },
 ];
 
 const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
@@ -39,12 +39,12 @@ const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
     setSimulation(prev => prev ? { ...prev, scoring: { ...prev.scoring, ...patch } } : null);
 
   // Ensure all values are numbers with proper defaults
-  const totalPoints = typeof simulation.scoring.totalPoints === 'number' ? simulation.scoring.totalPoints : 100;
-  const passingScore = typeof simulation.scoring.passingScore === 'number' ? simulation.scoring.passingScore : 70;
-  const qualityWeight = typeof simulation.scoring.qualityWeight === 'number' ? simulation.scoring.qualityWeight : 70;
-  const speedWeight = typeof simulation.scoring.speedWeight === 'number' ? simulation.scoring.speedWeight : 20;
-  const behavioralWeight = typeof simulation.scoring.behavioralWeight === 'number' ? simulation.scoring.behavioralWeight : 10;
-  const timeBonus = typeof simulation.scoring.timeBonus === 'boolean' ? simulation.scoring.timeBonus : false;
+  const totalPoints = typeof simulation.scoring.totalPoints === 'number'? simulation.scoring.totalPoints : 100;
+  const passingScore = typeof simulation.scoring.passingScore === 'number'? simulation.scoring.passingScore : 70;
+  const qualityWeight = typeof simulation.scoring.qualityWeight === 'number'? simulation.scoring.qualityWeight : 70;
+  const speedWeight = typeof simulation.scoring.speedWeight === 'number'? simulation.scoring.speedWeight : 20;
+  const behavioralWeight = typeof simulation.scoring.behavioralWeight === 'number'? simulation.scoring.behavioralWeight : 10;
+  const timeBonus = typeof simulation.scoring.timeBonus === 'boolean'? simulation.scoring.timeBonus : false;
   
   const weightTotal = qualityWeight + speedWeight + behavioralWeight;
   const weightsOk = weightTotal === 100;
@@ -88,7 +88,7 @@ const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
               value={passingScore}
               onChange={e => setScoring({ passingScore: Number(e.target.value) })}
               className={`w-full px-4 py-2.5 border rounded-xl text-sm focus:ring-2 focus:ring-purple-400 focus:border-transparent ${
-                passingScore < 1 || passingScore > 100 ? 'border-red-300 bg-red-50' : 'border-gray-200'
+                passingScore < 1 || passingScore > 100 ? 'border-red-300 bg-red-50': 'border-gray-200'
               }`}
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
@@ -114,7 +114,7 @@ const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
           {/* Threshold marker */}
           <div
             className="absolute inset-y-0 w-1.5 bg-white shadow-md rounded-full transition-all duration-300"
-            style={{ left: `${passingScore}%`, transform: 'translateX(-50%)' }}
+            style={{ left: `${passingScore}%`, transform: 'translateX(-50%)'}}
           />
           {/* Labels */}
           <div className="absolute inset-0 flex items-center justify-between px-4">
@@ -126,13 +126,13 @@ const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
           <div className="flex items-center gap-2">
             <XCircle size={16} className="text-red-500" />
             <span className="text-gray-600">
-              Below <strong>{passingScore}%</strong> — {passingPts > 0 ? `< ${passingPts} pts` : '—'} — <span className="text-red-600 font-semibold">FAIL</span>
+              Below <strong>{passingScore}%</strong>   {passingPts > 0 ? `< ${passingPts} pts` : ' '}   <span className="text-red-600 font-semibold">FAIL</span>
             </span>
           </div>
           <div className="flex items-center gap-2">
             <CheckCircle size={16} className="text-green-500" />
             <span className="text-gray-600">
-              ≥ <strong>{passingScore}%</strong> — {passingPts > 0 ? `≥ ${passingPts} pts` : '—'} — <span className="text-green-600 font-semibold">PASS</span>
+              ≥ <strong>{passingScore}%</strong>   {passingPts > 0 ? `≥ ${passingPts} pts` : ' '}   <span className="text-green-600 font-semibold">PASS</span>
             </span>
           </div>
         </div>
@@ -143,9 +143,9 @@ const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-semibold text-gray-700">Score Weight Distribution</h4>
           <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-            weightsOk ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+            weightsOk ? 'bg-green-50 text-green-700 border border-green-200': 'bg-red-50 text-red-700 border border-red-200'
           }`}>
-            {weightTotal}% {weightsOk ? '✓ balanced' : '— must equal 100%'}
+            {weightTotal}% {weightsOk ? '✓ balanced': '  must equal 100%'}
           </span>
         </div>
 
@@ -177,7 +177,7 @@ const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
             <div key={key as string} className="rounded-xl p-4" style={{ background: bg }}>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: color + '20' }}>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: color + '20'}}>
                     <Icon size={14} style={{ color }} />
                   </div>
                   <span className="text-sm font-semibold text-gray-700">{label}</span>
@@ -218,7 +218,7 @@ const Step4Scoring: React.FC<Props> = ({ simulation, setSimulation }) => {
           <div className="flex items-center gap-2.5 p-3.5 bg-red-50 border border-red-200 rounded-xl">
             <AlertCircle size={16} className="text-red-500 flex-shrink-0" />
             <p className="text-sm text-red-700">
-              Weights total <strong>{weightTotal}%</strong> — adjust them so they add up to exactly <strong>100%</strong>.
+              Weights total <strong>{weightTotal}%</strong>   adjust them so they add up to exactly <strong>100%</strong>.
             </p>
           </div>
         )}

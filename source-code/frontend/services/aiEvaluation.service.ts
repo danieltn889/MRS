@@ -55,7 +55,7 @@ const aiEvaluationService = {
     };
 
     const baseScore = Object.values(detailedScores).reduce((sum, value) => sum + value, 0) / 5;
-    const score = clamp(typeof githubScore === 'number' ? (baseScore * 0.75) + (githubScore * 0.25) : baseScore);
+    const score = clamp(typeof githubScore === 'number'? (baseScore * 0.75) + (githubScore * 0.25) : baseScore);
 
     const improvements = [];
     if (detailedScores.documentation < 60) improvements.push('Add more comments to explain your code');

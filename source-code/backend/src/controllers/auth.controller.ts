@@ -9,6 +9,9 @@ import { sendEmail } from '../services/email.service.js';
 import RecommendationSyncService from '../services/recommendation-sync.service.js';
 import { User, AuthenticatedRequest } from '../types/auth.types.js';
 import { User as BaseUser } from '../models/index.js';
+import { finalizeIdentityDocumentFile, deleteStagedFile } from '../utils/identityDocumentStorage.js';
+import { validateIdentityDocument, isDuplicateDocument, DocumentType } from '../validators/identityDocument.js';
+import { isValidRwandaLocationChain } from '../utils/rwandaLocation.js';
 
 // ============ PASSWORD VALIDATION HELPERS ============
 
@@ -34,16 +37,16 @@ const validatePasswordStrength = (password: string): { isValid: boolean; message
   const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
 
   if (!hasUppercase) {
-    return { isValid: false, message: 'Password must contain at least one uppercase letter' };
+    return { isValid: false, message: 'Password must contain at least one uppercase letter'};
   }
   if (!hasLowercase) {
-    return { isValid: false, message: 'Password must contain at least one lowercase letter' };
+    return { isValid: false, message: 'Password must contain at least one lowercase letter'};
   }
   if (!hasNumber) {
-    return { isValid: false, message: 'Password must contain at least one number' };
+    return { isValid: false, message: 'Password must contain at least one number'};
   }
   if (!hasSpecialChar) {
-    return { isValid: false, message: 'Password must contain at least one special character (!@#$%^&*)' };
+    return { isValid: false, message: 'Password must contain at least one special character (!@#$%^&*)'};
   }
 
   return { isValid: true };
@@ -134,8 +137,27 @@ interface RegisterRequest extends Request {
     firstName: string;
     lastName: string;
     companyId?: number;
+    // Candidate-only fields   sent as multipart/form-data, so all arrive as strings.
+    gender?: string;
+    dateOfBirth?: string;
+    phone?: string;
+    isRwandan?: string;
+    province?: string;
+    district?: string;
+    sector?: string;
+    cell?: string;
+    village?: string;
+    country?: string;
+    city?: string;
+    documentType?: DocumentType;
+    documentNumber?: string;
   };
 }
+
+type IdentityDocumentFiles = {
+  documentFront?: Express.Multer.File[];
+  documentBack?: Express.Multer.File[];
+};
 
 interface LoginRequest extends Request {
   body: {
@@ -201,6 +223,17 @@ const generateToken = (user: any): string => {
 // @access  Public
 const register = async (req: RegisterRequest, res: Response): Promise<void> => {
   const client = await getClient();
+  const files = req.files as IdentityDocumentFiles | undefined;
+
+  // Files land in a shared staging dir (no user id exists yet)   tracked here
+  // so every early-return/catch path can clean them up and avoid orphans.
+  const stagedFiles = [
+    files?.documentFront?.[0],
+    files?.documentBack?.[0]
+  ].filter((f): f is Express.Multer.File => Boolean(f));
+  const cleanupStagedFiles = (): void => {
+    stagedFiles.forEach(f => deleteStagedFile(f.path));
+  };
 
   try {
     await client.query('BEGIN');
@@ -215,11 +248,113 @@ const register = async (req: RegisterRequest, res: Response): Promise<void> => {
 
     if (userExists.rows.length > 0) {
       await client.query('ROLLBACK');
+      cleanupStagedFiles();
       res.status(400).json({
         success: false,
         message: 'User already exists'
       });
       return;
+    }
+
+    // ============ CANDIDATE-ONLY VALIDATION ============
+    // (field presence/format already checked by express-validator in
+    // auth.routes.ts; this covers cross-field/DB-dependent checks that
+    // can't be expressed as a simple validator chain.)
+    let candidateData: {
+      gender: string;
+      dateOfBirth: string;
+      phone: string;
+      isRwandan: boolean;
+      province: string | null;
+      district: string | null;
+      sector: string | null;
+      cell: string | null;
+      village: string | null;
+      country: string;
+      city: string | null;
+      documentType: DocumentType;
+      documentNumber: string;
+    } | null = null;
+
+    if (userType === 'candidate') {
+      const {
+        gender, dateOfBirth, phone, isRwandan: isRwandanRaw,
+        province, district, sector, cell, village,
+        country: countryInput, city: cityInput,
+        documentType, documentNumber
+      } = req.body;
+      const isRwandan = isRwandanRaw === 'true';
+
+      // Duplicate phone check
+      const phoneExists = await client.query(
+        'SELECT user_id FROM candidate_profiles WHERE phone = $1',
+        [phone]
+      );
+      if (phoneExists.rows.length > 0) {
+        await client.query('ROLLBACK');
+        cleanupStagedFiles();
+        res.status(400).json({ success: false, message: 'Phone number already in use'});
+        return;
+      }
+
+      let country: string;
+      let city: string | null;
+      if (isRwandan) {
+        const validChain = await isValidRwandaLocationChain({
+          province: province || '', district: district || '', sector: sector || '',
+          cell: cell || '', village: village || ''
+        });
+        if (!validChain) {
+          await client.query('ROLLBACK');
+          cleanupStagedFiles();
+          res.status(400).json({ success: false, message: 'Invalid Rwanda location combination'});
+          return;
+        }
+        country = 'Rwanda';
+        city = null;
+      } else {
+        country = countryInput!;
+        city = cityInput!;
+      }
+
+      // Identity document required for every candidate
+      const frontFile = files?.documentFront?.[0];
+      if (!frontFile) {
+        await client.query('ROLLBACK');
+        cleanupStagedFiles();
+        res.status(400).json({ success: false, message: 'Identity document upload is required'});
+        return;
+      }
+
+      const docValidation = validateIdentityDocument(country, documentType!, documentNumber!, dateOfBirth);
+      if (!docValidation.valid) {
+        await client.query('ROLLBACK');
+        cleanupStagedFiles();
+        res.status(400).json({ success: false, message: docValidation.error });
+        return;
+      }
+      if (docValidation.warning) {
+        logger.warn(`Identity document warning for ${email}: ${docValidation.warning}`);
+      }
+
+      if (await isDuplicateDocument(documentType!, documentNumber!)) {
+        await client.query('ROLLBACK');
+        cleanupStagedFiles();
+        const label = documentType === 'national_id'? 'National ID': 'Passport';
+        res.status(400).json({ success: false, message: `${label} already exists` });
+        return;
+      }
+
+      candidateData = {
+        gender: gender!, dateOfBirth: dateOfBirth!, phone: phone!, isRwandan,
+        province: isRwandan ? province! : null,
+        district: isRwandan ? district! : null,
+        sector: isRwandan ? sector! : null,
+        cell: isRwandan ? cell! : null,
+        village: isRwandan ? village! : null,
+        country, city,
+        documentType: documentType!, documentNumber: documentNumber!
+      };
     }
 
     // Hash password
@@ -241,13 +376,33 @@ const register = async (req: RegisterRequest, res: Response): Promise<void> => {
     const user = userResult.rows[0];
 
     // Create profile based on user type
-    if (userType === 'candidate') {
+    if (userType === 'candidate'&& candidateData) {
       await client.query(
-        `INSERT INTO candidate_profiles (user_id, first_name, last_name, profile_completion, created_at, updated_at)
-         VALUES ($1, $2, $3, 10, NOW(), NOW())`,
-        [user.id, firstName, lastName]
+        `INSERT INTO candidate_profiles (
+           user_id, first_name, last_name, phone, gender, date_of_birth,
+           is_rwandan, country, city, province, district, sector, cell, village,
+           profile_completion, created_at, updated_at
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 10, NOW(), NOW())`,
+        [
+          user.id, firstName, lastName, candidateData.phone, candidateData.gender, candidateData.dateOfBirth,
+          candidateData.isRwandan, candidateData.country, candidateData.city,
+          candidateData.province, candidateData.district, candidateData.sector,
+          candidateData.cell, candidateData.village
+        ]
       );
-    } else if (userType === 'recruiter' || userType === 'company_admin') {
+
+      const frontFile = files!.documentFront![0]!;
+      const backFile = files?.documentBack?.[0];
+      const frontKey = finalizeIdentityDocumentFile(frontFile.path, user.id, 'front');
+      const backKey = backFile ? finalizeIdentityDocumentFile(backFile.path, user.id, 'back') : null;
+
+      await client.query(
+        `INSERT INTO candidate_documents (candidate_id, document_type, document_number, document_front, document_back)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [user.id, candidateData.documentType, candidateData.documentNumber, frontKey, backKey]
+      );
+    } else if (userType === 'recruiter'|| userType === 'company_admin') {
       if (!companyId) {
         await client.query('ROLLBACK');
         res.status(400).json({
@@ -309,13 +464,13 @@ const register = async (req: RegisterRequest, res: Response): Promise<void> => {
             <p>Hi ${firstName},</p>
             <p>Thank you for registering! Please verify your email address to complete your registration and start using the platform.</p>
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}" 
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}" 
                  style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
                 Verify Email
               </a>
             </div>
             <p style="color: #666; font-size: 14px;">Or copy this link:</p>
-            <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}</p>
+            <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}</p>
             <p style="color: #666; font-size: 14px; margin-top: 20px;">
               <strong>⏰ This link expires in 24 hours</strong>
             </p>
@@ -329,7 +484,7 @@ const register = async (req: RegisterRequest, res: Response): Promise<void> => {
 Hi ${firstName},
 
 Verify your email to complete registration:
-${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}
+${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}
 
 This link expires in 24 hours.`
       });
@@ -350,6 +505,8 @@ This link expires in 24 hours.`
 
   } catch (error) {
     await client.query('ROLLBACK');
+    // No-ops for any file already moved out of staging by finalizeIdentityDocumentFile.
+    cleanupStagedFiles();
     logger.error('Registration error:', error);
     res.status(500).json({
       success: false,
@@ -409,7 +566,7 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
         logger.warn(`Login attempt on locked account: ${email}`);
         res.status(401).json({
           success: false,
-          message: `Account is locked. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''}.`,
+          message: `Account is locked. Try again in ${minutesRemaining} minute${minutesRemaining !== 1 ? 's': ''}.`,
           code: 'ACCOUNT_LOCKED',
           minutesRemaining
         });
@@ -434,7 +591,7 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
       return;
     }
 
-    if (user.status === 'suspended' || user.status === 'deleted') {
+    if (user.status === 'suspended'|| user.status === 'deleted') {
       logger.warn(`Login attempt on ${user.status} account: ${email}`);
       res.status(401).json({
         success: false,
@@ -464,7 +621,7 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
       res.status(401).json({
         success: false,
         message: attemptsRemaining > 0 
-          ? `Incorrect password. ${attemptsRemaining} attempt${attemptsRemaining !== 1 ? 's' : ''} remaining.`
+          ? `Incorrect password. ${attemptsRemaining} attempt${attemptsRemaining !== 1 ? 's': ''} remaining.`
           : `Too many failed attempts. Account locked for ${LOCKOUT_MINUTES} minutes.`,
         code: 'INVALID_PASSWORD',
         attemptsRemaining: Math.max(0, attemptsRemaining)
@@ -511,9 +668,9 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
       [
         user.id,
         token,
-        { userAgent: req.get('User-Agent') || 'unknown', platform: 'web' },
+        { userAgent: req.get('User-Agent') || 'unknown', platform: 'web'},
         req.ip || 'unknown',
-        { country: 'Unknown', city: 'Unknown' },
+        { country: 'Unknown', city: 'Unknown'},
         tokenExpiryDate,
         true,
         rememberMe
@@ -526,9 +683,9 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
       [user.id, req.ip || 'unknown', req.get('User-Agent') || 'unknown', 'success']
     );
 
-    // ✅ ✅ ✅ ADD THIS: Get company info for recruiters and company admins
+    // ''''''ADD THIS: Get company info for recruiters and company admins
     let companyData = null;
-    if (user.user_type === 'recruiter' || user.user_type === 'company_admin') {
+    if (user.user_type === 'recruiter'|| user.user_type === 'company_admin') {
       const companyResult = await query(
         `SELECT c.id, c.name, c.slug, c.logo_url, c.industry, c.size, c.verification_status
          FROM companies c
@@ -548,7 +705,7 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
 
     logger.info(`Successful login for user: ${email}`);
 
-    // ✅ ✅ ✅ UPDATE THE RESPONSE TO INCLUDE COMPANY DATA
+    // ''''''UPDATE THE RESPONSE TO INCLUDE COMPANY DATA
     res.json({
       success: true,
       data: {
@@ -561,7 +718,7 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
           user_type: user.user_type,
           status: user.status,
           lastLoginAt: user.last_login_at,
-          // ✅ ADD COMPANY DATA TO USER OBJECT
+          // ''ADD COMPANY DATA TO USER OBJECT
           companyId: companyData?.id || null,
           companyName: companyData?.name || null,
           company: companyData
@@ -683,7 +840,7 @@ const forgotPassword = async (req: ForgotPasswordRequest, res: Response): Promis
     const user = userResult.rows[0];
 
     // Check account status
-    if (user.status !== 'active' && user.status !== 'unverified' && user.status !== 'verified') {
+    if (user.status !== 'active'&& user.status !== 'unverified'&& user.status !== 'verified') {
       res.json({
         success: true,
         message: 'If an account with that email exists, a password reset link has been sent.'
@@ -713,13 +870,13 @@ const forgotPassword = async (req: ForgotPasswordRequest, res: Response): Promis
             <p>Hi ${user.first_name || 'User'},</p>
             <p>We received a request to reset your password. Click the button below to create a new password.</p>
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/reset-password?token=${resetToken}" 
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}" 
                  style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
                 Reset Password
               </a>
             </div>
             <p style="color: #666; font-size: 14px;">Or copy this link:</p>
-            <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL}/reset-password?token=${resetToken}</p>
+            <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}</p>
             <p style="color: #666; font-size: 14px; margin-top: 20px;">
               <strong>⏰ This link expires in 1 hour</strong>
             </p>
@@ -733,7 +890,7 @@ const forgotPassword = async (req: ForgotPasswordRequest, res: Response): Promis
 Hi ${user.first_name || 'User'},
 
 Click this link to reset your password:
-${process.env.FRONTEND_URL}/reset-password?token=${resetToken}
+${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}
 
 This link expires in 1 hour.
 
@@ -895,7 +1052,7 @@ const resetPassword = async (req: ResetPasswordRequest, res: Response): Promise<
                 You'll need to log in again on all devices with your new password.
               </p>
               <p style="color: #dc2626; font-size: 14px; margin-top: 20px;">
-                <strong>⚠️ Didn't do this?</strong>
+                <strong>Didn't do this?</strong>
               </p>
               <p style="color: #666; font-size: 14px;">
                 If you didn't change your password, please contact our support team immediately at ${process.env.SUPPORT_EMAIL || 'support@recruitment-platform.com'} or reply to this email.
@@ -1072,7 +1229,7 @@ const getMe = async (req: AuthenticatedRequest, res: Response): Promise<void> =>
     if (req.user.user_type === 'candidate') {
       joinClause = 'LEFT JOIN candidate_profiles cp ON u.id = cp.user_id';
       selectFields = ', cp.first_name, cp.last_name';
-    } else if (req.user.user_type === 'recruiter' || req.user.user_type === 'company_admin') {
+    } else if (req.user.user_type === 'recruiter'|| req.user.user_type === 'company_admin') {
       joinClause = 'LEFT JOIN company_team ct ON u.id = ct.user_id';
       selectFields = ', ct.first_name, ct.last_name';
     }
@@ -1094,8 +1251,8 @@ const getMe = async (req: AuthenticatedRequest, res: Response): Promise<void> =>
     userData.lastName = userData.last_name || userData.lastName;
     userData.userType = userData.user_type;
 
-    // ✅ ADD COMPANY DATA FOR RECRUITERS/ADMINS
-    if (userData.user_type === 'recruiter' || userData.user_type === 'company_admin') {
+    // ''ADD COMPANY DATA FOR RECRUITERS/ADMINS
+    if (userData.user_type === 'recruiter'|| userData.user_type === 'company_admin') {
       const companyResult = await query(
         `SELECT c.id, c.name, c.slug, c.logo_url, c.industry, c.size
          FROM companies c
@@ -1140,8 +1297,8 @@ const updateProfile = async (req: UpdateProfileRequest, res: Response): Promise<
          WHERE user_id = $5`,
         [firstName, lastName, phone, bio, req.user.id]
       );
-    } else if (req.user.user_type === 'recruiter' || req.user.user_type === 'company_admin') {
-      // For company_team table, we need to combine first_name and last_name into a single 'name' field
+    } else if (req.user.user_type === 'recruiter'|| req.user.user_type === 'company_admin') {
+      // For company_team table, we need to combine first_name and last_name into a single 'name'field
       const fullName = `${firstName || ''} ${lastName || ''}`.trim();
       
       await query(
@@ -1268,7 +1425,7 @@ const logoutAll = async (req: AuthenticatedRequest, res: Response): Promise<void
 
     res.json({
       success: true,
-      message: `Logged out from ${terminatedCount} device${terminatedCount !== 1 ? 's' : ''} successfully`,
+      message: `Logged out from ${terminatedCount} device${terminatedCount !== 1 ? 's': ''} successfully`,
       terminatedCount
     });
   } catch (error) {
@@ -1339,7 +1496,7 @@ const getLoginHistory = async (req: AuthenticatedRequest, res: Response): Promis
       dateFilter = 'AND login_at >= NOW() - INTERVAL \'30 days\'';
     } else if (dateRange === '90days') {
       dateFilter = 'AND login_at >= NOW() - INTERVAL \'90 days\'';
-    } else if (dateRange === 'custom' && req.query.startDate && req.query.endDate) {
+    } else if (dateRange === 'custom'&& req.query.startDate && req.query.endDate) {
       dateFilter = 'AND login_at >= $1 AND login_at <= $2';
       dateParams = [req.query.startDate, req.query.endDate];
     }
@@ -1348,7 +1505,7 @@ const getLoginHistory = async (req: AuthenticatedRequest, res: Response): Promis
     const status = req.query.status as string;
     let statusFilter = '';
     if (status && ['success', 'failed'].includes(status)) {
-      statusFilter = 'AND status = $' + (dateParams.length + 1);
+      statusFilter = 'AND status = $'+ (dateParams.length + 1);
       dateParams.push(status);
     }
 
@@ -1366,8 +1523,8 @@ const getLoginHistory = async (req: AuthenticatedRequest, res: Response): Promis
         status,
         failure_reason,
         CASE
-          WHEN status = 'success' THEN 'success'
-          WHEN status = 'failed' THEN 'failed'
+          WHEN status = 'success'THEN 'success'
+          WHEN status = 'failed'THEN 'failed'
           ELSE 'unknown'
         END as status_type
        FROM login_history
@@ -1443,7 +1600,7 @@ const exportLoginHistory = async (req: AuthenticatedRequest, res: Response): Pro
       dateFilter = 'AND login_at >= NOW() - INTERVAL \'30 days\'';
     } else if (dateRange === '90days') {
       dateFilter = 'AND login_at >= NOW() - INTERVAL \'90 days\'';
-    } else if (dateRange === 'custom' && req.query.startDate && req.query.endDate) {
+    } else if (dateRange === 'custom'&& req.query.startDate && req.query.endDate) {
       dateFilter = 'AND login_at >= $1 AND login_at <= $2';
       dateParams = [req.query.startDate, req.query.endDate];
     }
@@ -1452,7 +1609,7 @@ const exportLoginHistory = async (req: AuthenticatedRequest, res: Response): Pro
     const status = req.query.status as string;
     let statusFilter = '';
     if (status && ['success', 'failed'].includes(status)) {
-      statusFilter = 'AND status = $' + (dateParams.length + 1);
+      statusFilter = 'AND status = $'+ (dateParams.length + 1);
       dateParams.push(status);
     }
 
@@ -1752,13 +1909,13 @@ const registerCompanyComplete = async (req: Request, res: Response): Promise<voi
           </div>
 
           <div style="text-align: center; margin: 30px 0;">
-            <a href="${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}"
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}"
                style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
               Verify Email & Activate Account
             </a>
           </div>
           <p style="color: #666; font-size: 14px;">Or copy this link:</p>
-          <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}</p>
+          <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}</p>
           <p style="color: #666; font-size: 14px; margin-top: 20px;">
             <strong>⏰ This link expires in 24 hours</strong>
           </p>
@@ -1789,7 +1946,7 @@ Please verify your email address to complete the registration process and activa
 Your Verification Code: ${verificationCode}
 
 Or verify using this link:
-${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}
+${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}
 
 This link expires in 24 hours.
 
@@ -1991,7 +2148,7 @@ const inviteTeamMember = async (req: AuthenticatedRequest, res: Response): Promi
       return;
     }
 
-    // ✅ FIX: Get user's company through company_team (NOT created_by)
+    // ''FIX: Get user's company through company_team (NOT created_by)
     const companyResult = await client.query(
       `SELECT c.id, c.name, ct.role as user_role
        FROM companies c
@@ -2031,8 +2188,8 @@ const inviteTeamMember = async (req: AuthenticatedRequest, res: Response): Promi
       let trimmedEmail = '';
 
       try {
-        if (!email || typeof email !== 'string' || email.trim().length === 0) {
-          errors.push({ email, error: 'Email is required' });
+        if (!email || typeof email !== 'string'|| email.trim().length === 0) {
+          errors.push({ email, error: 'Email is required'});
           continue;
         }
 
@@ -2056,7 +2213,7 @@ const inviteTeamMember = async (req: AuthenticatedRequest, res: Response): Promi
         );
 
         if (pendingInvitation.rows.length > 0) {
-          errors.push({ email: trimmedEmail, error: 'Pending invitation already exists' });
+          errors.push({ email: trimmedEmail, error: 'Pending invitation already exists'});
           continue;
         }
 
@@ -2087,19 +2244,19 @@ const inviteTeamMember = async (req: AuthenticatedRequest, res: Response): Promi
                 <p>You've been invited to join <strong>${company.name}</strong> as a <strong>${role}</strong>.</p>
                 ${personalMessage ? `<p><em>"${personalMessage}"</em></p>` : ''}
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="${process.env.FRONTEND_URL}/accept-invitation?token=${invitationToken}"
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitationToken}"
                      style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
                     Accept Invitation & Register
                   </a>
                 </div>
                 <p style="color: #666; font-size: 14px;">Or copy this link:</p>
-                <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL}/accept-invitation?token=${invitationToken}</p>
+                <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitationToken}</p>
                 <div style="background-color: #f3f4f6; padding: 20px; border-radius: 5px; margin: 20px 0;">
                   <h3 style="color: #374151; margin-top: 0;">Your Role: ${role.charAt(0).toUpperCase() + role.slice(1)}</h3>
                   <ul style="color: #4b5563;">
-                    ${role === 'admin' ? '<li>Full access to company settings and team management</li><li>Post and manage jobs</li><li>Review candidates</li>' :
-                      role === 'recruiter' ? '<li>Post and manage jobs</li><li>Review and manage candidates</li>' :
-                      role === 'reviewer' ? '<li>Review and assess candidates</li><li>Provide feedback on applications</li>' :
+                    ${role === 'admin'? '<li>Full access to company settings and team management</li><li>Post and manage jobs</li><li>Review candidates</li>':
+                      role === 'recruiter'? '<li>Post and manage jobs</li><li>Review and manage candidates</li>':
+                      role === 'reviewer'? '<li>Review and assess candidates</li><li>Provide feedback on applications</li>':
                       '<li>View company dashboard and candidates</li><li>Read-only access</li>'}
                   </ul>
                 </div>
@@ -2120,12 +2277,12 @@ You've been invited to join ${company.name} as a ${role}.
 ${personalMessage ? `"${personalMessage}"` : ''}
 
 Accept the invitation and register here:
-${process.env.FRONTEND_URL}/accept-invitation?token=${invitationToken}
+${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitationToken}
 
 Your Role: ${role.charAt(0).toUpperCase() + role.slice(1)}
-${role === 'admin' ? '- Full access to company settings and team management\n- Post and manage jobs\n- Review candidates' :
-  role === 'recruiter' ? '- Post and manage jobs\n- Review and manage candidates' :
-  role === 'reviewer' ? '- Review and assess candidates\n- Provide feedback on applications' :
+${role === 'admin'? '- Full access to company settings and team management\n- Post and manage jobs\n- Review candidates':
+  role === 'recruiter'? '- Post and manage jobs\n- Review and manage candidates':
+  role === 'reviewer'? '- Review and assess candidates\n- Provide feedback on applications':
   '- View company dashboard and candidates\n- Read-only access'}
 
 This invitation expires in 7 days.`
@@ -2136,11 +2293,11 @@ This invitation expires in 7 days.`
         } catch (emailError) {
           logger.error('Team invitation email failed:', emailError);
           await client.query('DELETE FROM team_invitations WHERE id = $1', [invitationResult.rows[0].id]);
-          errors.push({ email: trimmedEmail, error: 'Failed to send invitation email' });
+          errors.push({ email: trimmedEmail, error: 'Failed to send invitation email'});
         }
 
       } catch (err) {
-        errors.push({ email: trimmedEmail, error: 'Failed to process invitation' });
+        errors.push({ email: trimmedEmail, error: 'Failed to process invitation'});
       }
     }
 
@@ -2441,15 +2598,15 @@ const resendVerificationEmail = async (req: Request, res: Response): Promise<voi
           <h2>Welcome to SVWR-CFE!</h2>
           <p>Please verify your email address to complete your registration.</p>
           <p>
-            <a href="${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}" 
+            <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}" 
                style="background-color: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">
               Verify Email
             </a>
           </p>
-          <p>Or copy this link: ${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}</p>
+          <p>Or copy this link: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}</p>
           <p>This verification link expires in 24 hours.</p>
         `,
-        text: `Verify your email at: ${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`
+        text: `Verify your email at: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`
       });
       logger.info(`Verification email resent to ${email}`);
     } catch (emailError) {
@@ -2689,7 +2846,7 @@ const acceptTeamInvitation = async (req: Request, res: Response): Promise<void> 
     });
 
     // Generate JWT token for the new user - use a different variable name
-    const authToken = generateToken({ id: userId, email: invitation.email, user_type: 'recruiter' });
+    const authToken = generateToken({ id: userId, email: invitation.email, user_type: 'recruiter'});
 
     res.json({
       success: true,
@@ -2743,7 +2900,7 @@ const getTeamInvitations = async (req: AuthenticatedRequest, res: Response): Pro
     // Get invitations
     const invitations = await query(
       `SELECT ti.*, u.email as inviter_email,
-              CASE WHEN ti.expires_at < NOW() THEN 'expired' ELSE ti.status END as current_status
+              CASE WHEN ti.expires_at < NOW() THEN 'expired'ELSE ti.status END as current_status
        FROM team_invitations ti
        LEFT JOIN users u ON ti.invited_by = u.id
        WHERE ti.company_id = $1
@@ -2835,13 +2992,13 @@ const resendTeamInvitation = async (req: AuthenticatedRequest, res: Response): P
             <p>This is a reminder invitation to join <strong>${invitation.company_name}</strong> as a <strong>${invitation.role}</strong>.</p>
             ${invitation.personal_message ? `<p><em>"${invitation.personal_message}"</em></p>` : ''}
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL}/accept-invitation?token=${invitation.invitation_token}"
+              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitation.invitation_token}"
                  style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
                 Accept Invitation
               </a>
             </div>
             <p style="color: #666; font-size: 14px;">Or copy this link:</p>
-            <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL}/accept-invitation?token=${invitation.invitation_token}</p>
+            <p style="color: #2563eb; word-break: break-all; font-size: 12px;">${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitation.invitation_token}</p>
             <p style="color: #666; font-size: 14px; margin-top: 20px;">
               <strong>⏰ This invitation expires in 7 days</strong>
             </p>
@@ -2854,7 +3011,7 @@ Hi${invitation.first_name ? ` ${invitation.first_name}` : ''},
 This is a reminder invitation to join ${invitation.company_name} as a ${invitation.role}.
 
 Accept the invitation here:
-${process.env.FRONTEND_URL}/accept-invitation?token=${invitation.invitation_token}
+${process.env.FRONTEND_URL || 'http://localhost:3000'}/accept-invitation?token=${invitation.invitation_token}
 
 This invitation expires in 7 days.`
       });
@@ -2977,7 +3134,7 @@ const getTeamMembers = async (req: AuthenticatedRequest, res: Response): Promise
     // Get team members
     const members = await query(
       `SELECT ct.*, u.status as user_status, u.last_login_at,
-              CASE WHEN ct.user_id IS NULL THEN 'pending' ELSE 'active' END as member_status
+              CASE WHEN ct.user_id IS NULL THEN 'pending'ELSE 'active'END as member_status
        FROM company_team ct
        LEFT JOIN users u ON ct.user_id = u.id
        WHERE ct.company_id = $1

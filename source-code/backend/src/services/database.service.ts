@@ -21,7 +21,7 @@ interface Aggregation {
 
 interface OrderBy {
   field: string;
-  direction?: 'ASC' | 'DESC';
+  direction?: 'ASC'| 'DESC';
 }
 
 interface PaginationOptions {
@@ -103,7 +103,7 @@ class DatabaseService {
     for (const [key, condition] of Object.entries(conditions)) {
       if (condition === null || condition === undefined) continue;
 
-      if (typeof condition === 'object' && condition.operator) {
+      if (typeof condition === 'object'&& condition.operator) {
         // Advanced condition with operator
         const { operator, value } = condition as WhereCondition;
         switch (operator) {
@@ -152,7 +152,7 @@ class DatabaseService {
         // IN clause
         whereConditions.push(`${key} = ANY($${paramIndex})`);
         params.push(condition);
-      } else if (typeof condition === 'string' && condition.includes('%')) {
+      } else if (typeof condition === 'string'&& condition.includes('%')) {
         // LIKE clause
         whereConditions.push(`${key} ILIKE $${paramIndex}`);
         params.push(condition);
@@ -166,7 +166,7 @@ class DatabaseService {
     }
 
     return {
-      clause: whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '',
+      clause: whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '',
       params,
       nextParamIndex: paramIndex
     };
@@ -202,7 +202,7 @@ class DatabaseService {
     return joins.map(join => {
       const { type = 'LEFT JOIN', table, on } = join;
       return `${type} ${table} ON ${on}`;
-    }).join(' ');
+    }).join('');
   }
 
   /**
@@ -400,7 +400,7 @@ class DatabaseService {
     const selectFields: string[] = [`${tableName}.*`];
 
     relations.forEach(relation => {
-      const { table, foreignKey, localKey = 'id', as, select = '*' } = relation;
+      const { table, foreignKey, localKey = 'id', as, select = '*'} = relation;
       joins.push({
         type: 'LEFT JOIN',
         table,

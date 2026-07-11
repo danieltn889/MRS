@@ -29,7 +29,7 @@ interface SavedJob {
   description: string;
   saved_at: string;
   notes?: string;
-  priority: 'low' | 'medium' | 'high';
+  priority: 'low'| 'medium'| 'high';
   tags: string[];
   match_score?: number;
   match_stars?: string;
@@ -105,7 +105,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
       setProfileLoading(true);
       const token = localStorage.getItem('authToken');
       // The logged-in id lives inside the `user` object in localStorage (not a
-      // separate `userId` key), so fall back to parsing it — otherwise the profile
+      // separate `userId` key), so fall back to parsing it   otherwise the profile
       // never loads and the Apply modal's render gate blocks it.
       let userId = user?.id || localStorage.getItem('userId');
       if (!userId) {
@@ -259,7 +259,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
     setFilteredJobs(updatedJobs);
   };
 
-  const updateJobPriority = (jobId: string, priority: 'low' | 'medium' | 'high'): void => {
+  const updateJobPriority = (jobId: string, priority: 'low'| 'medium'| 'high'): void => {
     const updatedJobs = savedJobs.map(job =>
       job.id === jobId ? { ...job, priority } : job
     );
@@ -294,16 +294,16 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
   }, [savedJobs, searchQuery, filterPriority, filterTags]);
 
   const handleApplyJob = (job: SavedJob): void => {
-    // Open the full job details page and auto-start the application there — same
+    // Open the full job details page and auto-start the application there   same
     // experience as applying from search (see details, then apply).
     window.location.href = `/jobs/${job.id}?apply=1`;
   };
 
   // The JobApplicationModal performs the submission itself and calls this on
-  // success — so here we ONLY sync local state (mark applied, close the modal).
+  // success   so here we ONLY sync local state (mark applied, close the modal).
   // Re-submitting here would cause a duplicate application.
   const handleApplicationSubmit = (_data?: any): void => {
-    // Mark as applied but keep the modal open — it shows its own next-steps screen
+    // Mark as applied but keep the modal open   it shows its own next-steps screen
     // (simulation details, or the "no simulation yet" notice) and closes itself (onClose).
     if (selectedJobForApply) {
       appliedJobsManager.addAppliedJob(selectedJobForApply.id);
@@ -338,7 +338,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
               <h1 className="text-2xl font-bold text-gray-900">Saved Jobs</h1>
             </div>
             <div className="text-sm text-gray-600">
-              {filteredJobs.length} saved {filteredJobs.length === 1 ? 'job' : 'jobs'}
+              {filteredJobs.length} saved {filteredJobs.length === 1 ? 'job': 'jobs'}
             </div>
           </div>
         </div>
@@ -522,7 +522,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
                     <div className="flex items-center space-x-2 ml-4">
                       <select
                         value={job.priority}
-                        onChange={(e) => updateJobPriority(job.id, e.target.value as 'low' | 'medium' | 'high')}
+                        onChange={(e) => updateJobPriority(job.id, e.target.value as 'low'| 'medium'| 'high')}
                         className="text-sm border border-gray-300 rounded px-2 py-1"
                       >
                         <option value="low">Low</option>
@@ -538,7 +538,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
                         className="p-2 text-gray-400 hover:text-blue-600"
                         title="Edit notes"
                       >
-                        📝
+                        
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(job.id)}
@@ -573,7 +573,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                       >
-                        {appliedJobs.includes(job.id) ? 'Applied ✓' : 'Apply Now'}
+                        {appliedJobs.includes(job.id) ? 'Applied ✓': 'Apply Now'}
                       </button>
                     </div>
                   </div>

@@ -1,9 +1,9 @@
-"""
+"
 candidates.py
 =============
 Builds every candidate-side table from real Complete_Candidate_Profile.csv
 rows plus only the fields the database needs that the CSV doesn't have
-(names, contact info, bio, skills catalog membership, etc — see
+(names, contact info, bio, skills catalog membership, etc   see
 faker_utils.py for how those are generated).
 
 Produces one DataFrame per output table:
@@ -11,7 +11,7 @@ Produces one DataFrame per output table:
     user_skills, certifications
 plus the flattened candidates.csv / candidate_skills.csv /
 candidate_certificates.csv the project spec asks for as deliverables.
-"""
+"
 
 from __future__ import annotations
 
@@ -41,11 +41,11 @@ CERT_POOL = {
 }
 
 
-def _s(x, default: str = "") -> str:
-    """Safe string coercion: pandas represents a missing value as float NaN
+def _s(x, default: str = ) -> str:
+    "Safe string coercion: pandas represents a missing value as float NaN
     even in an object/string column, and `nan or default` still evaluates to
-    `nan` (NaN is truthy) rather than falling back — route every nullable
-    CSV field read through this instead of `row.get(x) or default`."""
+    `nan` (NaN is truthy) rather than falling back   route every nullable
+    CSV field read through this instead of `row.get(x) or default`."
     if x is None or (isinstance(x, float) and x != x):
         return default
     return str(x)
@@ -182,7 +182,7 @@ def build_candidate_tables(candidate_profile_df: pd.DataFrame, seed: int,
             is_current_job = (i == 0 and random.random() < 0.4)
             work_id = mapping.deterministic_uuid("work_experience", original_id, str(i))
             title = f"{field_of_study.split(',')[0].strip() if field_of_study else 'Officer'} " \
-                    f"{'Assistant' if i == n_exp - 1 else 'Officer'}"
+                    f"{'Assistant'if i == n_exp - 1 else 'Officer'}"
             work_rows.append({
                 "id": work_id, "user_id": user_id,
                 "company": f"{random.choice(['Ministry of', 'Rwanda', 'District of'])} "

@@ -108,26 +108,26 @@ class TestResultService {
   // Setup test workflow in candidate's repo
   private async setupTestWorkflowInRepo(owner: string, repo: string): Promise<void> {
     // Using regular string concatenation to avoid template expression parsing issues
-    const workflowContent = 'name: Auto Test & Report\n' +
-      '\n' +
-      'on: [push, pull_request]\n' +
-      '\n' +
-      'jobs:\n' +
-      '  test:\n' +
-      '    runs-on: ubuntu-latest\n' +
-      '    steps:\n' +
-      '      - uses: actions/checkout@v4\n' +
-      '      - name: Run Tests with JSON Output\n' +
-      '        run: |\n' +
-      '          pip install pytest pytest-cov pytest-json-report flake8 bandit\n' +
-      '          pytest --json-report --json-report-file=test-results.json\n' +
-      '          flake8 . --format=json --output-file=lint-results.json\n' +
-      '          bandit -r . -f json -o security-results.json\n' +
-      '      - name: Send Results to Platform\n' +
-      '        run: |\n' +
-      '          curl -X POST "${{ secrets.PLATFORM_API_URL }}/api/test-results" \\\n' +
-      '            -H "Content-Type: application/json" \\\n' +
-      '            -d @test-results.json';
+    const workflowContent = 'name: Auto Test & Report\n'+
+      '\n'+
+      'on: [push, pull_request]\n'+
+      '\n'+
+      'jobs:\n'+
+      ' test:\n'+
+      '   runs-on: ubuntu-latest\n'+
+      '   steps:\n'+
+      '     - uses: actions/checkout@v4\n'+
+      '     - name: Run Tests with JSON Output\n'+
+      '       run: |\n'+
+      '         pip install pytest pytest-cov pytest-json-report flake8 bandit\n'+
+      '         pytest --json-report --json-report-file=test-results.json\n'+
+      '         flake8 . --format=json --output-file=lint-results.json\n'+
+      '         bandit -r . -f json -o security-results.json\n'+
+      '     - name: Send Results to Platform\n'+
+      '       run: |\n'+
+      '         curl -X POST "${{ secrets.PLATFORM_API_URL }}/api/test-results" \\\n'+
+      '           -H "Content-Type: application/json" \\\n'+
+      '           -d @test-results.json';
     
     // Create the workflow file in the repo
     await this.octokit.repos.createOrUpdateFileContents({
@@ -210,8 +210,8 @@ class TestResultService {
 ## Overall Status: ${results.summary.overall_status.toUpperCase()}
 
 ### Test Metrics
-- ✅ Passed: ${results.summary.tests_passed}
-- ❌ Failed: ${results.summary.tests_failed}
+- ''Passed: ${results.summary.tests_passed}
+-  Failed: ${results.summary.tests_failed}
 - 📈 Coverage: ${results.summary.coverage_percent}%
 - 🐛 Linting Errors: ${results.summary.linting_errors}
 - 🔒 Security Issues: ${results.summary.security_issues}

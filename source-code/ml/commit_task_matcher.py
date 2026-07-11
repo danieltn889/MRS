@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""
-COMMIT-TO-TASK MATCHER  —  Server
-Tasks are passed in the request body — nothing is hardcoded.
+"
+COMMIT-TO-TASK MATCHER     Server
+Tasks are passed in the request body   nothing is hardcoded.
 
 Run:  python commit_task_matcher.py
 Docs: http://localhost:8097/docs
@@ -13,7 +13,7 @@ POST /match
     { "id": "...", "name": "...", "description": "...", "instructions": "..." }
   ]
 }
-"""
+"
 
 import subprocess
 import sys
@@ -31,7 +31,7 @@ for pkg in ['scikit-learn', 'nltk', 'spacy', 'vaderSentiment', 'fastapi', 'uvico
 # ──────────────────────────────────────────────────────────────
 # LOAD LIBRARIES
 # ──────────────────────────────────────────────────────────────
-print("\n📥 Loading libraries...")
+print("\n Loading libraries...")
 
 import re
 import json
@@ -40,7 +40,7 @@ from typing import List, Dict
 
 warnings.filterwarnings("ignore")
 
-# spaCy — prefer md (real word vectors), fall back to sm
+# spaCy   prefer md (real word vectors), fall back to sm
 nlp = None
 for model in ("en_core_web_md", "en_core_web_sm"):
     try:
@@ -51,10 +51,10 @@ for model in ("en_core_web_md", "en_core_web_sm"):
             print(f"  Downloading {model}...")
             subprocess.check_call([sys.executable, "-m", "spacy", "download", model, "--quiet"])
             nlp = spacy.load(model)
-        print(f"  ✅ spaCy  ({model})")
+        print(f"  ''spaCy  ({model})")
         break
     except Exception as e:
-        print(f"  ⚠️  spaCy {model}: {e}")
+        print(f"    spaCy {model}: {e}")
 
 # NLTK
 stopwords         = None
@@ -75,18 +75,18 @@ try:
             nltk.data.find(path)
         except LookupError:
             nltk.download(resource, quiet=True)
-    print("  ✅ NLTK")
+    print("  ''NLTK")
 except Exception as e:
-    print(f"  ⚠️  NLTK: {e}")
+    print(f"    NLTK: {e}")
 
 # VADER
 sia = None
 try:
     from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
     sia = SentimentIntensityAnalyzer()
-    print("  ✅ VADER")
+    print("  ''VADER")
 except Exception as e:
-    print(f"  ⚠️  VADER: {e}")
+    print(f"    VADER: {e}")
 
 # scikit-learn
 TfidfVectorizer  = None
@@ -94,9 +94,9 @@ cosine_similarity = None
 try:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.metrics.pairwise import cosine_similarity
-    print("  ✅ scikit-learn")
+    print("  ''scikit-learn")
 except Exception as e:
-    print(f"  ⚠️  scikit-learn: {e}")
+    print(f"    scikit-learn: {e}")
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -123,10 +123,10 @@ class TextProcessor:
 
     def clean_text(self, text: str) -> str:
         if not text:
-            return ""
+            return 
         text = text.lower()
-        text = re.sub(r'[^\w\s]', ' ', text)
-        text = re.sub(r'\s+', ' ', text).strip()
+        text = re.sub(r'[^\w\s]', '', text)
+        text = re.sub(r'\s+', '', text).strip()
         try:
             tokens = word_tokenize(text) if word_tokenize else text.split()
         except Exception:
@@ -140,7 +140,7 @@ class TextProcessor:
                     except Exception:
                         pass
                 cleaned.append(token)
-        return ' '.join(cleaned)
+        return ''.join(cleaned)
 
     def tfidf_similarity(self, text1: str, text2: str) -> float:
         c1 = self.clean_text(text1)
@@ -197,21 +197,21 @@ class TaskMatcher:
 
     def _task_text(self, task: Dict) -> str:
         return " ".join([
-            task.get("name", ""),
-            task.get("description", ""),
-            task.get("instructions", ""),
+            task.get("name", ),
+            task.get("description", ),
+            task.get("instructions", ),
         ])
 
     def _match_level(self, confidence: float) -> str:
         if confidence >= 65:
-            return "Excellent Match 🌟"
+            return "Excellent Match "
         elif confidence >= 50:
-            return "Strong Match ✅"
+            return "Strong Match ''"
         elif confidence >= 35:
-            return "Good Match 👍"
+            return "Good Match "
         elif confidence >= 20:
-            return "Weak Match 📝"
-        return "No Match ❌"
+            return "Weak Match "
+        return "No Match "
 
     def match(self, commit_message: str, tasks: List[Dict]) -> Dict:
         if not commit_message or not commit_message.strip():
@@ -232,8 +232,8 @@ class TaskMatcher:
             confidence      = round(min((combined_sim + sentiment_bonus) * 100, 100.0), 1)
 
             results.append({
-                "task_id":          task.get("id", ""),
-                "task_name":        task.get("name", ""),
+                "task_id":          task.get("id", ),
+                "task_name":        task.get("name", ),
                 "confidence":       confidence,
                 "match_level":      self._match_level(confidence),
                 "tfidf_score":      round(tfidf_sim * 100, 1),
@@ -284,7 +284,7 @@ async def health():
 
 @app.post("/match")
 async def match_commit(request: Request):
-    """
+    "
     Match a commit message against tasks passed in the request body.
 
     Body (JSON):
@@ -299,11 +299,11 @@ async def match_commit(request: Request):
         }
       ]
     }
-    """
+    "
     try:
         data = json.loads((await request.body()).decode("utf-8"))
 
-        commit_message = data.get("commit_message", "").strip()
+        commit_message = data.get("commit_message", ).strip()
         if not commit_message:
             return {"success": False, "error": "commit_message is required"}
 
@@ -325,9 +325,9 @@ async def match_commit(request: Request):
 # ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     print("\n" + "=" * 65)
-    print("🚀  COMMIT-TO-TASK MATCHER  v3.0")
+    print("  COMMIT-TO-TASK MATCHER  v3.0")
     print("=" * 65)
-    print("  Tasks come from the request body — nothing hardcoded.")
+    print("  Tasks come from the request body   nothing hardcoded.")
     print("  TF-IDF  : weight 55%  (scikit-learn)")
     print("  spaCy   : weight 45%  (en_core_web_md)")
     print("  Sentiment bonus: +8%  (VADER)")
@@ -337,7 +337,7 @@ if __name__ == "__main__":
     print("  Docs   : http://localhost:8097/docs")
     print()
     print("  Example body for POST /match:")
-    print("""
+    print("
   {
     "commit_message": "fixed delete button removing wrong todo item",
     "tasks": [
@@ -349,6 +349,6 @@ if __name__ == "__main__":
       }
     ]
   }
-    """)
+    ")
     print("=" * 65 + "\n")
     uvicorn.run(app, host="0.0.0.0", port=8097)

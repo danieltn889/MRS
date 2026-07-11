@@ -89,7 +89,7 @@ router.get('/suggestions', protect, async (req: express.Request, res: express.Re
           CASE
             WHEN tasks_structure IS NOT NULL AND jsonb_typeof(tasks_structure->'objectives') = 'array'
               THEN tasks_structure->'objectives'
-            WHEN jsonb_typeof(tasks) = 'object' AND tasks ? 'objectives'
+            WHEN jsonb_typeof(tasks) = 'object'AND tasks ? 'objectives'
               THEN tasks->'objectives'
             ELSE '[]'::jsonb
           END
@@ -103,11 +103,11 @@ router.get('/suggestions', protect, async (req: express.Request, res: express.Re
 
     // Unique task titles from tasks array
     const taskTitlesResult = await DatabaseService.execute(`
-      SELECT DISTINCT elem->>'title' AS title
+      SELECT DISTINCT elem->>'title'AS title
       FROM simulation_templates,
         jsonb_array_elements(
           CASE
-            WHEN jsonb_typeof(tasks) = 'array' THEN tasks
+            WHEN jsonb_typeof(tasks) = 'array'THEN tasks
             WHEN tasks_structure IS NOT NULL AND jsonb_typeof(tasks_structure->'tasks') = 'array'
               THEN tasks_structure->'tasks'
             ELSE '[]'::jsonb
@@ -236,7 +236,7 @@ router.post('/my-simulations/:id/progress', protect, authorize('candidate'), [
     const sessionId = req.params.id;
     const { currentTask = 0, answers = {}, timeSpent = 0 } = req.body;
 
-    // ✅ STEP 1: Verify session exists and belongs to user
+    // ''STEP 1: Verify session exists and belongs to user
     const sessionCheck = await DatabaseService.query(`
       SELECT id FROM simulation_sessions
       WHERE id = $1 AND user_id = $2 AND status IN ('in_progress', 'paused')
@@ -248,7 +248,7 @@ router.post('/my-simulations/:id/progress', protect, authorize('candidate'), [
       return;
     }
 
-    // ✅ STEP 2: Update ONLY session's current_task and time_spent (NOT answers/progress)
+    // ''STEP 2: Update ONLY session's current_task and time_spent (NOT answers/progress)
     const sessionResult = await DatabaseService.query(`
       UPDATE simulation_sessions
       SET current_task = $1,
@@ -263,7 +263,7 @@ router.post('/my-simulations/:id/progress', protect, authorize('candidate'), [
       return;
     }
 
-    // ✅ STEP 3: Save each task's answer to session_task_progress (per-task, not global)
+    // ''STEP 3: Save each task's answer to session_task_progress (per-task, not global)
     const savedTasks = [];
     for (const [taskKey, taskAnswer] of Object.entries(answers)) {
       try {
@@ -272,7 +272,7 @@ router.post('/my-simulations/:id/progress', protect, authorize('candidate'), [
         const taskIndex = taskIndexMatch && taskIndexMatch[1] !== undefined ? parseInt(taskIndexMatch[1]) : null;
         
         if (taskIndex === null || taskIndex < 0) {
-          console.warn(`⚠️ Skipping invalid task key: ${taskKey}`);
+          console.warn(` Skipping invalid task key: ${taskKey}`);
           continue;
         }
 
@@ -284,13 +284,13 @@ router.post('/my-simulations/:id/progress', protect, authorize('candidate'), [
         `, [sessionId, taskIndex]);
 
         if (existing.rows[0]) {
-          // ✅ UPDATE: Only update this specific task's answer
+          // ''UPDATE: Only update this specific task's answer
           await DatabaseService.update('session_task_progress', existing.rows[0].id, {
             answer: taskAnswer,
             updated_at: new Date()
           });
         } else {
-          // ✅ CREATE: New task progress record with answer
+          // ''CREATE: New task progress record with answer
           await DatabaseService.create('session_task_progress', {
             session_id: sessionId,
             task_index: taskIndex,
@@ -307,7 +307,7 @@ router.post('/my-simulations/:id/progress', protect, authorize('candidate'), [
       }
     }
 
-    console.log(`✅ [saveProgress] Session ${sessionId}: saved ${savedTasks.length} task answers`);
+    console.log(`''[saveProgress] Session ${sessionId}: saved ${savedTasks.length} task answers`);
 
     ResponseService.success(res, {
       sessionId,
@@ -394,7 +394,7 @@ router.post('/tasks/run-code', protect, [
   try {
     const { code, language, testCases, simulationId, taskId } = req.body;
     
-    console.log('📝 Code execution request:', { language, codeLength: code?.length });
+    console.log(' Code execution request:', { language, codeLength: code?.length });
     
     let output = '';
     let error = null;
@@ -407,8 +407,8 @@ router.post('/tasks/run-code', protect, [
           const originalLog = console.log;
           console.log = (...args) => {
             consoleOutput.push(args.map(arg => 
-              typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-            ).join(' '));
+              typeof arg === 'object'? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(''));
             originalLog(...args);
           };
           
@@ -459,15 +459,15 @@ router.post('/tasks/run-code', protect, [
 });
 
 router.post('/tasks/run-project', protect, [], async (req: express.Request, res: express.Response): Promise<void> => {
-  res.json({ success: true, message: 'Project execution endpoint' });
+  res.json({ success: true, message: 'Project execution endpoint'});
 });
 
 router.post('/tasks/run-command', protect, [], async (req: express.Request, res: express.Response): Promise<void> => {
-  res.json({ success: true, message: 'Command execution endpoint' });
+  res.json({ success: true, message: 'Command execution endpoint'});
 });
 
 router.post('/tasks/test-project', protect, [], async (req: express.Request, res: express.Response): Promise<void> => {
-  res.json({ success: true, message: 'Project testing endpoint' });
+  res.json({ success: true, message: 'Project testing endpoint'});
 });
 
 // ============================================
@@ -759,7 +759,7 @@ router.get('/stats/overview', protect, [
     const authReq = req as AuthenticatedRequest;
     let companyId = req.query.companyId as string;
     
-    if ((authReq.user.user_type === 'company_admin' || authReq.user.user_type === 'recruiter') && !companyId) {
+    if ((authReq.user.user_type === 'company_admin'|| authReq.user.user_type === 'recruiter') && !companyId) {
       const teamResult = await DatabaseService.query(
         'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
         [authReq.user.id]
@@ -791,8 +791,8 @@ router.get('/stats/overview', protect, [
     const sessionStats = await DatabaseService.query(`
       SELECT 
         COUNT(*) as total_sessions,
-        COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_sessions,
-        COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as active_sessions,
+        COUNT(CASE WHEN status = 'completed'THEN 1 END) as completed_sessions,
+        COUNT(CASE WHEN status = 'in_progress'THEN 1 END) as active_sessions,
         AVG(score)::int as avg_score
       FROM simulation_sessions ss
       ${companyId ? `WHERE simulation_id IN (SELECT id FROM simulation_templates WHERE company_id = $1)` : ''}
@@ -807,7 +807,7 @@ router.get('/stats/overview', protect, [
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Failed to fetch statistics' });
+    res.status(500).json({ success: false, message: 'Failed to fetch statistics'});
   }
 });
 

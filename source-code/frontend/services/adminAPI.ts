@@ -1,4 +1,4 @@
-// API Service for System Admin — Company Management & User Management
+// API Service for System Admin   Company Management & User Management
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
@@ -24,7 +24,7 @@ export interface AdminCompany {
   industry: string | null;
   size: string | null;
   website: string | null;
-  verification_status: 'pending' | 'verified' | 'rejected' | 'expired';
+  verification_status: 'pending'| 'verified'| 'rejected'| 'expired';
   created_at: string;
   created_by: string | null;
   owner_email: string | null;
@@ -36,7 +36,7 @@ export interface AdminCompanyUser {
   team_id: string;
   name: string;
   title: string;
-  team_role: 'admin' | 'recruiter' | 'reviewer' | 'viewer';
+  team_role: 'admin'| 'recruiter'| 'reviewer'| 'viewer';
   team_email: string;
   user_id: string;
   login_email: string;
@@ -104,7 +104,7 @@ export const getAdminCompanyUsers = async (companyId: string) => {
 };
 
 export const createAdminCompanyUser = async (companyId: string, payload: {
-  name: string; email: string; title?: string; teamRole: 'admin' | 'recruiter' | 'reviewer' | 'viewer';
+  name: string; email: string; title?: string; teamRole: 'admin'| 'recruiter'| 'reviewer'| 'viewer';
 }) => {
   const response = await fetch(`${API_BASE_URL}/admin/companies/${companyId}/users`, {
     method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload),

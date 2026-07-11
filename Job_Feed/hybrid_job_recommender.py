@@ -1,4 +1,4 @@
-"""
+"
 hybrid_job_recommender.py
 ==========================
 Production-style Hybrid Job Recommendation System, implemented as a single
@@ -29,7 +29,7 @@ Usage
 
     # 3. Get recommendations for one candidate
     python hybrid_job_recommender.py --run --candidate-id C000123 --top-k 20
-"""
+"
 
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ from torch.utils.data import Dataset, DataLoader as TorchDataLoader
 
 @dataclass
 class HybridWeights:
-    """Weights used to combine the three sub-scores. Must sum to 1.0."""
+    "Weights used to combine the three sub-scores. Must sum to 1.0."
     content: float = 0.40
     collaborative: float = 0.35
     behavior: float = 0.25
@@ -73,9 +73,9 @@ class HybridWeights:
 
 @dataclass
 class MFConfig:
-    """Hyperparameters for the PyTorch implicit-feedback matrix
+    "Hyperparameters for the PyTorch implicit-feedback matrix
     factorization model (embeddings + biases, trained with a weighted
-    logistic loss over observed interactions + sampled negatives)."""
+    logistic loss over observed interactions + sampled negatives)."
     embedding_dim: int = 64
     epochs: int = 10
     batch_size: int = 8192
@@ -90,7 +90,7 @@ class MFConfig:
 
 @dataclass
 class ContentConfig:
-    """Hyperparameters for the TF-IDF / one-hot content-based pipeline."""
+    "Hyperparameters for the TF-IDF / one-hot content-based pipeline."
     text_max_features: int = 3000
     ngram_range: Tuple[int, int] = (1, 1)
     min_df: int = 1
@@ -98,15 +98,15 @@ class ContentConfig:
 
 @dataclass
 class BehaviorConfig:
-    """Hyperparameters for the recency-weighted behavior model."""
+    "Hyperparameters for the recency-weighted behavior model."
     recency_half_life_days: int = 90
     max_events_per_candidate: int = 500
 
 
 @dataclass
 class InteractionWeights:
-    """Implicit feedback strength per event type, as specified by the
-    business requirements. Larger = stronger signal of interest/fit."""
+    "Implicit feedback strength per event type, as specified by the
+    business requirements. Larger = stronger signal of interest/fit."
     view: float = 1.0
     clicked_apply: float = 2.0
     applied: float = 5.0
@@ -122,7 +122,7 @@ class InteractionWeights:
 
 @dataclass
 class RecommenderConfig:
-    """Top-level configuration bundle threaded through the whole pipeline."""
+    "Top-level configuration bundle threaded through the whole pipeline."
     data_dir: Path = Path("./data")
     output_dir: Path = Path("./outputs")
     log_dir: Path = Path("./logs")
@@ -164,8 +164,8 @@ class RecommenderConfig:
 
 
 def get_logger(name: str, log_dir: Path = Path("./logs")) -> logging.Logger:
-    """Configure and return a module-level logger with console + rotating
-    file handlers. Idempotent - safe to call multiple times for the same name."""
+    "Configure and return a module-level logger with console + rotating
+    file handlers. Idempotent - safe to call multiple times for the same name."
     logger = logging.getLogger(name)
     if logger.handlers:
         return logger
@@ -191,12 +191,12 @@ def get_logger(name: str, log_dir: Path = Path("./logs")) -> logging.Logger:
 # ==========================================================================
 
 class DataLoader:
-    """Loads and lightly validates the four raw CSV sources.
+    "Loads and lightly validates the four raw CSV sources.
 
     Applications/Engagement are read with explicit dtypes and in chunks
     because at ~4.8M rows each, naive `pd.read_csv` with inferred object
     dtypes for ID columns can bloat memory 5-10x versus typed columns.
-    """
+    "
 
     def __init__(self, cfg: RecommenderConfig, logger: logging.Logger):
         self.cfg = cfg
@@ -282,7 +282,7 @@ class DataLoader:
             cleaned = cleaned.replace(" /", "/").replace("/ ", "/")
             canonical = alias_map.get(cleaned.lower(), cleaned)
             if canonical != col:
-                self.log.info("Mapped column '%s' -> '%s'", col, canonical)
+                self.log.info("Mapped column '%s'-> '%s'", col, canonical)
             rename_map[col] = canonical
 
         return df.rename(columns=rename_map)
@@ -298,7 +298,7 @@ class DataLoader:
             "n": 0,
             "false": 0,
             "0": 0,
-            "": 0,
+            : 0,
             "nan": 0,
             "none": 0,
         })
@@ -313,13 +313,13 @@ class DataLoader:
 # ==========================================================================
 
 class Preprocessor:
-    """Builds compact integer indices for candidates/jobs and a single,
+    "Builds compact integer indices for candidates/jobs and a single,
     weighted interaction table merged from applications + engagement.
 
     Why integer indices: string ID joins/groupbys across 4.8M+ rows are
     slow and memory-hungry. Mapping to dense 0..N-1 integer codes lets us
     use scipy sparse matrices and PyTorch embedding lookups directly.
-    """
+    "
 
     def __init__(self, cfg: RecommenderConfig, logger: logging.Logger):
         self.cfg = cfg
@@ -337,7 +337,7 @@ class Preprocessor:
         self.log.info("Indexed %d candidates and %d jobs", len(self.idx_to_candidate_id), len(self.idx_to_job_id))
 
     def build_interaction_events(self, applications: pd.DataFrame, engagement: pd.DataFrame) -> pd.DataFrame:
-        """Returns a long-format event table: candidate_idx, job_idx, weight, event_date.
+        "Returns a long-format event table: candidate_idx, job_idx, weight, event_date.
 
         Multiple raw signals can point at the same (candidate, job) pair
         (e.g. a view row AND an applications row for the same application).
@@ -345,7 +345,7 @@ class Preprocessor:
         can use full temporal history; deduplication to a single strongest
         weight per pair happens separately in `build_interaction_matrix`
         for the collaborative model, which needs one weight per cell.
-        """
+        "
         iw = self.cfg.interaction_weights
         events = []
 
@@ -400,9 +400,9 @@ class Preprocessor:
         return result
 
     def build_interaction_matrix(self, events: pd.DataFrame, n_candidates: int, n_jobs: int) -> sp.csr_matrix:
-        """Collapses events to one strongest weight per (candidate, job)
+        "Collapses events to one strongest weight per (candidate, job)
         pair and returns a sparse CSR matrix, used to train the
-        collaborative filtering model."""
+        collaborative filtering model."
         agg = events.groupby(["candidate_idx", "job_idx"], as_index=False)["weight"].max()
         mat = sp.csr_matrix(
             (agg["weight"].values.astype(np.float32),
@@ -419,7 +419,7 @@ class Preprocessor:
 # ==========================================================================
 
 class ContentBasedModel:
-    """Builds candidate and job feature vectors in a *shared* feature space
+    "Builds candidate and job feature vectors in a *shared* feature space
     and scores similarity via batched cosine similarity (sparse matmul).
 
     Sharing the feature space (same OneHotEncoder/TfidfVectorizer vocab for
@@ -428,7 +428,7 @@ class ContentBasedModel:
     separate encoders per side would produce vectors that aren't in the
     same coordinate system, and cosine similarity between them would be
     meaningless.
-    """
+    "
 
     CATEGORICAL_PAIRS = [
         # (candidate_column, job_column)
@@ -455,7 +455,7 @@ class ContentBasedModel:
         cand_blocks, job_blocks = [], []
 
         # Categorical fields: fit one encoder per pair on the UNION of both
-        # sides' categories so both sides map into identical columns.
+        # sides'categories so both sides map into identical columns.
         for cand_col, job_col in self.CATEGORICAL_PAIRS:
             key = f"{cand_col}__{job_col}"
             cand_vals = candidates.get(cand_col, pd.Series(dtype=str)).astype(str).fillna("unknown")
@@ -471,8 +471,8 @@ class ContentBasedModel:
         # over a shared vocabulary fit on both sides combined.
         for cand_col, job_col in self.TEXT_PAIRS:
             key = f"{cand_col}__{job_col}"
-            cand_vals = candidates.get(cand_col, pd.Series(dtype=str)).astype(str).fillna("")
-            job_vals = jobs.get(job_col, pd.Series(dtype=str)).astype(str).fillna("")
+            cand_vals = candidates.get(cand_col, pd.Series(dtype=str)).astype(str).fillna()
+            job_vals = jobs.get(job_col, pd.Series(dtype=str)).astype(str).fillna()
             vec = TfidfVectorizer(
                 max_features=self.cfg.text_max_features,
                 ngram_range=self.cfg.ngram_range,
@@ -498,10 +498,10 @@ class ContentBasedModel:
         self.log.info("Content feature space dimensionality: %d", self.candidate_matrix.shape[1])
 
     def score_batch(self, candidate_indices: np.ndarray) -> np.ndarray:
-        """Cosine similarity of a batch of candidates against ALL jobs.
+        "Cosine similarity of a batch of candidates against ALL jobs.
         Rows are already L2-normalized, so this is a plain sparse matmul.
         Returns a dense (batch_size, n_jobs) array clipped to [0, 1].
-        """
+        "
         batch = self.candidate_matrix[candidate_indices]
         sims = batch.dot(self.job_matrix.T).toarray()
         return np.clip(sims, 0.0, 1.0).astype(np.float32)
@@ -512,9 +512,9 @@ class ContentBasedModel:
 # ==========================================================================
 
 class MatrixFactorizationNet(nn.Module):
-    """Classic implicit-feedback matrix factorization:
+    "Classic implicit-feedback matrix factorization:
     score(u, i) = sigmoid( dot(P_u, Q_i) + b_u + b_i + b_global )
-    """
+    "
 
     def __init__(self, n_users: int, n_items: int, embedding_dim: int):
         super().__init__()
@@ -537,8 +537,8 @@ class MatrixFactorizationNet(nn.Module):
 
     @torch.no_grad()
     def score_users_batch(self, user_idx: torch.Tensor, all_items: bool = True) -> torch.Tensor:
-        """Dense scores for a batch of users against every item, via a
-        single matmul. Returns probabilities in [0, 1] (sigmoid applied)."""
+        "Dense scores for a batch of users against every item, via a
+        single matmul. Returns probabilities in [0, 1] (sigmoid applied)."
         u_vec = self.user_emb(user_idx)                      # (B, d)
         u_bias = self.user_bias(user_idx)                     # (B, 1)
         logits = u_vec @ self.item_emb.weight.T               # (B, n_items)
@@ -547,13 +547,13 @@ class MatrixFactorizationNet(nn.Module):
 
 
 class InteractionDataset(Dataset):
-    """Wraps positive (user, item, weight) triples from the sparse
+    "Wraps positive (user, item, weight) triples from the sparse
     interaction matrix, with on-the-fly random negative sampling.
 
     Negatives are drawn uniformly at random per __getitem__ call rather
     than pre-materialized, which keeps memory flat regardless of the
     negative_sampling_ratio and gives fresh negatives every epoch.
-    """
+    "
 
     def __init__(self, interaction_matrix: sp.csr_matrix, neg_ratio: int, max_weight: float, seed: int = 42):
         coo = interaction_matrix.tocoo()
@@ -596,7 +596,7 @@ class InteractionDataset(Dataset):
 
 
 class CollaborativeModel:
-    """Trains and serves the PyTorch matrix factorization model.
+    "Trains and serves the PyTorch matrix factorization model.
 
     Loss: weighted BCE-with-logits. Positive pairs are weighted by their
     normalized implicit-feedback strength (a "Hired" pair contributes more
@@ -604,7 +604,7 @@ class CollaborativeModel:
     and label 0. This is a standard, scalable substitute for full ALS when
     you want a differentiable model you can extend later (e.g. add side
     features) without switching frameworks.
-    """
+    "
 
     def __init__(self, cfg: MFConfig, logger: logging.Logger):
         self.cfg = cfg
@@ -718,7 +718,7 @@ class CollaborativeModel:
         return total_loss / max(total_count, 1)
 
     def score_batch(self, candidate_indices: np.ndarray) -> np.ndarray:
-        """Dense (batch_size, n_items) collaborative scores in [0, 1]."""
+        "Dense (batch_size, n_items) collaborative scores in [0, 1]."
         idx_tensor = torch.as_tensor(candidate_indices, dtype=torch.long, device=self.device)
         scores = self.model.score_users_batch(idx_tensor)
         return scores.detach().cpu().numpy().astype(np.float32)
@@ -738,7 +738,7 @@ class CollaborativeModel:
 # ==========================================================================
 
 class BehaviorModel:
-    """Learns each candidate's implicit preference distribution over
+    "Learns each candidate's implicit preference distribution over
     categorical job attributes from their interaction history, with an
     exponential recency decay, then scores candidate-job fit as the
     (weighted) overlap between that preference distribution and a given
@@ -750,7 +750,7 @@ class BehaviorModel:
     tend to go for jobs like this" (within-candidate pattern), even for
     candidates with too few interactions for collaborative filtering to
     generalize well.
-    """
+    "
 
     ATTRS = ["Job_Category", "Institution", "Job_Location", "Required_Languages", "Required_Education"]
 
@@ -760,7 +760,7 @@ class BehaviorModel:
         self.candidate_preferences: Dict[int, Dict[str, Dict[str, float]]] = {}
 
     def fit(self, events: pd.DataFrame, jobs: pd.DataFrame, reference_date: Optional[pd.Timestamp] = None) -> None:
-        """events: candidate_idx, job_idx, weight, event_date (from Preprocessor)."""
+        "events: candidate_idx, job_idx, weight, event_date (from Preprocessor)."
         if reference_date is None:
             reference_date = events["event_date"].max()
         half_life = self.cfg.recency_half_life_days
@@ -800,14 +800,14 @@ class BehaviorModel:
         self.log.info("Behavior profiles built for %d candidates", len(prefs))
 
     def score_batch(self, candidate_indices: np.ndarray, jobs: pd.DataFrame) -> np.ndarray:
-        """Returns (batch_size, n_jobs) behavior-fit scores in [0, 1].
+        "Returns (batch_size, n_jobs) behavior-fit scores in [0, 1].
 
         Score per (candidate, job) = mean, across attributes the candidate
         has a preference distribution for, of the preference weight that
         distribution assigns to the job's actual attribute value. A
         candidate with no history at all scores 0 everywhere here (their
         recommendation leans on content + collaborative instead).
-        """
+        "
         n_jobs = len(jobs)
         out = np.zeros((len(candidate_indices), n_jobs), dtype=np.float32)
         job_attr_values = {attr: jobs[attr].astype(str).values if attr in jobs.columns else None
@@ -838,8 +838,8 @@ class BehaviorModel:
 # ==========================================================================
 
 class HybridRanker:
-    """Combines the three per-batch score matrices into a single Final
-    Score matrix and extracts the top-K jobs per candidate."""
+    "Combines the three per-batch score matrices into a single Final
+    Score matrix and extracts the top-K jobs per candidate."
 
     def __init__(self, weights: HybridWeights, logger: logging.Logger):
         weights.validate()
@@ -853,8 +853,8 @@ class HybridRanker:
 
     @staticmethod
     def top_k_indices(scores: np.ndarray, k: int) -> Tuple[np.ndarray, np.ndarray]:
-        """Vectorized top-K over each row of a (batch, n_jobs) matrix.
-        Returns (indices, scores) both shaped (batch, k), sorted descending."""
+        "Vectorized top-K over each row of a (batch, n_jobs) matrix.
+        Returns (indices, scores) both shaped (batch, k), sorted descending."
         k = min(k, scores.shape[1])
         part = np.argpartition(-scores, kth=k - 1, axis=1)[:, :k]
         row_idx = np.arange(scores.shape[0])[:, None]
@@ -870,9 +870,9 @@ class HybridRanker:
 # ==========================================================================
 
 class Evaluator:
-    """Standard top-K recommendation metrics computed against a held-out
+    "Standard top-K recommendation metrics computed against a held-out
     set of "relevant" jobs per candidate (e.g. jobs they were Shortlisted/
-    Interviewed/Hired for, that were excluded from training)."""
+    Interviewed/Hired for, that were excluded from training)."
 
     def __init__(self, logger: logging.Logger):
         self.log = logger
@@ -914,7 +914,7 @@ class Evaluator:
         return 1.0 if any(j in relevant for j in top) else 0.0
 
     def evaluate(self, recommendations: Dict[int, List[int]], ground_truth: Dict[int, set], k: int = 20) -> Dict[str, float]:
-        """recommendations / ground_truth are keyed by candidate_idx."""
+        "recommendations / ground_truth are keyed by candidate_idx."
         metrics = {"precision": [], "recall": [], "map": [], "ndcg": [], "hit_rate": []}
         for cand_idx, relevant in ground_truth.items():
             recs = recommendations.get(cand_idx, [])
@@ -936,9 +936,9 @@ class Evaluator:
 # ==========================================================================
 
 class RecommendationEngine:
-    """Wires every component together: load -> preprocess -> fit models ->
+    "Wires every component together: load -> preprocess -> fit models ->
     batched scoring -> hybrid ranking -> export. Also exposes a single-
-    candidate inference path for on-demand recommendation requests."""
+    candidate inference path for on-demand recommendation requests."
 
     def __init__(self, cfg: RecommenderConfig):
         self.cfg = cfg
@@ -959,7 +959,7 @@ class RecommendationEngine:
 
     # ------------------------------------------------------------------
     def prepare(self) -> None:
-        """Load data and fit all three models. Call once before scoring."""
+        "Load data and fit all three models. Call once before scoring."
         t0 = time.time()
         data = self.data_loader.load_all()
         self.candidates, self.jobs = data["candidates"], data["jobs"]
@@ -978,8 +978,8 @@ class RecommendationEngine:
 
     # ------------------------------------------------------------------
     def generate_all_recommendations(self) -> pd.DataFrame:
-        """Scores every candidate in batches and returns the top-K feed
-        for the whole population as one DataFrame."""
+        "Scores every candidate in batches and returns the top-K feed
+        for the whole population as one DataFrame."
         n_candidates = len(self.candidates)
         batch_size = self.cfg.candidate_batch_size
         k = self.cfg.top_k
@@ -1005,8 +1005,8 @@ class RecommendationEngine:
                     rows.append({
                         "Candidate_ID": cand_id,
                         "Job_ID": job_id,
-                        "Job_Title": job_row.get("Job_Title", ""),
-                        "Institution": job_row.get("Institution", ""),
+                        "Job_Title": job_row.get("Job_Title", ),
+                        "Institution": job_row.get("Institution", ),
                         "Content_Score": round(float(content_scores[row_i, job_col]), 4),
                         "Collaborative_Score": round(float(collab_scores[row_i, job_col]), 4),
                         "Behavior_Score": round(float(behavior_scores[row_i, job_col]), 4),
@@ -1019,7 +1019,7 @@ class RecommendationEngine:
 
     # ------------------------------------------------------------------
     def recommend_for_candidate(self, candidate_id: str, k: Optional[int] = None) -> pd.DataFrame:
-        """On-demand inference path for a single candidate (e.g. an API call)."""
+        "On-demand inference path for a single candidate (e.g. an API call)."
         if candidate_id not in self.preprocessor.candidate_id_to_idx:
             raise KeyError(f"Unknown Candidate_ID: {candidate_id}")
         k = k or self.cfg.top_k
@@ -1037,8 +1037,8 @@ class RecommendationEngine:
             rows.append({
                 "Candidate_ID": candidate_id,
                 "Job_ID": self.preprocessor.idx_to_job_id[job_col],
-                "Job_Title": job_row.get("Job_Title", ""),
-                "Institution": job_row.get("Institution", ""),
+                "Job_Title": job_row.get("Job_Title", ),
+                "Institution": job_row.get("Institution", ),
                 "Content_Score": round(float(content_scores[0, job_col]), 4),
                 "Collaborative_Score": round(float(collab_scores[0, job_col]), 4),
                 "Behavior_Score": round(float(behavior_scores[0, job_col]), 4),
@@ -1049,7 +1049,7 @@ class RecommendationEngine:
 
     # ------------------------------------------------------------------
     def evaluate(self, holdout_status: Tuple[str, ...] = ("Hired", "Interviewed", "Shortlisted"), k: int = 20) -> Dict[str, float]:
-        """Builds ground truth from strong-signal application outcomes and
+        "Builds ground truth from strong-signal application outcomes and
         evaluates the already-generated recommendations against it.
 
         Note: for a rigorous offline evaluation you would time-split
@@ -1058,7 +1058,7 @@ class RecommendationEngine:
         This method evaluates ranking quality against known positive
         outcomes as a sanity check / regression test; see README for the
         time-split variant.
-        """
+        "
         ground_truth: Dict[int, set] = {}
         for _, row in self.interaction_events.iterrows():
             pass  # placeholder to keep interface explicit; real GT built below for speed
@@ -1087,9 +1087,9 @@ class RecommendationEngine:
 # ==========================================================================
 
 class SyntheticDataGenerator:
-    """Creates small, schema-correct CSVs so the full pipeline can be
+    "Creates small, schema-correct CSVs so the full pipeline can be
     exercised end to end without the real datasets. NOT a substitute for
-    validation against real data -- purely for smoke-testing the code."""
+    validation against real data -- purely for smoke-testing the code."
 
     CATEGORIES = ["Engineering", "Healthcare", "Education", "Finance", "Agriculture", "IT"]
     EDUCATION = ["Bachelor's", "Master's", "Diploma", "PhD"]

@@ -3,19 +3,19 @@ import { useAuth } from '../context/AuthContext';
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
-// Fire-and-forget — never throws, never blocks UI
+// Fire-and-forget   never throws, never blocks UI
 function fire(url: string, method: string, body?: object, token?: string | null) {
   if (!token) return;
   fetch(url, {
     method,
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
     body: body ? JSON.stringify(body) : undefined,
   }).catch(() => {});
 }
 
 export function useFeedTracker() {
   const { token, user } = useAuth();
-  const isCandidate = user?.userType === 'candidate' || (user as any)?.user_type === 'candidate';
+  const isCandidate = user?.userType === 'candidate'|| (user as any)?.user_type === 'candidate';
 
   // Debounce search logs so rapid keystrokes don't spam the API
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,7 +56,7 @@ export function useFeedTracker() {
     hoverStart.current[jobId] = Date.now();
   }, [isCandidate]);
 
-  // Call on mouseleave — logs a view if hovered 4+ seconds
+  // Call on mouseleave   logs a view if hovered 4+ seconds
   const onHoverEnd = useCallback((jobId: string) => {
     if (!isCandidate || !jobId) return;
     const start = hoverStart.current[jobId];

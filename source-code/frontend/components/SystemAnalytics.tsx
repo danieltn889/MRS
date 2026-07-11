@@ -98,7 +98,7 @@ const SystemAnalytics: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             {companies.slice(0, 15).map(c => (
               <tr key={c.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 font-medium text-gray-900">{c.name}</td>
-                <td className="px-4 py-3 text-gray-600">{c.industry || '—'}</td>
+                <td className="px-4 py-3 text-gray-600">{c.industry || ' '}</td>
                 <td className="px-4 py-3 text-gray-600">{c.job_count}</td>
                 <td className="px-4 py-3 text-gray-600">{c.team_count}</td>
                 <td className="px-4 py-3 text-gray-600">{c.verification_status}</td>

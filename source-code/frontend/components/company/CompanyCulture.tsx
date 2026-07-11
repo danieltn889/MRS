@@ -25,14 +25,14 @@ const PRESET_VALUES = [
 ];
 
 const cultureSections = [
-  { id: 'description', title: 'Culture Overview', icon: Heart, color: 'pink', max: 1000, placeholder: 'Describe your company culture overall — what candidates can expect day to day…' },
-  { id: 'workEnvironment', title: 'Work Environment', icon: Users, color: 'blue', max: 600, placeholder: 'Describe the physical workspace, remote flexibility, open-plan vs private offices…' },
-  { id: 'teamDynamics', title: 'Team Dynamics', icon: Users, color: 'indigo', max: 600, placeholder: 'How do teams collaborate, pair, conduct stand-ups, handle disagreements…' },
-  { id: 'communicationStyle', title: 'Communication Style', icon: MessageSquare, color: 'cyan', max: 600, placeholder: 'Async vs sync, Slack vs email, meeting cadence, documentation culture…' },
-  { id: 'decisionMaking', title: 'Decision Making', icon: Target, color: 'amber', max: 600, placeholder: 'Top-down vs consensus, who has ownership, how proposals are raised…' },
-  { id: 'feedbackCulture', title: 'Feedback Culture', icon: BarChart2, color: 'orange', max: 600, placeholder: 'Performance reviews, 360 feedback, recognition practices, psychological safety…' },
-  { id: 'workLifeBalance', title: 'Work-Life Balance', icon: Heart, color: 'green', max: 600, placeholder: 'Working hours, flexible scheduling, PTO policy, parental leave…' },
-  { id: 'diversityInclusion', title: 'Diversity & Inclusion', icon: HeartHandshake, color: 'purple', max: 600, placeholder: 'DEI initiatives, affinity groups, hiring practices, belonging programmes…' },
+  { id: 'description', title: 'Culture Overview', icon: Heart, color: 'pink', max: 1000, placeholder: 'Describe your company culture overall   what candidates can expect day to day…'},
+  { id: 'workEnvironment', title: 'Work Environment', icon: Users, color: 'blue', max: 600, placeholder: 'Describe the physical workspace, remote flexibility, open-plan vs private offices…'},
+  { id: 'teamDynamics', title: 'Team Dynamics', icon: Users, color: 'indigo', max: 600, placeholder: 'How do teams collaborate, pair, conduct stand-ups, handle disagreements…'},
+  { id: 'communicationStyle', title: 'Communication Style', icon: MessageSquare, color: 'cyan', max: 600, placeholder: 'Async vs sync, Slack vs email, meeting cadence, documentation culture…'},
+  { id: 'decisionMaking', title: 'Decision Making', icon: Target, color: 'amber', max: 600, placeholder: 'Top-down vs consensus, who has ownership, how proposals are raised…'},
+  { id: 'feedbackCulture', title: 'Feedback Culture', icon: BarChart2, color: 'orange', max: 600, placeholder: 'Performance reviews, 360 feedback, recognition practices, psychological safety…'},
+  { id: 'workLifeBalance', title: 'Work-Life Balance', icon: Heart, color: 'green', max: 600, placeholder: 'Working hours, flexible scheduling, PTO policy, parental leave…'},
+  { id: 'diversityInclusion', title: 'Diversity & Inclusion', icon: HeartHandshake, color: 'purple', max: 600, placeholder: 'DEI initiatives, affinity groups, hiring practices, belonging programmes…'},
 ];
 
 const iconColorMap: Record<string, string> = {
@@ -50,7 +50,7 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
   const [cultureData, setCultureData] = useState<CultureData>({ attributes: {}, values: [], employeeTestimonials: [] });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success'| 'error'; message: string } | null>(null);
   const [newValue, setNewValue] = useState('');
   const [newAttribute, setNewAttribute] = useState('');
   const [valueError, setValueError] = useState('');
@@ -68,7 +68,7 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
       if (!data.attributes || Array.isArray(data.attributes)) data.attributes = {};
       setCultureData(data);
     } catch (err: any) {
-      setNotification({ type: 'error', message: err.message || 'Failed to load culture data' });
+      setNotification({ type: 'error', message: err.message || 'Failed to load culture data'});
     } finally {
       setLoading(false);
     }
@@ -80,7 +80,7 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
       await updateCompanyCulture({ ...cultureData, attributes: cultureData.attributes || {}, values: cultureData.values || [], employeeTestimonials: cultureData.employeeTestimonials || [] });
       const valCount = (cultureData.values || []).length;
       const attrCount = Object.keys(cultureData.attributes || {}).length;
-      setNotification({ type: 'success', message: 'Culture & values saved successfully!' });
+      setNotification({ type: 'success', message: 'Culture & values saved successfully!'});
       onNotify?.('success', 'Culture Saved', `Culture & values saved.`, `${valCount} values · ${attrCount} attributes`);
     } catch (err: any) {
       const msg = err.message || 'Failed to save culture data';
@@ -130,7 +130,7 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
   const getAttributesArray = () =>
     Object.entries(cultureData.attributes || {}).map(([key, value]) => ({
       key,
-      name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      name: key.replace(/_/g, '').replace(/\b\w/g, l => l.toUpperCase()),
       score: value as number,
     }));
 
@@ -155,8 +155,8 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
 
       {/* Notification */}
       {notification && (
-        <div className={`flex items-start gap-3 p-4 rounded-lg border ${notification.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
-          {notification.type === 'success' ? <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" /> : <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />}
+        <div className={`flex items-start gap-3 p-4 rounded-lg border ${notification.type === 'success'? 'bg-green-50 border-green-200 text-green-800': 'bg-red-50 border-red-200 text-red-800'}`}>
+          {notification.type === 'success'? <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" /> : <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" />}
           <span className="text-sm font-medium">{notification.message}</span>
           <button onClick={() => setNotification(null)} className="ml-auto opacity-60 hover:opacity-100"><X className="h-4 w-4" /></button>
         </div>
@@ -172,7 +172,7 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
             <h3 className="text-base font-semibold text-gray-900">Core Values</h3>
             <p className="text-xs text-gray-500">What principles guide your company?</p>
           </div>
-          <span className="ml-auto text-sm text-gray-500">{(cultureData.values || []).length} value{(cultureData.values || []).length !== 1 ? 's' : ''}</span>
+          <span className="ml-auto text-sm text-gray-500">{(cultureData.values || []).length} value{(cultureData.values || []).length !== 1 ? 's': ''}</span>
         </div>
 
         {/* Quick-add presets */}
@@ -246,7 +246,7 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                   <div className="flex gap-1">
                     {[1, 2, 3, 4, 5].map(n => (
                       <button key={n} onClick={() => updateAttributeScore(attr.key, n)}
-                        className={`w-7 h-7 rounded-full text-xs font-medium transition-colors ${attr.score >= n ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-500 hover:bg-amber-100'}`}>
+                        className={`w-7 h-7 rounded-full text-xs font-medium transition-colors ${attr.score >= n ? 'bg-amber-500 text-white': 'bg-gray-200 text-gray-500 hover:bg-amber-100'}`}>
                         {n}
                       </button>
                     ))}
@@ -280,9 +280,9 @@ const CompanyCulture: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
               </div>
               <textarea value={val} onChange={e => updateField(section.id as keyof CultureData, e.target.value)}
                 rows={4} maxLength={section.max + 50}
-                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${overLimit ? 'border-orange-400' : 'border-gray-300'}`}
+                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none ${overLimit ? 'border-orange-400': 'border-gray-300'}`}
                 placeholder={section.placeholder} />
-              <p className={`text-xs mt-1 text-right ${overLimit ? 'text-orange-500 font-medium' : val.length > section.max * 0.85 ? 'text-amber-500' : 'text-gray-400'}`}>
+              <p className={`text-xs mt-1 text-right ${overLimit ? 'text-orange-500 font-medium': val.length > section.max * 0.85 ? 'text-amber-500': 'text-gray-400'}`}>
                 {val.length}/{section.max}
               </p>
             </motion.div>

@@ -1,6 +1,6 @@
-# V-WES Blockchain Layer
+# MRS Blockchain Layer
 
-This folder contains the Hardhat blockchain layer for the V-WES capstone project. It supports immutable storage and verification of virtual work simulation results.
+This folder contains the Hardhat blockchain layer for the MRS capstone project. It supports immutable storage and verification of virtual work simulation results.
 
 ## Company Information
 

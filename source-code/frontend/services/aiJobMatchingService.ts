@@ -3,17 +3,17 @@
 // Points at the combined feed (ai_job_matcher_og.py 70% + hybrid_job_recommender.py
 // 30%, see source-code/ml/hybrid_job_recommender.py::combined_score_candidate),
 // not ai_job_matcher_og.py directly. Every result carries its own "job" object
-// (full details) plus a human-readable "reasons" list — the UI should show
+// (full details) plus a human-readable "reasons" list   the UI should show
 // those reasons, not just a bare percentage.
 
 const HYBRID_GATEWAY_URL = import.meta.env.VITE_HYBRID_GATEWAY_URL || 'http://localhost:8080/hybrid';
 // Kept only for getJobMatchForCandidate (single-job match, used by
 // ApplicationScreen/JobDetails) which the combined feed has no equivalent
-// for yet — see aiJobMatchingService.ts's getJobMatchForCandidate.
+// for yet   see aiJobMatchingService.ts's getJobMatchForCandidate.
 const MATCHER_GATEWAY_URL = import.meta.env.VITE_ML_GATEWAY_URL || 'http://localhost:8080/matcher';
 const AI_MATCH_TIMEOUT_MS = 300000;
 // High enough to cover every currently-active, published job rather than
-// just a top slice — the dashboard should show all active jobs with their
+// just a top slice   the dashboard should show all active jobs with their
 // score, not a truncated "top N". combined_score_candidate() still only
 // returns however many active jobs actually exist, so this is a ceiling,
 // not a target count.
@@ -55,12 +55,21 @@ interface MatcherBreakdown {
     experience_match?: number;
     preferences_match?: number;
   };
+  // Actual weights applied to each of the 4 factors AFTER redistribution
+  // (a factor the job doesn't require gets excluded/weight 0, its base
+  // weight redistributed across the applicable factors) -- these are the
+  // real percentages behind criteria_scores' points, not the nominal
+  // 40/25/20/15 defaults.
+  factor_weights_used?: { skills?: number; qualifications?: number; experience?: number; preferences?: number };
+  excluded_factors?: string[];
   skills_breakdown?: {
     matched_skills?: string[];
     missing_skills?: string[];
     total_required?: number;
     total_matched?: number;
     individual_scores?: number[];
+    applicable?: boolean;
+    note?: string | null;
   };
   qualifications_breakdown?: Record<string, any>;
   experience_breakdown?: Record<string, any>;
@@ -77,18 +86,23 @@ interface ScoredJob {
   total_score: number;
   matcher_score: number | null;
   hybrid_score: number | null;
-  score_source: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+  score_source: 'matcher+hybrid'| 'matcher-only'| 'hybrid-only';
   reasons: string[];
-  // Full matcher 4-factor breakdown (null when score_source is "hybrid-only" —
+  // Full matcher 4-factor breakdown (null when score_source is "hybrid-only"  
   // the matcher had no data for this job, not a real zero).
   matcher_breakdown: MatcherBreakdown | null;
-  // Full hybrid breakdown (null when score_source is "matcher-only" — hybrid
+  // Full hybrid breakdown (null when score_source is "matcher-only"   hybrid
   // had no data for this job).
   hybrid_detail: HybridDetail | null;
+  // True when hybrid_score above includes the Content signal -- only false
+  // when score_source is "matcher+hybrid" (Content excluded there to avoid
+  // double-counting against the matcher's own profile-vs-job fit score).
+  // See combined_score_candidate() in hybrid_job_recommender.py.
+  hybrid_content_included?: boolean;
 }
 
 // Full behavior/collaborative/freshness/popularity/business-rule breakdown
-// from hybrid_job_recommender.py's score_candidate() — see its "detail" dict.
+// from hybrid_job_recommender.py's score_candidate()   see its "detail" dict.
 // null when the combined result came from the matcher alone (score_source
 // "matcher-only") since hybrid had no data for that job.
 interface HybridDetail {
@@ -139,7 +153,7 @@ interface CandidateInfo {
   [key: string]: any;
 }
 
-// /hybrid/score/combined has no "success" field — it returns the payload
+// /hybrid/score/combined has no "success" field   it returns the payload
 // directly and signals failure via HTTP status (see hybrid_job_recommender.py's
 // score_combined, which raises HTTPException rather than returning
 // {success: false}). It also has no "candidate" field; candidate info comes
@@ -154,7 +168,7 @@ interface CombinedFeedResponse {
 }
 
 // Kept as an alias so any code still checking `.matches`/`.total_jobs_matched`
-// (the old ai_job_matcher_og.py shape) doesn't need to change to compile —
+// (the old ai_job_matcher_og.py shape) doesn't need to change to compile  
 // new code should read `.scored_jobs` directly. `success`/`error` are
 // synthesized here since the combined feed itself has neither field.
 type AIMatchResponse = CombinedFeedResponse & {
@@ -262,13 +276,13 @@ interface SingleJobMatchResponse {
     job: any;
     // Present only when this match came from getCombinedJobMatch (the
     // matcher 70% + hybrid 30% blend) rather than the matcher-only
-    // getJobMatchForCandidate — undefined otherwise.
+    // getJobMatchForCandidate   undefined otherwise.
     matcher_score?: number | null;
     hybrid_score?: number | null;
-    score_source?: 'matcher+hybrid' | 'matcher-only' | 'hybrid-only';
+    score_source?: 'matcher+hybrid'| 'matcher-only'| 'hybrid-only';
     reasons?: string[];
     // Full behavior/collaborative/freshness/popularity/business-rule breakdown
-    // from the hybrid recommender — null when score_source is "matcher-only".
+    // from the hybrid recommender   null when score_source is "matcher-only".
     hybrid_detail?: HybridDetail | null;
   };
   timestamp?: string;
@@ -288,7 +302,7 @@ export const getJobMatchesFromAI = async (candidateId: string): Promise<AIMatchR
   console.log('🔍 Combined feed request started for:', candidateId);
 
   if (!candidateId) {
-    console.error('❌ Candidate ID is required');
+    console.error(' Candidate ID is required');
     return emptyResponse('Candidate ID is required');
   }
 
@@ -309,15 +323,15 @@ export const getJobMatchesFromAI = async (candidateId: string): Promise<AIMatchR
     const data: CombinedFeedResponse = await response.json();
 
     if (data.scored_jobs && data.scored_jobs.length > 0) {
-      console.log(`✅ Found ${data.scored_jobs.length} recommended jobs for candidate ${candidateId} (weights: matcher=${data.weights_used?.matcher}, hybrid=${data.weights_used?.hybrid})`);
+      console.log(`''Found ${data.scored_jobs.length} recommended jobs for candidate ${candidateId} (weights: matcher=${data.weights_used?.matcher}, hybrid=${data.weights_used?.hybrid})`);
     } else {
-      console.log(`⚠️ No job matches found for candidate ${candidateId}`);
+      console.log(` No job matches found for candidate ${candidateId}`);
     }
 
     return toAIMatchResponse(data);
 
   } catch (error: any) {
-    console.error('❌ Combined feed request failed:', error.message);
+    console.error(' Combined feed request failed:', error.message);
     return emptyResponse(error.message);
   }
 };
@@ -335,7 +349,7 @@ export const getJobMatchForCandidate = async (
   console.log('🔍 AI Job Match Request Started for:', { candidateId, jobId });
   
   if (!candidateId) {
-    console.error('❌ Candidate ID is required');
+    console.error(' Candidate ID is required');
     return {
       success: false,
       error: 'Candidate ID is required'
@@ -343,7 +357,7 @@ export const getJobMatchForCandidate = async (
   }
   
   if (!jobId) {
-    console.error('❌ Job ID is required');
+    console.error(' Job ID is required');
     return {
       success: false,
       error: 'Job ID is required'
@@ -367,15 +381,15 @@ export const getJobMatchForCandidate = async (
     const data: SingleJobMatchResponse = await response.json();
 
     if (data.success && data.match) {
-      console.log(`✅ Match score for job ${jobId}: ${data.match.match_score}%`);
+      console.log(`''Match score for job ${jobId}: ${data.match.match_score}%`);
     } else {
-      console.log(`⚠️ No match found for candidate ${candidateId} and job ${jobId}`);
+      console.log(` No match found for candidate ${candidateId} and job ${jobId}`);
     }
 
     return data;
 
   } catch (error: any) {
-    console.error('❌ AI Job Match Failed:', error.message);
+    console.error(' AI Job Match Failed:', error.message);
 
     return {
       success: false,
@@ -387,7 +401,7 @@ export const getJobMatchForCandidate = async (
 /**
  * Get the SAME combined score shown in the job feed (matcher 70% + hybrid
  * 30%, see hybrid_job_recommender.py::combined_score_candidate) for a single
- * job — used by job-detail pages so a candidate sees one consistent score
+ * job   used by job-detail pages so a candidate sees one consistent score
  * everywhere instead of a matcher-only number on "View Details" and a
  * blended number on the dashboard feed.
  */
@@ -396,10 +410,10 @@ export const getCombinedJobMatch = async (
   jobId: string
 ): Promise<SingleJobMatchResponse> => {
   if (!candidateId) {
-    return { success: false, error: 'Candidate ID is required' };
+    return { success: false, error: 'Candidate ID is required'};
   }
   if (!jobId) {
-    return { success: false, error: 'Job ID is required' };
+    return { success: false, error: 'Job ID is required'};
   }
 
   try {
@@ -418,19 +432,19 @@ export const getCombinedJobMatch = async (
 
     const data = await response.json();
     const jm = data.job_match || {};
-    // matcher_breakdown is null when score_source is "hybrid-only" — the
+    // matcher_breakdown is null when score_source is "hybrid-only"   the
     // matcher never scored this job, so there is no 4-factor breakdown to show,
     // only the blended total + reasons (same graceful-degradation rule as the feed).
     const bd = jm.matcher_breakdown || null;
 
-    console.log(`✅ Combined match score for job ${jobId}: ${jm.total_score}% (source: ${jm.score_source})`);
+    console.log(`''Combined match score for job ${jobId}: ${jm.total_score}% (source: ${jm.score_source})`);
 
     return {
       success: true,
       match: {
         match_score: jm.total_score ?? 0,
         match_level: bd?.match_level || '',
-        // null (not 0) when bd is null — lets callers tell "matcher never
+        // null (not 0) when bd is null   lets callers tell "matcher never
         // scored this job" apart from "matcher scored it at 0%".
         criteria_scores: bd?.criteria_scores || {
           skills_match: null as any, qualifications_match: null as any,
@@ -466,7 +480,7 @@ export const getCombinedJobMatch = async (
     };
 
   } catch (error: any) {
-    console.error('❌ Combined job match failed:', error.message);
+    console.error(' Combined job match failed:', error.message);
     return { success: false, error: error.message };
   }
 };
@@ -506,7 +520,7 @@ export const getJobMatchesFromAIWithTimeout = async (
 
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.error('❌ Combined feed request failed:', error.message);
+    console.error(' Combined feed request failed:', error.message);
 
     if (error.name === 'AbortError') {
       return emptyResponse('AI matching is still loading. Please try again in a moment.');
@@ -553,7 +567,7 @@ export const getJobMatchForCandidateWithTimeout = async (
 
   } catch (error: any) {
     clearTimeout(timeoutId);
-    console.error('❌ AI Job Match Failed:', error.message);
+    console.error(' AI Job Match Failed:', error.message);
 
     if (error.name === 'AbortError') {
       return {
@@ -628,7 +642,7 @@ export const transformMatchData = (match: any) => {
 /**
  * Transform a scored job from the combined feed (/hybrid/score/combined) for
  * frontend display. Unlike transformMatchData, there is no fixed 4-factor
- * breakdown here — matcher_score/hybrid_score may each be null (one signal
+ * breakdown here   matcher_score/hybrid_score may each be null (one signal
  * unavailable) and reasons is the primary explanation surface.
  */
 export const transformScoredJob = (scored: ScoredJob) => {

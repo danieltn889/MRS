@@ -32,7 +32,7 @@ interface TeamMember {
   email: string;
   role: string;
   avatar?: string;
-  status: 'online' | 'offline' | 'away';
+  status: 'online'| 'offline'| 'away';
   lastActive: string;
 }
 
@@ -54,7 +54,7 @@ interface CandidateDiscussion {
   candidateId: string;
   jobTitle: string;
   status: string;
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  priority: 'low'| 'medium'| 'high'| 'urgent';
   assignedTo: TeamMember[];
   comments: Comment[];
   lastActivity: string;
@@ -214,7 +214,7 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
               likes: 3,
               isLiked: true,
               attachments: [
-                { name: 'interview_notes.pdf', url: '/attachments/interview_notes.pdf', type: 'pdf' }
+                { name: 'interview_notes.pdf', url: '/attachments/interview_notes.pdf', type: 'pdf'}
               ]
             }
           ]
@@ -231,13 +231,13 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
 
   const getFilteredDiscussions = () => {
     return discussions.filter(discussion => {
-      const matchesSearch = searchTerm === '' ||
+      const matchesSearch = searchTerm === ''||
         discussion.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         discussion.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
         discussion.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
 
-      const matchesStatus = filterStatus === 'all' || discussion.status === filterStatus;
-      const matchesPriority = filterPriority === 'all' || discussion.priority === filterPriority;
+      const matchesStatus = filterStatus === 'all'|| discussion.status === filterStatus;
+      const matchesPriority = filterPriority === 'all'|| discussion.priority === filterPriority;
 
       return matchesSearch && matchesStatus && matchesPriority;
     });
@@ -447,7 +447,7 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
                     key={discussion.id}
                     onClick={() => setSelectedDiscussion(discussion)}
                     className={`p-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 ${
-                      selectedDiscussion?.id === discussion.id ? 'bg-blue-50 border-blue-200' : ''
+                      selectedDiscussion?.id === discussion.id ? 'bg-blue-50 border-blue-200': ''
                     }`}
                   >
                     <div className="flex items-start justify-between mb-2">
@@ -464,7 +464,7 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
                     <div className="flex items-center justify-between">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(discussion.status)}`}>
                         {getStatusIcon(discussion.status)}
-                        <span className="ml-1">{discussion.status.replace('_', ' ')}</span>
+                        <span className="ml-1">{discussion.status.replace('_', '')}</span>
                       </span>
 
                       <div className="flex items-center space-x-2">
@@ -517,7 +517,7 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
                   <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">No discussions found</h3>
                   <p className="text-gray-600">
-                    {searchTerm || filterStatus !== 'all' || filterPriority !== 'all'
+                    {searchTerm || filterStatus !== 'all'|| filterPriority !== 'all'
                       ? 'Try adjusting your filters.'
                       : 'Start a new discussion to collaborate with your team.'
                     }
@@ -543,7 +543,7 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
                     <div className="flex items-center space-x-2">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(selectedDiscussion.status)}`}>
                         {getStatusIcon(selectedDiscussion.status)}
-                        <span className="ml-1">{selectedDiscussion.status.replace('_', ' ')}</span>
+                        <span className="ml-1">{selectedDiscussion.status.replace('_', '')}</span>
                       </span>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getPriorityColor(selectedDiscussion.priority)}`}>
                         {selectedDiscussion.priority}
@@ -617,7 +617,7 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
                             <button
                               onClick={() => toggleLike(selectedDiscussion.id, comment.id)}
                               className={`flex items-center space-x-1 text-sm ${
-                                comment.isLiked ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                                comment.isLiked ? 'text-blue-600': 'text-gray-500 hover:text-gray-700'
                               }`}
                             >
                               <ThumbsUp size={14} />
@@ -645,7 +645,7 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
                                     <button
                                       onClick={() => toggleLike(selectedDiscussion.id, reply.id)}
                                       className={`flex items-center space-x-1 text-sm ${
-                                        reply.isLiked ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'
+                                        reply.isLiked ? 'text-blue-600': 'text-gray-500 hover:text-gray-700'
                                       }`}
                                     >
                                       <ThumbsUp size={12} />
@@ -744,8 +744,8 @@ const TeamCollaboration = ({ onBack }: TeamCollaborationProps) => {
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
                           <div className={`w-3 h-3 rounded-full ${
-                            member.status === 'online' ? 'bg-green-500' :
-                            member.status === 'away' ? 'bg-yellow-500' : 'bg-gray-400'
+                            member.status === 'online'? 'bg-green-500':
+                            member.status === 'away'? 'bg-yellow-500': 'bg-gray-400'
                           }`} />
                           <span className="text-sm text-gray-600 capitalize">{member.status}</span>
                         </div>

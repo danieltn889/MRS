@@ -1,12 +1,12 @@
 # Blockchain & Audit-Chain Documentation
 
-This document describes how the V-WES platform provides a **tamper-evident audit trail**
+This document describes how the MRS platform provides a **tamper-evident audit trail**
 for important platform events. There are two complementary layers:
 
-1. **Ethereum layer** — a local Hardhat/Ethereum chain with a Solidity smart contract
+1. **Ethereum layer**   a local Hardhat/Ethereum chain with a Solidity smart contract
    (`LocalSimulation.sol`) that stores simulation scores on-chain and returns a transaction
    hash. Requires a running node.
-2. **Application audit chain** — a SHA-256, hash-linked chain stored in PostgreSQL
+2. **Application audit chain**   a SHA-256, hash-linked chain stored in PostgreSQL
    (`audit_chain` table) that links every event to the previous one. It works **without a
    running node**, is fully unit-tested, and can *anchor* to an Ethereum transaction via
    `eth_tx_id`.
@@ -21,7 +21,7 @@ This document focuses primarily on the application audit chain, which is the sou
 Each important event (e.g. a simulation submission) is written as a **block**. Every block
 stores the **hash of the previous block** plus a hash of its own contents. Because each hash
 depends on the one before it, changing any historical block invalidates the hash of that
-block *and every block after it* — which the verification routine detects.
+block *and every block after it*   which the verification routine detects.
 
 | Property | Value |
 |----------|-------|
@@ -96,8 +96,8 @@ SHA256(
 ```
 
 Properties (all covered by tests):
-- **Deterministic** — identical input always yields the same 64-char hex hash.
-- **Tamper-evident** — changing any field (metadata, event_type, prev_hash, nonce, …)
+- **Deterministic**   identical input always yields the same 64-char hex hash.
+- **Tamper-evident**   changing any field (metadata, event_type, prev_hash, nonce, …)
   produces a different hash.
 
 ---
@@ -135,7 +135,7 @@ bad block, and `issues[]` explains each failure (`Hash mismatch`, `Broken link`,
 ## 6. Event types
 
 Currently written:
-- `simulation_submitted` — appended after a submission is saved (anchored to the Ethereum
+- `simulation_submitted`   appended after a submission is saved (anchored to the Ethereum
   tx hash when on-chain storage is enabled).
 
 Designed to be extended (one `AuditChainService.appendBlock({...})` call each):
@@ -159,8 +159,8 @@ All routes require authentication (`protect`).
 | GET | `/chain/:id/verify` | any user | Verify a single block (hash + prev-hash link) |
 
 > Chain verification is intentionally available to any authenticated user (including the
-> candidate) — it is a **read-only integrity check** that reveals only status and counts,
-> no sensitive data — so candidates can verify their own results have not been tampered with.
+> candidate)   it is a **read-only integrity check** that reveals only status and counts,
+> no sensitive data   so candidates can verify their own results have not been tampered with.
 
 ### Example: verify the chain
 
@@ -177,14 +177,14 @@ curl -H "Authorization: Bearer <token>" \
 
 ## 8. Security considerations
 
-- **Append-only** — there is no update/delete API for the chain; rows are only inserted.
-- **Serialized appends** — `appendBlock` runs inside a transaction with
+- **Append-only**   there is no update/delete API for the chain; rows are only inserted.
+- **Serialized appends**   `appendBlock` runs inside a transaction with
   `pg_advisory_xact_lock`, so concurrent events cannot claim the same block number / link.
-- **Metadata sanitization** — `sanitizeMetadata` strips keys matching
+- **Metadata sanitization**   `sanitizeMetadata` strips keys matching
   `password|secret|token|privatekey|authorization|apikey` and truncates oversized values, so
   secrets never enter the chain.
-- **No sensitive payloads** — store identifiers and hashes, not raw PII or credentials.
-- **Best-effort, non-blocking** — `appendBlock` never throws into the request path; a chain
+- **No sensitive payloads**   store identifiers and hashes, not raw PII or credentials.
+- **Best-effort, non-blocking**   `appendBlock` never throws into the request path; a chain
   failure cannot fail the underlying action.
 
 ---
@@ -240,5 +240,5 @@ npx hardhat run scripts/deploy.js --network localhost
 |---------|-------------|
 | `/chain/verify` returns 403 | Ensure you are authenticated; the route only requires a valid token (not admin). |
 | Verify reports `valid: false` | A block's contents or link changed. Inspect `issues[]` and `firstInvalidBlockNumber`. |
-| No blocks in the explorer | No events recorded yet — submit a simulation to create the first block. |
+| No blocks in the explorer | No events recorded yet   submit a simulation to create the first block. |
 | Ethereum tx is `null` | `USE_BLOCKCHAIN` is not `true` or no node at `BLOCKCHAIN_RPC_URL`. The audit chain still works without it. |

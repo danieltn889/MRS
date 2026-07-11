@@ -1,4 +1,4 @@
-# Simulation Scoring — Full Calculation
+# Simulation Scoring   Full Calculation
 
 How a candidate's simulation score is calculated, end to end, from submission to the
 final number shown on the **Candidate Results & Performance Analysis** table.
@@ -8,11 +8,11 @@ Source of truth: `backend/src/controllers/simulation.controller.ts` (the
 
 ---
 
-## Step 0 — Trigger
+## Step 0   Trigger
 When the candidate **submits** the session (`submitSimulation`), the AI evaluation runs
 over their task progress, chat messages, time data, and GitHub repository.
 
-## Step 1 — Score each task (per task, 0–100) — `~line 4121`
+## Step 1   Score each task (per task, 0–100)   `~line 4121`
 For every task, four sub-scores are computed:
 
 | Sub-score | Meaning |
@@ -26,14 +26,14 @@ For every task, four sub-scores are computed:
 Task overall = (completion + time + quality + answer_quality) / 4
 ```
 
-## Step 2 — Aggregate task metrics — `~4157–4165`
+## Step 2   Aggregate task metrics   `~4157–4165`
 ```
 completionRate         = completedTasks / totalTasks * 100
 averageTaskScore       = sum(task.overall) / totalTasks
 overallTaskPercentage  = totalPointsEarned / (totalTasks * 100) * 100
 ```
 
-## Step 3 — Competency scores (0–100 each)
+## Step 3   Competency scores (0–100 each)
 | Competency | How | Line |
 |---|---|---|
 | **Punctuality** | weighted on-time + partial credit across tasks ÷ total weight | `4279` |
@@ -42,15 +42,15 @@ overallTaskPercentage  = totalPointsEarned / (totalTasks * 100) * 100
 | **Adaptability** | base − abandonment penalty + creativity bonus (clamped 0–100) | `4415` |
 | **Communication** | chat analysis (`communicationScoreResult.score`) | `4006` |
 | **Collaboration** | volume (msgs) + balance (msg ratio ×30) + responsiveness (≤30), capped 100 | `4622–4658` |
-| **GitHub** | `calculateGitHubScore()` — repo commits/structure/practices | `3973` |
+| **GitHub** | `calculateGitHubScore()`   repo commits/structure/practices | `3973` |
 
-## Step 4 — Composite scores
+## Step 4   Composite scores
 ```
 Quality    = (Technical + Punctuality + Adaptability) / 3      // ~4599
 Behavioral = (Adaptability + Communication) / 2                // ~4611
 ```
 
-## Step 5 — AI Simulation Overall — `4678–4697`
+## Step 5   AI Simulation Overall   `4678–4697`
 Weighted sum (weights come from the simulation's scoring rubric; defaults shown):
 
 | Component | Default weight |
@@ -66,12 +66,12 @@ AI Overall % = Quality×0.60 + Speed×0.15 + Behavioral×0.10 + GitHub×0.15
 
 This is the **Simulation Score** column.
 
-## Step 6 — Pass / Fail — `4703–4704`
+## Step 6   Pass / Fail   `4703–4704`
 ```
 passed = AI Overall >= passingScore     // rubric.passingScore, default 70
 ```
 
-## Step 7 — Final platform Overall (the table)
+## Step 7   Final platform Overall (the table)
 The AI score is combined with the **recruiter's task evaluation** (per-task scores the
 recruiter enters, 0–100, stored in `simulation_tasks.score`):
 
@@ -96,9 +96,9 @@ Final = 75×0.70 + 80×0.30 = 52.5 + 24 = 76.5%
 ---
 
 ## Where each number appears in the UI
-- **Candidate Results table** — `Tasks` (recruiter avg %), `Recruiter (30%)`, `Simulation`
+- **Candidate Results table**   `Tasks` (recruiter avg %), `Recruiter (30%)`, `Simulation`
   (AI %), `AI (70%)`, `Overall Score` (Final).
-- **Candidate Details modal** — "How this score is calculated" → "Show full calculation"
+- **Candidate Details modal**   "How this score is calculated" → "Show full calculation"
   shows these steps and the candidate's competency scores.
 
 ## No new database fields

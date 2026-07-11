@@ -17,7 +17,7 @@ export interface APIKey extends BaseEntity {
 export interface PaymentMethod extends BaseEntity {
   user_id: UUID;
   company_id?: UUID;
-  type: 'card' | 'bank_account' | 'paypal' | 'crypto';
+  type: 'card'| 'bank_account'| 'paypal'| 'crypto';
   provider: string;
   external_id: string;
   last_four?: string;
@@ -33,7 +33,7 @@ export interface SubscriptionPlanDetails extends BaseEntity {
   plan_type: string;
   price: number;
   currency: string;
-  billing_cycle: 'monthly' | 'yearly';
+  billing_cycle: 'monthly'| 'yearly';
   features: JSONB;
   limits: JSONB;
   is_active: boolean;
@@ -109,7 +109,7 @@ export interface LinkedInIntegration extends BaseEntity {
 
 export interface CalendarIntegration extends BaseEntity {
   user_id: UUID;
-  provider: 'google' | 'outlook' | 'apple';
+  provider: 'google'| 'outlook'| 'apple';
   access_token: string;
   refresh_token?: string;
   expires_at: TIMESTAMP;
@@ -191,7 +191,7 @@ export interface QualityOfHire extends BaseEntity {
   user_id: UUID;
   hire_date: TIMESTAMP;
   performance_rating?: number;
-  retention_status: 'active' | 'left' | 'terminated';
+  retention_status: 'active'| 'left'| 'terminated';
   time_to_productivity?: number;
   cost_to_company?: number;
   metadata: JSONB;
@@ -226,9 +226,9 @@ export interface FeatureSuggestion extends BaseEntity {
   title: string;
   description: string;
   category: string;
-  status: 'open' | 'under_review' | 'planned' | 'in_progress' | 'completed' | 'declined';
+  status: 'open'| 'under_review'| 'planned'| 'in_progress'| 'completed'| 'declined';
   votes_count: number;
-  priority: 'low' | 'medium' | 'high' | 'critical';
+  priority: 'low'| 'medium'| 'high'| 'critical';
   tags?: string[];
   metadata: JSONB;
 }
@@ -236,7 +236,7 @@ export interface FeatureSuggestion extends BaseEntity {
 export interface FeatureVote extends BaseEntity {
   suggestion_id: UUID;
   user_id: UUID;
-  vote_type: 'up' | 'down';
+  vote_type: 'up'| 'down';
   comment?: string;
 }
 
@@ -245,8 +245,8 @@ export interface BugReport extends BaseEntity {
   user_id: UUID;
   title: string;
   description: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'investigating' | 'in_progress' | 'resolved' | 'closed';
+  severity: 'low'| 'medium'| 'high'| 'critical';
+  status: 'open'| 'investigating'| 'in_progress'| 'resolved'| 'closed';
   browser_info?: JSONB;
   device_info?: JSONB;
   steps_to_reproduce?: string;
@@ -261,7 +261,7 @@ export interface BugReport extends BaseEntity {
 // Coupons and Discounts
 export interface Coupon extends BaseEntity {
   code: string;
-  discount_type: 'percentage' | 'fixed_amount';
+  discount_type: 'percentage'| 'fixed_amount';
   discount_value: number;
   currency?: string;
   max_uses?: number;
@@ -279,7 +279,7 @@ export interface BackgroundCheckIntegration extends BaseEntity {
   user_id: UUID;
   provider: string;
   external_id: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending'| 'in_progress'| 'completed'| 'failed';
   results?: JSONB;
   requested_at: TIMESTAMP;
   completed_at?: TIMESTAMP;
@@ -294,7 +294,7 @@ export interface CustomReport extends BaseEntity {
   name: string;
   description?: string;
   query_config: JSONB;
-  schedule?: 'daily' | 'weekly' | 'monthly';
+  schedule?: 'daily'| 'weekly'| 'monthly';
   last_run_at?: TIMESTAMP;
   is_active: boolean;
   recipients?: string[];
@@ -339,7 +339,7 @@ export interface IntegrationLog extends BaseEntity {
   user_id?: UUID;
   company_id?: UUID;
   action: string;
-  status: 'success' | 'error' | 'warning';
+  status: 'success'| 'error'| 'warning';
   message: string;
   request_data?: JSONB;
   response_data?: JSONB;

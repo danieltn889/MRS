@@ -17,8 +17,8 @@ const storage = multer.diskStorage({
     const sanitizedName = file.originalname
       .replace(/\s/g, '_')
       .replace(/[^a-zA-Z0-9._-]/g, '');
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + '-' + sanitizedName);
+    const uniqueSuffix = Date.now() + '-'+ Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + '-'+ sanitizedName);
   }
 });
 

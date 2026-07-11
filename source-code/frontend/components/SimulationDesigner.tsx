@@ -40,7 +40,7 @@ interface SimulationDesignerProps {
 // ─── Save / Publish Success Modal ────────────────────────────────────────────
 
 interface SaveResult {
-  action: 'draft' | 'published';
+  action: 'draft'| 'published';
   simulation: Simulation;
 }
 
@@ -55,17 +55,17 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
 
         {/* Colour header */}
-        <div className={`px-6 py-5 ${isDraft ? 'bg-gradient-to-r from-blue-500 to-indigo-600' : 'bg-gradient-to-r from-green-500 to-emerald-600'}`}>
+        <div className={`px-6 py-5 ${isDraft ? 'bg-gradient-to-r from-blue-500 to-indigo-600': 'bg-gradient-to-r from-green-500 to-emerald-600'}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               {isDraft ? <Save size={20} className="text-white" /> : <Play size={20} className="text-white" />}
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">
-                {isDraft ? 'Draft Saved!' : 'Practical Assessment Published!'}
+                {isDraft ? 'Draft Saved!': 'Practical Assessment Published!'}
               </h3>
               <p className="text-xs text-white/80">
-                {isDraft ? 'Your practical assessment has been saved as a draft.' : 'Your practical assessment is now live for candidates.'}
+                {isDraft ? 'Your practical assessment has been saved as a draft.': 'Your practical assessment is now live for candidates.'}
               </p>
             </div>
           </div>
@@ -74,7 +74,7 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
         {/* Simulation summary */}
         <div className="px-6 py-5 space-y-3">
           <div className="flex items-start gap-3 p-4 bg-gray-50 rounded-xl">
-            <FileCheck size={18} className={isDraft ? 'text-blue-500 shrink-0 mt-0.5' : 'text-green-500 shrink-0 mt-0.5'} />
+            <FileCheck size={18} className={isDraft ? 'text-blue-500 shrink-0 mt-0.5': 'text-green-500 shrink-0 mt-0.5'} />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-gray-900 truncate">{sim.title || 'Untitled Practical Assessment'}</p>
               {sim.jobRole && (
@@ -83,8 +83,8 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
                 </p>
               )}
             </div>
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${isDraft ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'}`}>
-              {isDraft ? 'Draft' : 'Published'}
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full shrink-0 ${isDraft ? 'bg-blue-100 text-blue-700': 'bg-green-100 text-green-700'}`}>
+              {isDraft ? 'Draft': 'Published'}
             </span>
           </div>
 
@@ -93,7 +93,7 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
             {[
               { icon: Clock,  label: 'Duration',   value: `${sim.duration} min` },
               { icon: Layers, label: 'Tasks',       value: `${sim.tasks.length}` },
-              { icon: Target, label: 'Pass score',  value: `${sim.scoring?.passingScore ?? '—'}%` },
+              { icon: Target, label: 'Pass score',  value: `${sim.scoring?.passingScore ?? ' '}%` },
             ].map(({ icon: Icon, label, value }) => (
               <div key={label} className="text-center bg-gray-50 rounded-xl py-3 px-2">
                 <Icon size={15} className="mx-auto text-gray-400 mb-1" />
@@ -107,7 +107,7 @@ const SaveSuccessModal: React.FC<{ result: SaveResult; onClose: () => void; onBa
           {sim.objectives.filter(o => o?.trim()).length > 0 && (
             <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
               <CheckCircle size={13} className="text-green-500" />
-              {sim.objectives.filter(o => o?.trim()).length} learning objective{sim.objectives.filter(o => o?.trim()).length !== 1 ? 's' : ''} defined
+              {sim.objectives.filter(o => o?.trim()).length} learning objective{sim.objectives.filter(o => o?.trim()).length !== 1 ? 's': ''} defined
             </div>
           )}
           {sim.jobId && (
@@ -154,7 +154,7 @@ const PublishErrorModal: React.FC<{ message: string; onClose: () => void }> = ({
           </div>
           <div>
             <h3 className="text-lg font-bold text-white">Publish Failed</h3>
-            <p className="text-xs text-white/80">Something went wrong — your assessment was not published.</p>
+            <p className="text-xs text-white/80">Something went wrong   your assessment was not published.</p>
           </div>
         </div>
       </div>
@@ -192,8 +192,8 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
   const [publishError, setPublishError]     = useState<string | null>(null);
   const [jobs, setJobs]                     = useState<any[]>([]);
 
-  // ── view mode: 'list' shows SimulationList, 'edit' shows the stepper ────────
-  const [viewMode, setViewMode]             = useState<'list' | 'edit'>(simulationId ? 'edit' : 'list');
+  // ── view mode: 'list'shows SimulationList, 'edit'shows the stepper ────────
+  const [viewMode, setViewMode]             = useState<'list'| 'edit'>(simulationId ? 'edit': 'list');
   const [editingId, setEditingId]           = useState<string | undefined>(simulationId);
   const [objectiveSuggestions, setObjectiveSuggestions] = useState<string[]>([]);
 
@@ -222,7 +222,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
     }
   }, [simulationId]);
 
-  // ✅ FIXED: fetchSuggestions - API returns { objectives: [], taskTitles: [] } directly
+  // ''FIXED: fetchSuggestions - API returns { objectives: [], taskTitles: [] } directly
   const fetchSuggestions = async () => {
     try {
       const result = await simulationAPI.getSuggestions();
@@ -258,7 +258,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
 
   const fetchJobs = async () => {
     try {
-      const response = await jobAPI.getCompanyJobs({ limit: 50, status: 'active,published,draft', sort: '-created_at' });
+      const response = await jobAPI.getCompanyJobs({ limit: 50, status: 'active,published,draft', sort: '-created_at'});
       let arr: any[] = [];
       if (response?.data?.data && Array.isArray(response.data.data))         arr = response.data.data;
       else if (response?.data && Array.isArray(response.data))               arr = response.data;
@@ -301,8 +301,8 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
         duration:    data.duration || data.duration_minutes || 60,
         difficulty:  data.difficulty || 'intermediate',
         objectives:  data.objectives || data.tasks_structure?.objectives || [],
-        tasks:       typeof data.tasks === 'string' ? JSON.parse(data.tasks) : (data.tasks || []),
-        scoring:     typeof data.scoring === 'string' ? JSON.parse(data.scoring) : (data.scoring || data.scoring_rubric || { totalPoints: 100, passingScore: 70, timeBonus: false, qualityWeight: 70, speedWeight: 20, behavioralWeight: 10, autoFailConditions: [] }),
+        tasks:       typeof data.tasks === 'string'? JSON.parse(data.tasks) : (data.tasks || []),
+        scoring:     typeof data.scoring === 'string'? JSON.parse(data.scoring) : (data.scoring || data.scoring_rubric || { totalPoints: 100, passingScore: 70, timeBonus: false, qualityWeight: 70, speedWeight: 20, behavioralWeight: 10, autoFailConditions: [] }),
         settings:    data.settings || data.tasks_structure?.settings || { allowPause: true, showTimer: true, randomizeTasks: false, allowHints: true, recordScreen: false, recordAudio: false, maxAttempts: 1, timeLimit: 60, environment: 'office', tools: [], constraints: [] },
         status:      data.status || 'draft',
         createdAt:   data.createdAt || data.created_at || new Date().toISOString(),
@@ -436,7 +436,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
     // Step 1 must always be valid before saving
     const step1Errors = getStepErrors(simulation, 1);
     if (step1Errors.length > 0) {
-      setValidationErrors(['Fix step 1 errors before saving: ' + step1Errors.join(' · ')]);
+      setValidationErrors(['Fix step 1 errors before saving: '+ step1Errors.join('· ')]);
       setCurrentStep(1);
       return;
     }
@@ -446,7 +446,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       const payload = withMetadata(simulation);
       const result = await simulationAPI.saveSimulationDraft(payload);
       const savedId = result?.data?.id || result?.data?.data?.id || result?.id;
-      const updated = { ...simulation, id: savedId || simulation.id, status: 'draft' as const };
+      const updated = { ...simulation, id: savedId || simulation.id, status: 'draft'as const };
       setSimulation(updated);
       setValidationErrors([]);
       setSaveResult({ action: 'draft', simulation: updated });
@@ -481,7 +481,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
       const payload = withMetadata(simulation);
       const result = await simulationAPI.publishSimulation(payload);
       const savedId = result?.data?.id || result?.data?.data?.id || result?.id;
-      const updated = { ...simulation, id: savedId || simulation.id, status: 'published' as const };
+      const updated = { ...simulation, id: savedId || simulation.id, status: 'published'as const };
       setSimulation(updated);
       setSaveResult({ action: 'published', simulation: updated });
     } catch (error: any) {
@@ -634,7 +634,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
               <div className="h-5 w-px bg-gray-200 flex-shrink-0" />
               <div className="min-w-0">
                 <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-purple-600 to-indigo-600 bg-clip-text text-transparent truncate">
-                  {editingId ? 'Edit Practical Assessment' : 'Create Practical Assessment'}
+                  {editingId ? 'Edit Practical Assessment': 'Create Practical Assessment'}
                 </h1>
                 {simulation.jobRole && (
                   <p className="text-xs text-gray-500 truncate">{simulation.jobRole}</p>
@@ -685,26 +685,26 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
                           setCurrentStep(step.id);
                           setVisitedSteps(prev => new Set(prev).add(step.id));
                         }}
-                        title={!canGo ? 'Complete required steps first' : step.title}
-                        className={`flex items-center gap-2 group focus:outline-none ${!canGo ? 'cursor-not-allowed opacity-50' : ''}`}
+                        title={!canGo ? 'Complete required steps first': step.title}
+                        className={`flex items-center gap-2 group focus:outline-none ${!canGo ? 'cursor-not-allowed opacity-50': ''}`}
                       >
                         <div className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 transition-all ${
-                          done   ? 'bg-green-500 text-white' :
-                          active ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white ring-2 ring-purple-200' :
+                          done   ? 'bg-green-500 text-white':
+                          active ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white ring-2 ring-purple-200':
                                    'bg-gray-200 text-gray-500 group-hover:bg-gray-300'
                         }`}>
                           {done ? <CheckCircle size={13} /> : step.id}
                         </div>
                         <span className={`text-xs font-medium whitespace-nowrap transition-colors ${
-                          active ? 'text-purple-700' :
-                          done   ? 'text-green-600 hidden sm:inline' :
+                          active ? 'text-purple-700':
+                          done   ? 'text-green-600 hidden sm:inline':
                                    'text-gray-400 hidden sm:inline'
                         }`}>
                           {step.title}
                         </span>
                       </button>
                       {index < STEPS.length - 1 && (
-                        <div className={`w-5 sm:w-8 h-px mx-1 sm:mx-1.5 flex-shrink-0 ${done ? 'bg-green-400' : 'bg-gray-200'}`} />
+                        <div className={`w-5 sm:w-8 h-px mx-1 sm:mx-1.5 flex-shrink-0 ${done ? 'bg-green-400': 'bg-gray-200'}`} />
                       )}
                     </React.Fragment>
                   );
@@ -712,7 +712,7 @@ const SimulationDesigner: React.FC<SimulationDesignerProps> = ({ onBack, simulat
               </div>
             </div>
             <p className="text-xs text-gray-400 mt-2">
-              Step {currentStep} of {STEPS.length} —{' '}
+              Step {currentStep} of {STEPS.length}  {''}
               <span className="text-gray-600 font-medium">{STEPS[currentStep - 1]?.description}</span>
             </p>
           </div>

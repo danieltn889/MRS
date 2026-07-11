@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: '20'
 
-      # Test gate — if these fail, the job stops here and NOTHING is deployed.
+      # Test gate   if these fail, the job stops here and NOTHING is deployed.
       - name: Backend tests
         run: |
           cd source-code/backend
@@ -34,7 +34,7 @@ jobs:
       - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          printf '%s\n'"${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "${{ secrets.SERVER_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
 
@@ -45,13 +45,13 @@ jobs:
       - name: Rsync code to server
         run: |
           rsync -az --delete \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='**/node_modules' \
-            --exclude='.env' \
-            --exclude='**/.env' \
-            --exclude='ssh_key.pem' \
-            --exclude='**/dist' \
+            --exclude='.git'\
+            --exclude='node_modules'\
+            --exclude='**/node_modules'\
+            --exclude='.env'\
+            --exclude='**/.env'\
+            --exclude='ssh_key.pem'\
+            --exclude='**/dist'\
             -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no" \
             ./ "${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:~/SVWR-CFE/"
 
@@ -72,15 +72,15 @@ jobs:
             ok=true
             # Retries (not just a longer sleep): pm2 restarting a process can
             # briefly crash-then-recover on its own (e.g. a cleanup error during
-            # shutdown) — a single check right after a fixed sleep has been
+            # shutdown)   a single check right after a fixed sleep has been
             # landing in that gap and failing the whole deploy even though the
             # service is actually healthy a few seconds later.
             check () { # name url
               for attempt in 1 2 3 4 5; do
-                if curl -fsS -m 15 "$2" >/dev/null 2>&1; then echo "✅ $1 healthy"; return; fi
+                if curl -fsS -m 15 "$2" >/dev/null 2>&1; then echo "''$1 healthy"; return; fi
                 sleep 5
               done
-              echo "❌ $1 FAILED ($2)"; ok=false
+              echo " $1 FAILED ($2)"; ok=false
             }
             check "backend"  "http://127.0.0.1:3001/health"
             check "ml"       "http://127.0.0.1:8080/matcher/health"

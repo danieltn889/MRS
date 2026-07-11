@@ -7,8 +7,8 @@ interface ConfirmDialogProps {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  /** 'danger' shows a red confirm button (deletes); 'primary' shows blue. */
-  variant?: 'danger' | 'primary';
+  /** 'danger'shows a red confirm button (deletes); 'primary'shows blue. */
+  variant?: 'danger'| 'primary';
   loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;

@@ -7,7 +7,7 @@ import { getJobCandidatesWithMatches } from '../../services/jobAPI';
 import { updateApplication } from '../../services/applicationAPI';
 
 // Recruiter-recommended baseline AI match score. The AI recommends; the recruiter
-// always decides — shortlisting below this only warns, never blocks (spec §8).
+// always decides   shortlisting below this only warns, never blocks (spec §8).
 const RECOMMENDED_MATCH = 70;
 
 interface JobCandidatesViewProps {
@@ -263,17 +263,17 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
 
   // Change an applicant's status (Shortlist / Reject / Under Review). Reuses the
   // existing PUT /applications/:id endpoint, which already records the timeline and
-  // sends the candidate an email + in-app notification — no new API or schema.
-  const changeStatus = async (c: Candidate, newStatus: 'shortlisted' | 'rejected' | 'under_review') => {
+  // sends the candidate an email + in-app notification   no new API or schema.
+  const changeStatus = async (c: Candidate, newStatus: 'shortlisted'| 'rejected'| 'under_review') => {
     // AI recommends, recruiter decides: warn (don't block) when shortlisting below
     // the score the recruiter set for this job; confirm before rejecting.
-    if (newStatus === 'shortlisted' && (c.ai_match_score || 0) < requiredScore) {
+    if (newStatus === 'shortlisted'&& (c.ai_match_score || 0) < requiredScore) {
       const ok = window.confirm(
         `This candidate is below this job's required AI Match Score (${Math.round(c.ai_match_score || 0)}% < ${requiredScore}%), but you may still shortlist them based on your professional judgment.\n\nShortlist anyway?`
       );
       if (!ok) return;
     }
-    if (newStatus === 'rejected' && !window.confirm(`Reject ${c.full_name}? They will be notified by email.`)) {
+    if (newStatus === 'rejected'&& !window.confirm(`Reject ${c.full_name}? They will be notified by email.`)) {
       return;
     }
     const prevStatus = c.application_status;
@@ -309,7 +309,7 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
   const loadCandidates = async () => {
     try {
       setLoading(true);
-      const result = await getJobCandidatesWithMatches(jobId, { page: 1, limit: 100, sortBy: 'match_score', sortOrder: 'DESC' });
+      const result = await getJobCandidatesWithMatches(jobId, { page: 1, limit: 100, sortBy: 'match_score', sortOrder: 'DESC'});
       if (result.success) {
         setCandidates(result.data.candidates || []);
         setStats(result.data.stats || {});
@@ -342,21 +342,21 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, { bg: string; text: string }> = {
-      submitted: { bg: '#f1f5f9', text: '#475569' },
-      under_review: { bg: '#eff6ff', text: '#2563eb' },
-      shortlisted: { bg: '#f5f3ff', text: '#7c3aed' },
-      interview: { bg: '#ecfdf5', text: '#059669' },
-      assessment: { bg: '#fff7ed', text: '#c2410c' },
-      offer: { bg: '#fdf4ff', text: '#a21caf' },
-      hired: { bg: '#dcfce7', text: '#15803d' },
-      rejected: { bg: '#fee2e2', text: '#dc2626' },
+      submitted: { bg: '#f1f5f9', text: '#475569'},
+      under_review: { bg: '#eff6ff', text: '#2563eb'},
+      shortlisted: { bg: '#f5f3ff', text: '#7c3aed'},
+      interview: { bg: '#ecfdf5', text: '#059669'},
+      assessment: { bg: '#fff7ed', text: '#c2410c'},
+      offer: { bg: '#fdf4ff', text: '#a21caf'},
+      hired: { bg: '#dcfce7', text: '#15803d'},
+      rejected: { bg: '#fee2e2', text: '#dc2626'},
     };
-    return colors[status] || { bg: '#f1f5f9', text: '#475569' };
+    return colors[status] || { bg: '#f1f5f9', text: '#475569'};
   };
 
   const formatDate = (d?: string) => {
     if (!d) return 'N/A';
-    return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric'});
   };
 
   const getStatusIcon = (status: string) => {
@@ -385,7 +385,7 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
       },
       generated_at: new Date().toISOString(),
     };
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -401,7 +401,7 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
         c.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.candidate_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         c.headline?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === 'all' || c.application_status === statusFilter;
+      const matchesStatus = statusFilter === 'all'|| c.application_status === statusFilter;
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
@@ -423,27 +423,27 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ minHeight: '100vh', background: '#f8fafc', fontFamily: 'Inter, sans-serif'}}>
       {/* Header */}
       <div style={{ background: '#fff', borderBottom: '1px solid #e2e8f0', padding: '0 32px', height: 64, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'transparent', border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#374151' }}>
+          <button onClick={onBack} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, background: 'transparent', border: '1px solid #e2e8f0', cursor: 'pointer', fontSize: 14, fontWeight: 500, color: '#374151'}}>
             <ArrowLeft size={16} /> Back to Jobs
           </button>
           <div>
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Candidates — {jobTitle}</span>
-            <span style={{ fontSize: 13, color: '#64748b', marginLeft: 12 }}>{stats.total_applications} applicant{stats.total_applications !== 1 ? 's' : ''}</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: '#0f172a'}}>Candidates   {jobTitle}</span>
+            <span style={{ fontSize: 13, color: '#64748b', marginLeft: 12 }}>{stats.total_applications} applicant{stats.total_applications !== 1 ? 's': ''}</span>
           </div>
         </div>
       </div>
 
-      <div style={{ padding: '24px 32px' }}>
+      <div style={{ padding: '24px 32px'}}>
         {/* Stats Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
           {statCards.map((s, i) => (
-            <div key={i} style={{ background: '#fff', borderRadius: 12, padding: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div key={i} style={{ background: '#fff', borderRadius: 12, padding: '16px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b' }}>{s.label}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: '#64748b'}}>{s.label}</span>
                 <s.icon size={18} color={s.color} />
               </div>
               <div style={{ fontSize: 28, fontWeight: 700, color: s.color }}>{s.value}</div>
@@ -452,18 +452,18 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
         </div>
 
         {/* Filters */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center'}}>
           <div style={{ position: 'relative', flex: 1, maxWidth: 300 }}>
-            <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+            <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8'}} />
             <input
               type="text"
               placeholder="Search by name, email, headline..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px 9px 36px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', padding: '9px 12px 9px 36px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, outline: 'none', boxSizing: 'border-box'}}
             />
           </div>
-          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, background: '#fff', cursor: 'pointer' }}>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, background: '#fff', cursor: 'pointer'}}>
             <option value="all">All Status</option>
             <option value="submitted">Submitted</option>
             <option value="under_review">Under Review</option>
@@ -473,34 +473,34 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
             <option value="hired">Hired</option>
             <option value="rejected">Rejected</option>
           </select>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, background: '#fff', cursor: 'pointer' }}>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)} style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 10, fontSize: 14, background: '#fff', cursor: 'pointer'}}>
             <option value="match_score">Sort: Match Score</option>
             <option value="applied_at">Sort: Applied Date</option>
             <option value="name">Sort: Name</option>
           </select>
-          <span style={{ fontSize: 13, color: '#64748b' }}>{filteredCandidates.length} result{filteredCandidates.length !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 13, color: '#64748b'}}>{filteredCandidates.length} result{filteredCandidates.length !== 1 ? 's': ''}</span>
         </div>
 
         {/* Candidates Table */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 60 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#8b5cf6', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px' }} />
-            <p style={{ color: '#64748b' }}>Loading candidates...</p>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #e2e8f0', borderTopColor: '#8b5cf6', animation: 'spin 0.8s linear infinite', margin: '0 auto 16px'}} />
+            <p style={{ color: '#64748b'}}>Loading candidates...</p>
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           </div>
         ) : filteredCandidates.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0' }}>
+          <div style={{ textAlign: 'center', padding: 60, background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0'}}>
             <Users size={48} color="#cbd5e1" />
-            <p style={{ marginTop: 16, fontSize: 16, fontWeight: 600, color: '#0f172a' }}>No candidates found</p>
-            <p style={{ fontSize: 14, color: '#64748b' }}>{searchTerm ? 'Try a different search.' : 'Applications will appear here once candidates apply.'}</p>
+            <p style={{ marginTop: 16, fontSize: 16, fontWeight: 600, color: '#0f172a'}}>No candidates found</p>
+            <p style={{ fontSize: 14, color: '#64748b'}}>{searchTerm ? 'Try a different search.': 'Applications will appear here once candidates apply.'}</p>
           </div>
         ) : (
-          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflowX: 'auto' }}>
-            <table style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse' }}>
+          <div style={{ background: '#fff', borderRadius: 16, border: '1px solid #e2e8f0', overflowX: 'auto'}}>
+            <table style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse'}}>
               <thead>
-                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0'}}>
                   {['Candidate', 'Match', 'Status', 'Applied', 'Top Skills', 'Current Role', 'Practical Assessment', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b' }}>{h}</th>
+                    <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b'}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -514,26 +514,26 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                   return (
                     <tr
                       key={c.application_id}
-                      style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
+                      style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s'}}
                       onMouseEnter={e => (e.currentTarget.style.background = '#fafafa')}
                       onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                     >
                       {/* Candidate */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 16px'}}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'linear-gradient(135deg, #8b5cf6, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
                             {(c.first_name?.[0] || c.full_name?.[0] || '?').toUpperCase()}
                           </div>
                           <div>
                             <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{c.full_name || 'Unknown'}</div>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>{c.candidate_email}</div>
+                            <div style={{ fontSize: 12, color: '#64748b'}}>{c.candidate_email}</div>
                             {c.headline && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{c.headline}</div>}
                           </div>
                         </div>
                       </td>
 
                       {/* Match */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 16px'}}>
                         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 20, background: getMatchBg(c.ai_match_score || 0), color: getMatchColor(c.ai_match_score || 0), fontWeight: 700, fontSize: 14 }}>
                           <Star size={12} fill={getMatchColor(c.ai_match_score || 0)} />
                           {c.ai_match_score || 0}%
@@ -542,21 +542,21 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                       </td>
 
                       {/* Status */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 16px'}}>
                         <span style={{ display: 'inline-block', padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500, background: statusStyle.bg, color: statusStyle.text }}>
-                          {c.application_status?.replace('_', ' ') || 'submitted'}
+                          {c.application_status?.replace('_', '') || 'submitted'}
                         </span>
                         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>#{c.application_number}</div>
                       </td>
 
                       {/* Applied */}
-                      <td style={{ padding: '14px 16px', fontSize: 13, color: '#64748b' }}>{formatDate(c.applied_at)}</td>
+                      <td style={{ padding: '14px 16px', fontSize: 13, color: '#64748b'}}>{formatDate(c.applied_at)}</td>
 
                       {/* Skills */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 16px'}}>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                           {(c.candidate_skills || []).slice(0, 3).map((s, i) => (
-                            <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: '#f1f5f9', color: '#475569' }}>{s.skill_name}</span>
+                            <span key={i} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 12, background: '#f1f5f9', color: '#475569'}}>{s.skill_name}</span>
                           ))}
                           {(c.candidate_skills?.length || 0) > 3 && (
                             <span style={{ fontSize: 11, color: '#8b5cf6', fontWeight: 500 }}>+{(c.candidate_skills?.length || 0) - 3}</span>
@@ -565,46 +565,46 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                       </td>
 
                       {/* Current Role */}
-                      <td style={{ padding: '14px 16px', fontSize: 13, color: '#475569' }}>
+                      <td style={{ padding: '14px 16px', fontSize: 13, color: '#475569'}}>
                         {c.work_experience?.[0] ? (
                           <div>
                             <div style={{ fontWeight: 500 }}>{c.work_experience[0].title}</div>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>{c.work_experience[0].company}</div>
+                            <div style={{ fontSize: 12, color: '#64748b'}}>{c.work_experience[0].company}</div>
                           </div>
                         ) : (
-                          <span style={{ color: '#cbd5e1' }}>No experience</span>
+                          <span style={{ color: '#cbd5e1'}}>No experience</span>
                         )}
                       </td>
 
                       {/* Simulation */}
-                      <td style={{ padding: '14px 16px' }}>
+                      <td style={{ padding: '14px 16px'}}>
                         {topSim ? (
                           <div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
                               <div>
-                                <span style={{ fontSize: 20, fontWeight: 700, color: overallScore >= 70 ? '#22c55e' : overallScore >= 50 ? '#f59e0b' : '#ef4444' }}>{Math.round(overallScore)}%</span>
+                                <span style={{ fontSize: 20, fontWeight: 700, color: overallScore >= 70 ? '#22c55e': overallScore >= 50 ? '#f59e0b': '#ef4444'}}>{Math.round(overallScore)}%</span>
                                 <span style={{ fontSize: 10, color: '#64748b', marginLeft: 2 }}>overall</span>
                               </div>
                               {avgTaskScore > 0 && (
-                                <div style={{ paddingLeft: 8, borderLeft: '1px solid #e2e8f0' }}>
-                                  <span style={{ fontSize: 16, fontWeight: 600, color: avgTaskScore >= 70 ? '#22c55e' : avgTaskScore >= 50 ? '#f59e0b' : '#ef4444' }}>{Math.round(avgTaskScore)}%</span>
+                                <div style={{ paddingLeft: 8, borderLeft: '1px solid #e2e8f0'}}>
+                                  <span style={{ fontSize: 16, fontWeight: 600, color: avgTaskScore >= 70 ? '#22c55e': avgTaskScore >= 50 ? '#f59e0b': '#ef4444'}}>{Math.round(avgTaskScore)}%</span>
                                   <span style={{ fontSize: 10, color: '#64748b', marginLeft: 2 }}>avg tasks</span>
                                 </div>
                               )}
                             </div>
                             <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
                               {getStatusIcon(topSim.session_status)}
-                              <span style={{ color: topSim.session_status === 'completed' ? '#22c55e' : '#f59e0b' }}>{topSim.session_status}</span>
+                              <span style={{ color: topSim.session_status === 'completed'? '#22c55e': '#f59e0b'}}>{topSim.session_status}</span>
                             </div>
                           </div>
                         ) : (
-                          <span style={{ fontSize: 12, color: '#cbd5e1' }}>No practical assessment</span>
+                          <span style={{ fontSize: 12, color: '#cbd5e1'}}>No practical assessment</span>
                         )}
                       </td>
 
                       {/* Actions */}
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      <td style={{ padding: '14px 16px'}}>
+                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center'}}>
                           <button
                             onClick={() => onViewCandidate(c)}
                             style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #8b5cf6', background: '#f5f3ff', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: '#7c3aed', display: 'inline-flex', alignItems: 'center', gap: 4 }}
@@ -617,39 +617,39 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                               href={`/session-report/${topSim.session_id}`}
                               target="_blank"
                               rel="noreferrer"
-                              title={topSim.session_status === 'in_progress' ? 'View live session' : 'View session report'}
-                              style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${topSim.session_status === 'completed' ? '#7c3aed' : '#d97706'}`, background: topSim.session_status === 'completed' ? '#ede9fe' : '#fef3c7', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: topSim.session_status === 'completed' ? '#7c3aed' : '#92400e', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                              title={topSim.session_status === 'in_progress'? 'View live session': 'View session report'}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${topSim.session_status === 'completed'? '#7c3aed': '#d97706'}`, background: topSim.session_status === 'completed'? '#ede9fe': '#fef3c7', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: topSim.session_status === 'completed'? '#7c3aed': '#92400e', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none'}}
                             >
-                              <Activity size={14} /> {topSim.session_status === 'in_progress' ? 'Live' : 'Report'}
+                              <Activity size={14} /> {topSim.session_status === 'in_progress'? 'Live': 'Report'}
                             </a>
                           )}
 
-                          {c.application_status !== 'shortlisted' && (
+                          {c.application_status !== 'shortlisted'&& (
                             <button
                               onClick={() => changeStatus(c, 'shortlisted')}
                               disabled={statusUpdatingId === c.application_id}
-                              title={(c.ai_match_score || 0) < requiredScore ? `Below this job's required AI score (${requiredScore}%) — you can still shortlist` : 'Shortlist this candidate'}
-                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#f0fdf4', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait' : 'pointer', fontWeight: 600, color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
+                              title={(c.ai_match_score || 0) < requiredScore ? `Below this job's required AI score (${requiredScore}%)   you can still shortlist` : 'Shortlist this candidate'}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #16a34a', background: '#f0fdf4', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait': 'pointer', fontWeight: 600, color: '#16a34a', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
                             >
                               <CheckCircle size={14} /> Shortlist
                             </button>
                           )}
 
-                          {c.application_status !== 'under_review' && (
+                          {c.application_status !== 'under_review'&& (
                             <button
                               onClick={() => changeStatus(c, 'under_review')}
                               disabled={statusUpdatingId === c.application_id}
-                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #2563eb', background: '#eff6ff', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait' : 'pointer', fontWeight: 500, color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #2563eb', background: '#eff6ff', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait': 'pointer', fontWeight: 500, color: '#2563eb', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
                             >
                               <Activity size={14} /> Review
                             </button>
                           )}
 
-                          {c.application_status !== 'rejected' && (
+                          {c.application_status !== 'rejected'&& (
                             <button
                               onClick={() => changeStatus(c, 'rejected')}
                               disabled={statusUpdatingId === c.application_id}
-                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #dc2626', background: '#fef2f2', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait' : 'pointer', fontWeight: 500, color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
+                              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #dc2626', background: '#fef2f2', fontSize: 13, cursor: statusUpdatingId === c.application_id ? 'wait': 'pointer', fontWeight: 500, color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4, opacity: statusUpdatingId === c.application_id ? 0.5 : 1 }}
                             >
                               <AlertCircle size={14} /> Reject
                             </button>

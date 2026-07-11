@@ -8,7 +8,7 @@ import {
   AdminCompany,
 } from '../services/adminAPI';
 
-interface Alert { id: number; type: 'success' | 'error'; message: string; }
+interface Alert { id: number; type: 'success'| 'error'; message: string; }
 
 const SIZE_OPTIONS = ['1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5001-10000', '10000+'];
 
@@ -29,7 +29,7 @@ const CompanyManagement: React.FC<{ onBack?: () => void; onManageUsers?: (compan
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const addAlert = (type: 'success' | 'error', message: string) => {
+  const addAlert = (type: 'success'| 'error', message: string) => {
     const id = Date.now();
     setAlerts(prev => [...prev, { id, type, message }]);
     setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== id)), 5000);
@@ -105,7 +105,7 @@ const CompanyManagement: React.FC<{ onBack?: () => void; onManageUsers?: (compan
     }
   };
 
-  const setVerification = async (c: AdminCompany, status: 'verified' | 'rejected' | 'pending') => {
+  const setVerification = async (c: AdminCompany, status: 'verified'| 'rejected'| 'pending') => {
     try {
       await updateAdminCompany(c.id, { verificationStatus: status });
       setCompanies(prev => prev.map(x => x.id === c.id ? { ...x, verification_status: status } : x));
@@ -135,7 +135,7 @@ const CompanyManagement: React.FC<{ onBack?: () => void; onManageUsers?: (compan
     <div className="max-w-7xl mx-auto p-6">
       <div className="fixed top-4 right-4 z-50 w-96">
         {alerts.map(a => (
-          <div key={a.id} className={`mb-2 p-3 rounded-lg shadow-lg text-sm font-medium ${a.type === 'success' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+          <div key={a.id} className={`mb-2 p-3 rounded-lg shadow-lg text-sm font-medium ${a.type === 'success'? 'bg-green-50 text-green-800 border border-green-200': 'bg-red-50 text-red-800 border border-red-200'}`}>
             {a.message}
           </div>
         ))}
@@ -199,7 +199,7 @@ const CompanyManagement: React.FC<{ onBack?: () => void; onManageUsers?: (compan
                       </a>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{c.industry || '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{c.industry || ' '}</td>
                   <td className="px-4 py-3 text-gray-600">
                     {c.owner_email || <span className="text-amber-600 flex items-center gap-1"><AlertCircle size={12} /> No admin yet</span>}
                   </td>
@@ -220,7 +220,7 @@ const CompanyManagement: React.FC<{ onBack?: () => void; onManageUsers?: (compan
                       <button onClick={() => openEdit(c)} title="Edit" className="p-1.5 rounded border border-gray-200 text-gray-600 hover:bg-gray-100">
                         <Edit size={14} />
                       </button>
-                      {c.verification_status !== 'verified' && (
+                      {c.verification_status !== 'verified'&& (
                         <button onClick={() => setVerification(c, 'verified')} title="Verify" className="p-1.5 rounded border border-green-200 text-green-600 hover:bg-green-50">
                           <CheckCircle size={14} />
                         </button>
@@ -244,7 +244,7 @@ const CompanyManagement: React.FC<{ onBack?: () => void; onManageUsers?: (compan
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">{editingId ? 'Edit Company' : 'Add Company'}</h2>
+              <h2 className="text-lg font-bold text-gray-900">{editingId ? 'Edit Company': 'Add Company'}</h2>
               <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
             <form onSubmit={submitForm} className="p-5 space-y-4">
@@ -293,7 +293,7 @@ const CompanyManagement: React.FC<{ onBack?: () => void; onManageUsers?: (compan
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100">Cancel</button>
                 <button type="submit" disabled={saving} className="px-4 py-2 rounded-lg text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50">
-                  {saving ? 'Saving...' : editingId ? 'Save changes' : 'Create company'}
+                  {saving ? 'Saving...': editingId ? 'Save changes': 'Create company'}
                 </button>
               </div>
             </form>

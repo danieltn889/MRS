@@ -10,7 +10,7 @@ import { useGitHubRepo } from './context/GitHubRepoContext';
 interface FileNode {
   name: string;
   path: string;
-  type: 'file' | 'folder';
+  type: 'file'| 'folder';
   content?: string;
   language?: string;
   children?: FileNode[];
@@ -30,7 +30,7 @@ interface FileExplorerProps {
   onRefresh: () => void;
   onLoadFromGitHub?: (owner: string, repo: string) => Promise<void>;
   isLoadingGitHub?: boolean;
-  // ✅ Add githubRepo prop to receive session GitHub data
+  // ''Add githubRepo prop to receive session GitHub data
   githubRepo?: {
     repoName: string;
     repoUrl: string;
@@ -56,23 +56,23 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   isLoadingGitHub = false,
   githubRepo,  // ← Add this prop
 }) => {
-  // Start fully collapsed — folders expand on demand so you view files/code when you want.
+  // Start fully collapsed   folders expand on demand so you view files/code when you want.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
     path: string;
-    type: 'file' | 'folder';
+    type: 'file'| 'folder';
   } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [dragOverPath, setDragOverPath] = useState<string | null>(null);
-  const [clipboard, setClipboard] = useState<{ node: FileNode; action: 'copy' | 'cut' } | null>(null);
+  const [clipboard, setClipboard] = useState<{ node: FileNode; action: 'copy'| 'cut'} | null>(null);
   const [showNewDialog, setShowNewDialog] = useState(false);
   const [newItemParentPath, setNewItemParentPath] = useState('');
   const [newItemName, setNewItemName] = useState('');
-  const [newItemType, setNewItemType] = useState<'file' | 'folder'>('file');
+  const [newItemType, setNewItemType] = useState<'file'| 'folder'>('file');
   
   // GitHub repo loader state
   const [repoUrl, setRepoUrl] = useState('');
@@ -99,10 +99,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     return { owner, repo };
   };
 
-  // ✅ FIX: Only load repository when task index changes, not on every render
+  // ''FIX: Only load repository when task index changes, not on every render
   useEffect(() => {
     if (currentTaskIndex !== lastLoadedTaskRef.current && !isLoadingRef.current) {
-      console.log(`📁 FileExplorer: Loading repository for Task ${currentTaskIndex}`);
+      console.log(` FileExplorer: Loading repository for Task ${currentTaskIndex}`);
       lastLoadedTaskRef.current = currentTaskIndex;
       isLoadingRef.current = true;
       loadRepoForTask(currentTaskIndex);
@@ -112,7 +112,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     }
   }, [currentTaskIndex, loadRepoForTask]);
 
-  // ✅ AUTO-LOAD GITHUB REPOSITORY FROM SESSION (when githubRepo prop changes)
+  // ''AUTO-LOAD GITHUB REPOSITORY FROM SESSION (when githubRepo prop changes)
   useEffect(() => {
     if (githubRepo?.repoUrl && !currentRepo && !isLoadingRef.current) {
       console.log('🐙 [FileExplorer] Auto-loading GitHub repo from session:', {
@@ -122,7 +122,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       isLoadingRef.current = true;
       loadSessionGitHubRepo(githubRepo.repoUrl, githubRepo.branchName)
         .catch((err) => {
-          console.error('❌ Failed to auto-load GitHub repo from session:', err);
+          console.error(' Failed to auto-load GitHub repo from session:', err);
         })
         .finally(() => {
           setTimeout(() => {
@@ -132,11 +132,11 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     }
   }, [githubRepo?.repoUrl, githubRepo?.branchName, currentRepo, loadSessionGitHubRepo]);
 
-  // ✅ Verify currentRepo is being loaded correctly
+  // ''Verify currentRepo is being loaded correctly
   useEffect(() => {
     if (currentRepo) {
       const fileCount = Object.keys(currentRepo.files || {}).length;
-      console.log(`✅ [FileExplorer] Repo loaded: ${currentRepo.owner}/${currentRepo.repo}, Branch: ${currentRepo.branchName}, Files: ${fileCount}`);
+      console.log(`''[FileExplorer] Repo loaded: ${currentRepo.owner}/${currentRepo.repo}, Branch: ${currentRepo.branchName}, Files: ${fileCount}`);
     }
   }, [currentRepo]);
 
@@ -146,7 +146,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
       setTimeout(() => {
         const selectedElement = scrollContainerRef.current?.querySelector(`[data-file-path="${currentFile}"]`);
         if (selectedElement) {
-          selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          selectedElement.scrollIntoView({ behavior: 'smooth', block: 'nearest'});
         }
       }, 100);
     }
@@ -288,7 +288,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     if (contextMenu) {
       const node = findNodeByPath(files, contextMenu.path);
       if (node) {
-        setClipboard({ node, action: 'copy' });
+        setClipboard({ node, action: 'copy'});
       }
       setContextMenu(null);
     }
@@ -298,7 +298,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     if (contextMenu) {
       const node = findNodeByPath(files, contextMenu.path);
       if (node) {
-        setClipboard({ node, action: 'cut' });
+        setClipboard({ node, action: 'cut'});
       }
       setContextMenu(null);
     }
@@ -325,10 +325,10 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
     return nodes
       .filter(n =>
         n.name.toLowerCase().includes(search.toLowerCase()) ||
-        (n.type === 'folder' && n.children && filterNodes(n.children).length > 0)
+        (n.type === 'folder'&& n.children && filterNodes(n.children).length > 0)
       )
       .map(n =>
-        n.type === 'folder' && n.children
+        n.type === 'folder'&& n.children
           ? { ...n, children: filterNodes(n.children) }
           : n
       );
@@ -346,7 +346,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
         return (
           <div
             key={node.path}
-            className={`transition-colors ${isDragOver ? 'bg-blue-900/50 border border-blue-500 rounded' : ''}`}
+            className={`transition-colors ${isDragOver ? 'bg-blue-900/50 border border-blue-500 rounded': ''}`}
             onDragOver={(e) => handleDragOver(e, node.path)}
             onDragLeave={handleDragLeave}
             onDrop={(e) => handleDrop(e, node.path)}
@@ -356,7 +356,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
               onClick={() => toggleExpand(node.path)}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setContextMenu({ x: e.clientX, y: e.clientY, path: node.path, type: 'folder' });
+                setContextMenu({ x: e.clientX, y: e.clientY, path: node.path, type: 'folder'});
               }}
               style={{ paddingLeft: `${level * 16 + 8}px` }}
               draggable
@@ -371,7 +371,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                   autoFocus
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleRename(node.path)}
+                  onKeyDown={(e) => e.key === 'Enter'&& handleRename(node.path)}
                   onBlur={() => handleRename(node.path)}
                   className="bg-gray-700 text-white px-1 rounded text-sm"
                   onClick={(e) => e.stopPropagation()}
@@ -418,12 +418,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
           key={node.path}
           data-file-path={node.path}
           className={`flex items-center py-1 px-2 hover:bg-gray-700 cursor-pointer transition-colors ${
-            isCurrent ? 'bg-gray-700' : ''
-          } ${isDragOver ? 'bg-blue-900/50 border border-blue-500 rounded' : ''}`}
+            isCurrent ? 'bg-gray-700': ''
+          } ${isDragOver ? 'bg-blue-900/50 border border-blue-500 rounded': ''}`}
           onClick={() => onFileSelect(node.path, node.content || '', node.language || 'plaintext')}
           onContextMenu={(e) => {
             e.preventDefault();
-            setContextMenu({ x: e.clientX, y: e.clientY, path: node.path, type: 'file' });
+            setContextMenu({ x: e.clientX, y: e.clientY, path: node.path, type: 'file'});
           }}
           style={{ paddingLeft: `${level * 16 + 24}px` }}
           draggable
@@ -438,7 +438,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleRename(node.path)}
+              onKeyDown={(e) => e.key === 'Enter'&& handleRename(node.path)}
               onBlur={() => handleRename(node.path)}
               className="bg-gray-700 text-white px-1 rounded text-sm"
               onClick={(e) => e.stopPropagation()}
@@ -491,7 +491,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                       className="text-gray-500 hover:text-green-400 transition-colors p-1"
                       title="Refresh repository"
                     >
-                      <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
+                      <RefreshCw size={12} className={isRefreshing ? 'animate-spin': ''} />
                     </button>
                     <button
                       onClick={handleClearRepo}
@@ -577,7 +577,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                     type="text"
                     value={repoUrl}
                     onChange={(e) => setRepoUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLoadRepo()}
+                    onKeyDown={(e) => e.key === 'Enter'&& handleLoadRepo()}
                     placeholder="https://github.com/owner/repo"
                     className="flex-1 text-xs bg-gray-700 border border-gray-600 rounded px-2.5 py-1.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                     disabled={isLoadingGitHub || isRefreshing}
@@ -675,12 +675,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                         <Github size={13} /> Repository created successfully
                       </p>
                       <p className="text-gray-300 leading-relaxed">
-                        Your practical assessment repository has been created successfully. The repository is{' '}
+                        Your practical assessment repository has been created successfully. The repository is{''}
                         <span className="text-green-300 font-medium">empty</span> and ready for you to begin
                         your work. You will create the first files and commits during the practical assessment.
                       </p>
                       <p className="text-gray-500 mt-2 flex items-center gap-1">
-                        Use the <FilePlus size={12} className="inline text-gray-400" /> /{' '}
+                        Use the <FilePlus size={12} className="inline text-gray-400" /> /{''}
                         <FolderPlus size={12} className="inline text-gray-400" /> buttons above to create your first file.
                       </p>
                     </div>
@@ -776,16 +776,16 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
           <div className="bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6 border border-gray-700">
             <h2 className="text-xl font-bold text-white mb-4">
-              New {newItemType === 'file' ? 'File' : 'Folder'}
+              New {newItemType === 'file'? 'File': 'Folder'}
             </h2>
             <input
               autoFocus
               type="text"
               value={newItemName}
               onChange={(e) => setNewItemName(e.target.value)}
-              placeholder={newItemType === 'file' ? 'filename.js' : 'folder-name'}
+              placeholder={newItemType === 'file'? 'filename.js': 'folder-name'}
               className="w-full px-3 py-2 bg-gray-700 text-white rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-              onKeyDown={(e) => e.key === 'Enter' && createNewItem()}
+              onKeyDown={(e) => e.key === 'Enter'&& createNewItem()}
             />
             <div className="flex justify-end gap-3">
               <button

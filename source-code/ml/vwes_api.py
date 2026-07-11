@@ -1,5 +1,5 @@
 # ============================================
-# V-WES COMMUNICATION CLASSIFIER - COMPLETE API
+# MRS COMMUNICATION CLASSIFIER - COMPLETE API
 # RUN ON PORT 8091
 # ============================================
 
@@ -50,9 +50,9 @@ training_status = {
 # ============================================
 
 def extract_email_body(raw_message: str) -> str:
-    """Extract clean text body from raw email format"""
+    "Extract clean text body from raw email format"
     if not isinstance(raw_message, str):
-        return ""
+        return 
     
     parts = re.split(r'\n\s*\n', raw_message, maxsplit=1)
     body = parts[1] if len(parts) > 1 else raw_message
@@ -71,8 +71,8 @@ def extract_email_body(raw_message: str) -> str:
         elif not skip_header:
             clean_lines.append(line)
     
-    clean_body = ' '.join(clean_lines)
-    clean_body = re.sub(r'\s+', ' ', clean_body).strip()
+    clean_body = ''.join(clean_lines)
+    clean_body = re.sub(r'\s+', '', clean_body).strip()
     return clean_body[:2000]
 
 # ============================================
@@ -80,7 +80,7 @@ def extract_email_body(raw_message: str) -> str:
 # ============================================
 
 def auto_label_email(text: str) -> str:
-    """Automatically label email as formal, semi-formal, or informal"""
+    "Automatically label email as formal, semi-formal, or informal"
     text_lower = text.lower()
     
     formal_patterns = [
@@ -92,7 +92,7 @@ def auto_label_email(text: str) -> str:
             return 'formal'
     
     informal_patterns = [
-        'no problem', 'pls', ' u ', ' ur ', 'thx', 'dumb',
+        'no problem', 'pls', 'u ', 'ur ', 'thx', 'dumb',
         'sent from my blackberry', 'hey ', 'sorry'
     ]
     for pattern in informal_patterns:
@@ -106,7 +106,7 @@ def auto_label_email(text: str) -> str:
 # ============================================
 
 def train_model_from_csv(csv_path: str = None, max_samples: int = 10000):
-    """Train the Random Forest model"""
+    "Train the Random Forest model"
     
     global training_status
     
@@ -176,25 +176,25 @@ def train_model_from_csv(csv_path: str = None, max_samples: int = 10000):
         training_status["class_report"] = report
         training_status["message"] = "Training completed successfully"
         
-        print(f"✅ Training complete! Accuracy: {accuracy:.3f}")
+        print(f"''Training complete! Accuracy: {accuracy:.3f}")
         
         return rf, vectorizer, accuracy, report
         
     except Exception as e:
         training_status["is_training"] = False
         training_status["message"] = f"Training failed: {str(e)}"
-        print(f"❌ Training failed: {e}")
+        print(f" Training failed: {e}")
         raise
 
 def load_model():
-    """Load existing model"""
+    "Load existing model"
     global rf_model, vectorizer_model
     if os.path.exists(MODEL_PATH) and os.path.exists(VECTORIZER_PATH):
         rf_model = joblib.load(MODEL_PATH)
         vectorizer_model = joblib.load(VECTORIZER_PATH)
-        print("✅ Model loaded successfully")
+        print("''Model loaded successfully")
         return True
-    print("⚠️ No model found. Use POST /train to train")
+    print(" No model found. Use POST /train to train")
     return False
 
 # ============================================
@@ -202,7 +202,7 @@ def load_model():
 # ============================================
 
 def predict_style(email_text: str) -> Dict[str, Any]:
-    """Predict communication style"""
+    "Predict communication style"
     global rf_model, vectorizer_model
     
     cleaned = extract_email_body(email_text)
@@ -228,7 +228,7 @@ def predict_style(email_text: str) -> Dict[str, Any]:
     }
 
 def analyze_chat(messages: List[str]) -> Dict[str, Any]:
-    """Analyze chat conversation"""
+    "Analyze chat conversation"
     results = [predict_style(msg) for msg in messages]
     
     formal = sum(1 for r in results if r['style'] == 'formal')
@@ -246,7 +246,7 @@ def analyze_chat(messages: List[str]) -> Dict[str, Any]:
         'style_counts': counts,
         'total_messages': len(results),
         'average_confidence': round(avg_conf, 3),
-        'recommendation': 'Excellent' if avg_score >= 80 else 'Good' if avg_score >= 60 else 'Needs Improvement'
+        'recommendation': 'Excellent'if avg_score >= 80 else 'Good'if avg_score >= 60 else 'Needs Improvement'
     }
 
 # ============================================
@@ -322,16 +322,16 @@ class FeedbackResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("\n" + "="*70)
-    print("🔥 V-WES COMMUNICATION CLASSIFIER API")
+    print("🔥 MRS COMMUNICATION CLASSIFIER API")
     print("="*70)
     load_model()
-    print(f"🌐 API: http://{API_HOST}:{API_PORT}")
-    print(f"📚 Swagger UI: http://{API_HOST}:{API_PORT}/docs")
+    print(f" API: http://{API_HOST}:{API_PORT}")
+    print(f" Swagger UI: http://{API_HOST}:{API_PORT}/docs")
     print("="*70)
     yield
 
 app = FastAPI(
-    title="V-WES Communication Style Classifier API",
+    title="MRS Communication Style Classifier API",
     description="Virtual Workspace Evaluation System - Communication Analyzer",
     version="2.0.0",
     lifespan=lifespan
@@ -381,7 +381,7 @@ async def status():
 
 @app.post("/train", response_model=TrainResponse)
 async def train(request: TrainRequest, background_tasks: BackgroundTasks):
-    """Train the model using CSV data"""
+    "Train the model using CSV data"
     global rf_model, vectorizer_model
     
     if training_status["is_training"]:
@@ -403,7 +403,7 @@ async def train(request: TrainRequest, background_tasks: BackgroundTasks):
 
 @app.post("/train/sync")
 async def train_sync(request: TrainRequest):
-    """Synchronous training - waits for completion"""
+    "Synchronous training - waits for completion"
     global rf_model, vectorizer_model
     
     try:
@@ -425,7 +425,7 @@ async def train_sync(request: TrainRequest):
 
 @app.post("/predict", response_model=PredictResponse)
 async def predict(request: PredictRequest):
-    """Classify a single message"""
+    "Classify a single message"
     if rf_model is None:
         raise HTTPException(status_code=400, detail="Model not trained. POST to /train first")
     
@@ -440,7 +440,7 @@ async def predict(request: PredictRequest):
 
 @app.post("/predict/batch", response_model=BatchPredictResponse)
 async def predict_batch(request: BatchPredictRequest):
-    """Classify multiple messages"""
+    "Classify multiple messages"
     if rf_model is None:
         raise HTTPException(status_code=400, detail="Model not trained")
     
@@ -463,7 +463,7 @@ async def predict_batch(request: BatchPredictRequest):
 
 @app.post("/analyze/chat", response_model=ChatResponse)
 async def analyze(request: ChatRequest):
-    """Analyze a chat conversation"""
+    "Analyze a chat conversation"
     if rf_model is None:
         raise HTTPException(status_code=400, detail="Model not trained")
     
@@ -488,7 +488,7 @@ async def upload_csv(
     file: UploadFile = File(...),
     message_column: str = Form("message")
 ):
-    """Upload and classify CSV file"""
+    "Upload and classify CSV file"
     if rf_model is None:
         raise HTTPException(status_code=400, detail="Model not trained")
     
@@ -496,7 +496,7 @@ async def upload_csv(
     df = pd.read_csv(io.BytesIO(contents))
     
     if message_column not in df.columns:
-        raise HTTPException(status_code=400, detail=f"Column '{message_column}' not found")
+        raise HTTPException(status_code=400, detail=f"Column '{message_column}'not found")
     
     df['predicted_style'] = df[message_column].apply(lambda x: predict_style(str(x))['style'])
     df['confidence'] = df[message_column].apply(lambda x: predict_style(str(x))['confidence'])
@@ -515,7 +515,7 @@ async def upload_csv(
 
 @app.get("/download/{filename}")
 async def download(filename: str):
-    """Download a file"""
+    "Download a file"
     if os.path.exists(filename):
         return FileResponse(filename, filename=filename)
     raise HTTPException(status_code=404, detail="File not found")
@@ -526,7 +526,7 @@ async def download(filename: str):
 
 @app.get("/model/info")
 async def model_info():
-    """Get model information"""
+    "Get model information"
     if rf_model is None:
         return {"model_loaded": False}
     
@@ -540,7 +540,7 @@ async def model_info():
 
 @app.delete("/model")
 async def delete_model():
-    """Delete the trained model"""
+    "Delete the trained model"
     global rf_model, vectorizer_model
     
     try:
@@ -562,7 +562,7 @@ feedback_log = []
 
 @app.post("/feedback")
 async def submit_feedback(request: FeedbackRequest):
-    """Submit feedback for model improvement"""
+    "Submit feedback for model improvement"
     feedback_log.append({
         "timestamp": datetime.now().isoformat(),
         "text": request.text,
@@ -581,7 +581,7 @@ async def submit_feedback(request: FeedbackRequest):
 
 @app.get("/feedback")
 async def get_feedback():
-    """Get all feedback"""
+    "Get all feedback"
     return {"total_feedback": len(feedback_log), "feedback": feedback_log}
 
 # ============================================
@@ -590,7 +590,7 @@ async def get_feedback():
 
 @app.get("/demo")
 async def demo():
-    """Run demo with example messages"""
+    "Run demo with example messages"
     if rf_model is None:
         return {"error": "Model not trained. Please POST to /train first"}
     
@@ -616,7 +616,7 @@ async def demo():
 
 @app.get("/test")
 async def test():
-    """Test all endpoints"""
+    "Test all endpoints"
     return {
         "status": "API is running",
         "endpoints": [

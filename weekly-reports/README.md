@@ -4,7 +4,7 @@ Upload weekly capstone progress reports in PDF format in this folder.
 
 ## Project
 
-**Title:** A Simulated Virtual Workspace for Recruitment and Culture-Fit Evaluation (V-WES)  
+**Title:** A Simulated Virtual Workspace for Recruitment and Culture-Fit Evaluation (MRS)  
 **Student:** TURIKUMWENIMANA Daniel  
 **Registration number:** 25RP19824
 

@@ -1,7 +1,7 @@
 {
   "network": "localhost",
   "generatedAt": "2026-06-02T18:01:18.265Z",
-  "warning": "⚠️ THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ⚠️",
+  "warning": " THESE ARE DEFAULT HARDHAT PRIVATE KEYS - FOR LOCAL DEVELOPMENT ONLY ",
   "neverUseOnMainnet": "Never use these keys on Mainnet or any live network!",
   "accounts": [
     {

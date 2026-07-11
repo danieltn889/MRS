@@ -53,10 +53,10 @@ const Step9Testing: React.FC<Props> = ({ simulation, complianceChecks, onRunComp
         <h4 className="text-sm font-semibold text-gray-700 mb-4">Practical Assessment Statistics</h4>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            { value: simulation.tasks.length,     label: 'Tasks',       color: 'purple' },
-            { value: totalTaskDuration,            label: 'Minutes',     color: 'blue'   },
-            { value: evalPoints,                   label: 'Eval Points', color: 'indigo' },
-            { value: simulation.scoring.totalPoints, label: 'Max Score', color: 'green'  },
+            { value: simulation.tasks.length,     label: 'Tasks',       color: 'purple'},
+            { value: totalTaskDuration,            label: 'Minutes',     color: 'blue'  },
+            { value: evalPoints,                   label: 'Eval Points', color: 'indigo'},
+            { value: simulation.scoring.totalPoints, label: 'Max Score', color: 'green' },
           ].map(({ value, label, color }) => (
             <div key={label} className="text-center">
               <p className={`text-2xl font-bold text-${color}-600`}>{value}</p>
@@ -75,13 +75,13 @@ const Step9Testing: React.FC<Props> = ({ simulation, complianceChecks, onRunComp
               <div className="flex items-center justify-between mb-2">
                 <h5 className="text-sm font-medium text-gray-900 capitalize">{check.category} Check</h5>
                 <span className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
-                  check.status === 'passed'  ? 'bg-green-100 text-green-700'  :
-                  check.status === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+                  check.status === 'passed' ? 'bg-green-100 text-green-700' :
+                  check.status === 'warning'? 'bg-yellow-100 text-yellow-700':
                   'bg-red-100 text-red-700'
                 }`}>
-                  {check.status === 'passed'  && <CheckCircle size={11} />}
-                  {check.status === 'warning' && <AlertTriangle size={11} />}
-                  {check.status === 'failed'  && <X size={11} />}
+                  {check.status === 'passed' && <CheckCircle size={11} />}
+                  {check.status === 'warning'&& <AlertTriangle size={11} />}
+                  {check.status === 'failed' && <X size={11} />}
                   {check.status}
                 </span>
               </div>

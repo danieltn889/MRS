@@ -38,7 +38,7 @@ const ObjectiveInput: React.FC<{
   const [open, setOpen] = useState(false);
   const [selIdx, setSelIdx] = useState(-1);
 
-  // Compute matches synchronously — no debounce needed for a small static list
+  // Compute matches synchronously   no debounce needed for a small static list
   const matches = value.trim()
     ? suggestions
         .filter(s => s.toLowerCase().includes(value.toLowerCase()) && !usedValues.includes(s))
@@ -52,7 +52,7 @@ const ObjectiveInput: React.FC<{
     if (e.key === 'ArrowDown') { e.preventDefault(); setSelIdx(i => Math.min(i + 1, matches.length - 1)); }
     if (e.key === 'ArrowUp')   { e.preventDefault(); setSelIdx(i => Math.max(i - 1, -1)); }
     if (e.key === 'Escape')    { setOpen(false); }
-    if (e.key === 'Enter' && selIdx >= 0 && matches[selIdx]) { e.preventDefault(); pick(matches[selIdx]); }
+    if (e.key === 'Enter'&& selIdx >= 0 && matches[selIdx]) { e.preventDefault(); pick(matches[selIdx]); }
   };
 
   return (
@@ -74,7 +74,7 @@ const ObjectiveInput: React.FC<{
             onBlur={() => setTimeout(() => setOpen(false), 150)}
             onKeyDown={onKey}
             className={`w-full pl-9 pr-3 py-2.5 border rounded-xl text-sm transition-all focus:outline-none focus:ring-2 focus:ring-purple-400 focus:border-transparent ${
-              !value.trim() ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-white hover:border-purple-300'
+              !value.trim() ? 'border-red-300 bg-red-50': 'border-gray-200 bg-white hover:border-purple-300'
             }`}
             placeholder="e.g., Demonstrate ability to debug production issues…"
           />
@@ -89,7 +89,7 @@ const ObjectiveInput: React.FC<{
             <div className="px-3 py-1.5 bg-purple-50 border-b border-purple-100 flex items-center gap-1.5">
               <Sparkles size={11} className="text-purple-500" />
               <span className="text-xs font-semibold text-purple-600 uppercase tracking-wide">
-                {value.trim() ? 'Matching suggestions' : 'Suggestions'}
+                {value.trim() ? 'Matching suggestions': 'Suggestions'}
               </span>
             </div>
             {matches.map((m, i) => (
@@ -97,7 +97,7 @@ const ObjectiveInput: React.FC<{
                 key={m}
                 onMouseDown={e => { e.preventDefault(); pick(m); }}
                 className={`px-4 py-2.5 text-sm cursor-pointer flex items-center gap-2 transition-colors ${
-                  selIdx === i ? 'bg-purple-50 text-purple-800' : 'text-gray-700 hover:bg-purple-50'
+                  selIdx === i ? 'bg-purple-50 text-purple-800': 'text-gray-700 hover:bg-purple-50'
                 }`}
               >
                 <Target size={12} className="text-purple-400 shrink-0" />
@@ -211,7 +211,7 @@ const Step2Objectives: React.FC<Props> = ({ simulation, setSimulation, suggestio
                 onClick={() => setObjectives([...simulation.objectives, s])}
                 className="text-xs px-3 py-1.5 rounded-lg border border-purple-200 bg-white text-purple-700 hover:bg-purple-100 transition-colors text-left"
               >
-                + {s.length > 60 ? s.slice(0, 60) + '…' : s}
+                + {s.length > 60 ? s.slice(0, 60) + '…': s}
               </button>
             ))}
           </div>

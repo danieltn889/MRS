@@ -26,26 +26,26 @@ interface GitHubPanelProps {
   className?: string;
 }
 
-type TabId = 'overview' | 'commits' | 'prs' | 'issues' | 'stats' | 'actions';
+type TabId = 'overview'| 'commits'| 'prs'| 'issues'| 'stats'| 'actions';
 
 // ============================================
 // HELPERS
 // ============================================
 
 const fmtNum = (n?: number) => {
-  if (n === undefined || n === null) return '—';
+  if (n === undefined || n === null) return ' ';
   if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
   return String(n);
 };
 
 const fmtDate = (d?: string) => {
-  if (!d) return '—';
-  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!d) return ' ';
+  return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric'});
 };
 
 const fmtRelative = (d?: string) => {
-  if (!d) return '—';
+  if (!d) return ' ';
   const diff = Date.now() - new Date(d).getTime();
   const days = Math.floor(diff / 86400000);
   if (days === 0) return 'today';
@@ -227,7 +227,7 @@ const PRList: React.FC<{ prs: any[] }> = ({ prs }) => {
         <div key={i} className="py-2.5 px-3 hover:bg-gray-800/50">
           <div className="flex items-start gap-2">
             <span className={`mt-0.5 flex-shrink-0 ${
-              pr.state === 'open' ? 'text-green-400' : pr.merged_at ? 'text-purple-400' : 'text-red-400'
+              pr.state === 'open'? 'text-green-400': pr.merged_at ? 'text-purple-400': 'text-red-400'
             }`}>
               <GitPullRequest size={13} />
             </span>
@@ -258,7 +258,7 @@ const PRList: React.FC<{ prs: any[] }> = ({ prs }) => {
               {pr.merged_at && (
                 <p className="text-purple-400 text-[8px] mt-1">✓ Merged {fmtRelative(pr.merged_at)}</p>
               )}
-              {pr.state === 'closed' && !pr.merged_at && pr.closed_at && (
+              {pr.state === 'closed'&& !pr.merged_at && pr.closed_at && (
                 <p className="text-red-400/70 text-[8px] mt-1">✗ Closed {fmtRelative(pr.closed_at)}</p>
               )}
             </div>
@@ -287,7 +287,7 @@ const IssueList: React.FC<{ issues: any[] }> = ({ issues }) => {
       {issues.map((issue, i) => (
         <div key={i} className="py-2.5 px-3 hover:bg-gray-800/50">
           <div className="flex items-start gap-2">
-            {issue.state === 'open' ? (
+            {issue.state === 'open'? (
               <AlertCircle size={13} className="text-red-400 mt-0.5 flex-shrink-0" />
             ) : (
               <CheckCircle size={13} className="text-green-400 mt-0.5 flex-shrink-0" />
@@ -317,13 +317,13 @@ const IssueList: React.FC<{ issues: any[] }> = ({ issues }) => {
                 <div className="flex flex-wrap gap-1 mt-1">
                   {issue.labels.slice(0, 3).map((label: any, lidx: number) => (
                     <span key={lidx} className="text-[6px] px-1 py-0.5 rounded-full" 
-                          style={{ backgroundColor: `#${label.color}`, color: '#000' }}>
+                          style={{ backgroundColor: `#${label.color}`, color: '#000'}}>
                       {label.name}
                     </span>
                   ))}
                 </div>
               )}
-              {issue.state === 'closed' && issue.closed_at && (
+              {issue.state === 'closed'&& issue.closed_at && (
                 <p className="text-green-600/70 text-[7px] mt-1">✓ Closed {fmtRelative(issue.closed_at)}</p>
               )}
             </div>
@@ -380,7 +380,7 @@ const ScoreRing: React.FC<{ score: number; label: string; size?: number }> = ({ 
   const r = (size / 2) - 4;
   const circ = 2 * Math.PI * r;
   const fill = circ * (score / 100);
-  const color = score >= 70 ? '#22c55e' : score >= 40 ? '#eab308' : '#ef4444';
+  const color = score >= 70 ? '#22c55e': score >= 40 ? '#eab308': '#ef4444';
   return (
     <div className="flex flex-col items-center gap-1">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -496,14 +496,14 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
       console.log('🐙 [GitHubPanel] Auto-loading repo from session:', propRepoUrl);
       setRepoInput(propRepoUrl);
       loadSessionGitHubRepo(propRepoUrl).catch((err) => {
-        console.error('❌ Failed to auto-load session repo:', err);
+        console.error(' Failed to auto-load session repo:', err);
       });
     }
   }, [propRepoUrl, loadSessionGitHubRepo]);
 
   useEffect(() => {
     if (currentRepo && currentRepo.owner && currentRepo.repo) {
-      console.log(`✅ [GitHubPanel] Repo loaded: ${currentRepo.owner}/${currentRepo.repo}`);
+      console.log(`''[GitHubPanel] Repo loaded: ${currentRepo.owner}/${currentRepo.repo}`);
       
       if (!fetchAttempted) {
         const repoKey = `${currentRepo.owner}/${currentRepo.repo}`;
@@ -579,7 +579,7 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
             className="text-gray-400 hover:text-white disabled:opacity-40"
             title="Refresh repository data"
           >
-            <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
+            <RefreshCw size={12} className={isLoading ? 'animate-spin': ''} />
           </button>
           
           <button onClick={() => setCollapsed(v => !v)} className="text-gray-400 hover:text-white">
@@ -596,7 +596,7 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                 <input
                   value={repoInput}
                   onChange={e => setRepoInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleLoadRepo()}
+                  onKeyDown={e => e.key === 'Enter'&& handleLoadRepo()}
                   placeholder="https://github.com/owner/repo"
                   className="flex-1 text-xs bg-gray-700 border border-gray-600 rounded px-2.5 py-1.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                   disabled={isLoading}
@@ -668,7 +668,7 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
 
               <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {/* OVERVIEW TAB */}
-                {activeTab === 'overview' && (
+                {activeTab === 'overview'&& (
                   <div className="space-y-4">
                     <div>
                       <h3 className="text-white font-semibold text-sm">{repo?.fullName || `${currentRepo?.owner}/${currentRepo?.repo}`}</h3>
@@ -707,11 +707,11 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                 )}
 
                 {/* COMMITS TAB - WITH COLLAPSIBLE SECTIONS */}
-                {activeTab === 'commits' && (
+                {activeTab === 'commits'&& (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-2">
                       <StatCard icon={<GitCommit size={11} />} label="Total Commits" value={fmtNum(commits?.total)} />
-                      <StatCard icon={<TrendingUp size={11} />} label="Per Week" value={commits?.averageCommitsPerWeek || '—'} />
+                      <StatCard icon={<TrendingUp size={11} />} label="Per Week" value={commits?.averageCommitsPerWeek || ' '} />
                     </div>
 
                     {commits?.recentCommits?.length > 0 && (
@@ -728,11 +728,11 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                 )}
 
                 {/* PULL REQUESTS TAB - WITH COLLAPSIBLE SECTIONS */}
-                {activeTab === 'prs' && (
+                {activeTab === 'prs'&& (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-2">
                       <StatCard icon={<GitPullRequest size={11} />} label="Total PRs" value={fmtNum(prs?.total)} />
-                      <StatCard icon={<CheckCircle size={11} />} label="Merge Rate" value={prs?.mergeRate !== undefined ? `${prs.mergeRate}%` : '—'} />
+                      <StatCard icon={<CheckCircle size={11} />} label="Merge Rate" value={prs?.mergeRate !== undefined ? `${prs.mergeRate}%` : ' '} />
                     </div>
 
                     {prs?.recentPRs?.length > 0 && (
@@ -749,7 +749,7 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                 )}
 
                 {/* ISSUES TAB - WITH COLLAPSIBLE SECTIONS */}
-                {activeTab === 'issues' && (
+                {activeTab === 'issues'&& (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-2">
                       <StatCard icon={<AlertCircle size={11} />} label="Total Issues" value={fmtNum(issues?.total)} />
@@ -770,7 +770,7 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                 )}
 
                 {/* STATS TAB - WITH COLLAPSIBLE SECTIONS */}
-                {activeTab === 'stats' && (
+                {activeTab === 'stats'&& (
                   <div className="space-y-3">
                     {contributors?.topContributors?.length > 0 && (
                       <CollapsibleSection
@@ -824,7 +824,7 @@ const GitHubPanel: React.FC<GitHubPanelProps> = ({
                 )}
 
                 {/* ACTIONS TAB */}
-                {activeTab === 'actions' && (
+                {activeTab === 'actions'&& (
                   <div className="text-center py-8">
                     <Zap size={32} className="mx-auto text-gray-600 mb-2" />
                     <p className="text-gray-500 text-sm">GitHub Actions data not available</p>

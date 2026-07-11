@@ -11,14 +11,14 @@ import glob
 import time
 
 class RateLimitError(Exception):
-    """Custom exception for GitHub API rate limiting."""
+    "Custom exception for GitHub API rate limiting."
     pass
 
 load_dotenv()
 
 class ICPProjectEvaluator:
     def __init__(self):
-        """Initialize the evaluator with API keys and models."""
+        "Initialize the evaluator with API keys and models."
         self.groq_api_key = os.getenv('GROQ_API_KEY')
         self.github_token = os.getenv('GITHUB_TOKEN')
         
@@ -44,7 +44,7 @@ class ICPProjectEvaluator:
         self._check_github_rate_limit()
     
     def _check_github_rate_limit(self):
-        """Check and display current GitHub API rate limit status."""
+        "Check and display current GitHub API rate limit status."
         try:
             rate_limit = self.github.get_rate_limit()
             core_limit = rate_limit.core
@@ -55,7 +55,7 @@ class ICPProjectEvaluator:
             print(f"  Search API: {search_limit.remaining}/{search_limit.limit} requests remaining")
             
             if core_limit.remaining < 100:
-                print(f"  ⚠️  Warning: Low API requests remaining!")
+                print(f"    Warning: Low API requests remaining!")
                 print(f"  ⏰  Core API resets at: {core_limit.reset}")
             
             if core_limit.remaining < 50:
@@ -66,7 +66,7 @@ class ICPProjectEvaluator:
             print(f"Warning: Could not check GitHub API rate limit: {e}")
     
     def extract_repo_info(self, repo_url: str) -> Tuple[str, str]:
-        """Extract owner and repo name from GitHub URL."""
+        "Extract owner and repo name from GitHub URL."
         # Handle different GitHub URL formats
         if repo_url.endswith('/'):
             repo_url = repo_url[:-1]
@@ -76,7 +76,7 @@ class ICPProjectEvaluator:
             repo_url = repo_url[:-4]
         
         parts = repo_url.split('/')
-        if 'github.com' in parts:
+        if 'github.com'in parts:
             github_index = parts.index('github.com')
             owner = parts[github_index + 1]
             repo_name = parts[github_index + 2]
@@ -86,14 +86,14 @@ class ICPProjectEvaluator:
         return owner, repo_name
     
     def extract_installation_section(self, readme_content: str) -> str:
-        """Extract the Installation section from the README using regex."""
+        "Extract the Installation section from the README using regex."
         match = re.search(r'(#+\s*Installation[\s\S]+?)(?=\n#+|$)', readme_content, re.IGNORECASE)
         if match:
             return match.group(1)
         return None
 
     def chunk_text(self, text: str, chunk_size: int = 3500, overlap: int = 500):
-        """Split text into overlapping chunks for LLM processing."""
+        "Split text into overlapping chunks for LLM processing."
         chunks = []
         start = 0
         while start < len(text):
@@ -103,7 +103,7 @@ class ICPProjectEvaluator:
         return chunks
 
     def get_readme_content(self, owner: str, repo_name: str) -> str:
-        """Fetch README content from GitHub repository with comprehensive search."""
+        "Fetch README content from GitHub repository with comprehensive search."
         try:
             repo = self.github.get_repo(f"{owner}/{repo_name}")
             
@@ -145,16 +145,16 @@ class ICPProjectEvaluator:
                 return content
                 
             print(f"  ✗ No README file found anywhere in repository")
-            return ""
+            return 
             
         except Exception as e:
             print(f"Error fetching README for {owner}/{repo_name}: {e}")
-            return ""
+            return 
     
-    def _search_readme_recursive(self, repo, path="", max_depth=3, current_depth=0) -> str:
-        """Recursively search for README files with depth limit to avoid API rate limiting."""
+    def _search_readme_recursive(self, repo, path=, max_depth=3, current_depth=0) -> str:
+        "Recursively search for README files with depth limit to avoid API rate limiting."
         if current_depth >= max_depth:
-            return ""
+            return 
             
         try:
             contents = repo.get_contents(path)
@@ -200,10 +200,10 @@ class ICPProjectEvaluator:
             # Silently continue on errors to avoid spam, but could log for debugging
             pass
             
-        return ""
+        return 
     
     def get_dfx_json_content(self, owner: str, repo_name: str) -> bool:
-        """Check if dfx.json file exists in the repository with comprehensive search."""
+        "Check if dfx.json file exists in the repository with comprehensive search."
         try:
             repo = self.github.get_repo(f"{owner}/{repo_name}")
             
@@ -251,8 +251,8 @@ class ICPProjectEvaluator:
             print(f"Error searching for dfx.json in {owner}/{repo_name}: {e}")
             return False
     
-    def _search_dfx_json_recursive(self, repo, path="", max_depth=3, current_depth=0) -> bool:
-        """Recursively search for dfx.json files with depth limit to avoid API rate limiting."""
+    def _search_dfx_json_recursive(self, repo, path=, max_depth=3, current_depth=0) -> bool:
+        "Recursively search for dfx.json files with depth limit to avoid API rate limiting."
         if current_depth >= max_depth:
             return False
             
@@ -303,7 +303,7 @@ class ICPProjectEvaluator:
         return False
 
     def get_commit_history(self, owner: str, repo_name: str) -> list:
-        """Fetch commit history during hackathon period from the default branch only."""
+        "Fetch commit history during hackathon period from the default branch only."
         try:
             repo = self.github.get_repo(f"{owner}/{repo_name}")
             branch = repo.default_branch
@@ -324,7 +324,7 @@ class ICPProjectEvaluator:
             return []
     
     def get_commit_diff(self, owner: str, repo_name: str, commit_sha: str) -> str:
-        """Get the diff for a specific commit, with a limit of 2000 lines."""
+        "Get the diff for a specific commit, with a limit of 2000 lines."
         try:
             repo = self.github.get_repo(f"{owner}/{repo_name}")
             commit = repo.get_commit(commit_sha)
@@ -384,7 +384,7 @@ class ICPProjectEvaluator:
             return f"Error fetching diff: {e}"
 
     def get_weekly_file_changes(self, owner: str, repo_name: str, weekly_commits: list) -> str:
-        """Get a summary of file changes for a week's worth of commits."""
+        "Get a summary of file changes for a week's worth of commits."
         if not weekly_commits:
             return "No commits this week"
         
@@ -413,7 +413,7 @@ class ICPProjectEvaluator:
         return '\n'.join(weekly_changes)
 
     def get_initial_file_state(self, owner: str, repo_name: str) -> str:
-        """Get the initial state of files at the start of the hackathon period."""
+        "Get the initial state of files at the start of the hackathon period."
         try:
             repo = self.github.get_repo(f"{owner}/{repo_name}")
             
@@ -442,13 +442,13 @@ class ICPProjectEvaluator:
             return f"Error getting initial file state: {e}"
     
     def evaluate_readme_documentation(self, readme_content: str) -> tuple:
-        """Evaluate README for documentation quality including installation, setup, and general documentation."""
+        "Evaluate README for documentation quality including installation, setup, and general documentation."
         chunks = self.chunk_text(readme_content)
         score = 0
-        comments = ""
+        comments = 
         
         for chunk in chunks:
-            prompt = f"""
+            prompt = f"
             You are an expert technical writer evaluating a project's README file for comprehensive documentation quality.
             
             README Content:
@@ -474,7 +474,7 @@ class ICPProjectEvaluator:
             Respond in this exact format:
             Score: [1-5]
             Comments: [Your detailed explanation focusing on whether it includes setup instructions, project description, integration guide, and contribution guidelines. If you cannot assess, say so explicitly.]
-            """
+            "
             try:
                 response = self.llm.invoke([HumanMessage(content=prompt)])
                 response_text = response.content
@@ -497,7 +497,7 @@ class ICPProjectEvaluator:
         return score, comments
 
     def evaluate_dfx_json_presence(self, owner: str, repo_name: str) -> tuple:
-        """Evaluate if dfx.json file is present in the repository."""
+        "Evaluate if dfx.json file is present in the repository."
         has_dfx_json = self.get_dfx_json_content(owner, repo_name)
         
         if has_dfx_json:
@@ -510,7 +510,7 @@ class ICPProjectEvaluator:
         return score, comments
 
     def analyze_weekly_commits(self, owner: str, repo_name: str, commits: list) -> tuple:
-        """Analyze commit activity by week and generate weekly summaries."""
+        "Analyze commit activity by week and generate weekly summaries."
         if not commits:
             return 0, "No commits found during hackathon period.", []
         
@@ -570,7 +570,7 @@ class ICPProjectEvaluator:
         return score, score_description, weekly_summaries
     
     def generate_weekly_summary(self, owner: str, repo_name: str, weekly_commits: list, week_start: str) -> str:
-        """Generate a summary of what was built/improved in a given week based on actual file changes."""
+        "Generate a summary of what was built/improved in a given week based on actual file changes."
         if not weekly_commits:
             return "No commits this week"
         
@@ -591,7 +591,7 @@ class ICPProjectEvaluator:
             if total_prompt_length > 3000:  # If too long, fall back to commit message analysis
                 return self.generate_weekly_summary_from_commits(weekly_commits, week_start)
             
-            prompt = f"""
+            prompt = f"
             You are analyzing actual file changes from a development week to summarize what features were built or improved.
             
             Week starting: {week_start}
@@ -613,7 +613,7 @@ class ICPProjectEvaluator:
             If the changes are unclear or don't show meaningful development, say "Minor updates and fixes".
             
             Respond with only the summary:
-            """
+            "
             
             response = self.llm.invoke([HumanMessage(content=prompt)])
             summary = response.content.strip()
@@ -624,7 +624,7 @@ class ICPProjectEvaluator:
             return self.generate_weekly_summary_from_commits(weekly_commits, week_start)
 
     def generate_batched_weekly_summary(self, owner: str, repo_name: str, weekly_commits: list, week_start: str) -> str:
-        """Generate a summary by processing commits in smaller batches to avoid context limits."""
+        "Generate a summary by processing commits in smaller batches to avoid context limits."
         if not weekly_commits:
             return "No commits this week"
         
@@ -639,7 +639,7 @@ class ICPProjectEvaluator:
         
         # If we have multiple batch summaries, combine them
         if len(summaries) > 1:
-            combined_prompt = f"""
+            combined_prompt = f"
             You are combining multiple summaries from a development week into one cohesive summary.
             
             Week starting: {week_start}
@@ -655,7 +655,7 @@ class ICPProjectEvaluator:
             - The overall impact of the changes
             
             Respond with only the combined summary:
-            """
+            "
             
             try:
                 response = self.llm.invoke([HumanMessage(content=combined_prompt)])
@@ -668,7 +668,7 @@ class ICPProjectEvaluator:
             return summaries[0]
 
     def generate_weekly_summary_from_commits(self, weekly_commits: list, week_start: str) -> str:
-        """Generate a summary based on commit messages when diff analysis is too long."""
+        "Generate a summary based on commit messages when diff analysis is too long."
         if not weekly_commits:
             return "No commits this week"
         
@@ -678,7 +678,7 @@ class ICPProjectEvaluator:
         # Limit to last 15 commit messages to avoid token limits
         recent_messages = commit_messages[-15:]
         
-        prompt = f"""
+        prompt = f"
         You are analyzing commit messages from a development week to summarize what features were built or improved.
         
         Week starting: {week_start}
@@ -696,7 +696,7 @@ class ICPProjectEvaluator:
         If the commits are unclear or don't show meaningful development, say "Minor updates and fixes".
         
         Respond with only the summary:
-        """
+        "
         
         try:
             response = self.llm.invoke([HumanMessage(content=prompt)])
@@ -707,7 +707,7 @@ class ICPProjectEvaluator:
             return "Minor updates and fixes"
 
     def evaluate_commit_activity(self, owner: str, repo_name: str, commits: list) -> tuple:
-        """Evaluate commit activity during hackathon period with new weekly scoring system."""
+        "Evaluate commit activity during hackathon period with new weekly scoring system."
         score, score_description, weekly_summaries = self.analyze_weekly_commits(owner, repo_name, commits)
         
         # Combine score description with weekly summaries
@@ -720,7 +720,7 @@ class ICPProjectEvaluator:
         return score, comments
 
     def _is_rate_limit_error(self, error_msg: str) -> bool:
-        """Check if the error is a rate limiting error."""
+        "Check if the error is a rate limiting error."
         rate_limit_indicators = [
             "401", "Bad credentials",
             "403", "rate limit",
@@ -788,12 +788,12 @@ class ICPProjectEvaluator:
             }
     
     def evaluate_projects_from_csv(self, input_csv_path: str, output_csv_path: str, generate_report: bool = True):
-        """Evaluate all projects from input CSV and save results to output CSV."""
+        "Evaluate all projects from input CSV and save results to output CSV."
         print('Reading input CSV...')
         df = pd.read_csv(input_csv_path)
         
-        if 'repo_url' not in df.columns:
-            raise ValueError("Input CSV must contain a 'repo_url' column")
+        if 'repo_url'not in df.columns:
+            raise ValueError("Input CSV must contain a 'repo_url'column")
         
         results = []
         
@@ -821,7 +821,7 @@ class ICPProjectEvaluator:
     
     def evaluate_projects_in_batches(self, input_csv_path: str, output_dir: str, batch_percentage: float = 10.0, 
                                    generate_report: bool = True, resume_from: str = None):
-        """
+        "
         Evaluate projects in batches and save results incrementally.
         
         Args:
@@ -833,12 +833,12 @@ class ICPProjectEvaluator:
         
         Returns:
             Path to final combined results file
-        """
+        "
         print('Reading input CSV...')
         df = pd.read_csv(input_csv_path)
         
-        if 'repo_url' not in df.columns:
-            raise ValueError("Input CSV must contain a 'repo_url' column")
+        if 'repo_url'not in df.columns:
+            raise ValueError("Input CSV must contain a 'repo_url'column")
         
         total_projects = len(df)
         batch_size = max(1, int(total_projects * (batch_percentage / 100.0)))
@@ -1015,7 +1015,7 @@ class ICPProjectEvaluator:
         return final_output_path
     
     def create_detailed_report(self, results_df: pd.DataFrame, report_path: str):
-        """Create a detailed, readable report from evaluation results."""
+        "Create a detailed, readable report from evaluation results."
         with open(report_path, 'w') as f:
             f.write("=" * 80 + "\n")
             f.write("ICP PROJECT EVALUATION REPORT\n")

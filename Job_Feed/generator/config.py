@@ -1,4 +1,4 @@
-"""Paths, constants, and RNG seed shared by every generator module."""
+"Paths, constants, and RNG seed shared by every generator module."
 
 from pathlib import Path
 
@@ -17,7 +17,7 @@ APPLICATIONS_CSV = DATA_DIR / "Cleaned_Combined_Applications.csv"
 ENGAGEMENT_CSV = DATA_DIR / "Cleaned_Combined_Engagement.csv"
 
 # Tables this project actually populates (the full schema has 118 tables;
-# most — billing, simulations, blockchain, etc. — are out of scope here).
+# most   billing, simulations, blockchain, etc.   are out of scope here).
 RELEVANT_TABLES = [
     "users", "candidate_profiles", "education", "work_experience",
     "certifications", "skills", "user_skills", "companies", "jobs",
@@ -34,7 +34,7 @@ JOB_POSTING_WINDOW_START = "2026-06-01"
 JOB_POSTING_WINDOW_END = "2026-12-31"
 
 # UUID namespace for deterministic id-mapping (original CSV id -> stable UUIDv5).
-# Fixed, arbitrary constant — NOT a secret, just needs to never change once data
+# Fixed, arbitrary constant   NOT a secret, just needs to never change once data
 # has been generated, so re-running the pipeline reproduces the same UUIDs.
 UUID_NAMESPACE = "6f6d6a6e-3f0a-4a8b-9c1d-3a2b7e5f9d10"
 

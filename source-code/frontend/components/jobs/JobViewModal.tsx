@@ -69,7 +69,7 @@ const skillProficiency = (s: any): string | null => {
   if (s && typeof s === 'object') {
     if (s.proficiency) return s.proficiency;
     if (s.proficiency_level) {
-      const levels: Record<number, string> = { 1: 'Beginner', 2: 'Basic', 3: 'Intermediate', 4: 'Advanced', 5: 'Expert' };
+      const levels: Record<number, string> = { 1: 'Beginner', 2: 'Basic', 3: 'Intermediate', 4: 'Advanced', 5: 'Expert'};
       return levels[s.proficiency_level] || null;
     }
   }
@@ -89,7 +89,7 @@ const requirementText = (req: any): string => {
 
 const fmtNum = (n: number): string => n.toLocaleString();
 
-const Pill = ({ text, color = 'gray' }: { text: string; color?: string }) => {
+const Pill = ({ text, color = 'gray'}: { text: string; color?: string }) => {
   const c: Record<string, string> = {
     blue: 'bg-blue-100 text-blue-800',
     green: 'bg-green-100 text-green-800',
@@ -114,25 +114,36 @@ const Section = ({ title, icon: Icon, children }: { title: string; icon?: any; c
 );
 
 const FactorRow = ({
-  label, score, weight, pts, colour, children
+  label, score, weight, pts, colour, excluded, excludedNote, children
 }: {
-  label: string; score: number; weight: string; pts: number; colour: string; children?: React.ReactNode
+  label: string; score: number; weight: string; pts: number; colour: string;
+  excluded?: boolean; excludedNote?: string; children?: React.ReactNode
 }) => (
   <div className="mb-4 border-b border-gray-100 pb-3 last:border-0">
     <div className="flex items-center justify-between text-sm mb-1">
       <span className="font-semibold text-gray-700">{label}</span>
       <div className="flex items-center gap-3 text-xs">
-        <span className={`font-bold px-2 py-0.5 rounded-full ${
-          score >= 80 ? 'bg-green-100 text-green-800' :
-          score >= 60 ? 'bg-yellow-100 text-yellow-800' :
-          'bg-red-100 text-red-800'
-        }`}>{score.toFixed(0)}%</span>
+        {excluded ? (
+          <span className="font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">Excluded</span>
+        ) : (
+          <span className={`font-bold px-2 py-0.5 rounded-full ${
+            score >= 80 ? 'bg-green-100 text-green-800':
+            score >= 60 ? 'bg-yellow-100 text-yellow-800':
+            'bg-red-100 text-red-800'
+          }`}>{score.toFixed(0)}%</span>
+        )}
         <span className="text-gray-400">× {weight} = <strong className="text-gray-700">{pts.toFixed(1)} pts</strong></span>
       </div>
     </div>
-    <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
-      <div className={`${colour} h-2 rounded-full transition-all`} style={{ width: `${Math.min(score, 100)}%` }} />
-    </div>
+    {excluded ? (
+      <p className="text-[11px] text-gray-400 italic">
+        {excludedNote || 'Not required by this job -- excluded from scoring, its weight redistributed to the other factors.'}
+      </p>
+    ) : (
+      <div className="w-full bg-gray-100 rounded-full h-2 mb-2">
+        <div className={`${colour} h-2 rounded-full transition-all`} style={{ width: `${Math.min(score, 100)}%` }} />
+      </div>
+    )}
     {children}
   </div>
 );
@@ -146,16 +157,16 @@ const matchLevelBg = (level: string): string => {
 };
 
 const TabBtn = ({ id, label, currentTab, setTab }: {
-  id: 'match' | 'job';
+  id: 'match'| 'job';
   label: string;
   currentTab: string;
-  setTab: (id: 'match' | 'job') => void
+  setTab: (id: 'match'| 'job') => void
 }) => (
   <button
     type="button"
     onClick={() => setTab(id)}
     className={`flex-1 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-      currentTab === id ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-800'
+      currentTab === id ? 'border-blue-600 text-blue-600': 'border-transparent text-gray-500 hover:text-gray-800'
     }`}
   >
     {label}
@@ -166,13 +177,13 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   isOpen, onClose, job, matchScore: userMatchScore, criteria_scores,
   matchData, candidateInfo,
 }) => {
-  const [currentTab, setCurrentTab] = useState<'match' | 'job'>('job');
+  const [currentTab, setCurrentTab] = useState<'match'| 'job'>('job');
   const { trackView } = useFeedTracker();
 
   // Tracked here (not by each caller) so every place that opens this modal
   // records a view consistently. Keyed on the job id, not the isOpen
   // boolean or the job object reference, so closing and reopening for the
-  // SAME job fires again (each open is a real, separately-weighted view —
+  // SAME job fires again (each open is a real, separately-weighted view  
   // the backend upserts job_views on (user_id, job_id), refreshing
   // viewed_at rather than stacking duplicate rows, so repeat views are
   // safe to keep sending).
@@ -213,7 +224,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
       if (typeof l === 'string') return l;
       if (l?.is_remote) return '🌍 Remote';
       return [l?.city, l?.country].filter(Boolean).join(', ') || null;
-    }).filter(Boolean).join(' · ') || 'Not specified';
+    }).filter(Boolean).join('· ') || 'Not specified';
   })();
 
   // ========== SALARY ==========
@@ -226,10 +237,10 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   const salaryDisplay: string | null = (() => {
     if (!salaryVisible) return 'Not disclosed';
     if (salaryMin && salaryMax && salaryMin !== salaryMax) {
-      return `${salaryCurrency} ${fmtNum(salaryMin)} – ${fmtNum(salaryMax)} ${salaryPeriod === 'year' ? '/year' : '/month'}`;
+      return `${salaryCurrency} ${fmtNum(salaryMin)} – ${fmtNum(salaryMax)} ${salaryPeriod === 'year'? '/year': '/month'}`;
     }
-    if (salaryMin) return `${salaryCurrency} ${fmtNum(salaryMin)}+ ${salaryPeriod === 'year' ? '/year' : '/month'}`;
-    if (salaryMax) return `Up to ${salaryCurrency} ${fmtNum(salaryMax)} ${salaryPeriod === 'year' ? '/year' : '/month'}`;
+    if (salaryMin) return `${salaryCurrency} ${fmtNum(salaryMin)}+ ${salaryPeriod === 'year'? '/year': '/month'}`;
+    if (salaryMax) return `Up to ${salaryCurrency} ${fmtNum(salaryMax)} ${salaryPeriod === 'year'? '/year': '/month'}`;
     return 'Not specified';
   })();
 
@@ -265,7 +276,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   const matchLevel = matchData?.matchLevel || '';
   const criteria = matchData?.criteriaScores || {};
   // The 4-factor breakdown only exists when the profile matcher actually
-  // scored this job (score_source "matcher+hybrid" or "matcher-only") — for
+  // scored this job (score_source "matcher+hybrid" or "matcher-only")   for
   // "hybrid-only" jobs criteria_scores is null, and showing 0% next to a
   // real total score would be misleading, so we hide the section instead.
   const hasBreakdown = criteria.skills_match != null || criteria.qualifications_match != null;
@@ -278,7 +289,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   const missingSkills: string[] = toStrArr(matchData?.missingSkills || matchData?.skillsBreakdown?.missing_skills);
   const reasons = matchData?.matchReasons || matchData?.reasons || [];
 
-  const ringColor = matchScore >= 80 ? '#22c55e' : matchScore >= 60 ? '#3b82f6' : matchScore >= 40 ? '#f59e0b' : '#ef4444';
+  const ringColor = matchScore >= 80 ? '#22c55e': matchScore >= 60 ? '#3b82f6': matchScore >= 40 ? '#f59e0b': '#ef4444';
 
   // Extract detailed match breakdowns
   const qualsBD = matchData?.qualificationsBreakdown || {};
@@ -286,8 +297,25 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
   const prefsBD = matchData?.preferencesBreakdown || {};
   const skillsBD = matchData?.skillsBreakdown || {};
   // Behavior/Collaborative/Freshness/Popularity/Business-rules breakdown from
-  // the hybrid recommender — null when scoreSource is "matcher-only".
+  // the hybrid recommender   null when scoreSource is "matcher-only".
   const hybridDetail = matchData?.hybridDetail || null;
+  const contentDetail = hybridDetail?.content || null;
+
+  // Actual weights applied to each of the matcher's 4 factors AFTER
+  // redistribution, and to the outer matcher/hybrid blend   the real math
+  // behind every point shown above, not the nominal 40/25/20/15 / 70/30
+  // defaults. Fall back to the nominal defaults only when the backend
+  // didn't send this (older cached response shape).
+  const factorWeightsUsed = matchData?.factorWeightsUsed || null;
+  const excludedFactorsList: string[] = matchData?.excludedFactors || [];
+  const skillsWeightPct = Math.round((factorWeightsUsed?.skills ?? 0.40) * 100);
+  const qualsWeightPct = Math.round((factorWeightsUsed?.qualifications ?? 0.25) * 100);
+  const expWeightPct = Math.round((factorWeightsUsed?.experience ?? 0.20) * 100);
+  const prefsWeightPct = Math.round((factorWeightsUsed?.preferences ?? 0.15) * 100);
+  const hybridContentIncluded = matchData?.hybridContentIncluded;
+  const outerWeightsUsed = matchData?.outerWeightsUsed || null;
+  const outerMatcherPct = outerWeightsUsed ? Math.round(outerWeightsUsed.matcher * 100) : null;
+  const outerHybridPct = outerWeightsUsed ? Math.round(outerWeightsUsed.hybrid * 100) : null;
 
   const candidateDegrees = qualsBD.candidate_degrees || [];
   const candidateFields = qualsBD.candidate_fields || [];
@@ -324,17 +352,17 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
       <div className="space-y-3">
         {edu.minimum_degree && (
           <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-4 py-3">
-            <strong className="block text-blue-800 mb-1">🎓 Minimum Degree:</strong>
+            <strong className="block text-blue-800 mb-1"> Minimum Degree:</strong>
             <p>{edu.minimum_degree}</p>
           </div>
         )}
 
         {edu.fields_of_study && edu.fields_of_study.length > 0 && (
           <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-4 py-3">
-            <strong className="block text-blue-800 mb-1">📚 Fields of Study:</strong>
+            <strong className="block text-blue-800 mb-1"> Fields of Study:</strong>
             <div className="flex flex-wrap gap-1 mt-1">
               {edu.fields_of_study.map((field: any, idx: number) => {
-                const label = typeof field === 'string' ? field : field?.name || '';
+                const label = typeof field === 'string'? field : field?.name || '';
                 return label ? (
                   <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-xs">
                     {label}
@@ -347,11 +375,11 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
 
         {edu.languages && edu.languages.length > 0 && (
           <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-4 py-3">
-            <strong className="block text-blue-800 mb-1">🌐 Languages Required:</strong>
+            <strong className="block text-blue-800 mb-1"> Languages Required:</strong>
             <div className="flex flex-wrap gap-1 mt-1">
               {edu.languages.map((lang: any, idx: number) => {
-                const langName = typeof lang === 'string' ? lang : lang?.name || '';
-                const langProf = typeof lang === 'object' && lang?.proficiency ? lang.proficiency : null;
+                const langName = typeof lang === 'string'? lang : lang?.name || '';
+                const langProf = typeof lang === 'object'&& lang?.proficiency ? lang.proficiency : null;
                 return langName ? (
                   <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-xs">
                     {langName}{langProf ? ` (${langProf})` : ''}
@@ -367,7 +395,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
             <strong className="block text-blue-800 mb-1">📜 Certifications Required:</strong>
             <div className="flex flex-wrap gap-1 mt-1">
               {edu.certifications.map((cert: any, idx: number) => {
-                const label = typeof cert === 'string' ? cert : cert?.name || cert?.title || '';
+                const label = typeof cert === 'string'? cert : cert?.name || cert?.title || '';
                 return label ? (
                   <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-xs">
                     {label}
@@ -384,7 +412,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
             : !!edu.experience_requirements
         ) && (
           <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-4 py-3">
-            <strong className="block text-blue-800 mb-1">💼 Experience Requirements:</strong>
+            <strong className="block text-blue-800 mb-1"> Experience Requirements:</strong>
             {Array.isArray(edu.experience_requirements) ? (
               <ul className="mt-1 space-y-1">
                 {edu.experience_requirements.map((exp: any, idx: number) => {
@@ -392,9 +420,9 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                     ? exp
                     : [
                         exp?.title,
-                        exp?.years ? `${exp.years} yr${Number(exp.years) !== 1 ? 's' : ''}` : null,
+                        exp?.years ? `${exp.years} yr${Number(exp.years) !== 1 ? 's': ''}` : null,
                         exp?.description,
-                      ].filter(Boolean).join(' — ');
+                      ].filter(Boolean).join('  ');
                   return text ? (
                     <li key={idx} className="flex items-start gap-1.5">
                       <span className="text-blue-400 mt-0.5 shrink-0">•</span>
@@ -415,11 +443,11 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
             : !!edu.additional_requirements
         ) && (
           <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-4 py-3">
-            <strong className="block text-blue-800 mb-1">✨ Additional Requirements:</strong>
+            <strong className="block text-blue-800 mb-1"> Additional Requirements:</strong>
             {Array.isArray(edu.additional_requirements) ? (
               <ul className="mt-1 space-y-1">
                 {edu.additional_requirements.map((req: any, idx: number) => {
-                  const text = typeof req === 'string' ? req : req?.text || req?.description || req?.name || '';
+                  const text = typeof req === 'string'? req : req?.text || req?.description || req?.name || '';
                   return text ? (
                     <li key={idx} className="flex items-start gap-1.5">
                       <span className="text-blue-400 mt-0.5 shrink-0">•</span>
@@ -436,7 +464,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
 
         {edu.age_requirement && (
           <div className="text-sm text-gray-700 bg-blue-50 rounded-lg px-4 py-3">
-            <strong className="block text-blue-800 mb-1">🎂 Age Requirement:</strong>
+            <strong className="block text-blue-800 mb-1"> Age Requirement:</strong>
             <p>{edu.age_requirement}</p>
           </div>
         )}
@@ -444,7 +472,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
         <div className="flex flex-wrap gap-2">
           {edu.is_degree_required === false && (
             <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs">
-              ⚠️ Degree Not Required
+              Degree Not Required
             </span>
           )}
           {edu.no_documents_needed && (
@@ -454,17 +482,17 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
           )}
           {edu.no_languages_needed && (
             <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-              🌍 No Language Requirements
+              No Language Requirements
             </span>
           )}
           {edu.no_experience_needed && (
             <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-              🚀 Entry Level - No Experience Required
+              Entry Level - No Experience Required
             </span>
           )}
           {edu.no_certifications_needed && (
             <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-              📜 No Certifications Required
+              No Certifications Required
             </span>
           )}
         </div>
@@ -478,7 +506,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
     if (!name) return null;
 
     const proficiency = skillProficiency(skill);
-    const isRequired = typeof skill === 'object' ? skill?.is_required ?? skill?.importance === 'required' : false;
+    const isRequired = typeof skill === 'object'? skill?.is_required ?? skill?.importance === 'required': false;
     const isMatched = matchedSkills.some(m =>
       m.toLowerCase().includes(name.toLowerCase()) ||
       name.toLowerCase().includes(m.toLowerCase())
@@ -497,9 +525,9 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
         <span>{name}</span>
         {proficiency && (
           <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-            proficiency === 'Expert' ? 'bg-purple-100 text-purple-700' :
-            proficiency === 'Advanced' ? 'bg-blue-100 text-blue-700' :
-            proficiency === 'Intermediate' ? 'bg-yellow-100 text-yellow-700' :
+            proficiency === 'Expert'? 'bg-purple-100 text-purple-700':
+            proficiency === 'Advanced'? 'bg-blue-100 text-blue-700':
+            proficiency === 'Intermediate'? 'bg-yellow-100 text-yellow-700':
             'bg-gray-100 text-gray-500'
           }`}>
             {proficiency}
@@ -514,7 +542,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
     const text = requirementText(req);
     if (!text) return null;
 
-    const isExperience = req && typeof req === 'object' && req.years !== undefined;
+    const isExperience = req && typeof req === 'object'&& req.years !== undefined;
 
     return (
       <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
@@ -551,12 +579,12 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
               )}
 
               <div className="flex flex-wrap gap-2">
-                <Pill text={status.charAt(0).toUpperCase() + status.slice(1)} color={status === 'active' ? 'active' : 'draft'} />
-                {visibility === 'public'  && <Pill text="Public"  color="blue" />}
-                {visibility === 'private' && <Pill text="Private" color="gray" />}
-                {jobType          && <Pill text={jobType.replace('-', ' ')} color="blue" />}
+                <Pill text={status.charAt(0).toUpperCase() + status.slice(1)} color={status === 'active'? 'active': 'draft'} />
+                {visibility === 'public' && <Pill text="Public"  color="blue" />}
+                {visibility === 'private'&& <Pill text="Private" color="gray" />}
+                {jobType          && <Pill text={jobType.replace('-', '')} color="blue" />}
                 {workArrangement  && <Pill text={workArrangement}            color="purple" />}
-                {experienceLevel  && <Pill text={experienceLevel + ' level'} color="orange" />}
+                {experienceLevel  && <Pill text={experienceLevel + 'level'} color="orange" />}
                 {department       && <Pill text={department}                 color="gray" />}
               </div>
             </div>
@@ -583,7 +611,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
               <span className="flex items-center gap-1.5"><Calendar size={14} />Closes {expiryDate}</span>
             )}
             <span className="flex items-center gap-1.5">
-              <Users size={14} />{applicationCount} applicant{applicationCount !== 1 ? 's' : ''}
+              <Users size={14} />{applicationCount} applicant{applicationCount !== 1 ? 's': ''}
             </span>
             {viewCount > 0 && (
               <span className="flex items-center gap-1.5"><Eye size={14} />{viewCount} views</span>
@@ -605,7 +633,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
         <div className="overflow-y-auto flex-1 px-6 py-5">
 
           {/* ════ JOB DETAILS TAB ════ */}
-          {currentTab === 'job' && (
+          {currentTab === 'job'&& (
             <div>
               {companyBanner && (
                 <div className="mb-6 rounded-xl overflow-hidden">
@@ -694,7 +722,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                   <div className="flex flex-wrap gap-2">
                     {benefits.map((b, idx) => (
                       <span key={idx} className="px-3 py-1.5 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-full text-sm">
-                        🎁 {b}
+                         {b}
                       </span>
                     ))}
                   </div>
@@ -721,7 +749,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
           )}
 
           {/* ════ MATCH ANALYSIS TAB ════ */}
-          {currentTab === 'match' && hasMatch && matchScore >= 0 && (
+          {currentTab === 'match'&& hasMatch && matchScore >= 0 && (
             <div className="space-y-5">
               {/* Overall score card */}
               <div className={`rounded-2xl border p-5 ${matchLevelBg(matchLevel)}`}>
@@ -747,22 +775,56 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                         <span className="flex items-center gap-1"><WorkIcon size={10} /> Experience: {expScore.toFixed(0)}%</span>
                       </div>
                     ) : (
-                      <p className="text-xs text-gray-500 mt-2">Score from the AI hybrid recommender (content, behavior, collaborative, freshness, popularity) — the profile matcher hasn't scored this specific job yet.</p>
+                      <p className="text-xs text-gray-500 mt-2">Score from the AI hybrid recommender (content, behavior, collaborative, freshness, popularity)   the profile matcher hasn't scored this specific job yet.</p>
                     )}
+                    {/* How this total was actually calculated */}
+                    <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1">
+                      <Info size={11} className="shrink-0" />
+                      {hasBreakdown && outerWeightsUsed
+                        ? `Profile matcher ${outerMatcherPct}% + hybrid recommender ${outerHybridPct}%` +
+                          (hybridContentIncluded === false ? ' (hybrid excludes Content here -- already covered by the matcher\'s own profile fit)' : '')
+                        : hasBreakdown
+                        ? 'Profile matcher only -- hybrid recommender had no data for this job.'
+                        : hybridContentIncluded
+                        ? 'Hybrid recommender only (all 5 signals, Content included) -- profile matcher had no data for this job.'
+                        : 'Hybrid recommender only -- profile matcher had no data for this job.'}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* 4-Factor breakdown — only when the profile matcher actually scored this job */}
+              {/* 4-Factor breakdown   only when the profile matcher actually scored this job */}
               {hasBreakdown && (
                 <div className="bg-gray-50 rounded-2xl border border-gray-100 p-5">
                   <h3 className="text-sm font-bold text-gray-800 mb-4 flex items-center gap-2">
                     <Target size={15} className="text-blue-600" /> 4-Factor Score Breakdown
                   </h3>
-                  <FactorRow label="🔧 Skills"          score={skillsScore} weight="40%" pts={skillsScore * 0.40} colour="bg-green-500" />
-                  <FactorRow label="🎓 Qualifications"  score={qualsScore}  weight="25%" pts={qualsScore  * 0.25} colour="bg-blue-500" />
-                  <FactorRow label="📅 Experience"      score={expScore}    weight="20%" pts={expScore    * 0.20} colour="bg-purple-500" />
-                  <FactorRow label="⚙️ Preferences"     score={prefsScore}  weight="15%" pts={prefsScore  * 0.15} colour="bg-yellow-500" />
+                  {excludedFactorsList.length > 0 && (
+                    <p className="text-[11px] text-gray-500 mb-3 -mt-1">
+                      Weights below are the ACTUAL weights used after redistribution -- {excludedFactorsList.join(', ')} excluded (job stated no requirement), their share moved to the remaining factors.
+                    </p>
+                  )}
+                  <FactorRow label="🔧 Skills"          score={skillsScore} weight={`${skillsWeightPct}%`} pts={skillsScore * (skillsWeightPct / 100)} colour="bg-green-500"
+                    excluded={excludedFactorsList.includes('skills')} excludedNote={skillsBD.note || undefined} />
+                  <FactorRow label=" Qualifications"  score={qualsScore}  weight={`${qualsWeightPct}%`}  pts={qualsScore  * (qualsWeightPct / 100)}  colour="bg-blue-500"
+                    excluded={excludedFactorsList.includes('qualifications')}>
+                    {qualsBD.excluded_dimensions?.length > 0 && !excludedFactorsList.includes('qualifications') && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Within Qualifications: {qualsBD.excluded_dimensions.join(', ')} not required by this job, redistributed to
+                        {' '}{Object.entries(qualsBD.redistributed_weights || {}).filter(([, w]: any) => w > 0).map(([k]: any) => k).join(', ')}.
+                      </p>
+                    )}
+                  </FactorRow>
+                  <FactorRow label="📅 Experience"      score={expScore}    weight={`${expWeightPct}%`}    pts={expScore    * (expWeightPct / 100)}    colour="bg-purple-500" />
+                  <FactorRow label="⚙️ Preferences"     score={prefsScore}  weight={`${prefsWeightPct}%`}  pts={prefsScore  * (prefsWeightPct / 100)}  colour="bg-yellow-500"
+                    excluded={excludedFactorsList.includes('preferences')}>
+                    {prefsBD.excluded_dimensions?.length > 0 && !excludedFactorsList.includes('preferences') && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Within Preferences: {prefsBD.excluded_dimensions.join(', ')} not specified by this job, redistributed to
+                        {' '}{Object.entries(prefsBD.redistributed_weights || {}).filter(([, w]: any) => w > 0).map(([k]: any) => k).join(', ')}.
+                      </p>
+                    )}
+                  </FactorRow>
                   <div className="mt-4 pt-3 border-t border-gray-200">
                     <div className="flex justify-between text-sm font-bold text-gray-900 mb-1">
                       <span>Total Score</span>
@@ -772,10 +834,10 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                       <div className="h-2.5 rounded-full" style={{ width: `${matchScore}%`, background: ringColor }} />
                     </div>
                     <p className="text-center text-xs text-gray-500 mt-3">
-                      {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.' :
-                       matchScore >= 65 ? '👍 Good match! Consider applying.' :
-                       matchScore >= 50 ? '⚠️ Partial match. Update your profile to improve.' :
-                                          '📝 Low match. Focus on skill development.'}
+                      {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.':
+                       matchScore >= 65 ? ' Good match! Consider applying.':
+                       matchScore >= 50 ? ' Partial match. Update your profile to improve.':
+                                          ' Low match. Focus on skill development.'}
                     </p>
                   </div>
                 </div>
@@ -790,7 +852,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                   
                   <div className="grid md:grid-cols-2 gap-4 text-sm">
                     <div>
-                      <p className="text-xs text-blue-600 font-medium mb-2">🎓 Your Education:</p>
+                      <p className="text-xs text-blue-600 font-medium mb-2"> Your Education:</p>
                       <div className="space-y-2">
                         {candidateDegrees.map((deg: string, idx: number) => (
                           <div key={idx} className="bg-white rounded-lg p-2">
@@ -799,12 +861,12 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                         ))}
                         {candidateFields.map((field: string, idx: number) => (
                           <div key={idx} className="bg-white rounded-lg p-2">
-                            <span className="text-blue-700 text-xs">📚 {field}</span>
+                            <span className="text-blue-700 text-xs"> {field}</span>
                           </div>
                         ))}
                         {candidateDegrees.length === 0 && candidateFields.length === 0 && (
                           <div className="bg-white rounded-lg p-2 text-orange-600 text-xs">
-                            ⚠️ No education information provided
+                             No education information provided
                           </div>
                         )}
                       </div>
@@ -813,7 +875,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                     <div>
                       <p className="text-xs text-blue-600 font-medium mb-2">📋 Job Requirements:</p>
                       <div className="bg-white rounded-lg p-2 mb-2">
-                        <p className="text-blue-900">🎓 {jobDegreeRequired || 'Not specified'}</p>
+                        <p className="text-blue-900"> {jobDegreeRequired || 'Not specified'}</p>
                       </div>
                       {jobAllowedFields.length > 0 && (
                         <div>
@@ -832,7 +894,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                   
                   {bestSimilarity > 0 && bestMatchedField && (
                     <div className="mt-3 pt-2 border-t border-blue-200 text-xs text-blue-700">
-                      🎯 Best match: <strong>{bestMatchedField}</strong> (Similarity: {(bestSimilarity * 100).toFixed(0)}%) - Match type: <strong>{matchType}</strong>
+                      ''Best match: <strong>{bestMatchedField}</strong> (Similarity: {(bestSimilarity * 100).toFixed(0)}%) - Match type: <strong>{matchType}</strong>
                     </div>
                   )}
                 </div>
@@ -916,7 +978,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                   
                   {missingSkills.length > 0 && (
                     <div>
-                      <p className="text-xs text-orange-700 font-medium mb-2">❌ Missing Skills ({missingSkills.length}):</p>
+                      <p className="text-xs text-orange-700 font-medium mb-2"> Missing Skills ({missingSkills.length}):</p>
                       <div className="flex flex-wrap gap-1.5">
                         {missingSkills.map((skill: string, idx: number) => (
                           <span key={idx} className="px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
@@ -983,24 +1045,24 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                 </div>
               )}
 
-              {/* Match reasons — hybrid_job_recommender.py's `reasons` is a list of
+              {/* Match reasons   hybrid_job_recommender.py's `reasons` is a list of
                   plain explanation strings (see RECOMMENDATION_ENGINE.md), not
                   {type, text} objects, so normalize both shapes here. */}
               {reasons.length > 0 && (
                 <div className="space-y-2">
                   <h4 className="text-sm font-semibold text-gray-700">Match Insights</h4>
                   {reasons.map((r: any, idx: number) => {
-                    const text = typeof r === 'string' ? r : r.text;
-                    const type = typeof r === 'string' ? undefined : r.type;
+                    const text = typeof r === 'string'? r : r.text;
+                    const type = typeof r === 'string'? undefined : r.type;
                     if (!text) return null;
                     return (
                       <div key={idx} className={`flex items-start gap-2 px-3 py-2 rounded-xl text-sm ${
-                        type === 'positive' ? 'bg-green-50 text-green-800' :
-                        type === 'warning'  ? 'bg-amber-50 text-amber-800' :
+                        type === 'positive'? 'bg-green-50 text-green-800':
+                        type === 'warning' ? 'bg-amber-50 text-amber-800':
                                                 'bg-blue-50 text-blue-800'
                       }`}>
-                        {type === 'positive' ? <ThumbsUp   size={13} className="mt-0.5 shrink-0" /> :
-                         type === 'warning'  ? <AlertCircle size={13} className="mt-0.5 shrink-0" /> :
+                        {type === 'positive'? <ThumbsUp   size={13} className="mt-0.5 shrink-0" /> :
+                         type === 'warning' ? <AlertCircle size={13} className="mt-0.5 shrink-0" /> :
                                                  <Info        size={13} className="mt-0.5 shrink-0" />}
                         <span>{text}</span>
                       </div>
@@ -1009,7 +1071,7 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                 </div>
               )}
 
-              {/* Hybrid Recommendation Signals — Behavior/Collaborative/
+              {/* Hybrid Recommendation Signals   Behavior/Collaborative/
                   Freshness/Popularity/Business rules from
                   hybrid_job_recommender.py. Absent (null) when scoreSource is
                   "matcher-only", i.e. hybrid had no data for this job. */}
@@ -1018,7 +1080,46 @@ const JobViewModal: React.FC<JobViewModalProps> = ({
                   <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
                     <Sparkles size={14} className="text-indigo-500" /> Hybrid Recommendation Signals
                   </h4>
+                  <p className="text-[11px] text-gray-500 -mt-2 mb-3">
+                    5 signals blended: Content 35% · Behavior 30% · Collaborative 20% · Freshness 10% · Popularity 5%
+                    {hybridContentIncluded === false && ' (Content excluded here -- see note above)'}.
+                  </p>
                   <div className="space-y-3">
+                    {/* Content */}
+                    {contentDetail && (
+                      <div className={`bg-white rounded-xl p-3 ${hybridContentIncluded === false ? 'opacity-60' : ''}`}>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="flex items-center gap-1 font-medium text-gray-700"><Layers size={13} className="text-fuchsia-600" /> Content
+                            {hybridContentIncluded === false && <span className="text-[10px] text-gray-400 font-normal">(excluded from total)</span>}
+                          </span>
+                          <span className="font-semibold">{Math.round((contentDetail.final_score ?? 0) * 100)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+                          <div className="bg-fuchsia-500 h-2 rounded-full transition-all duration-500" style={{ width: `${(contentDetail.final_score ?? 0) * 100}%` }} />
+                        </div>
+                        {/* Per-pair TF-IDF cosine scores -- skills/fields/location/title/languages/certifications/experience_text */}
+                        {contentDetail.tfidf_score_by_pair && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-[10px] text-gray-500 mb-1">
+                            {Object.entries(contentDetail.tfidf_score_by_pair).map(([pair, val]: any) => (
+                              <span key={pair} className="flex justify-between bg-gray-50 rounded px-1.5 py-0.5">
+                                <span className="capitalize">{pair.replace(/_/g, ' ')}</span>
+                                <span className="font-medium">{Math.round((val || 0) * 100)}%</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {contentDetail.semantic_score != null && (
+                          <p className="text-[10px] text-gray-400">Semantic embedding similarity: {Math.round(contentDetail.semantic_score * 100)}%</p>
+                        )}
+                        {(() => {
+                          const matched = Object.values(contentDetail.matched_terms_by_pair || {}).flat() as string[];
+                          return matched.length > 0 && (
+                            <p className="text-xs text-fuchsia-700 mt-1">✓ Matched terms: {matched.slice(0, 6).join(', ')}</p>
+                          );
+                        })()}
+                      </div>
+                    )}
+
                     {/* Behavior */}
                     <div className="bg-white rounded-xl p-3">
                       <div className="flex justify-between text-xs mb-1">

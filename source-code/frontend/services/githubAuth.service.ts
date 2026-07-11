@@ -1,4 +1,4 @@
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const isProduction = window.location.hostname !== 'localhost'&& window.location.hostname !== '127.0.0.1';
 // Always use the same GitHub OAuth App the backend holds the client secret for
 // (a second "production" client ID previously used here had no matching backend
 // secret, so the token exchange always failed with a redirect_uri mismatch).
@@ -52,7 +52,7 @@ export const githubAuthService = {
         window.removeEventListener('message', handleMessage);
         clearInterval(pollClosed);
 
-        console.log('✅ GitHub connected:', event.data.username); // ADD THIS
+        console.log('GitHub connected:', event.data.username); // ADD THIS
 
         resolve({
           success: true,
@@ -83,7 +83,7 @@ export const githubAuthService = {
 
     const response = await fetch(`${API_BASE_URL}/github/auth/callback`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json'},
       body: JSON.stringify({ code, redirect_uri: REDIRECT_URI }),
     });
 
@@ -103,11 +103,11 @@ export const githubAuthService = {
       };
     }
 
-    console.error('❌ Exchange failed:', data.error || data.message || data);
+    console.error(' Exchange failed:', data.error || data.message || data);
     return { success: false };
 
   } catch (error) {
-    console.error('❌ Exchange threw:', error);
+    console.error(' Exchange threw:', error);
     return { success: false };
   }
 },

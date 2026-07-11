@@ -22,7 +22,7 @@ interface Project {
   description: string;
   startDate?: string;
   endDate?: string;
-  projectType: 'internal' | 'client' | 'open_source' | 'research' | 'product';
+  projectType: 'internal'| 'client'| 'open_source'| 'research'| 'product';
   teamSize?: number;
   technologies: string[];
   results?: string;
@@ -52,11 +52,11 @@ interface FormErrors {
 }
 
 const PROJECT_TYPES = [
-  { value: 'internal',    label: 'Internal Project',    color: 'bg-slate-100 text-slate-700'  },
-  { value: 'client',      label: 'Client Project',      color: 'bg-blue-100  text-blue-700'   },
-  { value: 'open_source', label: 'Open Source',         color: 'bg-green-100 text-green-700'  },
-  { value: 'research',    label: 'Research',            color: 'bg-purple-100 text-purple-700' },
-  { value: 'product',     label: 'Product Development', color: 'bg-orange-100 text-orange-700' },
+  { value: 'internal',    label: 'Internal Project',    color: 'bg-slate-100 text-slate-700' },
+  { value: 'client',      label: 'Client Project',      color: 'bg-blue-100  text-blue-700'  },
+  { value: 'open_source', label: 'Open Source',         color: 'bg-green-100 text-green-700' },
+  { value: 'research',    label: 'Research',            color: 'bg-purple-100 text-purple-700'},
+  { value: 'product',     label: 'Product Development', color: 'bg-orange-100 text-orange-700'},
 ];
 
 const INDUSTRIES = [
@@ -99,14 +99,14 @@ const Label: React.FC<{ text: string; required?: boolean }> = ({ text, required 
 
 const inputCls = (err?: string) =>
   `w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors ${
-    err ? 'border-red-400 bg-red-50' : 'border-gray-300'
+    err ? 'border-red-400 bg-red-50': 'border-gray-300'
   }`;
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 const EMPTY_FORM = {
   name: '', client: '', industry: '', description: '',
-  startDate: '', endDate: '', projectType: 'internal' as Project['projectType'],
+  startDate: '', endDate: '', projectType: 'internal'as Project['projectType'],
   teamSize: '', technologies: [] as string[], results: '', impact: '',
   awards: [] as string[], websiteUrl: '', githubUrl: '',
   featured: false, displayOrder: 0,
@@ -441,14 +441,14 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
             </div>
 
             <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-              {typeof project.description === 'string' ? project.description : '—'}
+              {typeof project.description === 'string'? project.description : ' '}
             </p>
 
             <div className="flex items-center gap-4 text-xs text-gray-400 mb-3">
               <span className="flex items-center gap-1">
                 <Calendar className="h-3 w-3" />
-                {project.startDate ? new Date(project.startDate).getFullYear() : '—'}
-                {project.endDate ? ` – ${new Date(project.endDate).getFullYear()}` : ' – Present'}
+                {project.startDate ? new Date(project.startDate).getFullYear() : ' '}
+                {project.endDate ? ` – ${new Date(project.endDate).getFullYear()}` : '– Present'}
               </span>
               {project.teamSize && (
                 <span className="flex items-center gap-1">
@@ -514,7 +514,7 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                   </div>
                   <div>
                     <h3 className="text-base font-semibold text-white">
-                      {editingProject ? 'Edit Project' : 'Add New Project'}
+                      {editingProject ? 'Edit Project': 'Add New Project'}
                     </h3>
                     <p className="text-xs text-blue-200">
                       {editingProject ? `Editing: ${editingProject.name}` : 'Fill in the project details below'}
@@ -637,7 +637,7 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                         placeholder="Describe the project goals, challenges you solved, and how your team delivered it…" />
                       <div className="flex items-center justify-between mt-1">
                         <FieldError msg={fieldErrors.description} />
-                        <span className={`text-xs ml-auto ${formData.description.length > 2800 ? 'text-orange-500 font-medium' : 'text-gray-400'}`}>
+                        <span className={`text-xs ml-auto ${formData.description.length > 2800 ? 'text-orange-500 font-medium': 'text-gray-400'}`}>
                           {formData.description.length}/3 000
                         </span>
                       </div>
@@ -692,7 +692,7 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                           rows={3} maxLength={600}
                           className={`${inputCls()} resize-none`}
                           placeholder="40% faster load time, 2× revenue, 10k new users…" />
-                        <p className={`text-xs mt-1 text-right ${formData.results.length > 540 ? 'text-orange-500' : 'text-gray-400'}`}>
+                        <p className={`text-xs mt-1 text-right ${formData.results.length > 540 ? 'text-orange-500': 'text-gray-400'}`}>
                           {formData.results.length}/600
                         </p>
                       </div>
@@ -702,7 +702,7 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                           rows={3} maxLength={600}
                           className={`${inputCls()} resize-none`}
                           placeholder="Improved employee satisfaction, reduced churn by 15%…" />
-                        <p className={`text-xs mt-1 text-right ${formData.impact.length > 540 ? 'text-orange-500' : 'text-gray-400'}`}>
+                        <p className={`text-xs mt-1 text-right ${formData.impact.length > 540 ? 'text-orange-500': 'text-gray-400'}`}>
                           {formData.impact.length}/600
                         </p>
                       </div>
@@ -715,7 +715,7 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                         <input type="text" value={newAward} onChange={e => setNewAward(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addAward(newAward); } }}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Best Innovation Award 2024 — press Enter to add" />
+                          placeholder="Best Innovation Award 2024   press Enter to add" />
                         <button type="button" onClick={() => addAward(newAward)}
                           className="px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors flex-shrink-0">
                           <Plus className="h-4 w-4" />
@@ -840,8 +840,8 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                     <button type="submit" disabled={saving || uploadingMedia}
                       className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-sm font-medium shadow-sm min-w-[140px] justify-center">
                       {saving || uploadingMedia
-                        ? <><Loader2 className="h-4 w-4 animate-spin" />{uploadingMedia ? 'Uploading…' : 'Saving…'}</>
-                        : <><CheckCircle2 className="h-4 w-4" />{editingProject ? 'Update Project' : 'Save Project'}</>}
+                        ? <><Loader2 className="h-4 w-4 animate-spin" />{uploadingMedia ? 'Uploading…': 'Saving…'}</>
+                        : <><CheckCircle2 className="h-4 w-4" />{editingProject ? 'Update Project': 'Save Project'}</>}
                     </button>
                   </div>
                 </div>
@@ -895,8 +895,8 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                   {[
                     { label: 'Type',     value: typeLabel(viewingProject.projectType) },
                     { label: 'Duration', value: `${viewingProject.startDate ? new Date(viewingProject.startDate).getFullYear() : '?'} – ${viewingProject.endDate ? new Date(viewingProject.endDate).getFullYear() : 'Present'}` },
-                    { label: 'Client',   value: viewingProject.client   || '—' },
-                    { label: 'Team',     value: viewingProject.teamSize ? `${viewingProject.teamSize} people` : '—' },
+                    { label: 'Client',   value: viewingProject.client   || ' '},
+                    { label: 'Team',     value: viewingProject.teamSize ? `${viewingProject.teamSize} people` : ' '},
                   ].map(item => (
                     <div key={item.label} className="bg-gray-50 rounded-lg p-3">
                       <p className="text-xs text-gray-400 mb-0.5">{item.label}</p>
@@ -926,7 +926,7 @@ const CompanyProjects: React.FC<{ onNotify?: NotifyFn }> = ({ onNotify }) => {
                 {/* results */}
                 {(viewingProject.results || viewingProject.impact) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {viewingProject.results && typeof viewingProject.results === 'string' && (
+                    {viewingProject.results && typeof viewingProject.results === 'string'&& (
                       <div className="bg-green-50 border border-green-100 rounded-lg p-4">
                         <p className="text-xs font-semibold text-green-700 mb-1">Results &amp; Metrics</p>
                         <p className="text-sm text-green-800">{viewingProject.results}</p>

@@ -9,7 +9,7 @@ interface SimulationSession {
   id: string;
   simulationId: string;
   candidateId: string;
-  status: 'not_started' | 'in_progress' | 'paused' | 'completed' | 'submitted';
+  status: 'not_started'| 'in_progress'| 'paused'| 'completed'| 'submitted';
   startTime?: string;
   endTime?: string;
   timeSpent: number;
@@ -48,7 +48,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
   const [githubFiles, setGithubFiles] = useState<Record<string, string>>({});
   const [githubFileStructure, setGithubFileStructure] = useState<any[]>([]);
   const [loadingGithub, setLoadingGithub] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success'| 'error'; message: string } | null>(null);
   const [submissionResult, setSubmissionResult] = useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -68,7 +68,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     console.log('🔄 [taskProgress] State updated:', taskProgress);
   }, [taskProgress]);
 
-  const showNotification = (type: 'success' | 'error', message: string) => {
+  const showNotification = (type: 'success'| 'error', message: string) => {
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 3000);
   };
@@ -107,10 +107,10 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
 
   const isCompanyReviewer = () => {
     const userType = getStoredUserType();
-    return userType === 'company_admin' || userType === 'recruiter' || userType === 'system_admin';
+    return userType === 'company_admin'|| userType === 'recruiter'|| userType === 'system_admin';
   };
 
-  // ✅ PARSE GITHUB URL - Helper function
+  // ''PARSE GITHUB URL - Helper function
   const parseGitHubUrl = (url: string): { owner: string; repo: string } | null => {
     if (!url) return null;
     const match = url.match(/github\.com\/([^\/]+)\/([^\/\s]+)/);
@@ -120,10 +120,10 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     return { owner, repo };
   };
 
-  // ✅ LOAD GITHUB REPOSITORY FILES
+  // ''LOAD GITHUB REPOSITORY FILES
   const loadGithubRepository = useCallback(async (repoUrl: string, branchName?: string) => {
     if (!repoUrl) {
-      console.warn('⚠️ No GitHub repo URL provided');
+      console.warn(' No GitHub repo URL provided');
       return false;
     }
     
@@ -132,7 +132,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     try {
       const parsed = parseGitHubUrl(repoUrl);
       if (!parsed) {
-        console.error('❌ Failed to parse GitHub URL:', repoUrl);
+        console.error(' Failed to parse GitHub URL:', repoUrl);
         return false;
       }
       
@@ -165,7 +165,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         for (const file of files) {
           if (file.type !== 'tree') {
             let content = file.content || '';
-            if (file.encoding === 'base64' && content) {
+            if (file.encoding === 'base64'&& content) {
               content = decodeContent(content, file.encoding);
             }
             fileMap[file.path] = content || `// File: ${file.path}`;
@@ -175,13 +175,13 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         setGithubFiles(fileMap);
         setGithubFileStructure(files);
         
-        console.log(`✅ Loaded ${Object.keys(fileMap).length} files from GitHub`);
+        console.log(`''Loaded ${Object.keys(fileMap).length} files from GitHub`);
         return true;
       }
       
       return false;
     } catch (error) {
-      console.error('❌ Failed to load GitHub repository:', error);
+      console.error(' Failed to load GitHub repository:', error);
       return false;
     } finally {
       setLoadingGithub(false);
@@ -233,7 +233,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       }
       return null;
     } catch (error) {
-      console.error('❌ [loadTaskProgress] Failed:', error);
+      console.error(' [loadTaskProgress] Failed:', error);
       return null;
     }
   }, []);
@@ -253,7 +253,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         : await simulationAPI.resumeMySimulation(simulationId);
       const data = result?.data ?? result;
       
-      // ✅ EXTRACT GITHUB REPO FROM RESPONSE
+      // ''EXTRACT GITHUB REPO FROM RESPONSE
       if (data?.githubRepo) {
         console.log('📦 GitHub repo found in session:', data.githubRepo);
         setGithubRepo(data.githubRepo);
@@ -283,7 +283,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       const sessionIdValue = data?.id || data?.sessionId || data?.session_id || data?.session?.id || simulationId;
       
       // FIXED: Redirect to session report (not simulation results) when completed
-      if (!isCompanyReviewer() && (sessionStatus === 'completed' || sessionStatus === 'submitted')) {
+      if (!isCompanyReviewer() && (sessionStatus === 'completed'|| sessionStatus === 'submitted')) {
         setError('This simulation has already been completed. Redirecting to report...');
         setTimeout(() => {
           // Use session ID to go to session report
@@ -297,7 +297,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         const nestedSession = data.session || {};
         const nestedSimulation = data.simulation_record || {};
         const rawTaskSource = data.tasks ?? data.simulation_template?.tasks ?? [];
-        const rawTasks = typeof rawTaskSource === 'string' ? JSON.parse(rawTaskSource) : rawTaskSource;
+        const rawTasks = typeof rawTaskSource === 'string'? JSON.parse(rawTaskSource) : rawTaskSource;
         setTasks(rawTasks);
         
         const savedAnswers = data.answers ?? nestedSession.answers ?? nestedSimulation.answers ?? {};
@@ -350,7 +350,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         }
       }
     } catch (err: any) {
-      console.error('❌ [loadSession] Failed:', err);
+      console.error(' [loadSession] Failed:', err);
       setError(err.message || 'Failed to load simulation session');
     } finally {
       setLoading(false);
@@ -362,11 +362,11 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     if (!currentSession) return;
     
     if (isStartingTaskRef.current) {
-      console.log('⚠️ [saveProgress] Skipping save while starting task');
+      console.log(' [saveProgress] Skipping save while starting task');
       return;
     }
     
-    if (currentSession.status === 'completed' || currentSession.status === 'submitted') return;
+    if (currentSession.status === 'completed'|| currentSession.status === 'submitted') return;
     
     try {
       console.log('💾 [saveProgress] Saving progress...');
@@ -375,11 +375,11 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         answers: answers,
         timeSpent: currentSession.timeSpent,
       });
-      console.log('✅ [saveProgress] Progress saved successfully');
+      console.log('[saveProgress] Progress saved successfully');
       await loadTaskProgress(currentSession.id);
     } catch (error) {
-      console.error('❌ [saveProgress] Save failed:', error);
-      showNotification('error', '❌ Failed to save progress');
+      console.error(' [saveProgress] Save failed:', error);
+      showNotification('error', ' Failed to save progress');
     }
   }, [answers, loadTaskProgress]);
 
@@ -387,17 +387,17 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     const currentSession = sessionRef.current;
     if (!currentSession) return null;
     
-    if (currentSession.status === 'completed' || currentSession.status === 'submitted') return null;
+    if (currentSession.status === 'completed'|| currentSession.status === 'submitted') return null;
     
     const updatePromise = (async () => {
       try {
-        console.log(`📝 [updateTaskProgress] Updating task ${taskIndex}:`, data);
+        console.log(` [updateTaskProgress] Updating task ${taskIndex}:`, data);
         
         const result = await simulationAPI.updateTaskProgress(currentSession.id, taskIndex, data);
         const saved = result?.data ?? result;
         
         if (saved) {
-          console.log(`✅ [updateTaskProgress] Task ${taskIndex} updated:`, saved);
+          console.log(`''[updateTaskProgress] Task ${taskIndex} updated:`, saved);
           
           setTaskProgress(prev => {
             const filtered = prev.filter(t => t.task_index !== taskIndex);
@@ -418,7 +418,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         }
         return null;
       } catch (error) {
-        console.error(`❌ [updateTaskProgress] Failed:`, error);
+        console.error(` [updateTaskProgress] Failed:`, error);
         throw error;
       }
     })();
@@ -429,7 +429,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
 
   const updateTimeSpent = useCallback((newTimeSpent: number) => {
     const currentSession = sessionRef.current;
-    if (currentSession && currentSession.status !== 'completed' && currentSession.status !== 'submitted') {
+    if (currentSession && currentSession.status !== 'completed'&& currentSession.status !== 'submitted') {
       setSession(prev => prev ? { ...prev, timeSpent: newTimeSpent } : null);
     }
   }, []);
@@ -487,12 +487,12 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
   const startTask = useCallback(async (taskIndex: number) => {
     const currentSession = sessionRef.current;
     if (!currentSession) {
-      console.log('⚠️ [startTask] No current session');
+      console.log(' [startTask] No current session');
       return;
     }
     
-    if (currentSession.status === 'completed' || currentSession.status === 'submitted') {
-      console.warn('⚠️ [startTask] Cannot start task on completed session');
+    if (currentSession.status === 'completed'|| currentSession.status === 'submitted') {
+      console.warn(' [startTask] Cannot start task on completed session');
       return;
     }
     
@@ -507,20 +507,20 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
     const existingProgress = taskProgressRef.current.find(tp => tp.task_index === taskIndex);
     
     if (existingProgress?.status === 'completed') {
-      console.log('⚠️ [startTask] Task already completed');
+      console.log(' [startTask] Task already completed');
       showNotification('error', `Task ${taskIndex + 1} is already completed`);
       return;
     }
     
     if (existingProgress?.status === 'in_progress') {
-      console.log('⚠️ [startTask] Task already in progress');
+      console.log(' [startTask] Task already in progress');
       return;
     }
     
     isStartingTaskRef.current = true;
     
     try {
-      console.log(`🚀 [startTask] Starting task ${taskIndex}...`);
+      console.log(` [startTask] Starting task ${taskIndex}...`);
       
       const result = await updateTaskProgress(taskIndex, {
         status: 'in_progress',
@@ -528,7 +528,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
         time_spent: 0
       });
       
-      console.log(`✅ [startTask] Task ${taskIndex} started:`, result);
+      console.log(`''[startTask] Task ${taskIndex} started:`, result);
       
       if (currentSession.id) {
         console.log(`🔄 [startTask] Reloading task progress...`);
@@ -541,7 +541,7 @@ export function useSimulationSession(simulationId: string | null, currentUserTyp
       showNotification('success', `Task ${taskIndex + 1} started!`);
       return result;
     } catch (error) {
-      console.error(`❌ [startTask] Failed:`, error);
+      console.error(` [startTask] Failed:`, error);
       showNotification('error', `Failed to start task ${taskIndex + 1}`);
       throw error;
     } finally {

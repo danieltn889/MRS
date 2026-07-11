@@ -11,7 +11,7 @@ import NotificationService from '../services/notification.service.js';
 import emailService from '../services/email.service.js';
 import AuditChainService from '../services/audit-chain.service.js';
 import { BlockchainService } from '../services/blockchain.service.js';
-import contractArtifact from '../../../blockchain/artifacts/contracts/LocalSimulation.sol/LocalSimulation.json' with { type: 'json' };
+import contractArtifact from '../../../blockchain/artifacts/contracts/LocalSimulation.sol/LocalSimulation.json'with { type: 'json'};
 
 import NodeCache from 'node-cache';
 // Remove circular dependency
@@ -81,7 +81,7 @@ interface ChatMessageRow {
   user_type: string;
   first_name: string | null;
   last_name: string | null;
-  sender_type: 'candidate' | 'recruiter';
+  sender_type: 'candidate'| 'recruiter';
 }
 
 async function callCommunicationClassifier(messages: any[]): Promise<CommunicationClassifierResponse | null> {
@@ -93,7 +93,7 @@ async function callCommunicationClassifier(messages: any[]): Promise<Communicati
       try {
         let parsed = JSON.parse(text);
         let depth = 0;
-        while (typeof parsed === 'string' && depth < 10) {
+        while (typeof parsed === 'string'&& depth < 10) {
           try {
             parsed = JSON.parse(parsed);
             depth++;
@@ -111,7 +111,7 @@ async function callCommunicationClassifier(messages: any[]): Promise<Communicati
     }).filter(text => text && text.trim().length > 0);
 
     if (messageTexts.length === 0) {
-      console.log('⚠️ No valid message texts to analyze');
+      console.log('No valid message texts to analyze');
       return null;
     }
 
@@ -136,7 +136,7 @@ async function callCommunicationClassifier(messages: any[]): Promise<Communicati
 
     const result = await response.json() as CommunicationClassifierResponse;
 
-    console.log('✅ Communication classifier response:', {
+    console.log('Communication classifier response:', {
       dominant_style: result.dominant_style,
       communication_score: result.communication_score,
       total_messages: result.total_messages
@@ -250,7 +250,7 @@ interface CreateSimulationRequest extends AuthenticatedRequest {
     jobId?: string;
     description?: string;
     duration: number;
-    difficulty: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+    difficulty: 'beginner'| 'intermediate'| 'advanced'| 'expert';
     objectives: string[];
     tasks: any[];
     scoring: any;
@@ -337,7 +337,7 @@ class SimulationController extends BaseController {
   }
 
   private async getUserCompanyId(userId: string, userType: string): Promise<string | null> {
-    if (userType !== 'company_admin' && userType !== 'recruiter') {
+    if (userType !== 'company_admin'&& userType !== 'recruiter') {
       return null;
     }
 
@@ -380,18 +380,18 @@ class SimulationController extends BaseController {
       );
 
       if (!result.rows[0]) {
-        return { expired: true, reason: 'Simulation not found' };
+        return { expired: true, reason: 'Simulation not found'};
       }
 
       const simulation = result.rows[0];
 
       // Check if simulation status is already expired
       if (simulation.status === 'expired') {
-        return { expired: true, reason: 'Simulation has expired' };
+        return { expired: true, reason: 'Simulation has expired'};
       }
 
       // Check if simulation has ended
-      if (simulation.status === 'completed' || simulation.status === 'cancelled') {
+      if (simulation.status === 'completed'|| simulation.status === 'cancelled') {
         return { expired: true, reason: `Simulation is ${simulation.status}` };
       }
 
@@ -404,7 +404,7 @@ class SimulationController extends BaseController {
         if (availability.start_date) {
           const startDate = new Date(availability.start_date);
           if (now < startDate) {
-            return { expired: true, reason: 'Simulation has not started yet' };
+            return { expired: true, reason: 'Simulation has not started yet'};
           }
         }
 
@@ -412,15 +412,15 @@ class SimulationController extends BaseController {
         if (availability.end_date) {
           const endDate = new Date(availability.end_date);
           if (now > endDate) {
-            return { expired: true, reason: 'Simulation has ended' };
+            return { expired: true, reason: 'Simulation has ended'};
           }
         }
       }
 
       return { expired: false };
     } catch (error: any) {
-      console.error('❌ Error checking simulation expiration:', error.message);
-      return { expired: true, reason: 'Error validating simulation' };
+      console.error(' Error checking simulation expiration:', error.message);
+      return { expired: true, reason: 'Error validating simulation'};
     }
   }
 
@@ -432,14 +432,14 @@ class SimulationController extends BaseController {
       );
 
       if (!result.rows[0]) {
-        return { available: false, reason: 'Template not found' };
+        return { available: false, reason: 'Template not found'};
       }
 
       const template = result.rows[0];
 
       // Check if template is active
       if (!template.is_active) {
-        return { available: false, reason: 'Template is no longer available' };
+        return { available: false, reason: 'Template is no longer available'};
       }
 
       // Check availability dates if defined in metadata
@@ -451,7 +451,7 @@ class SimulationController extends BaseController {
         if (availability.start_date) {
           const startDate = new Date(availability.start_date);
           if (now < startDate) {
-            return { available: false, reason: 'Simulation has not started yet' };
+            return { available: false, reason: 'Simulation has not started yet'};
           }
         }
 
@@ -459,15 +459,15 @@ class SimulationController extends BaseController {
         if (availability.end_date) {
           const endDate = new Date(availability.end_date);
           if (now > endDate) {
-            return { available: false, reason: 'Simulation has ended' };
+            return { available: false, reason: 'Simulation has ended'};
           }
         }
       }
 
       return { available: true };
     } catch (error: any) {
-      console.error('❌ Error checking template availability:', error.message);
-      return { available: false, reason: 'Error validating template' };
+      console.error(' Error checking template availability:', error.message);
+      return { available: false, reason: 'Error validating template'};
     }
   }
 
@@ -501,7 +501,7 @@ class SimulationController extends BaseController {
 
       const companyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
 
-      if ((req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') && !companyId) {
+      if ((req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') && !companyId) {
         ResponseService.error(res, 'Company team members must be associated with a company to create templates', 403);
         return;
       }
@@ -573,10 +573,10 @@ class SimulationController extends BaseController {
                   LEFT JOIN simulations sim ON ss.simulation_id = sim.id
                   WHERE sim.template_id = st.id AND ss.user_id = $${idx++})`;
         params.push(req.user.id);
-      } else if ((req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') && userCompanyId) {
+      } else if ((req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') && userCompanyId) {
         where += ` AND (st.is_public = true OR st.company_id = $${idx++})`;
         params.push(userCompanyId);
-      } else if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+      } else if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
         where += ` AND st.is_public = true`;
       }
 
@@ -852,7 +852,7 @@ class SimulationController extends BaseController {
 
       const companyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
 
-      if ((req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') && !companyId) {
+      if ((req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') && !companyId) {
         ResponseService.error(res, 'Company team members must be associated with a company to create simulations', 403);
         return;
       }
@@ -867,7 +867,7 @@ class SimulationController extends BaseController {
           return;
         }
         const job = jobResult.rows[0];
-        if ((req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') && job.company_id !== companyId) {
+        if ((req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') && job.company_id !== companyId) {
           ResponseService.error(res, 'Access denied to this job', 403);
           return;
         }
@@ -910,7 +910,7 @@ class SimulationController extends BaseController {
         version: '1.0'
       };
 
-      const defaultStatus = (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') ? 'active' : 'draft';
+      const defaultStatus = (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') ? 'active': 'draft';
       const simulationStatus = status || defaultStatus;
 
       const result = await DatabaseService.query(`
@@ -989,7 +989,7 @@ class SimulationController extends BaseController {
       status = 'all',
       sort = '-created_at',
       search = '',
-      jobId  // ✅ ADD THIS - Job ID filter
+      jobId  // ''ADD THIS - Job ID filter
     } = req.query;
 
     console.log('📋 REQUEST PARAMS:', {
@@ -1000,7 +1000,7 @@ class SimulationController extends BaseController {
       status,
       sort,
       search,
-      jobId,  // ✅ ADD THIS
+      jobId,  // ''ADD THIS
       userId: req.user.id,
       userType: req.user.user_type,
       timestamp: new Date().toISOString()
@@ -1029,7 +1029,7 @@ class SimulationController extends BaseController {
       )`);
       params.push(req.user.id);
       console.log('🔐 Candidate access: showing only taken simulations');
-    } else if (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter') {
+    } else if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
       if (userCompanyId) {
         whereConditions.push(`(st.is_public = true OR st.company_id = $${paramIndex++})`);
         params.push(userCompanyId);
@@ -1045,14 +1045,14 @@ class SimulationController extends BaseController {
       console.log('🔐 Default access: showing only public simulations');
     }
 
-    // ✅ ADD THIS - Job ID filter
+    // ''ADD THIS - Job ID filter
     if (jobId) {
       whereConditions.push(`st.job_id = $${paramIndex++}`);
       params.push(jobId);
       console.log('📊 Job ID filter:', jobId);
     }
 
-    // ✅ Status filter - using latest simulation attempt status
+    // ''Status filter - using latest simulation attempt status
     if (status !== 'all') {
       if (status === 'scheduled') {
         whereConditions.push(`EXISTS (
@@ -1121,14 +1121,14 @@ class SimulationController extends BaseController {
     }
 
     // Search filter
-    if (search && typeof search === 'string' && search.trim()) {
+    if (search && typeof search === 'string'&& search.trim()) {
       whereConditions.push(`(st.name ILIKE $${paramIndex++} OR st.description ILIKE $${paramIndex++})`);
       params.push(`%${search}%`, `%${search}%`);
       console.log('📊 Search filter:', search);
     }
 
     const whereClause = whereConditions.length > 0
-      ? `WHERE ${whereConditions.join(' AND ')}`
+      ? `WHERE ${whereConditions.join('AND ')}`
       : '';
 
     console.log('📊 Where clause:', whereClause);
@@ -1158,7 +1158,7 @@ class SimulationController extends BaseController {
         u.user_type as creator_type,
         j.title as job_title,
         j.id as job_id,
-        -- ✅ Get the latest simulation attempt status
+        -- ''Get the latest simulation attempt status
         (
           SELECT sim.status
           FROM simulations sim
@@ -1166,7 +1166,7 @@ class SimulationController extends BaseController {
           ORDER BY sim.created_at DESC
           LIMIT 1
         ) as latest_simulation_status,
-        -- ✅ Status from simulation attempts (default to 'not_started' if no attempts)
+        -- ''Status from simulation attempts (default to 'not_started'if no attempts)
         COALESCE(
           (
             SELECT sim.status
@@ -1265,7 +1265,7 @@ class SimulationController extends BaseController {
           recordScreen: false, recordAudio: false, maxAttempts: 1, timeLimit: 60,
           environment: 'office', tools: [], constraints: [],
         },
-        // ✅ Use the simulation attempt status
+        // ''Use the simulation attempt status
         status: row.computed_status,
         latest_simulation_status: row.latest_simulation_status,
         is_active: row.is_active,
@@ -1340,14 +1340,14 @@ class SimulationController extends BaseController {
     });
 
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log('✅ [getSimulations] COMPLETED SUCCESSFULLY');
+    console.log('[getSimulations] COMPLETED SUCCESSFULLY');
     console.log('═══════════════════════════════════════════════════════════════');
 
     ResponseService.paginated(res, formattedResults, responseData);
 
   } catch (error: any) {
     console.error('═══════════════════════════════════════════════════════════════');
-    console.error('❌ [getSimulations] ERROR');
+    console.error(' [getSimulations] ERROR');
     console.error('═══════════════════════════════════════════════════════════════');
     console.error('Error details:', {
       message: error.message,
@@ -1575,7 +1575,7 @@ class SimulationController extends BaseController {
         practiceEnabled: ts.practiceEnabled ?? false,
         practiceSimulation: ts.practiceSimulation || null,
         compliance: ts.compliance || [],
-        status: t.is_active ? 'active' : 'draft',
+        status: t.is_active ? 'active': 'draft',
         tasks_structure: ts,
       }, 'Simulation updated');
     } catch (error: any) {
@@ -1599,23 +1599,23 @@ class SimulationController extends BaseController {
       });
 
       if (!id || !ValidationService.isValidUUID(id)) {
-        console.log('❌ Invalid simulation ID format:', id);
+        console.log(' Invalid simulation ID format:', id);
         ResponseService.error(res, 'Invalid simulation ID format', 400);
         return;
       }
-      console.log('✅ Simulation ID validation passed');
+      console.log('Simulation ID validation passed');
 
       // Check if simulation exists
       console.log('🔍 Checking simulation template for ID:', id);
       const simulation = await this.findById('simulation_templates', id);
 
       if (!simulation) {
-        console.log('❌ Simulation not found for ID:', id);
+        console.log(' Simulation not found for ID:', id);
         ResponseService.notFound(res, 'Simulation not found');
         return;
       }
 
-      console.log('✅ Simulation found:', {
+      console.log('Simulation found:', {
         id: simulation.id,
         name: simulation.name,
         company_id: simulation.company_id,
@@ -1644,11 +1644,11 @@ class SimulationController extends BaseController {
       });
 
       if (!hasAccess) {
-        console.log('❌ Permission denied for user:', req.user.id);
+        console.log(' Permission denied for user:', req.user.id);
         ResponseService.forbidden(res, 'Permission denied - You do not have access to delete this simulation');
         return;
       }
-      console.log('✅ Access granted');
+      console.log('Access granted');
 
       // Check if there are any simulation sessions (attempts)
       console.log('🔍 Checking for existing simulation sessions...');
@@ -1659,22 +1659,22 @@ class SimulationController extends BaseController {
     `, [id]);
 
       const existingSessions = parseInt(sessionCount.rows[0]?.count || '0');
-      console.log(`📊 Existing simulation sessions count: ${existingSessions}`);
+      console.log(`Existing simulation sessions count: ${existingSessions}`);
 
       if (existingSessions > 0) {
-        console.log(`⚠️ Cannot delete simulation with ${existingSessions} existing session(s)`);
+        console.log(`Cannot delete simulation with ${existingSessions} existing session(s)`);
         ResponseService.error(res, `Cannot delete simulation with ${existingSessions} existing session(s). Please archive it instead.`, 400);
         return;
       }
 
-      // ✅ FIX: Use a single client and handle errors properly
+      // FIX: Use a single client and handle errors properly
       const client = await DatabaseService.getClient();
 
       try {
         await client.query('BEGIN');
 
         // 1. Delete evaluation sections (if any)
-        console.log('📝 Deleting evaluation sections...');
+        console.log('Deleting evaluation sections...');
         await client.query(`
         DELETE FROM evaluation_sections
         WHERE evaluation_id IN (
@@ -1685,7 +1685,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 2. Delete evaluation behavioral metrics
-        console.log('📝 Deleting evaluation behavioral metrics...');
+        console.log('Deleting evaluation behavioral metrics...');
         await client.query(`
         DELETE FROM evaluation_behavioral_metrics
         WHERE evaluation_id IN (
@@ -1696,7 +1696,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 3. Delete evaluation skill assessments
-        console.log('📝 Deleting evaluation skill assessments...');
+        console.log('Deleting evaluation skill assessments...');
         await client.query(`
         DELETE FROM evaluation_skill_assessments
         WHERE evaluation_id IN (
@@ -1707,7 +1707,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 4. Delete evaluation AI feedback
-        console.log('📝 Deleting evaluation AI feedback...');
+        console.log('Deleting evaluation AI feedback...');
         await client.query(`
         DELETE FROM evaluation_ai_feedback
         WHERE evaluation_id IN (
@@ -1718,7 +1718,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 5. Delete evaluation benchmarks
-        console.log('📝 Deleting evaluation benchmarks...');
+        console.log('Deleting evaluation benchmarks...');
         await client.query(`
         DELETE FROM evaluation_benchmarks
         WHERE evaluation_id IN (
@@ -1729,7 +1729,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 6. Delete qualitative feedback
-        console.log('📝 Deleting qualitative feedback...');
+        console.log('Deleting qualitative feedback...');
         await client.query(`
         DELETE FROM evaluation_qualitative_feedback
         WHERE evaluation_id IN (
@@ -1740,7 +1740,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 7. Delete interview questions
-        console.log('📝 Deleting interview questions...');
+        console.log('Deleting interview questions...');
         await client.query(`
         DELETE FROM evaluation_interview_questions
         WHERE evaluation_id IN (
@@ -1751,7 +1751,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 8. Delete evaluations
-        console.log('📝 Deleting evaluations...');
+        console.log('Deleting evaluations...');
         await client.query(`
         DELETE FROM evaluations
         WHERE simulation_id IN (
@@ -1761,7 +1761,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 9. Delete simulation tasks
-        console.log('📝 Deleting simulation tasks...');
+        console.log('Deleting simulation tasks...');
         await client.query(`
         DELETE FROM simulation_tasks
         WHERE simulation_id IN (
@@ -1771,7 +1771,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 10. Delete code submissions
-        console.log('📝 Deleting code submissions...');
+        console.log('Deleting code submissions...');
         await client.query(`
         DELETE FROM code_submissions
         WHERE simulation_id IN (
@@ -1781,7 +1781,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 11. Delete whiteboard submissions
-        console.log('📝 Deleting whiteboard submissions...');
+        console.log('Deleting whiteboard submissions...');
         await client.query(`
         DELETE FROM whiteboard_submissions
         WHERE simulation_id IN (
@@ -1791,7 +1791,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 12. Delete session task progress
-        console.log('📝 Deleting session task progress...');
+        console.log('Deleting session task progress...');
         await client.query(`
         DELETE FROM session_task_progress
         WHERE session_id IN (
@@ -1802,7 +1802,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 13. Delete chat messages
-        console.log('📝 Deleting chat messages...');
+        console.log('Deleting chat messages...');
         await client.query(`
         DELETE FROM chat_messages
         WHERE session_id IN (
@@ -1813,7 +1813,7 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 14. Delete simulation sessions
-        console.log('📝 Deleting simulation sessions...');
+        console.log('Deleting simulation sessions...');
         await client.query(`
         DELETE FROM simulation_sessions
         WHERE simulation_id IN (
@@ -1823,24 +1823,24 @@ class SimulationController extends BaseController {
       `, [id]);
 
         // 15. Delete simulations (attempts)
-        console.log('📝 Deleting simulation attempts...');
+        console.log(' Deleting simulation attempts...');
         await client.query(`
         DELETE FROM simulations
         WHERE template_id = $1
       `, [id]);
 
         // 16. Finally, delete the simulation template
-        console.log('📝 Deleting simulation template...');
+        console.log(' Deleting simulation template...');
         await client.query(`
         DELETE FROM simulation_templates
         WHERE id = $1
       `, [id]);
 
         await client.query('COMMIT');
-        console.log('✅ Transaction committed successfully');
+        console.log('Transaction committed successfully');
 
       } catch (txError: any) {
-        console.error('❌ Transaction error, rolling back:', txError.message);
+        console.error(' Transaction error, rolling back:', txError.message);
         await client.query('ROLLBACK');
         throw txError;
       } finally {
@@ -1851,17 +1851,17 @@ class SimulationController extends BaseController {
       console.log('🗑️ Clearing cache for simulation:', id);
       templateCache.del(`template_${id}`);
       templateCache.del('templates_list');
-      console.log('✅ Cache cleared');
+      console.log('Cache cleared');
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [deleteSimulation] COMPLETED SUCCESSFULLY');
+      console.log('[deleteSimulation] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════');
 
       ResponseService.success(res, null, 'Simulation and all related data deleted successfully');
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [deleteSimulation] ERROR');
+      console.error(' [deleteSimulation] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -2105,7 +2105,7 @@ class SimulationController extends BaseController {
         date: commit.commit?.author?.date,
         url: commit.html_url,
         stats: commit.stats,  // { additions, deletions, total }
-        // ✅ THIS IS WHAT YOU WANT - FILES CHANGED IN THIS COMMIT
+        // ''THIS IS WHAT YOU WANT - FILES CHANGED IN THIS COMMIT
         files: commit.files?.map((file: any) => ({
           filename: file.filename,           // File name (e.g., "src/app.js")
           status: file.status,               // 'added', 'modified', 'removed', 'renamed'
@@ -2122,9 +2122,9 @@ class SimulationController extends BaseController {
   }
 
   /**
-   * calculateGitHubScore — complete drop-in replacement
+   * calculateGitHubScore   complete drop-in replacement
    *
-   * Return now includes perCommitDetail[] — for EVERY commit analyzed you can see:
+   * Return now includes perCommitDetail[]   for EVERY commit analyzed you can see:
    *   - What AI found (matched tasks, confidence, whatWasImplemented, howItWasImplemented)
    *   - What ML found (matched tasks, confidence, tfidfScore, spacyScore, sentimentMatch)
    *   - Combined winner decision
@@ -2160,7 +2160,7 @@ class SimulationController extends BaseController {
         commitSha: commit.shortSha || commit.sha?.substring(0, 7),
         commitMessage: commit.message || '',
         matchedTasks: [],
-        unmatchedParts: [`Trivial commit (${totalChanges} lines) — no task implementation`]
+        unmatchedParts: [`Trivial commit (${totalChanges} lines)   no task implementation`]
       };
     }
 
@@ -2173,7 +2173,7 @@ class SimulationController extends BaseController {
       );
 
     if (!hasSubstantialCode) {
-      console.log(`   ⏭️ [AI] SKIPPED — no substantial code (${totalChanges} lines)`);
+      console.log(`   ⏭️ [AI] SKIPPED   no substantial code (${totalChanges} lines)`);
       return {
         commitSha: commit.shortSha || commit.sha?.substring(0, 7),
         commitMessage: commit.message || '',
@@ -2182,7 +2182,7 @@ class SimulationController extends BaseController {
       };
     }
 
-    console.log(`   ✅ [AI] Proceeding — ${totalChanges} lines changed`);
+    console.log(`   ''[AI] Proceeding   ${totalChanges} lines changed`);
 
     const MAX_COMMIT_MSG = 300;
     const MAX_DIFF_PER_FILE = 200;
@@ -2277,13 +2277,13 @@ Return ONLY valid JSON:
         model: 'llama-3.3-70b-versatile',
         temperature: 0.2,
         max_tokens: 600,
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object'}
       });
 
       const responseContent = completion.choices[0]?.message?.content || '{"matchedTasks":[]}';
       const result = JSON.parse(responseContent);
 
-      console.log(`   ✅ [AI] Matched ${result.matchedTasks?.length || 0} tasks`);
+      console.log(`   ''[AI] Matched ${result.matchedTasks?.length || 0} tasks`);
 
       return {
         commitSha: commitData.sha,
@@ -2294,7 +2294,7 @@ Return ONLY valid JSON:
       } as any;
 
     } catch (error: any) {
-      console.error('   ❌ [AI] Failed:', error.message);
+      console.error('   [AI] Failed:', error.message);
       return {
         commitSha: commitData.sha,
         commitMessage: commitData.message,
@@ -2349,7 +2349,7 @@ Return ONLY valid JSON:
 
       const response = await fetch(pythonServerUrl, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify(requestBody)
       });
 
@@ -2407,7 +2407,7 @@ Return ONLY valid JSON:
       };
 
     } catch (error) {
-      console.error(`   ❌ [ML] Failed for commit ${commit.sha}:`, error);
+      console.error(`    [ML] Failed for commit ${commit.sha}:`, error);
       return {
         commitSha: commit.shortSha || commit.sha?.substring(0, 7),
         commitMessage: commit.message,
@@ -2446,12 +2446,12 @@ Return ONLY valid JSON:
       const isReadme = readmePatterns.some(pattern => pattern.test(fileName));
 
       if (isReadme) {
-        console.log(`✅ Found README file: ${fileName}`);
+        console.log(`''Found README file: ${fileName}`);
         return { file, fileName };
       }
     }
 
-    // If no README found, check if any .md file contains 'readme' in name
+    // If no README found, check if any .md file contains 'readme'in name
     const mdFiles = files.filter((f: any) =>
       f.name?.toLowerCase().includes('readme') ||
       (f.name?.endsWith('.md') && f.name?.toLowerCase().includes('readme'))
@@ -2459,11 +2459,11 @@ Return ONLY valid JSON:
 
     if (mdFiles.length > 0) {
       const file = mdFiles[0];
-      console.log(`✅ Found README-like file: ${file.name}`);
+      console.log(`''Found README-like file: ${file.name}`);
       return { file, fileName: file.name };
     }
 
-    console.log('❌ No README file found');
+    console.log(' No README file found');
     return { file: null, fileName: null };
   }
 
@@ -2502,12 +2502,12 @@ Return ONLY valid JSON:
     };
 
     if (!readmeContent || readmeContent.length < 100) {
-      console.log('⚠️ README content too short for analysis (< 100 chars)');
+      console.log(' README content too short for analysis (< 100 chars)');
       return defaultResult;
     }
 
     if (simulationTasks.length === 0) {
-      console.log('⚠️ No simulation tasks to compare against');
+      console.log(' No simulation tasks to compare against');
       return defaultResult;
     }
 
@@ -2545,18 +2545,18 @@ Return ONLY valid JSON:
 
       const completion = await getGroq().chat.completions.create({
         messages: [
-          { role: 'system', content: 'You analyze README files for technical documentation quality. Return ONLY valid JSON.' },
+          { role: 'system', content: 'You analyze README files for technical documentation quality. Return ONLY valid JSON.'},
           { role: 'user', content: prompt }
         ],
         model: 'llama-3.3-70b-versatile',
         temperature: 0.3,
         max_tokens: 800,
-        response_format: { type: 'json_object' }
+        response_format: { type: 'json_object'}
       });
 
       const result = JSON.parse(completion.choices[0]?.message?.content || '{}');
 
-      console.log(`✅ README Analysis complete:`, {
+      console.log(`''README Analysis complete:`, {
         quality: result.documentation_quality,
         documentedCount: result.tasks_documented?.length || 0,
         missingCount: result.tasks_missing?.length || 0,
@@ -2577,7 +2577,7 @@ Return ONLY valid JSON:
       };
 
     } catch (error: any) {
-      console.error('❌ README Groq analysis failed:', error.message);
+      console.error(' README Groq analysis failed:', error.message);
       return defaultResult;
     }
   }
@@ -2596,8 +2596,8 @@ Return ONLY valid JSON:
     let score = 0;
 
     if (!hasReadme) {
-      console.log('   No README found → 0/25');
-      return { score: 0, maxScore, details: 'No README file found' };
+      console.log('  No README found → 0/25');
+      return { score: 0, maxScore, details: 'No README file found'};
     }
 
     // Base points for having README: 5
@@ -2607,16 +2607,16 @@ Return ONLY valid JSON:
     // Quality bonus: up to 8 more points
     if (quality === 'excellent') {
       score += 10;
-      details += ' - Excellent documentation quality';
-      console.log('   +10: Excellent quality');
+      details += '- Excellent documentation quality';
+      console.log('  +10: Excellent quality');
     } else if (quality === 'good') {
       score += 8;
-      details += ' - Good documentation quality';
-      console.log('   +8: Good quality');
+      details += '- Good documentation quality';
+      console.log('  +8: Good quality');
     } else if (quality === 'basic') {
       score += 4;
-      details += ' - Basic documentation quality';
-      console.log('   +4: Basic quality');
+      details += '- Basic documentation quality';
+      console.log('  +4: Basic quality');
     }
 
     // Task coverage bonus: up to 2 more points
@@ -2646,25 +2646,25 @@ Return ONLY valid JSON:
     console.log('⚙️ [detectConfigFiles] Scanning for config files...');
 
     const configFilePatterns = [
-      { name: 'package.json', points: 10, lang: 'Node.js' },
-      { name: 'requirements.txt', points: 10, lang: 'Python' },
-      { name: 'go.mod', points: 10, lang: 'Go' },
-      { name: 'Cargo.toml', points: 10, lang: 'Rust' },
-      { name: 'pyproject.toml', points: 8, lang: 'Python' },
-      { name: 'setup.py', points: 8, lang: 'Python' },
-      { name: 'tsconfig.json', points: 8, lang: 'TypeScript' },
-      { name: '.eslintrc', points: 6, lang: 'JavaScript/TypeScript' },
-      { name: '.eslintrc.js', points: 6, lang: 'JavaScript' },
-      { name: '.eslintrc.json', points: 6, lang: 'JavaScript' },
-      { name: 'webpack.config.js', points: 6, lang: 'JavaScript' },
-      { name: 'vite.config.js', points: 6, lang: 'JavaScript' },
-      { name: 'composer.json', points: 8, lang: 'PHP' },
-      { name: 'Gemfile', points: 8, lang: 'Ruby' },
-      { name: 'build.gradle', points: 8, lang: 'Java' },
-      { name: 'pom.xml', points: 8, lang: 'Java' },
-      { name: '.env.example', points: 4, lang: 'Environment' },
-      { name: 'docker-compose.yml', points: 6, lang: 'Docker' },
-      { name: 'Dockerfile', points: 6, lang: 'Docker' }
+      { name: 'package.json', points: 10, lang: 'Node.js'},
+      { name: 'requirements.txt', points: 10, lang: 'Python'},
+      { name: 'go.mod', points: 10, lang: 'Go'},
+      { name: 'Cargo.toml', points: 10, lang: 'Rust'},
+      { name: 'pyproject.toml', points: 8, lang: 'Python'},
+      { name: 'setup.py', points: 8, lang: 'Python'},
+      { name: 'tsconfig.json', points: 8, lang: 'TypeScript'},
+      { name: '.eslintrc', points: 6, lang: 'JavaScript/TypeScript'},
+      { name: '.eslintrc.js', points: 6, lang: 'JavaScript'},
+      { name: '.eslintrc.json', points: 6, lang: 'JavaScript'},
+      { name: 'webpack.config.js', points: 6, lang: 'JavaScript'},
+      { name: 'vite.config.js', points: 6, lang: 'JavaScript'},
+      { name: 'composer.json', points: 8, lang: 'PHP'},
+      { name: 'Gemfile', points: 8, lang: 'Ruby'},
+      { name: 'build.gradle', points: 8, lang: 'Java'},
+      { name: 'pom.xml', points: 8, lang: 'Java'},
+      { name: '.env.example', points: 4, lang: 'Environment'},
+      { name: 'docker-compose.yml', points: 6, lang: 'Docker'},
+      { name: 'Dockerfile', points: 6, lang: 'Docker'}
     ];
 
     const maxScore = 10;
@@ -2677,7 +2677,7 @@ Return ONLY valid JSON:
         foundFiles.push(pattern.name);
         const pointsToAdd = Math.min(maxScore - score, pattern.points);
         score += pointsToAdd;
-        console.log(`   ✅ Found: ${pattern.name} (+${pointsToAdd} points, ${pattern.lang})`);
+        console.log(`   ''Found: ${pattern.name} (+${pointsToAdd} points, ${pattern.lang})`);
         if (score >= maxScore) break;
       }
     }
@@ -2701,9 +2701,9 @@ Return ONLY valid JSON:
     const hasGitignore = files.some((f: any) => f.name === '.gitignore');
     const maxScore = 5;
     const score = hasGitignore ? maxScore : 0;
-    const details = hasGitignore ? '.gitignore present' : 'No .gitignore found';
+    const details = hasGitignore ? '.gitignore present': 'No .gitignore found';
 
-    console.log(`📊 .gitignore: ${hasGitignore ? '✅ Present' : '❌ Missing'} (${score}/${maxScore})`);
+    console.log(`📊 .gitignore: ${hasGitignore ? 'Present': ' Missing'} (${score}/${maxScore})`);
 
     return { present: hasGitignore, score, maxScore, details };
   }
@@ -2729,7 +2729,7 @@ Return ONLY valid JSON:
 
     if (count >= 1) {
       score = 20;
-      details = `${count} file${count > 1 ? 's' : ''} — full marks`;
+      details = `${count} file${count > 1 ? 's': ''}   full marks`;
       console.log(`   → 20/20: ${count} code file(s) present`);
     } else {
       score = 0;
@@ -2752,11 +2752,11 @@ Return ONLY valid JSON:
 
     if (commitCount >= 2) {
       earned = 40;
-      details = `${commitCount} commits — full marks`;
+      details = `${commitCount} commits   full marks`;
       console.log(`   → 40/40: ${commitCount} commits present`);
     } else if (commitCount === 1) {
       earned = 20;
-      details = `1 commit — partial`;
+      details = `1 commit   partial`;
       console.log(`   → 20/40: only 1 commit`);
     } else {
       earned = 0;
@@ -2802,13 +2802,13 @@ Return ONLY valid JSON:
 
       if (!msg || msg.length < 3) {
         empty++;
-        flagged.push({ sha: shaOf(c), message: msg || '(empty)', reason: 'Empty or too short' });
+        flagged.push({ sha: shaOf(c), message: msg || '(empty)', reason: 'Empty or too short'});
       } else if (normalized.length === 0 || GENERIC.has(normalized) || (words.length === 1 && GENERIC.has(words[0] || ''))) {
         generic++;
-        flagged.push({ sha: shaOf(c), message: msg, reason: 'Generic/non-descriptive message' });
+        flagged.push({ sha: shaOf(c), message: msg, reason: 'Generic/non-descriptive message'});
       } else if (words.length < 3) {
         generic++;
-        flagged.push({ sha: shaOf(c), message: msg, reason: 'Vague message (too few words)' });
+        flagged.push({ sha: shaOf(c), message: msg, reason: 'Vague message (too few words)'});
       } else {
         meaningful++;
       }
@@ -2936,7 +2936,7 @@ Return ONLY valid JSON:
 
     // Guard: check github_links
     if (!session.github_links) {
-      console.log('❌ No GitHub repository linked');
+      console.log(' No GitHub repository linked');
       return { score: 0, analysis: { analyzed: false, message: 'No GitHub repository linked', detailedMarks, score: 0 } };
     }
 
@@ -2944,15 +2944,15 @@ Return ONLY valid JSON:
     if (typeof githubLinks === 'string') {
       try {
         githubLinks = JSON.parse(githubLinks);
-        console.log('✅ Parsed github_links from JSON');
+        console.log('Parsed github_links from JSON');
       } catch (e) {
-        console.error('❌ Failed to parse GitHub links:', e);
+        console.error(' Failed to parse GitHub links:', e);
         return { score: 0, analysis: { analyzed: false, message: 'Failed to parse GitHub links', detailedMarks, score: 0 } };
       }
     }
 
     if (!githubLinks?.repoUrl) {
-      console.log('❌ No repository URL in GitHub links');
+      console.log(' No repository URL in GitHub links');
       return { score: 0, analysis: { analyzed: false, message: 'No repository URL in GitHub links', detailedMarks, score: 0 } };
     }
 
@@ -2961,17 +2961,17 @@ Return ONLY valid JSON:
 
     const parsed = await githubController.parseGitHubUrl(repoUrl);
     if (!parsed) {
-      console.log('❌ Invalid GitHub repository URL');
+      console.log(' Invalid GitHub repository URL');
       return { score: 0, analysis: { analyzed: false, message: 'Invalid GitHub repository URL', detailedMarks, score: 0 } };
     }
 
     const { owner, repo } = parsed;
-    console.log(`✅ Repo parsed: ${owner}/${repo}`);
+    console.log(`''Repo parsed: ${owner}/${repo}`);
 
     try {
       // Fetch repository data
       console.log('\n📡 [STEP 1] Fetching GitHub repository data...');
-      const mockReq = { params: { owner, repo }, query: { includeContent: 'true', maxFiles: '100' } } as any;
+      const mockReq = { params: { owner, repo }, query: { includeContent: 'true', maxFiles: '100'} } as any;
       let responseData: any = null;
       const mockRes: any = {
         json: (data: any) => { responseData = data; return mockRes; },
@@ -2980,10 +2980,10 @@ Return ONLY valid JSON:
 
       const t0 = Date.now();
       await githubController.getEverything(mockReq, mockRes);
-      console.log(`✅ getEverything completed in ${Date.now() - t0}ms`);
+      console.log(`''getEverything completed in ${Date.now() - t0}ms`);
 
       if (!responseData?.data) {
-        console.log('❌ No data returned from GitHub API');
+        console.log(' No data returned from GitHub API');
         return { score: 0, analysis: { analyzed: false, message: 'No data returned from GitHub API', detailedMarks, score: 0 } };
       }
 
@@ -3014,12 +3014,12 @@ Return ONLY valid JSON:
             if (typeof tasksData === 'string') tasksData = JSON.parse(tasksData);
             if (Array.isArray(tasksData)) {
               simulationTasks = tasksData;
-              console.log(`✅ ${simulationTasks.length} simulation tasks loaded`);
+              console.log(`''${simulationTasks.length} simulation tasks loaded`);
             }
           }
         }
       } catch (err) {
-        console.error('❌ Error retrieving tasks:', err);
+        console.error(' Error retrieving tasks:', err);
       }
 
       // ============================================
@@ -3035,7 +3035,7 @@ Return ONLY valid JSON:
         detailedMarks.readme.present = true;
         detailedMarks.readme.file_name = readmeFileName;
 
-        // ✅ FIX: Handle null fileName by providing a default
+        // ''FIX: Handle null fileName by providing a default
         const safeFileName = readmeFileName || 'README.md';
 
         const aiReadmeAnalysis = await this.analyzeReadmeWithAI(
@@ -3057,7 +3057,7 @@ Return ONLY valid JSON:
         // Use GROQ AI score directly: 0-100 → scaled to readme max points
         const groqReadmeScore = aiReadmeAnalysis.readmeScore ?? 50;
         detailedMarks.readme.earned = Math.round((groqReadmeScore / 100) * detailedMarks.readme.max);
-        detailedMarks.readme.details = `README present — AI quality score: ${groqReadmeScore}/100`;
+        detailedMarks.readme.details = `README present   AI quality score: ${groqReadmeScore}/100`;
       } else {
         const readmeScoreResult = this.calculateReadmeScore(false, 'none', 0);
         detailedMarks.readme.earned = readmeScoreResult.score;
@@ -3065,7 +3065,7 @@ Return ONLY valid JSON:
       }
 
       // ============================================
-      // CONFIG FILES — not scored (detect only for display)
+      // CONFIG FILES   not scored (detect only for display)
       // ============================================
       console.log('\n⚙️ [STEP 5] Config Files (display only, not scored)...');
       const configResult = this.detectConfigFiles(files);
@@ -3141,13 +3141,13 @@ Return ONLY valid JSON:
         // COMMIT SCORE (40 pts): use GROQ confidence directly when available
         if (commitsWithChanges.length < 2) {
           detailedMarks.commits.earned = commitsWithChanges.length === 1 ? 20 : 0;
-          detailedMarks.commits.details = commitsWithChanges.length === 1 ? '1 commit — partial' : 'No commits';
+          detailedMarks.commits.details = commitsWithChanges.length === 1 ? '1 commit   partial': 'No commits';
         } else if (groqAvgConfidence > 0) {
-          // GROQ gave us confidence scores — use them directly
+          // GROQ gave us confidence scores   use them directly
           detailedMarks.commits.earned = Math.min(detailedMarks.commits.max, Math.round((groqAvgConfidence / 100) * detailedMarks.commits.max));
           detailedMarks.commits.details = `${commitsWithChanges.length} commits | GROQ confidence: ${Math.round(groqAvgConfidence)}%`;
         } else {
-          // GROQ had no matches — fall back to lines of code
+          // GROQ had no matches   fall back to lines of code
           let linesEarned = 0;
           if (totalLines >= 500)      linesEarned = 40;
           else if (totalLines >= 200) linesEarned = 32;
@@ -3158,9 +3158,9 @@ Return ONLY valid JSON:
           detailedMarks.commits.earned = Math.min(detailedMarks.commits.max, linesEarned);
           detailedMarks.commits.details = `${commitsWithChanges.length} commits | ${totalLines} lines (GROQ found no task match)`;
         }
-        console.log(`   → commits: ${detailedMarks.commits.earned}/${detailedMarks.commits.max} — ${detailedMarks.commits.details}`);
+        console.log(`   → commits: ${detailedMarks.commits.earned}/${detailedMarks.commits.max}   ${detailedMarks.commits.details}`);
       } else {
-        // No simulation tasks — fall back to lines of code
+        // No simulation tasks   fall back to lines of code
         if (commitsWithChanges.length >= 2) {
           let linesEarned = 0;
           if (totalLines >= 500)      linesEarned = 40;
@@ -3173,7 +3173,7 @@ Return ONLY valid JSON:
           detailedMarks.commits.details = `${commitsWithChanges.length} commits | ${totalLines} lines`;
         } else {
           detailedMarks.commits.earned = commitsWithChanges.length === 1 ? 20 : 0;
-          detailedMarks.commits.details = commitsWithChanges.length === 1 ? '1 commit — partial' : 'No commits';
+          detailedMarks.commits.details = commitsWithChanges.length === 1 ? '1 commit   partial': 'No commits';
         }
       }
 
@@ -3193,7 +3193,7 @@ Return ONLY valid JSON:
       console.log('\n╔═══════════════════════════════════════════════════════════════╗');
       console.log('║                    GITHUB SCORE BREAKDOWN                      ║');
       console.log('╠═══════════════════════════════════════════════════════════════╣');
-      console.log(`║ 📝 Commits:        ${detailedMarks.commits.earned.toString().padStart(2)}/${detailedMarks.commits.max}  - ${detailedMarks.commits.details}`);
+      console.log(`║  Commits:        ${detailedMarks.commits.earned.toString().padStart(2)}/${detailedMarks.commits.max}  - ${detailedMarks.commits.details}`);
       console.log(`║ 📖 README:         ${detailedMarks.readme.earned.toString().padStart(2)}/${detailedMarks.readme.max}  - ${detailedMarks.readme.details}`);
       console.log(`║ ⚙️ Config Files:   ${detailedMarks.configFile.earned.toString().padStart(2)}/${detailedMarks.configFile.max}  - ${detailedMarks.configFile.details}`);
       console.log(`║ 🚫 .gitignore:     ${detailedMarks.gitignore.earned.toString().padStart(2)}/${detailedMarks.gitignore.max}  - ${detailedMarks.gitignore.details}`);
@@ -3253,14 +3253,14 @@ Return ONLY valid JSON:
       };
 
       console.log('\n═══════════════════════════════════════════════════════════════');
-      console.log('✅ [calculateGitHubScore] COMPLETED SUCCESSFULLY');
+      console.log('[calculateGitHubScore] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════\n');
 
       return { score: githubScore, analysis: githubAnalysis };
 
     } catch (githubError: any) {
       console.error('\n═══════════════════════════════════════════════════════════════');
-      console.error('❌ [calculateGitHubScore] ERROR');
+      console.error(' [calculateGitHubScore] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', githubError.message);
       console.error('═══════════════════════════════════════════════════════════════\n');
@@ -3364,7 +3364,7 @@ Return ONLY valid JSON:
 
   calculateGitHubScoreForRepo = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
-      const { repoUrl, owner, repo, sessionId } = req.body || {};  // ✅ ADD sessionId
+      const { repoUrl, owner, repo, sessionId } = req.body || {};  // ''ADD sessionId
       const normalizedRepoUrl = repoUrl || (owner && repo ? `https://github.com/${owner}/${repo}` : null);
 
       if (!normalizedRepoUrl) {
@@ -3372,7 +3372,7 @@ Return ONLY valid JSON:
         return;
       }
 
-      // ✅ CREATE PROPER SESSION OBJECT WITH ID
+      // ''CREATE PROPER SESSION OBJECT WITH ID
       const session = {
         id: sessionId,  // ← CRITICAL: This enables task lookup
         github_links: {
@@ -3599,7 +3599,7 @@ Return ONLY valid JSON:
     // ============================================
     console.log('\n📊 [detectCodeQuality] SCORE BREAKDOWN:');
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log(`📝 Language: ${detectedLanguage}`);
+    console.log(` Language: ${detectedLanguage}`);
     console.log(`📄 Lines of code: ${linesOfCode}`);
     console.log(`📏 Code length: ${code.length} chars`);
     console.log(`🔍 Detected features: ${detectedFeatures.join(', ') || 'none'}`);
@@ -3611,69 +3611,69 @@ Return ONLY valid JSON:
     console.log('\n📌 CORE FEATURES (max 50 points):');
     if (hasFunctions) {
       score += 15;
-      console.log(`   ✅ Functions/Methods: +15 points (total: ${score})`);
+      console.log(`   ''Functions/Methods: +15 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Functions/Methods: +0 points (total: ${score})`);
+      console.log(`    Functions/Methods: +0 points (total: ${score})`);
     }
 
     if (hasVariables) {
       score += 10;
-      console.log(`   ✅ Variables: +10 points (total: ${score})`);
+      console.log(`   ''Variables: +10 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Variables: +0 points (total: ${score})`);
+      console.log(`    Variables: +0 points (total: ${score})`);
     }
 
     if (hasConditionals) {
       score += 10;
-      console.log(`   ✅ Conditionals (if/else): +10 points (total: ${score})`);
+      console.log(`   ''Conditionals (if/else): +10 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Conditionals (if/else): +0 points (total: ${score})`);
+      console.log(`    Conditionals (if/else): +0 points (total: ${score})`);
     }
 
     if (hasReturns) {
       score += 15;
-      console.log(`   ✅ Return statements: +15 points (total: ${score})`);
+      console.log(`   ''Return statements: +15 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Return statements: +0 points (total: ${score})`);
+      console.log(`    Return statements: +0 points (total: ${score})`);
     }
 
     // Advanced features (30 points)
     console.log('\n📌 ADVANCED FEATURES (max 30 points):');
     if (hasLoops) {
       score += 10;
-      console.log(`   ✅ Loops (for/while): +10 points (total: ${score})`);
+      console.log(`   ''Loops (for/while): +10 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Loops (for/while): +0 points (total: ${score})`);
+      console.log(`    Loops (for/while): +0 points (total: ${score})`);
     }
 
     if (hasErrorHandling) {
       score += 10;
-      console.log(`   ✅ Error handling (try/catch): +10 points (total: ${score})`);
+      console.log(`   ''Error handling (try/catch): +10 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Error handling (try/catch): +0 points (total: ${score})`);
+      console.log(`    Error handling (try/catch): +0 points (total: ${score})`);
     }
 
     if (hasClasses) {
       score += 10;
-      console.log(`   ✅ Classes/OOP: +10 points (total: ${score})`);
+      console.log(`   ''Classes/OOP: +10 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Classes/OOP: +0 points (total: ${score})`);
+      console.log(`    Classes/OOP: +0 points (total: ${score})`);
     }
 
     // Project structure (10 points)
     console.log('\n📌 PROJECT STRUCTURE (max 10 points):');
     if (linesOfCode > 10) {
       score += 5;
-      console.log(`   ✅ Lines of code > 10: +5 points (total: ${score})`);
+      console.log(`   ''Lines of code > 10: +5 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Lines of code > 10: +0 points (total: ${score})`);
+      console.log(`    Lines of code > 10: +0 points (total: ${score})`);
     }
 
     if (code.length > 500) {
       score += 5;
-      console.log(`   ✅ Code length > 500 chars: +5 points (total: ${score})`);
+      console.log(`   ''Code length > 500 chars: +5 points (total: ${score})`);
     } else {
-      console.log(`   ❌ Code length > 500 chars: +0 points (total: ${score})`);
+      console.log(`    Code length > 500 chars: +0 points (total: ${score})`);
     }
 
     // Cap at 100
@@ -3683,9 +3683,9 @@ Return ONLY valid JSON:
     console.log('\n───────────────────────────────────────────────────────────────');
     console.log(`📊 RAW SCORE: ${originalScore}/100`);
     if (originalScore > 100) {
-      console.log(`⚠️  Capped at 100 (max score)`);
+      console.log(`  Capped at 100 (max score)`);
     }
-    console.log(`✅ FINAL SCORE: ${score}%`);
+    console.log(`''FINAL SCORE: ${score}%`);
     console.log('═══════════════════════════════════════════════════════════════\n');
 
     return {
@@ -3738,11 +3738,11 @@ Return ONLY valid JSON:
         if (parsed) {
           const { owner, repo } = parsed;
 
-          // ✅ METHOD 1: Call getEverything directly (as you were trying)
+          // ''METHOD 1: Call getEverything directly (as you were trying)
           // But we need to capture the response properly
           const mockReq = {
             params: { owner, repo },
-            query: { includeContent: 'true', maxFiles: '50' }  // Limit files for performance
+            query: { includeContent: 'true', maxFiles: '50'}  // Limit files for performance
           } as any;
 
           let responseData: any = null;
@@ -3769,7 +3769,7 @@ Return ONLY valid JSON:
                file.path?.match(/\.(js|jsx|mjs|cjs|ts|tsx|vue|svelte|html|htm|css|scss|sass|less|py|java|go|rs|cpp|c|cc|cxx|hpp|h|rb|php|swift|kt|kts|cs|dart|lua|pl|r|m|scala|ex|exs|erl|hs|clj|sql|sh|bash|zsh|ps1|fish|yaml|yml|xml|tf|ipynb|json)$/i))
             );
 
-            // ✅ ANALYZE CODE QUALITY FROM GITHUB REPOSITORY
+            // ''ANALYZE CODE QUALITY FROM GITHUB REPOSITORY
             // Combine all code files content for quality analysis
             let combinedCode = '';
             for (const file of codeFiles) {
@@ -3778,7 +3778,7 @@ Return ONLY valid JSON:
               }
             }
 
-            // ✅ Use detectCodeQuality on the GitHub repository code
+            // ''Use detectCodeQuality on the GitHub repository code
             if (combinedCode.trim().length > 0) {
               const primaryLanguage = repoData.languages?.primary ||
                 repoData.repository?.language ||
@@ -3786,12 +3786,12 @@ Return ONLY valid JSON:
               const qualityResult = this.detectCodeQuality(combinedCode, primaryLanguage);
               codeQuality = qualityResult.score;
               codeQualityDetails = qualityResult.details;
-              console.log(`✅ Code quality analysis from GitHub repo: ${codeQuality}% (${codeFiles.length} files, ${combinedCode.length} chars)`);
+              console.log(`''Code quality analysis from GitHub repo: ${codeQuality}% (${codeFiles.length} files, ${combinedCode.length} chars)`);
             } else {
               // Fallback to inline code or comment if no code files found in repo
               const codeSource = answer.code || answer.comment || '';
               if (codeSource.trim()) {
-                console.log('⚠️ No code files in GitHub repo, falling back to inline code/comment');
+                console.log(' No code files in GitHub repo, falling back to inline code/comment');
                 const qualityResult = this.detectCodeQuality(codeSource, answer.language);
                 codeQuality = qualityResult.score;
                 codeQualityDetails = qualityResult.details;
@@ -3811,8 +3811,8 @@ Return ONLY valid JSON:
               fileStructure: files.slice(0, 20).map((f: any) => f.name || f.path),
               hasReadme: !!repoData.community?.hasReadme,
               hasConfigFile: codeFiles.some((f: any) =>
-                f.name === 'package.json' || f.name === 'requirements.txt' ||
-                f.name === 'go.mod' || f.name === 'Cargo.toml'
+                f.name === 'package.json'|| f.name === 'requirements.txt'||
+                f.name === 'go.mod'|| f.name === 'Cargo.toml'
               ),
               codeFiles: codeFiles.map((f: any) => ({
                 name: f.name,
@@ -3829,7 +3829,7 @@ Return ONLY valid JSON:
               (githubAnalysis.hasConfigFile ? 10 : 0)
             );
 
-            console.log(`✅ GitHub analysis completed for ${owner}/${repo}:`, {
+            console.log(`''GitHub analysis completed for ${owner}/${repo}:`, {
               codeFilesCount: codeFiles.length,
               codeQualityScore: codeQuality,
               githubScore: githubScore
@@ -3837,23 +3837,23 @@ Return ONLY valid JSON:
           }
         }
       } catch (error: any) {
-        console.error('❌ GitHub analysis failed:', error.message);
+        console.error(' GitHub analysis failed:', error.message);
         githubAnalysis = { error: error.message, hasRepo: false };
 
-        // ✅ FALLBACK: Use inline code or comment if GitHub fetch fails
+        // ''FALLBACK: Use inline code or comment if GitHub fetch fails
         const codeSource = answer.code || answer.comment || '';
         if (codeSource.trim()) {
-          console.log('⚠️ Falling back to inline code/comment analysis after GitHub failure');
+          console.log(' Falling back to inline code/comment analysis after GitHub failure');
           const qualityResult = this.detectCodeQuality(codeSource, answer.language);
           codeQuality = qualityResult.score;
           codeQualityDetails = qualityResult.details;
         }
       }
     } else {
-      // ✅ No GitHub URL - use inline code if provided, fallback to comment field
+      // ''No GitHub URL - use inline code if provided, fallback to comment field
       const codeSource = answer.code || answer.comment || '';
       if (codeSource.trim()) {
-        console.log(`📝 Using ${answer.code ? 'inline code' : 'comment field as code fallback'} for quality analysis`);
+        console.log(` Using ${answer.code ? 'inline code': 'comment field as code fallback'} for quality analysis`);
         const qualityResult = this.detectCodeQuality(codeSource, answer.language);
         codeQuality = qualityResult.score;
         codeQualityDetails = qualityResult.details;
@@ -4122,10 +4122,10 @@ Return ONLY valid JSON:
         let answerQualityScore = 0;
         let answerDetails = null;
         let answerMarks = {
-          codeQuality: { earned: 0, max: 50, details: '' },
-          essayQuality: { earned: 0, max: 50, details: '' },
-          completeness: { earned: 0, max: 30, details: '' },
-          total: { earned: 0, max: 100, details: '' }
+          codeQuality: { earned: 0, max: 50, details: ''},
+          essayQuality: { earned: 0, max: 50, details: ''},
+          completeness: { earned: 0, max: 30, details: ''},
+          total: { earned: 0, max: 100, details: ''}
         };
 
         if (progress?.answer) {
@@ -4161,7 +4161,7 @@ Return ONLY valid JSON:
             completeness: {
               earned: qualityResult.completeness,
               max: 30,
-              details: `Task marked as ${qualityResult.details.markedCompleted ? 'completed' : 'incomplete'}`
+              details: `Task marked as ${qualityResult.details.markedCompleted ? 'completed': 'incomplete'}`
             },
             total: {
               earned: qualityResult.score,
@@ -4191,10 +4191,10 @@ Return ONLY valid JSON:
         const taskOverallScore = Math.round((completionScore + timeScore + qualityScore + answerQualityScore) / 4);
 
         const taskScoreBreakdown = {
-          completion: { earned: completionScore, max: 100, percentage: completionScore, description: completionStatus === 'completed' ? 'Task completed' : completionStatus === 'in_progress' ? 'Task in progress' : 'Task not started' },
-          time: { earned: Math.round(timeScore), max: 100, percentage: Math.round(timeScore), description: timeTakenSeconds > 0 ? `Completed in ${Math.floor(timeTakenSeconds / 60)}m ${timeTakenSeconds % 60}s (limit: ${Math.floor(taskTimeLimit / 60)}m)` : 'Time not tracked' },
-          quality: { earned: qualityScore, max: 100, percentage: qualityScore, description: qualityScore >= 80 ? 'Excellent quality' : qualityScore >= 60 ? 'Good quality' : qualityScore >= 40 ? 'Average quality' : 'Needs improvement' },
-          answer_quality: { earned: Math.round(answerQualityScore), max: 100, percentage: Math.round(answerQualityScore), description: answerDetails?.markedCompleted ? 'Answer provided and marked complete' : 'Answer incomplete' }
+          completion: { earned: completionScore, max: 100, percentage: completionScore, description: completionStatus === 'completed'? 'Task completed': completionStatus === 'in_progress'? 'Task in progress': 'Task not started'},
+          time: { earned: Math.round(timeScore), max: 100, percentage: Math.round(timeScore), description: timeTakenSeconds > 0 ? `Completed in ${Math.floor(timeTakenSeconds / 60)}m ${timeTakenSeconds % 60}s (limit: ${Math.floor(taskTimeLimit / 60)}m)` : 'Time not tracked'},
+          quality: { earned: qualityScore, max: 100, percentage: qualityScore, description: qualityScore >= 80 ? 'Excellent quality': qualityScore >= 60 ? 'Good quality': qualityScore >= 40 ? 'Average quality': 'Needs improvement'},
+          answer_quality: { earned: Math.round(answerQualityScore), max: 100, percentage: Math.round(answerQualityScore), description: answerDetails?.markedCompleted ? 'Answer provided and marked complete': 'Answer incomplete'}
         };
 
         return {
@@ -4244,7 +4244,7 @@ Return ONLY valid JSON:
       for (let i = 0; i < templateTasks.length; i++) {
         const task = templateTasks[i];
 
-        // ✅ ADD THIS DEBUG LOGGING
+        // ''ADD THIS DEBUG LOGGING
         console.log(`\n🔍 [PUNCTUALITY] Task ${i}:`, {
           title: task.title || task.task_name,
           rawDuration: task.duration,
@@ -4253,18 +4253,18 @@ Return ONLY valid JSON:
           rawWeight: task.evaluation?.weight
         });
 
-        // ✅ FIX: Use consistent duration (ensure it's in MINUTES)
+        // ''FIX: Use consistent duration (ensure it's in MINUTES)
         let taskDurationMinutes = task.duration || task.duration_minutes || 30;
 
-        // ✅ FIX: If duration is in seconds ( > 100 ), convert to minutes
+        // ''FIX: If duration is in seconds ( > 100 ), convert to minutes
         if (taskDurationMinutes > 100) {
-          console.log(`   ⚠️ Detected large duration (${taskDurationMinutes}), assuming seconds, converting to minutes`);
+          console.log(`    Detected large duration (${taskDurationMinutes}), assuming seconds, converting to minutes`);
           taskDurationMinutes = Math.floor(taskDurationMinutes / 60);
         }
 
         const taskTimeLimit = taskDurationMinutes * 60;  // Convert to seconds
 
-        // ✅ FIX: Task weight should be based on task importance
+        // ''FIX: Task weight should be based on task importance
         const taskWeight = task.evaluation?.weight || task.priority ||
           (taskDurationMinutes > 60 ? 3 : taskDurationMinutes > 30 ? 2 : 1);
 
@@ -4280,7 +4280,7 @@ Return ONLY valid JSON:
         let creditEarned = 0;
         let overtimeSeconds = 0;
 
-        if (progress?.status === 'completed' && progress.completed_at) {
+        if (progress?.status === 'completed'&& progress.completed_at) {
           const taskCompletedAt = new Date(progress.completed_at);
           const taskStartedAt = progress.started_at ? new Date(progress.started_at) : sessionStartTime;
           taskElapsedSeconds = (taskCompletedAt.getTime() - taskStartedAt.getTime()) / 1000;
@@ -4295,7 +4295,7 @@ Return ONLY valid JSON:
             punctualityPercentage = 100;
             creditEarned = taskWeight;
             onTimeWeightSum += taskWeight;
-            console.log(`   ✅ ON TIME! (within 5-min grace) +${taskWeight} weight (total on-time: ${onTimeWeightSum})`);
+            console.log(`   ''ON TIME! (within 5-min grace) +${taskWeight} weight (total on-time: ${onTimeWeightSum})`);
           } else {
             overtimeSeconds = taskElapsedSeconds - taskTimeLimit;
             const maxOvertimeAllowed = taskTimeLimit;
@@ -4304,20 +4304,20 @@ Return ONLY valid JSON:
               punctualityPercentage = Math.max(0, 100 - (overtimeSeconds / maxOvertimeAllowed) * 100);
               creditEarned = taskWeight * (punctualityPercentage / 100);
               partialCreditSum += creditEarned;
-              console.log(`   ⚠️ LATE but partial credit: ${punctualityPercentage.toFixed(1)}% → +${creditEarned.toFixed(2)} weight`);
+              console.log(`    LATE but partial credit: ${punctualityPercentage.toFixed(1)}% → +${creditEarned.toFixed(2)} weight`);
             } else {
               punctualityPercentage = 0;
               creditEarned = 0;
-              console.log(`   ❌ VERY LATE: 0 credit`);
+              console.log(`    VERY LATE: 0 credit`);
             }
           }
         } else if (progress?.status === 'completed') {
           punctualityPercentage = 50;
           creditEarned = taskWeight * 0.5;
           partialCreditSum += creditEarned;
-          console.log(`   ⚠️ Completed but no timing → 50% credit: +${creditEarned.toFixed(2)}`);
+          console.log(`    Completed but no timing → 50% credit: +${creditEarned.toFixed(2)}`);
         } else {
-          console.log(`   ❌ Not completed → 0 credit`);
+          console.log(`    Not completed → 0 credit`);
         }
 
         punctualityBreakdown.push({
@@ -4370,22 +4370,22 @@ Return ONLY valid JSON:
       for (let i = 0; i < templateTasks.length; i++) {
         const task = templateTasks[i];
 
-        // Detect unexpected tasks — only genuine surprises, not planned technical tasks
-        const isUnexpected = task.type === 'emergency' ||
+        // Detect unexpected tasks   only genuine surprises, not planned technical tasks
+        const isUnexpected = task.type === 'emergency'||
           task.type === 'change_request';
 
         if (isUnexpected) {
           unexpectedEventsCount++;
           const progress = taskProgress.find((tp: any) => tp.task_index === i);
 
-          // ✅ USE YOUR EXISTING CODE QUALITY SCORE
+          // ''USE YOUR EXISTING CODE QUALITY SCORE
           let qualityScore = 0;
           if (progress?.answer) {
             const qualityResult = await this.calculateAnswerQuality(progress.answer);
             qualityScore = qualityResult.codeQuality;
           }
 
-          // ✅ SPEED SCORE: Use task.duration from template (180 minutes)
+          // ''SPEED SCORE: Use task.duration from template (180 minutes)
           let speedScore = 0;
           let isLate = false;
           let minutes = 0;
@@ -4393,28 +4393,28 @@ Return ONLY valid JSON:
           if (progress?.completed_at && progress?.started_at) {
             minutes = (new Date(progress.completed_at).getTime() - new Date(progress.started_at).getTime()) / 1000 / 60;
 
-            // ✅ FIXED: Use task.duration from template instead of hardcoded 30
+            // ''FIXED: Use task.duration from template instead of hardcoded 30
             const timeLimitMinutes = task.duration || task.duration_minutes || 30;
 
             if (minutes <= timeLimitMinutes) {
               speedScore = 100;
-              console.log(`   ✅ Task ${i + 1}: ON TIME (${minutes.toFixed(1)} min ≤ ${timeLimitMinutes} min) → Speed: 100`);
+              console.log(`   ''Task ${i + 1}: ON TIME (${minutes.toFixed(1)} min ≤ ${timeLimitMinutes} min) → Speed: 100`);
             } else {
               speedScore = 0;
               isLate = true;
-              console.log(`   ❌ Task ${i + 1}: LATE (${minutes.toFixed(1)} min > ${timeLimitMinutes} min) → Speed: 0`);
+              console.log(`    Task ${i + 1}: LATE (${minutes.toFixed(1)} min > ${timeLimitMinutes} min) → Speed: 0`);
             }
           } else if (progress?.status === 'completed') {
             speedScore = 0;
-            console.log(`   ⚠️ Task ${i + 1}: Completed but no timing → Speed: 0`);
+            console.log(`    Task ${i + 1}: Completed but no timing → Speed: 0`);
           }
 
           // Check for abandonment
-          if (progress?.status === 'cancelled' || progress?.status === 'not_started') {
+          if (progress?.status === 'cancelled'|| progress?.status === 'not_started') {
             abandonedCount++;
             qualityScore = 0;
             speedScore = 0;
-            console.log(`   ❌ Task ${i + 1}: ABANDONED → Quality: 0, Speed: 0`);
+            console.log(`    Task ${i + 1}: ABANDONED → Quality: 0, Speed: 0`);
           }
 
           // Check for creativity
@@ -4431,7 +4431,7 @@ Return ONLY valid JSON:
 
           console.log(`   📊 Task ${i + 1}: Quality=${qualityScore}, Speed=${speedScore} (Limit: ${task.duration || task.duration_minutes || 30} min)`);
 
-          // ✅ PUSH TO adaptabilityBreakdown
+          // ''PUSH TO adaptabilityBreakdown
           adaptabilityBreakdown.push({
             task_index: i,
             task_title: task.title || task.task_name || `Task ${i + 1}`,
@@ -4441,7 +4441,7 @@ Return ONLY valid JSON:
             quality_score: Math.round(qualityScore),
             speed_score: Math.round(speedScore),
             completed: progress?.status === 'completed',
-            was_abandoned: progress?.status === 'cancelled' || progress?.status === 'not_started',
+            was_abandoned: progress?.status === 'cancelled'|| progress?.status === 'not_started',
             was_creative: progress?.answer && JSON.stringify(progress.answer).toLowerCase().includes('alternative'),
             completed_late: isLate,
             completion_time_minutes: minutes
@@ -4468,7 +4468,7 @@ Return ONLY valid JSON:
         adaptabilityPath = 'A';
         avgQuality = qualitySum / unexpectedEventsCount;
         avgSpeed   = speedSum   / unexpectedEventsCount;
-        console.log(`\n📈 Averages — Quality: ${avgQuality.toFixed(1)}, Speed: ${avgSpeed.toFixed(1)}`);
+        console.log(`\n📈 Averages   Quality: ${avgQuality.toFixed(1)}, Speed: ${avgSpeed.toFixed(1)}`);
 
         abandonmentRate    = abandonedCount  / unexpectedEventsCount;
         abandonmentPenalty = abandonmentRate  * 30;
@@ -4478,13 +4478,13 @@ Return ONLY valid JSON:
 
         baseScore = Math.round((avgQuality * 0.5) + (avgSpeed * 0.5));
         adaptabilityScore = Math.max(0, Math.min(100, baseScore - abandonmentPenalty + creativityBonus));
-        console.log(`\n🎯 Path A — Final Adaptability: (${avgQuality.toFixed(1)}×0.5 + ${avgSpeed.toFixed(1)}×0.5) - ${abandonmentPenalty.toFixed(1)} + ${creativityBonus.toFixed(1)} = ${adaptabilityScore}`);
+        console.log(`\n🎯 Path A   Final Adaptability: (${avgQuality.toFixed(1)}×0.5 + ${avgSpeed.toFixed(1)}×0.5) - ${abandonmentPenalty.toFixed(1)} + ${creativityBonus.toFixed(1)} = ${adaptabilityScore}`);
 
       } else {
         // ── Path B: no emergency/change_request tasks ────────────────────────
         // Points are split proportionally across tasks so the SUM = final score.
         // With n tasks: each task is worth 100/n → on-time=40/n, git=40/n, code=20/n
-        console.log('\n⚡ Path B — No unexpected events. Scoring all tasks on time + git + code.');
+        console.log('\n⚡ Path B   No unexpected events. Scoring all tasks on time + git + code.');
 
         const numTasks = templateTasks.length || 1;
         const maxTimePerTask  = 40 / numTasks;
@@ -4501,7 +4501,7 @@ Return ONLY valid JSON:
           const task     = templateTasks[i];
           const progress = taskProgress.find((tp: any) => tp.task_index === i);
 
-          // 1. Time score — 40/n pts per task (5-minute grace allowed)
+          // 1. Time score   40/n pts per task (5-minute grace allowed)
           let timeScore = 0;
           let timeTakenMin = 0;
           if (progress?.completed_at && progress?.started_at) {
@@ -4510,7 +4510,7 @@ Return ONLY valid JSON:
             timeScore = timeTakenMin <= limitMin + 5 ? maxTimePerTask : 0;
           }
 
-          // 2. Git commit score — 40/n pts per task (credit even if late)
+          // 2. Git commit score   40/n pts per task (credit even if late)
           let gitScore = 0;
           if (implementedTaskTitles.length > 0) {
             const taskTitle = (task.title || task.task_name || '').toLowerCase().trim();
@@ -4521,12 +4521,12 @@ Return ONLY valid JSON:
             );
             if (found) { gitScore = maxGitPerTask; }
           } else if (githubAnalysis && (githubDetailedMarks?.commits?.count || 0) > 0) {
-            // Candidate pushed commits — give full In Git marks.
+            // Candidate pushed commits   give full In Git marks.
             // GitHub quality is scored separately in the GitHub section.
             gitScore = maxGitPerTask;
           }
 
-          // 3. Code written score — 20/n pts per task
+          // 3. Code written score   20/n pts per task
           let codeScore = 0;
           if (progress?.answer) {
             const src = progress.answer.code || progress.answer.comment || progress.answer.essay || '';
@@ -4540,7 +4540,7 @@ Return ONLY valid JSON:
           if (!codeScore && (githubDetailedMarks?.codeFiles?.count || 0) > 0) {
             codeScore = maxCodePerTask;
           }
-          // If code landed in git, the candidate wrote code — don't penalise external editors
+          // If code landed in git, the candidate wrote code   don't penalise external editors
           if (!codeScore && gitScore > 0) {
             codeScore = maxCodePerTask;
           }
@@ -4568,10 +4568,10 @@ Return ONLY valid JSON:
           console.log(`   Task ${i + 1} "${task.title || ''}": time=${Math.round(timeScore)}/${Math.round(maxTimePerTask)}, git=${Math.round(gitScore)}/${Math.round(maxGitPerTask)}, code=${Math.round(codeScore)}/${Math.round(maxCodePerTask)} → ${Math.round(taskAdaptScore)}/${Math.round(maxTimePerTask+maxGitPerTask+maxCodePerTask)}`);
         }
 
-        // Sum (not average) — points are already scaled to 100 total across all tasks
+        // Sum (not average)   points are already scaled to 100 total across all tasks
         adaptabilityScore = Math.min(100, Math.round(taskAdaptScores.reduce((a, b) => a + b, 0)));
 
-        console.log(`\n🎯 Path B — Final Adaptability: sum(${taskAdaptScores.map(s => Math.round(s)).join(', ')}) = ${adaptabilityScore}/100`);
+        console.log(`\n🎯 Path B   Final Adaptability: sum(${taskAdaptScores.map(s => Math.round(s)).join(', ')}) = ${adaptabilityScore}/100`);
       }
 
       console.log('═══════════════════════════════════════════════════════════════\n');
@@ -4586,7 +4586,7 @@ Return ONLY valid JSON:
 
       for (let i = 0; i < templateTasks.length; i++) {
         const task = templateTasks[i];
-        const isTechnical = task.type === 'technical' || task.type === 'code_editor' || task.type === 'code_execution';
+        const isTechnical = task.type === 'technical'|| task.type === 'code_editor'|| task.type === 'code_execution';
 
         if (isTechnical) {
           technicalTasksCount++;
@@ -4596,7 +4596,7 @@ Return ONLY valid JSON:
 
           if (progress?.answer) {
             const hasCode = !!(progress.answer.code || progress.answer.githubCommitUrl);
-            const isCompleted = progress.status === 'completed' || progress.answer.completed === true;
+            const isCompleted = progress.status === 'completed'|| progress.answer.completed === true;
 
             // Binary scoring: completed + code submitted = full marks.
             // Code quality is measured separately in the GitHub section.
@@ -4648,7 +4648,7 @@ Return ONLY valid JSON:
         let taskSpeedScore = 0;
         let taskTimeSpent = 0;
 
-        // ✅ FIXED: Get duration from task object (stored in templateTasks JSON)
+        // ''FIXED: Get duration from task object (stored in templateTasks JSON)
         // The task.duration is in MINUTES (from your template: 180)
         // Convert to seconds for comparison
         const taskDurationMinutes = task.duration || task.duration_minutes || 30;
@@ -4667,11 +4667,11 @@ Return ONLY valid JSON:
             if (taskTimeSpent <= taskTimeLimit + _graceS) {
               taskSpeedScore = 100;
               scoringMethod = 'on_time';
-              console.log(`   ✅ Task ${i + 1}: ON TIME (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s ≤ ${taskDurationMinutes}m + 5min grace) → Speed: 100`);
+              console.log(`   ''Task ${i + 1}: ON TIME (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s ≤ ${taskDurationMinutes}m + 5min grace) → Speed: 100`);
             } else {
               taskSpeedScore = 50;
               scoringMethod = 'late';
-              console.log(`   ⚠️ Task ${i + 1}: LATE (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s > ${taskDurationMinutes}m + 5min grace) → Speed: 50`);
+              console.log(`    Task ${i + 1}: LATE (${Math.floor(taskTimeSpent / 60)}m ${taskTimeSpent % 60}s > ${taskDurationMinutes}m + 5min grace) → Speed: 50`);
             }
             totalSpeedScoreSum += taskSpeedScore * taskWeight;
             tasksWithTimeData++;
@@ -4679,12 +4679,12 @@ Return ONLY valid JSON:
             taskSpeedScore = 50;
             totalSpeedScoreSum += taskSpeedScore * taskWeight;
             scoringMethod = 'partial_data';
-            console.log(`   ⚠️ Task ${i + 1}: Completed but no start time → Speed: 50`);
+            console.log(`    Task ${i + 1}: Completed but no start time → Speed: 50`);
           } else {
             taskSpeedScore = 40;
             totalSpeedScoreSum += taskSpeedScore * taskWeight;
             scoringMethod = 'no_time_data';
-            console.log(`   ⚠️ Task ${i + 1}: Completed but no timing → Speed: 40`);
+            console.log(`    Task ${i + 1}: Completed but no timing → Speed: 40`);
           }
         } else if (progress?.status === 'in_progress') {
           taskSpeedScore = 25;
@@ -4720,7 +4720,7 @@ Return ONLY valid JSON:
       }
 
       const sessionSpeedScore = Math.max(0, Math.min(100, (1 - (totalTimeSeconds / timeLimitSeconds)) * 100));
-      // Always use per-task weighted score — session-level time fallback was awarding
+      // Always use per-task weighted score   session-level time fallback was awarding
       // high speed scores even when tasks were never completed (misleading).
       const speedScore = weightedSpeedScore;
 
@@ -4739,7 +4739,7 @@ Return ONLY valid JSON:
         tasks_with_time_data: tasksWithTimeData,
         total_tasks_weighted: totalTasksForSpeed,
         per_task_speed: speedTaskBreakdown,
-        calculation_method: tasksWithTimeData > 0 ? 'weighted_per_task' : 'session_based'
+        calculation_method: tasksWithTimeData > 0 ? 'weighted_per_task': 'session_based'
       };
       // ============================================
       // 10. Quality Score
@@ -4774,13 +4774,13 @@ Return ONLY valid JSON:
         const candidateMessages = communicationScoreResult.candidateMessages;
         const recruiterMessages = communicationScoreResult.recruiterMessages;
 
-        // Score based purely on content quality — message count does not matter.
+        // Score based purely on content quality   message count does not matter.
         // 2 excellent messages score the same as 20 excellent messages.
         if (recruiterMessages === 0 && candidateMessages > 0) {
           // One-sided: candidate tried but recruiter never replied.
           collaborationScore = 10;
         } else if (recruiterMessages > 0 && candidateMessages > 0) {
-          // Two-way conversation — score = GROQ communication quality score.
+          // Two-way conversation   score = GROQ communication quality score.
           // If classifier also has data, blend it in lightly.
           const groqScore = communicationScoreResult.score || 0;
           if (communicationScoreResult.classifierAnalysis && groqScore > 0) {
@@ -4863,44 +4863,44 @@ Return ONLY valid JSON:
       const strengths = [];
       const improvements = [];
 
-      if (completionRate >= 80) strengths.push(`✅ High task completion rate (${Math.round(completionRate)}% of ${templateTasks.length} tasks completed)`);
-      else if (completionRate < 60) improvements.push(`⚠️ Complete more tasks (${Math.round(completionRate)}% completion rate, target: 80%)`);
+      if (completionRate >= 80) strengths.push(`''High task completion rate (${Math.round(completionRate)}% of ${templateTasks.length} tasks completed)`);
+      else if (completionRate < 60) improvements.push(` Complete more tasks (${Math.round(completionRate)}% completion rate, target: 80%)`);
 
-      if (punctualityScore >= 80) strengths.push(`✅ Excellent time management (${punctualityScore}% punctuality score)`);
-      else if (punctualityScore < 60) improvements.push(`⚠️ Improve time management (${punctualityScore}% punctuality score, target: 80%)`);
+      if (punctualityScore >= 80) strengths.push(`''Excellent time management (${punctualityScore}% punctuality score)`);
+      else if (punctualityScore < 60) improvements.push(` Improve time management (${punctualityScore}% punctuality score, target: 80%)`);
 
-      if (technicalScore >= 80) strengths.push(`✅ Strong technical skills (${technicalScore}% technical score)`);
-      else if (technicalScore < 60) improvements.push(`⚠️ Improve technical implementation (${technicalScore}% technical score, target: 80%)`);
+      if (technicalScore >= 80) strengths.push(`''Strong technical skills (${technicalScore}% technical score)`);
+      else if (technicalScore < 60) improvements.push(` Improve technical implementation (${technicalScore}% technical score, target: 80%)`);
 
-      if (qualityScore >= 80) strengths.push(`✅ High quality deliverables (${qualityScore}% quality score)`);
-      else if (qualityScore < 60) improvements.push(`⚠️ Focus on quality of work (${qualityScore}% quality score, target: 80%)`);
+      if (qualityScore >= 80) strengths.push(`''High quality deliverables (${qualityScore}% quality score)`);
+      else if (qualityScore < 60) improvements.push(` Focus on quality of work (${qualityScore}% quality score, target: 80%)`);
 
-      if (speedScore >= 80) strengths.push(`✅ Fast execution speed (${speedScore}% speed score)`);
-      else if (speedScore < 60) improvements.push(`⚠️ Complete tasks faster (${speedScore}% speed score, target: 80%)`);
+      if (speedScore >= 80) strengths.push(`''Fast execution speed (${speedScore}% speed score)`);
+      else if (speedScore < 60) improvements.push(` Complete tasks faster (${speedScore}% speed score, target: 80%)`);
 
-      if (averageTaskScore >= 80) strengths.push(`✅ Consistent performance across tasks (${Math.round(averageTaskScore)}% average task score)`);
-      else if (averageTaskScore < 60) improvements.push(`⚠️ Improve consistency across tasks (${Math.round(averageTaskScore)}% average task score, target: 80%)`);
+      if (averageTaskScore >= 80) strengths.push(`''Consistent performance across tasks (${Math.round(averageTaskScore)}% average task score)`);
+      else if (averageTaskScore < 60) improvements.push(` Improve consistency across tasks (${Math.round(averageTaskScore)}% average task score, target: 80%)`);
 
-      if (calculatedCommunicationScore >= 80) strengths.push(`✅ Strong communication skills (${calculatedCommunicationScore}% communication score)`);
-      else if (calculatedCommunicationScore < 60) improvements.push(`⚠️ Improve communication (${calculatedCommunicationScore}% communication score, target: 80%)`);
+      if (calculatedCommunicationScore >= 80) strengths.push(`''Strong communication skills (${calculatedCommunicationScore}% communication score)`);
+      else if (calculatedCommunicationScore < 60) improvements.push(` Improve communication (${calculatedCommunicationScore}% communication score, target: 80%)`);
 
-      if (githubScore >= 80) strengths.push(`✅ Excellent GitHub repository structure (${githubScore}% GitHub score)`);
-      else if (githubScore >= 50) strengths.push(`✅ Adequate GitHub setup (${githubScore}% GitHub score)`);
-      else if (githubScore > 0) improvements.push(`⚠️ Improve GitHub repository documentation and structure (${githubScore}% GitHub score, target: 80%)`);
+      if (githubScore >= 80) strengths.push(`''Excellent GitHub repository structure (${githubScore}% GitHub score)`);
+      else if (githubScore >= 50) strengths.push(`''Adequate GitHub setup (${githubScore}% GitHub score)`);
+      else if (githubScore > 0) improvements.push(` Improve GitHub repository documentation and structure (${githubScore}% GitHub score, target: 80%)`);
 
-      if (strengths.length === 0) strengths.push('✅ Completed the simulation');
-      if (improvements.length === 0 && overallScore < 80) improvements.push('⚠️ Review all tasks and ensure completeness for a higher score');
+      if (strengths.length === 0) strengths.push('Completed the simulation');
+      if (improvements.length === 0 && overallScore < 80) improvements.push(' Review all tasks and ensure completeness for a higher score');
 
       // ============================================
       // 15.5 Hiring Recommendation (derived transparently from the weighted scores)
       // ============================================
       const hiringRecommendation = ((): { level: string; label: string; reasoning: string } => {
-        const topStrengths = strengths.slice(0, 2).map((s: string) => s.replace(/^✅\s*/, ''));
-        const topGaps = improvements.slice(0, 2).map((s: string) => s.replace(/^⚠️\s*/, ''));
+        const topStrengths = strengths.slice(0, 2).map((s: string) => s.replace(/^''\s*/, ''));
+        const topGaps = improvements.slice(0, 2).map((s: string) => s.replace(/^\s*/, ''));
         const basis = `Overall ${overallScore}% (technical ${technicalScore}%, quality ${qualityScore}%, communication ${calculatedCommunicationScore}%, GitHub ${githubScore}%).`;
         if (overallScore >= 85) return { level: 'strong_hire', label: 'Strong Hire', reasoning: `${basis} Consistently strong across the board${topStrengths.length ? `: ${topStrengths.join('; ')}` : ''}.` };
         if (overallScore >= 70) return { level: 'hire', label: 'Hire', reasoning: `${basis} Meets the bar with solid performance${topStrengths.length ? `: ${topStrengths.join('; ')}` : ''}.` };
-        if (overallScore >= 60) return { level: 'borderline', label: 'Borderline', reasoning: `${basis} Mixed results — promising but with gaps${topGaps.length ? `: ${topGaps.join('; ')}` : ''}.` };
+        if (overallScore >= 60) return { level: 'borderline', label: 'Borderline', reasoning: `${basis} Mixed results   promising but with gaps${topGaps.length ? `: ${topGaps.join('; ')}` : ''}.` };
         if (overallScore >= 45) return { level: 'needs_improvement', label: 'Needs Improvement', reasoning: `${basis} Below the bar; notable gaps${topGaps.length ? `: ${topGaps.join('; ')}` : ''}.` };
         return { level: 'not_recommended', label: 'Not Recommended', reasoning: `${basis} Did not demonstrate the required competencies${topGaps.length ? `: ${topGaps.join('; ')}` : ''}.` };
       })();
@@ -5004,7 +5004,7 @@ Return ONLY valid JSON:
           improvements: improvements,
           summary: passed
             ? `🎉 Congratulations! You passed the ${session.simulation_name} simulation with a score of ${overallScore}%.`
-            : `📚 You scored ${overallScore}% on the ${session.simulation_name} simulation. The passing threshold is ${passingScore}%.`,
+            : ` You scored ${overallScore}% on the ${session.simulation_name} simulation. The passing threshold is ${passingScore}%.`,
           detailed_feedback: passed
             ? `Excellent work! You demonstrated strong ${strengths.slice(0, 2).join(', ')}. Keep up the great performance!`
             : `Focus on improving: ${improvements.slice(0, 3).join(', ')}. Review the tasks and try again.`,
@@ -5015,7 +5015,7 @@ Return ONLY valid JSON:
         hiring_recommendation: hiringRecommendation,
 
         // ============================================
-        // ✅ GITHUB ANALYSIS - FULL DETAILS
+        // ''GITHUB ANALYSIS - FULL DETAILS
         // ============================================
         github_analysis: {
           has_repo: !!githubRepoInfo,
@@ -5031,7 +5031,7 @@ Return ONLY valid JSON:
         },
 
         // ============================================
-        // ✅ COMMUNICATION ANALYSIS - FULL DETAILS (CLASSIFIER + GROQ)
+        // ''COMMUNICATION ANALYSIS - FULL DETAILS (CLASSIFIER + GROQ)
         // ============================================
         communication_analysis: communicationScoreResult ? {
           score: communicationScoreResult.score,
@@ -5040,7 +5040,7 @@ Return ONLY valid JSON:
           recruiter_messages: communicationScoreResult.recruiterMessages,
           has_chat: communicationScoreResult.messageCount > 0,
 
-          // ✅ FULL CLASSIFIER API ANALYSIS
+          // ''FULL CLASSIFIER API ANALYSIS
           classifier_analysis: communicationScoreResult.classifierAnalysis ? {
             dominant_style: communicationScoreResult.classifierAnalysis.dominant_style,
             style_counts: communicationScoreResult.classifierAnalysis.style_counts,
@@ -5050,7 +5050,7 @@ Return ONLY valid JSON:
             raw_response: communicationScoreResult.classifierAnalysis
           } : null,
 
-          // ✅ FULL GROQ AI ANALYSIS
+          // ''FULL GROQ AI ANALYSIS
           groq_analysis: communicationScoreResult.groqAnalysis ? {
             message_tone: communicationScoreResult.groqAnalysis.message_tone,
             clarity_level: communicationScoreResult.groqAnalysis.clarity_level,
@@ -5067,7 +5067,7 @@ Return ONLY valid JSON:
             raw_response: communicationScoreResult.groqAnalysis
           } : null,
 
-          // ✅ COMBINED INSIGHTS (Easy access)
+          // ''COMBINED INSIGHTS (Easy access)
           combined_insights: communicationScoreResult.combinedInsights || {
             taskDiscussionSummary: '',
             messageTone: '',
@@ -5079,13 +5079,13 @@ Return ONLY valid JSON:
             taskReferences: []
           },
 
-          // ✅ CANDIDATE SUMMARY
+          // ''CANDIDATE SUMMARY
           candidate_summary: communicationScoreResult.analysis?.candidate_summary || '',
 
-          // ✅ METHOD USED
+          // ''METHOD USED
           analysis_method: communicationScoreResult.analysis?.method || 'unknown',
 
-          // ✅ RAW ANALYSIS (fallback or combined)
+          // ''RAW ANALYSIS (fallback or combined)
           details: communicationScoreResult.analysis
 
         } : {
@@ -5108,7 +5108,7 @@ Return ONLY valid JSON:
           },
           candidate_summary: 'No chat messages available for analysis',
           analysis_method: 'none',
-          details: { message: 'No chat messages available for analysis' }
+          details: { message: 'No chat messages available for analysis'}
         },
 
         scoring_config: {
@@ -5136,7 +5136,7 @@ Return ONLY valid JSON:
       console.log('📊 [calculateFullSessionScores] Final Result:', result);
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [calculateFullSessionScores] COMPLETED');
+      console.log('[calculateFullSessionScores] COMPLETED');
       console.log('═══════════════════════════════════════════════════════════════');
       console.log('📊 FINAL SCORES SUMMARY:', {
         sessionId,
@@ -5179,7 +5179,7 @@ Return ONLY valid JSON:
       return result;
 
     } catch (error: any) {
-      console.error('❌ [calculateFullSessionScores] ERROR:', error);
+      console.error(' [calculateFullSessionScores] ERROR:', error);
       throw error;
     }
   }
@@ -5194,10 +5194,10 @@ Return ONLY valid JSON:
   private extractGitHubMetrics(repoData: any) {
     console.log('📊 [extractGitHubMetrics] Extracting metrics...');
 
-    // ✅ USE TOTAL ACROSS ALL BRANCHES if available
+    // ''USE TOTAL ACROSS ALL BRANCHES if available
     const commitCount = repoData.commits?.totalAcrossBranches || repoData.commits?.total || 0;
 
-    console.log(`📊 Using commit count: ${commitCount} (from ${repoData.commits?.totalAcrossBranches ? 'ALL branches' : 'default branch only'})`);
+    console.log(`📊 Using commit count: ${commitCount} (from ${repoData.commits?.totalAcrossBranches ? 'ALL branches': 'default branch only'})`);
 
     const fileStructure = repoData.code?.structure || [];
 
@@ -5207,8 +5207,8 @@ Return ONLY valid JSON:
       repoData.repository?.has_readme === true ||
       repoData.readme !== null ||
       fileStructure.some((f: any) =>
-        f.path === 'README.md' ||
-        f.path === 'README' ||
+        f.path === 'README.md'||
+        f.path === 'README'||
         f.path?.toLowerCase().includes('readme')
       );
 
@@ -5216,7 +5216,7 @@ Return ONLY valid JSON:
     const _allCodeExt = /\.(js|jsx|mjs|cjs|ts|tsx|vue|svelte|html|htm|css|scss|sass|less|py|java|go|rs|cpp|c|cc|cxx|hpp|h|rb|php|swift|kt|kts|cs|dart|lua|pl|r|m|scala|ex|exs|erl|hs|clj|sql|sh|bash|zsh|ps1|fish|yaml|yml|xml|tf|ipynb|json)$/i;
     const codeFiles = fileStructure.filter((f: any) => {
       const p = f.path || f.name || '';
-      return (f.type === 'blob' || f.type === 'file') && _allCodeExt.test(p);
+      return (f.type === 'blob'|| f.type === 'file') && _allCodeExt.test(p);
     });
 
     const codeFilesCount = codeFiles.length;
@@ -5224,11 +5224,11 @@ Return ONLY valid JSON:
 
     // Detect config files
     const hasConfigFile = fileStructure.some((f: any) =>
-      f.path === 'package.json' || f.path === 'requirements.txt' ||
-      f.path === 'go.mod' || f.path === 'Cargo.toml' ||
-      f.path === 'pyproject.toml' || f.path === 'setup.py' ||
-      f.path === 'tsconfig.json' || f.path === '.eslintrc' ||
-      f.path === 'webpack.config.js' || f.path === 'vite.config.js'
+      f.path === 'package.json'|| f.path === 'requirements.txt'||
+      f.path === 'go.mod'|| f.path === 'Cargo.toml'||
+      f.path === 'pyproject.toml'|| f.path === 'setup.py'||
+      f.path === 'tsconfig.json'|| f.path === '.eslintrc'||
+      f.path === 'webpack.config.js'|| f.path === 'vite.config.js'
     );
 
     // Detect test files
@@ -5239,7 +5239,7 @@ Return ONLY valid JSON:
     );
 
     // ============================================
-    // ✅ PROCESS COMMITS WITH FILE CHANGE DETAILS
+    // ''PROCESS COMMITS WITH FILE CHANGE DETAILS
     // ============================================
     // Get detailed commits (from getAllBranchCommits + getCommitWithChanges)
     const detailedCommits = repoData.commits?.detailedCommits || [];
@@ -5262,7 +5262,7 @@ Return ONLY valid JSON:
         totalChanges = totalAdditions + totalDeletions;
       }
 
-      // ✅ THIS IS WHAT YOU WANT - FILE CHANGES PER COMMIT
+      // ''THIS IS WHAT YOU WANT - FILE CHANGES PER COMMIT
       const changedFiles = files.map((file: any) => ({
         filename: file.filename,                    // File name (e.g., "src/app.js")
         status: file.status,                        // 'added', 'modified', 'removed', 'renamed'
@@ -5289,12 +5289,12 @@ Return ONLY valid JSON:
           total: totalChanges,
           filesChanged: files.length
         },
-        // ✅ FILE CHANGES DETAILS (what you wanted)
+        // ''FILE CHANGES DETAILS (what you wanted)
         filesChanged: files.length,
         linesAdded: totalAdditions,
         linesDeleted: totalDeletions,
         netChange: totalAdditions - totalDeletions,
-        // ✅ DETAILED LIST OF CHANGED FILES
+        // ''DETAILED LIST OF CHANGED FILES
         changedFiles: changedFiles
       };
     });
@@ -5321,7 +5321,7 @@ Return ONLY valid JSON:
       primaryLanguage: repoData.languages?.primary || 'Unknown',
       languages: repoData.languages?.breakdown || [],
 
-      // ✅ FULL COMMIT DETAILS WITH FILE CHANGES
+      // ''FULL COMMIT DETAILS WITH FILE CHANGES
       recentCommits: processedCommits,
 
       // Author metrics
@@ -5366,73 +5366,73 @@ Return ONLY valid JSON:
     let score = 0;
     const breakdown = [];
     const detailedMarks = {
-      commits: { earned: 0, max: 50, details: '' },
-      readme: { earned: 0, max: 15, details: '' },
-      configFile: { earned: 0, max: 10, details: '' },
-      gitignore: { earned: 0, max: 5, details: '' },
-      codeFiles: { earned: 0, max: 20, details: '' }
+      commits: { earned: 0, max: 50, details: ''},
+      readme: { earned: 0, max: 15, details: ''},
+      configFile: { earned: 0, max: 10, details: ''},
+      gitignore: { earned: 0, max: 5, details: ''},
+      codeFiles: { earned: 0, max: 20, details: ''}
     };
 
     console.log('\n📊 GITHUB SCORE CALCULATION (Progressive 1-Day Mode):');
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log('   ⚠️ NOTE: Frequency and streak penalties are IGNORED');
-    console.log('   📈 1 commit = ~30% | 10+ commits = ~90%');
+    console.log('   NOTE: Frequency and streak penalties are IGNORED');
+    console.log('  📈 1 commit = ~30% | 10+ commits = ~90%');
     console.log('───────────────────────────────────────────────────────────────');
 
     // ============================================
     // 1. COMMIT COUNT - 50% (50 points max)
     // ============================================
-    console.log(`   📝 Commit count: ${metrics.commitCount}`);
+    console.log(`    Commit count: ${metrics.commitCount}`);
 
     if (metrics.commitCount >= 10) {
       detailedMarks.commits.earned = 50;
       detailedMarks.commits.details = `10+ commits (${metrics.commitCount} commits) - EXCELLENT`;
       score += 50;
-      breakdown.push(`✅ +50: 10+ commits (${metrics.commitCount} commits) - EXCELLENT`);
+      breakdown.push(`''+50: 10+ commits (${metrics.commitCount} commits) - EXCELLENT`);
       console.log(`   → +50/50: EXCELLENT (10+ commits)`);
     } else if (metrics.commitCount >= 8) {
       detailedMarks.commits.earned = 45;
       detailedMarks.commits.details = `8-9 commits (${metrics.commitCount} commits) - VERY GOOD`;
       score += 45;
-      breakdown.push(`✅ +45: 8-9 commits (${metrics.commitCount} commits) - VERY GOOD`);
+      breakdown.push(`''+45: 8-9 commits (${metrics.commitCount} commits) - VERY GOOD`);
       console.log(`   → +45/50: VERY GOOD (8-9 commits)`);
     } else if (metrics.commitCount >= 6) {
       detailedMarks.commits.earned = 40;
       detailedMarks.commits.details = `6-7 commits (${metrics.commitCount} commits) - GOOD`;
       score += 40;
-      breakdown.push(`✅ +40: 6-7 commits (${metrics.commitCount} commits) - GOOD`);
+      breakdown.push(`''+40: 6-7 commits (${metrics.commitCount} commits) - GOOD`);
       console.log(`   → +40/50: GOOD (6-7 commits)`);
     } else if (metrics.commitCount >= 4) {
       detailedMarks.commits.earned = 30;
       detailedMarks.commits.details = `4-5 commits (${metrics.commitCount} commits) - ABOVE AVERAGE`;
       score += 30;
-      breakdown.push(`✅ +30: 4-5 commits (${metrics.commitCount} commits) - ABOVE AVERAGE`);
+      breakdown.push(`''+30: 4-5 commits (${metrics.commitCount} commits) - ABOVE AVERAGE`);
       console.log(`   → +30/50: ABOVE AVERAGE (4-5 commits)`);
     } else if (metrics.commitCount >= 2) {
       detailedMarks.commits.earned = 20;
       detailedMarks.commits.details = `2-3 commits (${metrics.commitCount} commits) - AVERAGE`;
       score += 20;
-      breakdown.push(`✅ +20: 2-3 commits (${metrics.commitCount} commits) - AVERAGE`);
+      breakdown.push(`''+20: 2-3 commits (${metrics.commitCount} commits) - AVERAGE`);
       console.log(`   → +20/50: AVERAGE (2-3 commits)`);
     } else if (metrics.commitCount >= 1) {
       detailedMarks.commits.earned = 10;
       detailedMarks.commits.details = `1 commit (${metrics.commitCount} commits) - MINIMAL`;
       score += 10;
-      breakdown.push(`✅ +10: 1 commit (${metrics.commitCount} commits) - MINIMAL`);
+      breakdown.push(`''+10: 1 commit (${metrics.commitCount} commits) - MINIMAL`);
       console.log(`   → +10/50: MINIMAL (1 commit)`);
     } else {
       detailedMarks.commits.earned = 0;
       detailedMarks.commits.details = `No commits (${metrics.commitCount} commits)`;
-      breakdown.push('❌ +0: No commits');
+      breakdown.push(' +0: No commits');
       console.log(`   → +0/50: No commits`);
     }
 
     // ============================================
     // SKIPPED: Frequency and streak (0 points)
     // ============================================
-    console.log(`   ⚠️ Commit frequency (${metrics.commitFrequency.toFixed(2)}/day) - IGNORED (0 points, 1-day simulation)`);
-    console.log(`   ⚠️ Commit streak (${metrics.commitStreak} days) - IGNORED (0 points, 1-day simulation)`);
-    console.log(`   ⚠️ Reason: Candidate may have completed all work in a few hours`);
+    console.log(`    Commit frequency (${metrics.commitFrequency.toFixed(2)}/day) - IGNORED (0 points, 1-day simulation)`);
+    console.log(`    Commit streak (${metrics.commitStreak} days) - IGNORED (0 points, 1-day simulation)`);
+    console.log(`    Reason: Candidate may have completed all work in a few hours`);
 
     // ============================================
     // 2. README FILE - 15% (15 points max)
@@ -5442,12 +5442,12 @@ Return ONLY valid JSON:
       detailedMarks.readme.earned = 15;
       detailedMarks.readme.details = 'README.md file present';
       score += 15;
-      breakdown.push('✅ +15: Has README');
+      breakdown.push('+15: Has README');
       console.log(`   → +15/15: README present`);
     } else {
       detailedMarks.readme.earned = 0;
       detailedMarks.readme.details = 'Missing README.md file';
-      breakdown.push('❌ +0: Missing README');
+      breakdown.push(' +0: Missing README');
       console.log(`   → +0/15: Missing README`);
     }
 
@@ -5459,12 +5459,12 @@ Return ONLY valid JSON:
       detailedMarks.configFile.earned = 10;
       detailedMarks.configFile.details = 'Config file present (package.json, requirements.txt, etc.)';
       score += 10;
-      breakdown.push('✅ +10: Has config file');
+      breakdown.push('+10: Has config file');
       console.log(`   → +10/10: Config file present`);
     } else {
       detailedMarks.configFile.earned = 0;
       detailedMarks.configFile.details = 'No config file found';
-      breakdown.push('❌ +0: Missing config file');
+      breakdown.push(' +0: Missing config file');
       console.log(`   → +0/10: Missing config file`);
     }
 
@@ -5476,12 +5476,12 @@ Return ONLY valid JSON:
       detailedMarks.gitignore.earned = 5;
       detailedMarks.gitignore.details = '.gitignore file present';
       score += 5;
-      breakdown.push('✅ +5: Has .gitignore');
+      breakdown.push('+5: Has .gitignore');
       console.log(`   → +5/5: .gitignore present`);
     } else {
       detailedMarks.gitignore.earned = 0;
       detailedMarks.gitignore.details = 'No .gitignore file found';
-      breakdown.push('❌ +0: Missing .gitignore');
+      breakdown.push(' +0: Missing .gitignore');
       console.log(`   → +0/5: Missing .gitignore`);
     }
 
@@ -5493,36 +5493,36 @@ Return ONLY valid JSON:
       detailedMarks.codeFiles.earned = 20;
       detailedMarks.codeFiles.details = `Excellent code structure (${metrics.codeFilesCount} files)`;
       score += 20;
-      breakdown.push(`✅ +20: Excellent code structure (${metrics.codeFilesCount} files)`);
+      breakdown.push(`''+20: Excellent code structure (${metrics.codeFilesCount} files)`);
       console.log(`   → +20/20: EXCELLENT (15+ files)`);
     } else if (metrics.codeFilesCount >= 10) {
       detailedMarks.codeFiles.earned = 16;
       detailedMarks.codeFiles.details = `Great code structure (${metrics.codeFilesCount} files)`;
       score += 16;
-      breakdown.push(`✅ +16: Great code structure (${metrics.codeFilesCount} files)`);
+      breakdown.push(`''+16: Great code structure (${metrics.codeFilesCount} files)`);
       console.log(`   → +16/20: GREAT (10-14 files)`);
     } else if (metrics.codeFilesCount >= 6) {
       detailedMarks.codeFiles.earned = 12;
       detailedMarks.codeFiles.details = `Good code structure (${metrics.codeFilesCount} files)`;
       score += 12;
-      breakdown.push(`✅ +12: Good code structure (${metrics.codeFilesCount} files)`);
+      breakdown.push(`''+12: Good code structure (${metrics.codeFilesCount} files)`);
       console.log(`   → +12/20: GOOD (6-9 files)`);
     } else if (metrics.codeFilesCount >= 3) {
       detailedMarks.codeFiles.earned = 8;
       detailedMarks.codeFiles.details = `Adequate code structure (${metrics.codeFilesCount} files)`;
       score += 8;
-      breakdown.push(`✅ +8: Adequate code structure (${metrics.codeFilesCount} files)`);
+      breakdown.push(`''+8: Adequate code structure (${metrics.codeFilesCount} files)`);
       console.log(`   → +8/20: ADEQUATE (3-5 files)`);
     } else if (metrics.codeFilesCount >= 1) {
       detailedMarks.codeFiles.earned = 4;
       detailedMarks.codeFiles.details = `Minimal code (${metrics.codeFilesCount} files)`;
       score += 4;
-      breakdown.push(`✅ +4: Minimal code (${metrics.codeFilesCount} files)`);
+      breakdown.push(`''+4: Minimal code (${metrics.codeFilesCount} files)`);
       console.log(`   → +4/20: MINIMAL (1-2 files)`);
     } else {
       detailedMarks.codeFiles.earned = 0;
       detailedMarks.codeFiles.details = `No code files (${metrics.codeFilesCount} files)`;
-      breakdown.push(`❌ +0: No code files`);
+      breakdown.push(` +0: No code files`);
       console.log(`   → +0/20: No code files`);
     }
 
@@ -5546,7 +5546,7 @@ Return ONLY valid JSON:
 
     console.log('\n📊 GITHUB SCORE DETAILED BREAKDOWN:');
     console.log('═══════════════════════════════════════════════════════════════');
-    console.log(`   📝 Commits:        ${detailedMarks.commits.earned}/${detailedMarks.commits.max} points - ${detailedMarks.commits.details}`);
+    console.log(`    Commits:        ${detailedMarks.commits.earned}/${detailedMarks.commits.max} points - ${detailedMarks.commits.details}`);
     console.log(`   📖 README:         ${detailedMarks.readme.earned}/${detailedMarks.readme.max} points - ${detailedMarks.readme.details}`);
     console.log(`   ⚙️ Config File:    ${detailedMarks.configFile.earned}/${detailedMarks.configFile.max} points - ${detailedMarks.configFile.details}`);
     console.log(`   🚫 .gitignore:     ${detailedMarks.gitignore.earned}/${detailedMarks.gitignore.max} points - ${detailedMarks.gitignore.details}`);
@@ -5601,14 +5601,14 @@ Return ONLY valid JSON:
    * Parse chat messages from database
    */
   private parseChatMessages(messages: any[], currentUserId: string) {
-    console.log(`📝 Parsing ${messages.length} chat messages...`);
+    console.log(` Parsing ${messages.length} chat messages...`);
 
     const parsed = messages.map((msg: any) => {
       let parsedText = msg.message;
       try {
         let parsed = JSON.parse(msg.message);
         let depth = 0;
-        while (typeof parsed === 'string' && depth < 10) {
+        while (typeof parsed === 'string'&& depth < 10) {
           try {
             parsed = JSON.parse(parsed);
             depth++;
@@ -5633,7 +5633,7 @@ Return ONLY valid JSON:
       };
     });
 
-    console.log(`✅ Parsed ${parsed.length} chat messages`);
+    console.log(`''Parsed ${parsed.length} chat messages`);
     // console.log(`📊 Candidate messages: ${parsed.filter(m => m.is_candidate).length}`);
     console.log(`📊 Recruiter messages: ${parsed.filter(m => !m.is_candidate).length}`);
 
@@ -5663,7 +5663,7 @@ Return ONLY valid JSON:
         completed_at: progress?.completed_at
       });
 
-      if (progress?.status === 'completed' && progress.completed_at) {
+      if (progress?.status === 'completed'&& progress.completed_at) {
         const completedAt = new Date(progress.completed_at);
         const elapsed = (completedAt.getTime() - sessionStartTime.getTime()) / 1000;
         const limit = (task.duration || task.duration_minutes || 30) * 60;
@@ -5706,9 +5706,9 @@ Return ONLY valid JSON:
     // Check unexpected tasks
     for (const task of tasks) {
       console.log(`   Evaluating Task ${task.order || task.task_index}: ${task.name} (type: ${task.type || task.task_type})`);
-      const isUnexpected = task.task_type === 'emergency' ||
-        task.task_type === 'change_request' ||
-        task.type === 'emergency' ||
+      const isUnexpected = task.task_type === 'emergency'||
+        task.task_type === 'change_request'||
+        task.type === 'emergency'||
         task.type === 'change_request';
       if (isUnexpected) {
         eventCount++;
@@ -5801,7 +5801,7 @@ Return ONLY valid JSON:
     let taskCount = 0;
 
     for (const task of tasks) {
-      const isTechnical = task.type === 'technical' || task.type === 'code_editor' || task.type === 'code_execution';
+      const isTechnical = task.type === 'technical'|| task.type === 'code_editor'|| task.type === 'code_execution';
       if (isTechnical) {
         taskCount++;
         console.log(`   Technical Task ${taskCount}: Task ${task.order || task.task_index} - ${task.name}`);
@@ -5941,12 +5941,12 @@ Return ONLY valid JSON:
               WHEN u.user_type IN ('recruiter', 'company_admin', 'system_admin') THEN 'recruiter'
               ELSE 'other'
           END as sender_type,
-          COALESCE(cp.first_name || ' ' || cp.last_name, u.email, 'User') as sender_name,
+          COALESCE(cp.first_name || ''|| cp.last_name, u.email, 'User') as sender_name,
           CASE 
-              WHEN u.user_type = 'recruiter' THEN 'Recruiter'
-              WHEN u.user_type = 'company_admin' THEN 'Company Admin'
-              WHEN u.user_type = 'system_admin' THEN 'System Admin'
-              WHEN u.user_type = 'candidate' THEN 'Candidate'
+              WHEN u.user_type = 'recruiter'THEN 'Recruiter'
+              WHEN u.user_type = 'company_admin'THEN 'Company Admin'
+              WHEN u.user_type = 'system_admin'THEN 'System Admin'
+              WHEN u.user_type = 'candidate'THEN 'Candidate'
               ELSE u.user_type
           END as sender_role
       FROM chat_messages cm
@@ -5961,7 +5961,7 @@ Return ONLY valid JSON:
       if (!messages || messages.length === 0) {
         return {
           score: 0,
-          analysis: { message: 'No chat messages exchanged' },
+          analysis: { message: 'No chat messages exchanged'},
           messageCount: 0,
           candidateMessages: 0,
           recruiterMessages: 0,
@@ -5989,7 +5989,7 @@ Return ONLY valid JSON:
       if (candidateMessages === 0) {
         return {
           score: 0,
-          analysis: { message: 'Candidate did not send any messages' },
+          analysis: { message: 'Candidate did not send any messages'},
           messageCount: totalMessages,
           candidateMessages,
           recruiterMessages,
@@ -6055,13 +6055,13 @@ Return ONLY valid JSON:
         if (classifierAnalysis && classifierAnalysis.communication_score) {
           communicationScore = classifierAnalysis.communication_score;
         }
-        console.log('✅ Communication classifier API response received:', {
+        console.log('Communication classifier API response received:', {
           score: classifierAnalysis?.communication_score,
           dominant_style: classifierAnalysis?.dominant_style,
           style_counts: classifierAnalysis?.style_counts
         });
       } catch (apiError: any) {
-        console.error('❌ Communication classifier API error:', apiError.message);
+        console.error(' Communication classifier API error:', apiError.message);
         classifierAnalysis = { error: apiError.message, fallback: true };
       }
 
@@ -6089,12 +6089,12 @@ Return ONLY valid JSON:
 
         // Parse and truncate each message
         const messageTexts = recentMessages.map((msg: ChatMessageRow, idx: number) => {
-          const sender = msg.sender_type === 'candidate' ? 'Candidate' : 'Recruiter';
+          const sender = msg.sender_type === 'candidate'? 'Candidate': 'Recruiter';
           let content = msg.message;
           try {
             let parsed = JSON.parse(msg.message);
             let depth = 0;
-            while (typeof parsed === 'string' && depth < 3) {
+            while (typeof parsed === 'string'&& depth < 3) {
               try {
                 parsed = JSON.parse(parsed);
                 depth++;
@@ -6110,7 +6110,7 @@ Return ONLY valid JSON:
         }).join('\n');
 
         const prompt = `Analyze these chat messages between a candidate and recruiter during a TIMED job simulation.
-IMPORTANT: This is a short, timed simulation (not a full interview). Candidates are under time pressure completing tasks. A few clear, relevant messages is GOOD communication. Do NOT penalize for brevity — reward clarity, relevance to the tasks, and professionalism. Score generously for any genuine attempt to communicate.
+IMPORTANT: This is a short, timed simulation (not a full interview). Candidates are under time pressure completing tasks. A few clear, relevant messages is GOOD communication. Do NOT penalize for brevity   reward clarity, relevance to the tasks, and professionalism. Score generously for any genuine attempt to communicate.
 
       TASKS:
       ${taskContext.substring(0, 500) || 'No specific tasks'}
@@ -6153,7 +6153,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             model: 'llama-3.3-70b-versatile',
             temperature: 0.3,
             max_tokens: 1200,
-            response_format: { type: 'json_object' }
+            response_format: { type: 'json_object'}
           });
 
           const responseContent = completion.choices[0]?.message?.content;
@@ -6173,7 +6173,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
               taskReferences: (groqAnalysis.task_references || []).slice(0, 10)
             };
 
-            console.log('✅ Groq AI analysis completed:', {
+            console.log('Groq AI analysis completed:', {
               score: groqAnalysis.communication_score,
               tone: groqAnalysis.message_tone,
               taskReferencesCount: groqAnalysis.task_references?.length || 0,
@@ -6181,10 +6181,10 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             });
           }
         } else {
-          console.warn(`⚠️ Prompt too long (${prompt.length} chars), skipping Groq`);
+          console.warn(` Prompt too long (${prompt.length} chars), skipping Groq`);
         }
       } catch (groqError: any) {
-        console.error('❌ Groq AI analysis failed:', groqError.message);
+        console.error(' Groq AI analysis failed:', groqError.message);
         groqAnalysis = { error: groqError.message, fallback: true };
       }
 
@@ -6205,7 +6205,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         for (const msg of messages) {
           if (msg?.sender_type === 'recruiter') {
             lastRecruiterMessageTime = new Date(msg.timestamp);
-          } else if (msg?.sender_type === 'candidate' && lastRecruiterMessageTime) {
+          } else if (msg?.sender_type === 'candidate'&& lastRecruiterMessageTime) {
             const responseTime = (new Date(msg.timestamp).getTime() - lastRecruiterMessageTime.getTime()) / 1000;
             if (responseTime > 0 && responseTime < 3600) {
               responseTimes.push(responseTime);
@@ -6232,7 +6232,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           try {
             let parsed = JSON.parse(msg.message);
             let depth = 0;
-            while (typeof parsed === 'string' && depth < 3) {
+            while (typeof parsed === 'string'&& depth < 3) {
               try {
                 parsed = JSON.parse(parsed);
                 depth++;
@@ -6293,7 +6293,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         finalAnalysis = {
           method: 'combined',
-          // ✅ FULL CLASSIFIER ANALYSIS
+          // ''FULL CLASSIFIER ANALYSIS
           classifier: classifierAnalysis ? {
             dominant_style: classifierAnalysis.dominant_style,
             style_counts: classifierAnalysis.style_counts,
@@ -6303,7 +6303,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             raw_response: classifierAnalysis
           } : null,
 
-          // ✅ FULL GROQ ANALYSIS
+          // ''FULL GROQ ANALYSIS
           groq: groqAnalysis ? {
             message_tone: groqAnalysis.message_tone,
             clarity_level: groqAnalysis.clarity_level,
@@ -6320,7 +6320,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             raw_response: groqAnalysis
           } : null,
 
-          // ✅ COMBINED INSIGHTS
+          // ''COMBINED INSIGHTS
           combined_insights: combinedInsights,
 
           // Statistics
@@ -6362,10 +6362,10 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       };
 
     } catch (error: any) {
-      console.error('❌ Error calculating communication score:', error);
+      console.error(' Error calculating communication score:', error);
       return {
         score: 0,
-        analysis: { error: error.message, message: 'Failed to calculate communication score' },
+        analysis: { error: error.message, message: 'Failed to calculate communication score'},
         messageCount: 0,
         candidateMessages: 0,
         recruiterMessages: 0,
@@ -6406,7 +6406,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       try {
         let parsed = JSON.parse(msg.message);
         let depth = 0;
-        while (typeof parsed === 'string' && depth < 3) {
+        while (typeof parsed === 'string'&& depth < 3) {
           try { parsed = JSON.parse(parsed); depth++; } catch { break; }
         }
         if (parsed && typeof parsed === 'object') {
@@ -6464,7 +6464,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
    * Send the submission-confirmation email to the candidate AND the company
    * (recruiters/admins/job creator), after the submission has been saved.
    * Idempotent: uses email_tracking to avoid resending for the same submission.
-   * Never throws — email problems must not fail the submission.
+   * Never throws   email problems must not fail the submission.
    */
   private async sendSubmissionEmails(params: {
     sessionId: string;
@@ -6478,16 +6478,16 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
     scoreBreakdown?: Record<string, { score: number; weight: number; contribution?: string }> | null;
   }): Promise<{ emailSent: boolean; recipients: string[]; deduped: boolean }> {
     const { sessionId, candidateUserId, candidateEmail, simulationName, taskNames, githubUrl, score, passed, scoreBreakdown } = params;
-    console.log(`📧 [sendSubmissionEmails] Starting — session=${sessionId} candidate=${candidateEmail} score=${score}`);
+    console.log(`📧 [sendSubmissionEmails] Starting   session=${sessionId} candidate=${candidateEmail} score=${score}`);
     try {
-      // Idempotency guard — if we've already logged a confirmation for this
+      // Idempotency guard   if we've already logged a confirmation for this
       // submission, don't send again (handles accidental double-submits/retries).
       const existing = await DatabaseService.query(
-        `SELECT 1 FROM email_tracking WHERE metadata->>'submission_session_id' = $1 AND metadata->>'type' = 'submission_confirmation' LIMIT 1`,
+        `SELECT 1 FROM email_tracking WHERE metadata->>'submission_session_id'= $1 AND metadata->>'type'= 'submission_confirmation'LIMIT 1`,
         [sessionId]
       );
       if (existing.rows.length > 0) {
-        console.log(`📧 [sendSubmissionEmails] DEDUPED — already sent for session ${sessionId}`);
+        console.log(`📧 [sendSubmissionEmails] DEDUPED   already sent for session ${sessionId}`);
         return { emailSent: true, recipients: [], deduped: true };
       }
 
@@ -6504,7 +6504,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         : (candidateEmail.split('@')[0] || 'Candidate');
 
       // Company / recruiter recipients: the job creator, company creator, the
-      // assigned reviewer, AND every member of the company's team — so the company
+      // assigned reviewer, AND every member of the company's team   so the company
       // side reliably receives the submission even when the recruiter didn't create
       // the job/company and isn't the assigned reviewer.
       const companyResult = await DatabaseService.query(
@@ -6523,16 +6523,16 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       );
       const companyEmails: string[] = companyResult.rows.map((r: any) => r.email).filter(Boolean);
 
-      // Make the "company got nothing" case visible — it's the usual reason the
+      // Make the "company got nothing" case visible   it's the usual reason the
       // submission email appears to reach only one end.
       if (companyEmails.length === 0) {
-        console.warn(`[sendSubmissionEmails] No company recipients resolved for session ${sessionId}. The company will NOT receive the submission email — check the job's created_by, the company's created_by, the assigned reviewer, or the company_team for this job's company.`);
+        console.warn(`[sendSubmissionEmails] No company recipients resolved for session ${sessionId}. The company will NOT receive the submission email   check the job's created_by, the company's created_by, the assigned reviewer, or the company_team for this job's company.`);
       } else {
         console.log(`[sendSubmissionEmails] Company recipients (${companyEmails.length}): ${companyEmails.join(', ')}`);
       }
 
       const submittedAt = new Date().toLocaleString();
-      const attempts: Array<{ to: string; role: 'candidate' | 'company'; ok: boolean; error?: string }> = [];
+      const attempts: Array<{ to: string; role: 'candidate'| 'company'; ok: boolean; error?: string }> = [];
 
       // Candidate email.
       try {
@@ -6565,7 +6565,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
              VALUES ($1, $2, NOW(), $3, $4)`,
             [
               a.to,
-              `Submission confirmation — ${simulationName}`,
+              `Submission confirmation   ${simulationName}`,
               a.ok,
               JSON.stringify({ type: 'submission_confirmation', submission_session_id: sessionId, role: a.role, error: a.error || null }),
             ]
@@ -6591,7 +6591,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const { answers, timeSpent } = req.body;
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('📝 [submitSimulation] STARTED');
+      console.log(' [submitSimulation] STARTED');
       console.log('═══════════════════════════════════════════════════════════════');
       console.log('📋 Request params:', {
         sessionId,
@@ -6607,7 +6607,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       // STEP 1: Validate session exists
       // ============================================
       if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-        console.log('❌ Invalid session ID format');
+        console.log(' Invalid session ID format');
         ResponseService.error(res, 'Invalid session ID format', 400);
         return;
       }
@@ -6621,19 +6621,19 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
     `, [validSessionId, req.user.id]);
 
       if (!sessionCheck.rows[0]) {
-        console.log('❌ Session not found');
+        console.log(' Session not found');
         ResponseService.error(res, 'Session not found', 404);
         return;
       }
 
       const session = sessionCheck.rows[0];
-      console.log('✅ Session found:', { sessionId: session.id, status: session.status });
+      console.log('Session found:', { sessionId: session.id, status: session.status });
 
       // ============================================
       // STEP 2: Check if already submitted
       // ============================================
-      if (session.status === 'completed' || session.status === 'submitted') {
-        console.log('⚠️ Session already completed');
+      if (session.status === 'completed'|| session.status === 'submitted') {
+        console.log(' Session already completed');
         ResponseService.success(res, {
           sessionId: session.id,
           alreadySubmitted: true,
@@ -6646,7 +6646,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       // STEP 3: Check if session is in progress
       // ============================================
       if (session.status !== 'in_progress') {
-        console.log('❌ Session not in progress. Status:', session.status);
+        console.log(' Session not in progress. Status:', session.status);
       }
 
       // ============================================
@@ -6707,18 +6707,18 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           req.user.id,
           (stage, label, percent) => this.emitEvalProgress(req.user.id, validSessionId, stage, label, percent)
         );
-        console.log('✅ Full score analysis completed');
+        console.log('Full score analysis completed');
         communicationAnalysis = fullScoreAnalysis.communication_analysis || null;
         this.emitEvalProgress(req.user.id, validSessionId, 'finalizing', 'Finalizing report', 95);
       } catch (calcError: any) {
-        console.error('❌ Score calculation failed:', calcError);
+        console.error(' Score calculation failed:', calcError);
         this.emitEvalProgress(req.user.id, validSessionId, 'error', 'Evaluation failed', 100, { error: true });
         ResponseService.error(res, 'Failed to calculate scores', 500);
         return;
       }
 
       // Extract all scores from the analysis
-      // Clamp to [0, 100] — the evaluations table CHECK constraints reject anything outside
+      // Clamp to [0, 100]   the evaluations table CHECK constraints reject anything outside
       // this range, and upstream sources (e.g. the communication classifier) aren't guaranteed
       // to return values within bounds.
       const clampScore = (value: any): number => Math.max(0, Math.min(100, Number(value) || 0));
@@ -6780,12 +6780,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const avgAnswerQuality = taskAnalysis.length > 0
         ? Math.round(taskAnalysis.reduce((sum: number, t: any) => sum + (t.scores?.answer_quality || 0), 0) / taskAnalysis.length)
         : 0;
-      const qualityGrade = avgAnswerQuality >= 80 ? 'A' : avgAnswerQuality >= 65 ? 'B' : avgAnswerQuality >= 50 ? 'C' : avgAnswerQuality >= 35 ? 'D' : 'F';
+      const qualityGrade = avgAnswerQuality >= 80 ? 'A': avgAnswerQuality >= 65 ? 'B': avgAnswerQuality >= 50 ? 'C': avgAnswerQuality >= 35 ? 'D': 'F';
 
       const dataQualityAnalysis = {
         average_answer_quality: avgAnswerQuality,
         grade: qualityGrade,
-        description: qualityGrade === 'A' ? 'Excellent quality answers' : qualityGrade === 'B' ? 'Good quality answers' : qualityGrade === 'C' ? 'Average quality answers' : qualityGrade === 'D' ? 'Below average — needs improvement' : 'Poor or no answers submitted',
+        description: qualityGrade === 'A'? 'Excellent quality answers': qualityGrade === 'B'? 'Good quality answers': qualityGrade === 'C'? 'Average quality answers': qualityGrade === 'D'? 'Below average   needs improvement': 'Poor or no answers submitted',
         per_task_quality: taskAnalysis.map((t: any) => ({
           task_index: t.task_index,
           task_title: t.task_title,
@@ -6821,7 +6821,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           participationBonus = Math.min(0, Math.floor(totalTimeSeconds / 360));
           participationMessage = `Participation marks awarded: +${participationBonus} pts (${Math.floor(totalTimeSeconds / 60)} min in session, minimum 3 min met)`;
         } else {
-          participationMessage = `No participation marks: session ended at ${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s — minimum 3 minutes required`;
+          participationMessage = `No participation marks: session ended at ${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s   minimum 3 minutes required`;
         }
       }
 
@@ -6831,18 +6831,18 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const completionRateLabel = `${Math.round(completionRate)}% completion (${completedTasksCount}/${totalTasks} tasks)`;
       const sessionTimeLabel = `${Math.floor(totalTimeSeconds / 60)}m ${totalTimeSeconds % 60}s`;
       const submissionMessage = finalPassed
-        ? `Passed with ${finalOverallScore}% — ${completionRateLabel} in ${sessionTimeLabel}.`
+        ? `Passed with ${finalOverallScore}%   ${completionRateLabel} in ${sessionTimeLabel}.`
         : completionRate === 0 && qualifiesForParticipation
           ? `No tasks completed. ${participationMessage}. Overall: ${finalOverallScore}%. Duration: ${sessionTimeLabel}.`
           : completionRate === 0
-            ? `No tasks completed. Session under 3 minutes (${sessionTimeLabel}) — no participation marks. Score: 0.`
-            : `Completed with ${finalOverallScore}% — ${completionRateLabel} in ${sessionTimeLabel}. Passing threshold: ${passingScore}%.`;
+            ? `No tasks completed. Session under 3 minutes (${sessionTimeLabel})   no participation marks. Score: 0.`
+            : `Completed with ${finalOverallScore}%   ${completionRateLabel} in ${sessionTimeLabel}. Passing threshold: ${passingScore}%.`;
 
       console.log('📐 Completion Angle:', completionAngle, '°');
       console.log('📦 Data Quantity:', dataQuantityAnalysis);
       console.log('🔍 Data Quality:', { grade: qualityGrade, avgScore: avgAnswerQuality });
       console.log('⏱️ Session Complete Time:', sessionCompleteTime.formatted, `(${sessionCompleteTime.time_used_percent}% of limit)`);
-      console.log('🎯 Participation:', { qualifies: qualifiesForParticipation, bonus: participationBonus, message: participationMessage });
+      console.log('Participation:', { qualifies: qualifiesForParticipation, bonus: participationBonus, message: participationMessage });
       console.log('📊 Final Score:', finalOverallScore, participationBonus > 0 ? `(base ${overallScore} + ${participationBonus} participation)` : '');
       console.log('💬 Submission Message:', submissionMessage);
 
@@ -6955,7 +6955,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
                 githubScore: githubScore
               });
 
-              console.log('✅ Blockchain storage successful!');
+              console.log('Blockchain storage successful!');
               console.log(`   📍 Address: ${result.address}`);
               console.log(`   🆕 New: ${result.isNewAddress}`);
               console.log(`   🔗 TX: ${result.txHash}`);
@@ -7013,18 +7013,18 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
                 balance: result.balance
               };
 
-              console.log('✅ Blockchain records saved to database');
+              console.log('Blockchain records saved to database');
               console.log('═══════════════════════════════════════════════════════════════');
 
             } else {
-              console.warn('⚠️ Contract artifact not found, skipping blockchain storage');
+              console.warn(' Contract artifact not found, skipping blockchain storage');
             }
           } else {
             console.log('ℹ️ Blockchain storage disabled (USE_BLOCKCHAIN !== "true")');
           }
         } catch (blockchainError: any) {
-          console.error('❌ Blockchain storage error:', blockchainError?.message);
-          console.error('   Continuing with submission...');
+          console.error(' Blockchain storage error:', blockchainError?.message);
+          console.error('  Continuing with submission...');
         }
 
         // 7.2 Update simulation record with blockchain info
@@ -7150,7 +7150,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
               tasks_completed = EXCLUDED.tasks_completed,
               total_tasks = EXCLUDED.total_tasks,
               metadata = EXCLUDED.metadata
-          `, [evaluationId, `Task ${task.task_index + 1}: ${task.task_title}`, task.scores.overall, 100, task.scores.overall, task.status === 'completed' ? 1 : 0, 1, JSON.stringify({ task_type: task.task_type, time_taken: task.time_taken_formatted, status: task.status, answer_details: task.answer_details })]);
+          `, [evaluationId, `Task ${task.task_index + 1}: ${task.task_title}`, task.scores.overall, 100, task.scores.overall, task.status === 'completed'? 1 : 0, 1, JSON.stringify({ task_type: task.task_type, time_taken: task.time_taken_formatted, status: task.status, answer_details: task.answer_details })]);
           }
 
           // 7.5 Insert behavioral metrics with ON CONFLICT
@@ -7175,20 +7175,20 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         `, [
             evaluationId,
             punctualityScore,
-            JSON.stringify(punctualityScore < 70 ? 'Consider better time management and planning' : 'Good time management demonstrated'),
-            JSON.stringify(punctualityScore < 70 ? 'Consider better time management and planning' : 'Good time management demonstrated'),
+            JSON.stringify(punctualityScore < 70 ? 'Consider better time management and planning': 'Good time management demonstrated'),
+            JSON.stringify(punctualityScore < 70 ? 'Consider better time management and planning': 'Good time management demonstrated'),
             adaptabilityScore,
-            JSON.stringify(adaptabilityScore < 70 ? 'Practice handling changing requirements and unexpected tasks' : 'Good adaptability shown'),
-            JSON.stringify(adaptabilityScore < 70 ? 'Practice handling changing requirements and unexpected tasks' : 'Good adaptability shown'),
+            JSON.stringify(adaptabilityScore < 70 ? 'Practice handling changing requirements and unexpected tasks': 'Good adaptability shown'),
+            JSON.stringify(adaptabilityScore < 70 ? 'Practice handling changing requirements and unexpected tasks': 'Good adaptability shown'),
             communicationScore,
-            JSON.stringify(communicationScore < 70 ? 'Improve clarity and structure in responses' : 'Clear and effective communication'),
-            JSON.stringify(communicationScore < 70 ? 'Improve clarity and structure in responses' : 'Clear and effective communication'),
+            JSON.stringify(communicationScore < 70 ? 'Improve clarity and structure in responses': 'Clear and effective communication'),
+            JSON.stringify(communicationScore < 70 ? 'Improve clarity and structure in responses': 'Clear and effective communication'),
             collaborationScore,
-            JSON.stringify(collaborationScore < 70 ? 'Engage more in collaborative tasks and discussions' : 'Strong collaboration skills'),
-            JSON.stringify(collaborationScore < 70 ? 'Engage more in collaborative tasks and discussions' : 'Strong collaboration skills'),
+            JSON.stringify(collaborationScore < 70 ? 'Engage more in collaborative tasks and discussions': 'Strong collaboration skills'),
+            JSON.stringify(collaborationScore < 70 ? 'Engage more in collaborative tasks and discussions': 'Strong collaboration skills'),
             technicalScore,
-            JSON.stringify(technicalScore < 70 ? 'Focus on core technical concepts and implementation' : 'Strong technical problem-solving'),
-            JSON.stringify(technicalScore < 70 ? 'Focus on core technical concepts and implementation' : 'Strong technical problem-solving')
+            JSON.stringify(technicalScore < 70 ? 'Focus on core technical concepts and implementation': 'Strong technical problem-solving'),
+            JSON.stringify(technicalScore < 70 ? 'Focus on core technical concepts and implementation': 'Strong technical problem-solving')
           ]);
 
           // 7.6 Insert AI feedback with ON CONFLICT
@@ -7208,7 +7208,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           );
           const sanitizedRecommendations = JSON.stringify(
             Array.isArray(fullScoreAnalysis.feedback.improvements)
-              ? fullScoreAnalysis.feedback.improvements.map((imp: string) => imp.replace(/[⚠️✅❌📚🎉]/g, '').trim()).slice(0, 3)
+              ? fullScoreAnalysis.feedback.improvements.map((imp: string) => imp.replace(/[️✅❌📚🎉]/g, '').trim()).slice(0, 3)
               : ['Review all tasks and ensure completeness']
           );
 
@@ -7243,11 +7243,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         }
 
         await client.query('COMMIT');
-        console.log('✅ Transaction committed successfully');
+        console.log('Transaction committed successfully');
 
       } catch (dbError: any) {
         await client.query('ROLLBACK');
-        console.error('❌ Database transaction failed:', dbError);
+        console.error(' Database transaction failed:', dbError);
         throw dbError;
       } finally {
         client.release();
@@ -7259,7 +7259,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const totalDuration = Date.now() - startTime;
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [submitSimulation] COMPLETED SUCCESSFULLY');
+      console.log('[submitSimulation] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════');
       console.log('📊 FINAL SCORES:', {
         overall: finalOverallScore,
@@ -7441,15 +7441,15 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           session.id
         ]);
 
-        console.log('✅ Submission results saved to simulation_sessions.submission_results');
+        console.log('Submission results saved to simulation_sessions.submission_results');
 
       } catch (saveError) {
-        console.error('❌ Error saving submission results:', saveError);
+        console.error(' Error saving submission results:', saveError);
         // Don't throw - continue to return response
       }
 
       // ============================================
-      // ✅ RETURN THE submissionResults OBJECT (NO DUPLICATE CODE)
+      // ''RETURN THE submissionResults OBJECT (NO DUPLICATE CODE)
       // ============================================
       if (!submissionResults) {
         // Fallback: create a minimal response if save failed
@@ -7491,7 +7491,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           (submissionResults as any).emailRecipients = emailResult.recipients;
         }
       } catch (emailErr: any) {
-        console.warn('⚠️ Submission email step failed:', emailErr?.message);
+        console.warn(' Submission email step failed:', emailErr?.message);
       }
 
       // Append a tamper-evident audit block for this submission, anchoring to the
@@ -7502,12 +7502,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           candidateId: req.user.id,
           simulationId: session.simulation_id,
           repoHash: fullScoreAnalysis.github_analysis?.repo_info?.repoUrl || null,
-          action: `Simulation submitted (score ${finalOverallScore}%, ${finalPassed ? 'passed' : 'completed'})`,
+          action: `Simulation submitted (score ${finalOverallScore}%, ${finalPassed ? 'passed': 'completed'})`,
           metadata: { score: finalOverallScore, passed: finalPassed, completionRate },
           ethTxId: (submissionResults as any)?.blockchain?.txHash || null,
         });
       } catch (chainErr: any) {
-        console.warn('⚠️ Audit chain append failed:', chainErr?.message);
+        console.warn(' Audit chain append failed:', chainErr?.message);
       }
 
       this.emitEvalProgress(req.user.id, validSessionId, 'complete', 'Evaluation complete', 100, {
@@ -7515,11 +7515,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         passed: finalPassed,
       });
 
-      ResponseService.success(res, submissionResults, `Simulation ${finalPassed ? 'passed' : 'completed'} successfully`);
+      ResponseService.success(res, submissionResults, `Simulation ${finalPassed ? 'passed': 'completed'} successfully`);
     } catch (error: any) {
       const totalDuration = Date.now() - startTime;
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [submitSimulation] ERROR');
+      console.error(' [submitSimulation] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -7560,8 +7560,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       const session = sessionCheck.rows[0];
       const isOwner = session.user_id === req.user.id;
-      const isRecruiter = req.user.user_type === 'recruiter' ||
-        req.user.user_type === 'company_admin' ||
+      const isRecruiter = req.user.user_type === 'recruiter'||
+        req.user.user_type === 'company_admin'||
         req.user.user_type === 'system_admin';
 
       if (!isOwner && !isRecruiter) {
@@ -7659,42 +7659,42 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const { simulationId, applicationId, githubUsername } = req.body;
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('🚀 [startAppliedJobSimulation] CALLED');
+      console.log(' [startAppliedJobSimulation] CALLED');
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('📥 Request body:', { simulationId, applicationId, githubUsername });
-      console.log('👤 User:', { userId: req.user.id, userType: req.user.user_type });
+      console.log(' Request body:', { simulationId, applicationId, githubUsername });
+      console.log(' User:', { userId: req.user.id, userType: req.user.user_type });
 
       // Validation
       if (!simulationId || !applicationId) {
-        console.log('❌ Missing simulationId or applicationId');
+        console.log(' Missing simulationId or applicationId');
         ResponseService.error(res, 'Simulation ID and Application ID are required', 400);
         return;
       }
 
       if (!githubUsername) {
-        console.log('❌ Missing githubUsername');
+        console.log(' Missing githubUsername');
         ResponseService.error(res, 'GitHub username is required', 400);
         return;
       }
 
       if (!ValidationService.isValidUUID(simulationId) || !ValidationService.isValidUUID(applicationId)) {
-        console.log('❌ Invalid UUID format');
+        console.log(' Invalid UUID format');
         ResponseService.error(res, 'Invalid ID format', 400);
         return;
       }
 
-      console.log('✅ Validation passed');
+      console.log('Validation passed');
 
       // Acquire lock
       const lockKey = `sim_${req.user.id}_${applicationId}`;
       const locked = await this.acquireLock(lockKey);
       if (!locked) {
-        console.log('❌ Failed to acquire lock');
+        console.log(' Failed to acquire lock');
         ResponseService.error(res, 'Another session is being created, please retry', 409);
         return;
       }
 
-      console.log('✅ Lock acquired');
+      console.log('Lock acquired');
 
       await client.query('BEGIN');
 
@@ -7708,12 +7708,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         if (parseInt(sessionCount.rows[0].count) >= SIMULATION_CONFIG.MAX_ACTIVE_SESSIONS_PER_USER) {
           await client.query('ROLLBACK');
-          console.log('❌ Too many active sessions');
+          console.log(' Too many active sessions');
           ResponseService.error(res, `You have too many active simulations. Maximum ${SIMULATION_CONFIG.MAX_ACTIVE_SESSIONS_PER_USER} allowed.`, 429);
           return;
         }
 
-        console.log('✅ Session count check passed');
+        console.log('Session count check passed');
 
         // Check application
         const appCheck = await client.query(`
@@ -7725,12 +7725,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         if (!appCheck.rows[0]) {
           await client.query('ROLLBACK');
-          console.log('❌ Application not found');
+          console.log(' Application not found');
           ResponseService.error(res, 'Application not found or access denied', 404);
           return;
         }
 
-        console.log('✅ Application found:', { jobId: appCheck.rows[0].job_id });
+        console.log('Application found:', { jobId: appCheck.rows[0].job_id });
 
         // Check simulation template
         const simCheck = await client.query(`
@@ -7741,18 +7741,18 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         if (!simCheck.rows[0]) {
           await client.query('ROLLBACK');
-          console.log('❌ Simulation template not found or inactive');
+          console.log(' Simulation template not found or inactive');
           ResponseService.error(res, 'Simulation not available for this job', 404);
           return;
         }
 
-        console.log('✅ Simulation template found:', { name: simCheck.rows[0].name });
+        console.log('Simulation template found:', { name: simCheck.rows[0].name });
 
         // Check if template is available (check availability dates)
         const availabilityCheck = await this.isTemplateAvailable(simulationId);
         if (!availabilityCheck.available) {
           await client.query('ROLLBACK');
-          console.log('❌ Template not available:', availabilityCheck.reason);
+          console.log(' Template not available:', availabilityCheck.reason);
           ResponseService.error(res, availabilityCheck.reason || 'Simulation is not available', 400);
           return;
         }
@@ -7770,7 +7770,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         if (existingSimulation.rows[0]) {
           simulationRecordId = existingSimulation.rows[0].id;
-          console.log('✅ Existing simulation found:', { simulationRecordId });
+          console.log('Existing simulation found:', { simulationRecordId });
 
           const activeSession = await client.query(`
           SELECT ss.id
@@ -7781,7 +7781,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
           if (activeSession.rows[0]) {
             await client.query('COMMIT');
-            console.log('⚠️ Active session already exists');
+            console.log(' Active session already exists');
             ResponseService.success(res, {
               sessionId: activeSession.rows[0].id,
               simulationId: simulationRecordId,
@@ -7818,7 +7818,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             JSON.stringify({ startedAt: new Date().toISOString() })
           ]);
           simulationRecordId = newSimulation.rows[0].id;
-          console.log('✅ New simulation created:', { simulationRecordId });
+          console.log('New simulation created:', { simulationRecordId });
         }
 
         // Create simulation session
@@ -7844,20 +7844,20 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         ]);
 
         session = newSession.rows[0];
-        console.log('✅ New session created:', { sessionId: session.id });
+        console.log('New session created:', { sessionId: session.id });
 
-        // ✅ COMMIT the transaction BEFORE creating GitHub repo
+        // ''COMMIT the transaction BEFORE creating GitHub repo
         await client.query('COMMIT');
 
-        // ✅ RELEASE the client immediately after commit to avoid timeout
+        // ''RELEASE the client immediately after commit to avoid timeout
         client.release();
 
-        console.log('✅ Transaction committed, client released - proceeding with GitHub operations');
+        console.log('Transaction committed, client released - proceeding with GitHub operations');
 
       } catch (dbError: any) {
         await client.query('ROLLBACK');
         client.release();
-        console.error('❌ Database error:', dbError);
+        console.error(' Database error:', dbError);
         ResponseService.error(res, 'Failed to create simulation session', 500);
         return;
       }
@@ -7866,7 +7866,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       // GITHUB OPERATIONS (outside transaction)
       // ============================================
 
-      // ✅ NEW: Get candidate's first name for better repo naming
+      // ''NEW: Get candidate's first name for better repo naming
       const candidateInfo = await DatabaseService.query(`
       SELECT first_name, last_name 
       FROM candidate_profiles 
@@ -7877,18 +7877,18 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const lastName = candidateInfo.rows[0]?.last_name || '';
       const candidateName = `${firstName}${lastName ? `-${lastName}` : ''}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
 
-      // ✅ NEW: Clean simulation name for use in repo name
+      // ''NEW: Clean simulation name for use in repo name
       const simulationName = template.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '')
         .substring(0, 30); // Limit length
 
-      // ✅ NEW: Generate timestamp for uniqueness
+      // ''NEW: Generate timestamp for uniqueness
       const timestamp = Date.now();
       const shortSimId = simulationRecordId.substring(0, 6);
 
-      // ✅ NEW REPO NAME FORMAT: {simulation-name}-{candidate-name}-{timestamp}
+      // ''NEW REPO NAME FORMAT: {simulation-name}-{candidate-name}-{timestamp}
       // Example: "frontend-developer-simulation-john-doe-1704067200000"
       const repoName = `${simulationName}-${candidateName}-${timestamp}`;
 
@@ -7912,7 +7912,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       let githubLinksData = null;
 
       try {
-        const templateTasks = typeof template.tasks === 'string' ? JSON.parse(template.tasks) : template.tasks;
+        const templateTasks = typeof template.tasks === 'string'? JSON.parse(template.tasks) : template.tasks;
 
         repoResult = await githubController.createSimulationRepoInternal(
           simulationRecordId,
@@ -7923,10 +7923,10 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           orgName
         );
 
-        console.log(`✅ GitHub repository created: ${repoResult.repoUrl}`);
+        console.log(`''GitHub repository created: ${repoResult.repoUrl}`);
         console.log(`📋 Issues created: ${repoResult.issuesCreated?.length || 0}`);
         console.log(`📊 Organization: ${repoResult.organizationName}`);
-        console.log(`👤 Candidate: ${repoResult.candidateUsername}`);
+        console.log(` Candidate: ${repoResult.candidateUsername}`);
 
         // Create COMPLETE github_links data object
         githubLinksData = {
@@ -7948,7 +7948,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         console.log('📦 GitHub links data prepared');
 
-        // ✅ Store in github_simulation_repos table
+        // ''Store in github_simulation_repos table
         await DatabaseService.query(`
         INSERT INTO github_simulation_repos (
           simulation_id,
@@ -7986,10 +7986,10 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           })
         ]);
 
-        console.log('✅ GitHub repo record saved to database');
+        console.log('GitHub repo record saved to database');
 
       } catch (githubError: any) {
-        console.error('⚠️ GitHub repo creation error:', {
+        console.error(' GitHub repo creation error:', {
           message: githubError?.message,
           status: githubError?.status,
           code: githubError?.code
@@ -8017,7 +8017,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         console.log('📦 Fallback GitHub links data prepared');
       }
 
-      // ✅ Store GitHub repo info in session using a NEW client
+      // ''Store GitHub repo info in session using a NEW client
       if (githubLinksData) {
         const updateClient = await DatabaseService.getClient();
         try {
@@ -8032,22 +8032,22 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             session.id
           ]);
 
-          console.log('✅ GitHub data stored in session github_links');
-          console.log('   Session ID:', session.id);
-          console.log('   Repo URL:', githubLinksData.repoUrl);
-          console.log('   Branch:', githubLinksData.branchName);
-          console.log('   Repo Name Pattern: {simulation-name}-{candidate-name}-{timestamp}');
+          console.log('GitHub data stored in session github_links');
+          console.log('  Session ID:', session.id);
+          console.log('  Repo URL:', githubLinksData.repoUrl);
+          console.log('  Branch:', githubLinksData.branchName);
+          console.log('  Repo Name Pattern: {simulation-name}-{candidate-name}-{timestamp}');
         } catch (updateError: any) {
-          console.error('❌ Failed to update session with GitHub data:', updateError.message);
+          console.error(' Failed to update session with GitHub data:', updateError.message);
         } finally {
           updateClient.release();
         }
       } else {
-        console.warn('⚠️ No GitHub data to store');
+        console.warn(' No GitHub data to store');
       }
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [startAppliedJobSimulation] SUCCESS');
+      console.log('[startAppliedJobSimulation] SUCCESS');
       console.log('═══════════════════════════════════════════════════════════════');
       console.log('📊 Response summary:', {
         sessionId: session.id,
@@ -8090,7 +8090,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [startAppliedJobSimulation] ERROR');
+      console.error(' [startAppliedJobSimulation] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error?.message,
@@ -8155,19 +8155,19 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         }
 
         const template = templateResult.rows[0];
-        const templateTasks = typeof template.tasks === 'string' ? JSON.parse(template.tasks) : template.tasks;
+        const templateTasks = typeof template.tasks === 'string'? JSON.parse(template.tasks) : template.tasks;
 
         // Check if template is available (check availability dates)
         const availabilityCheck = await this.isTemplateAvailable(templateId);
         if (!availabilityCheck.available) {
           await client.query('ROLLBACK');
-          console.log('❌ Template not available:', availabilityCheck.reason);
+          console.log(' Template not available:', availabilityCheck.reason);
           ResponseService.error(res, availabilityCheck.reason || 'Simulation is not available', 400);
           return;
         }
 
         // STEP 2: Create simulation record
-        console.log('📝 [STEP 2] Creating simulation record...');
+        console.log(' [STEP 2] Creating simulation record...');
         const simulationResult = await client.query(`
           INSERT INTO simulations (
             template_id,
@@ -8196,7 +8196,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         ]);
 
         const simulationId = simulationResult.rows[0].id;
-        console.log(`✅ Simulation created: ${simulationId}`);
+        console.log(`''Simulation created: ${simulationId}`);
 
         // STEP 3: Copy tasks from template to simulation_tasks
         console.log('📋 [STEP 3] Copying tasks from template...');
@@ -8230,7 +8230,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             ...task
           });
         }
-        console.log(`✅ ${taskInserts.length} tasks copied`);
+        console.log(`''${taskInserts.length} tasks copied`);
 
         // STEP 4: Create simulation_sessions record
         console.log('🔄 [STEP 4] Creating simulation session...');
@@ -8254,11 +8254,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           'candidate',
           'scheduled',
           template.duration_minutes * 60,
-          JSON.stringify({ status: 'pending' })
+          JSON.stringify({ status: 'pending'})
         ]);
 
         const sessionId = sessionResult.rows[0].id;
-        console.log(`✅ Session created: ${sessionId}`);
+        console.log(`''Session created: ${sessionId}`);
 
         // STEP 5: Create GitHub repository
         console.log('🐙 [STEP 5] Creating GitHub repository...');
@@ -8277,7 +8277,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         // Get repo info from GitHub response (we'll extract it from the flow)
         // For now, just mark the session as ready
-        console.log(`✅ GitHub repository created`);
+        console.log(`''GitHub repository created`);
 
         // Update session with GitHub repo info
         const repoName = `sim-${simulationId.substring(0, 8)}-${effectiveCandidateId.substring(0, 8)}`;
@@ -8385,7 +8385,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         }
       }
 
-      // ✅ FIXED: Get the LATEST session (not just in_progress)
+      // ''FIXED: Get the LATEST session (not just in_progress)
       const result = await DatabaseService.query(`
       SELECT 
         a.id as application_id,
@@ -8417,7 +8417,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         sim.status as simulation_status,
         sim.overall_score as simulation_score,
         sim.created_at as simulation_created_at,
-        -- ✅ FIXED: Get the LATEST session (ordered by created_at DESC, limit 1)
+        -- ''FIXED: Get the LATEST session (ordered by created_at DESC, limit 1)
         s.id as session_id,
         s.status as session_status,
         s.started_at,
@@ -8431,7 +8431,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       INNER JOIN companies c ON j.company_id = c.id
       LEFT JOIN simulation_templates st ON st.job_id = j.id AND st.is_active = true
       LEFT JOIN simulations sim ON sim.template_id = st.id AND sim.application_id = a.id AND sim.user_id = a.user_id
-      -- ✅ FIXED: Get LATEST session using LATERAL (works in PostgreSQL)
+      -- ''FIXED: Get LATEST session using LATERAL (works in PostgreSQL)
       LEFT JOIN LATERAL (
         SELECT s2.* 
         FROM simulation_sessions s2 
@@ -8461,7 +8461,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         difficulty: row.difficulty || 'intermediate',
         type: row.simulation_type || 'technical',
         status: row.simulation_status || 'not_started',
-        sessionId: row.session_id,  // ✅ Now returns sessionId for ALL simulations (completed and in_progress)
+        sessionId: row.session_id,  // ''Now returns sessionId for ALL simulations (completed and in_progress)
         sessionStatus: row.session_status,
         score: row.simulation_score,
         startedAt: row.started_at,
@@ -8552,8 +8552,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           s.time_remaining,
           CASE 
             WHEN s.id IS NULL THEN 'not_started'
-            WHEN s.status = 'completed' THEN 'completed'
-            WHEN s.status = 'in_progress' THEN 'in_progress'
+            WHEN s.status = 'completed'THEN 'completed'
+            WHEN s.status = 'in_progress'THEN 'in_progress'
             ELSE 'available'
           END as simulation_status
         FROM simulation_templates st
@@ -8562,7 +8562,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         INNER JOIN applications a ON a.job_id = j.id AND a.user_id = $2
         LEFT JOIN simulation_sessions s ON s.application_id = a.id 
           AND s.user_id = a.user_id 
-          AND s.session_type = 'candidate' 
+          AND s.session_type = 'candidate'
           AND s.simulation_id = st.id
         WHERE st.id = $1
           AND a.user_id = $2
@@ -8669,7 +8669,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const recentActivity = await DatabaseService.query(`
         SELECT 
           s.completed_at as date,
-          'completed' as type,
+          'completed'as type,
           j.title as job_title,
           s.score,
           c.name as company_name
@@ -8701,8 +8701,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       console.log('═══════════════════════════════════════════════════════════════');
       console.log('🔄 [resumeMySimulation] CALLED');
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('📥 Session ID:', id);
-      console.log('👤 User:', { userId: req.user.id, userType: req.user.user_type });
+      console.log(' Session ID:', id);
+      console.log(' User:', { userId: req.user.id, userType: req.user.user_type });
 
       if (!id || !ValidationService.isValidUUID(id)) {
         ResponseService.error(res, 'Invalid session ID format', 400);
@@ -8759,7 +8759,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
     `, [id, req.user.id]);
 
       if (!sessionResult.rows[0]) {
-        console.log('❌ Session not found');
+        console.log(' Session not found');
         ResponseService.notFound(res, 'Simulation session not found');
         return;
       }
@@ -8767,7 +8767,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const session = sessionResult.rows[0];
 
       // ============================================
-      // ✅ EXTRACT GITHUB REPO FROM github_links
+      // ''EXTRACT GITHUB REPO FROM github_links
       // ============================================
       let githubRepo = null;
       if (session.github_links) {
@@ -8776,7 +8776,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             ? JSON.parse(session.github_links)
             : session.github_links;
 
-          console.log('✅ GitHub repo data retrieved from session:', {
+          console.log('GitHub repo data retrieved from session:', {
             repoName: githubRepo.repoName,
             repoUrl: githubRepo.repoUrl,
             branchName: githubRepo.branchName,
@@ -8784,7 +8784,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             candidateUsername: githubRepo.candidateUsername
           });
         } catch (err) {
-          console.warn('⚠️ Failed to parse github_links:', err);
+          console.warn(' Failed to parse github_links:', err);
         }
       }
 
@@ -8807,7 +8807,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       }
 
       // ============================================
-      // ✅ BUILD RESPONSE WITH GITHUB REPO DATA - FIXED DUPLICATE 'progress'
+      // ''BUILD RESPONSE WITH GITHUB REPO DATA - FIXED DUPLICATE 'progress'
       // ============================================
       const responseData = {
         sessionId: session.id,
@@ -8823,7 +8823,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         startedAt: session.started_at,
         currentTask: currentTaskIndex,
         totalTasks: totalTasks,
-        progress: progressPercentage,  // ← This is the ONLY 'progress' property
+        progress: progressPercentage,  // ← This is the ONLY 'progress'property
         timeSpent: timeSpent,
         timeRemaining: timeRemaining,
         timeLimit: session.time_limit,
@@ -8832,9 +8832,9 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         tasks: tasks,
         scoringRubric: session.scoring_rubric,
         passFailCriteria: session.pass_fail_criteria,
-        canResume: session.status === 'in_progress' || session.status === 'scheduled',
+        canResume: session.status === 'in_progress'|| session.status === 'scheduled',
 
-        // ✅ GITHUB REPOSITORY DATA
+        // ''GITHUB REPOSITORY DATA
         githubRepo: githubRepo ? {
           repoName: githubRepo.repoName,
           repoUrl: githubRepo.repoUrl,
@@ -8849,19 +8849,19 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       };
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [resumeMySimulation] SUCCESS');
+      console.log('[resumeMySimulation] SUCCESS');
       console.log('═══════════════════════════════════════════════════════════════');
       console.log('📊 Response includes GitHub repo:', !!responseData.githubRepo);
       if (responseData.githubRepo) {
-        console.log('   Repo URL:', responseData.githubRepo.repoUrl);
-        console.log('   Branch:', responseData.githubRepo.branchName);
+        console.log('  Repo URL:', responseData.githubRepo.repoUrl);
+        console.log('  Branch:', responseData.githubRepo.branchName);
       }
 
       ResponseService.success(res, responseData, 'Simulation resumed successfully');
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [resumeMySimulation] ERROR');
+      console.error(' [resumeMySimulation] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error?.message,
@@ -8995,12 +8995,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-        console.log('❌ Invalid session ID format:', sessionId);
+        console.log(' Invalid session ID format:', sessionId);
         ResponseService.error(res, 'Invalid session ID format', 400);
         return;
       }
 
-      console.log('✅ Session ID validation passed');
+      console.log('Session ID validation passed');
 
       console.log('🔍 Executing query to fetch task progress...');
       const queryStartTime = Date.now();
@@ -9041,19 +9041,19 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         }))
       });
 
-      // ✅ Check each row's status
+      // ''Check each row's status
       for (const row of result.rows) {
-        console.log(`📌 Task ${row.task_index} - Raw status from DB: "${row.status}"`);
+        console.log(`''Task ${row.task_index} - Raw status from DB: "${row.status}"`);
 
         // Log if status is unexpected
         if (row.status === 'inactive') {
-          console.warn(`⚠️⚠️⚠️ WARNING: Task ${row.task_index} has status "inactive" in database!`);
+          console.warn(`️️️ WARNING: Task ${row.task_index} has status "inactive" in database!`);
           console.warn(`   This should be "not_started", "in_progress", or "completed"`);
           console.warn(`   Updating to "not_started" for frontend compatibility`);
         }
       }
 
-      // ✅ Return the status AS-IS from the database
+      // ''Return the status AS-IS from the database
       // The status should be one of: 'not_started', 'in_progress', 'completed'
       console.log('📤 SENDING RESPONSE:', {
         success: true,
@@ -9066,14 +9066,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [getSessionTaskProgress] COMPLETED SUCCESSFULLY');
+      console.log('[getSessionTaskProgress] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════');
 
       ResponseService.success(res, result.rows);
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [getSessionTaskProgress] ERROR');
+      console.error(' [getSessionTaskProgress] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -9111,7 +9111,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (req.params.taskIndex === undefined || req.params.taskIndex === null) {
-        console.log('❌ Task index is required but missing');
+        console.log(' Task index is required but missing');
         ResponseService.error(res, 'Task index is required', 400);
         return;
       }
@@ -9119,20 +9119,20 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const taskIndex = parseInt(req.params.taskIndex);
 
       if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-        console.log('❌ Invalid session ID format:', sessionId);
+        console.log(' Invalid session ID format:', sessionId);
         ResponseService.error(res, 'Invalid session ID format', 400);
         return;
       }
 
       if (isNaN(taskIndex) || taskIndex < 0) {
-        console.log('❌ Invalid task index:', taskIndex);
+        console.log(' Invalid task index:', taskIndex);
         ResponseService.error(res, 'Invalid task index', 400);
         return;
       }
 
-      console.log('✅ Validation passed:', { sessionId, taskIndex });
+      console.log('Validation passed:', { sessionId, taskIndex });
 
-      // ✅ Check if session exists (allow ANY status for update)
+      // ''Check if session exists (allow ANY status for update)
       console.log('🔍 Checking session existence...');
       const sessionCheck = await DatabaseService.query(`
       SELECT id, user_id, status, started_at FROM simulation_sessions
@@ -9145,13 +9145,13 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!sessionCheck.rows[0]) {
-        console.log('❌ Session not found or not accessible');
+        console.log(' Session not found or not accessible');
         ResponseService.error(res, 'Session not found or not accessible', 404);
         return;
       }
 
       const session = sessionCheck.rows[0];
-      console.log('✅ Session found:', {
+      console.log('Session found:', {
         id: session.id,
         user_id: session.user_id,
         status: session.status,
@@ -9159,8 +9159,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       // Don't allow updates if session is completed
-      if (session.status === 'completed' || session.status === 'submitted') {
-        console.log('❌ Session already completed, cannot update');
+      if (session.status === 'completed'|| session.status === 'submitted') {
+        console.log(' Session already completed, cannot update');
         ResponseService.error(res, 'Cannot update task progress for completed session', 400);
         return;
       }
@@ -9168,7 +9168,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const now = new Date();
       console.log('🕐 Current server time:', now.toISOString());
 
-      // ✅ Check if task progress record already exists
+      // ''Check if task progress record already exists
       console.log(`🔍 Checking existing task progress for task ${taskIndex}...`);
       const existing = await DatabaseService.query(`
       SELECT id, started_at, completed_at, status, time_spent
@@ -9187,7 +9187,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const values: any[] = [];
       let idx = 1;
 
-      // ✅ Build update fields dynamically
+      // ''Build update fields dynamically
       if (status !== undefined) {
         updateFields.push(`status = $${idx++}`);
         values.push(status);
@@ -9224,7 +9224,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         console.log(`   Setting time_spent to: ${timeSpent}`);
       }
 
-      // ✅ CRITICAL: Set started_at when status becomes 'in_progress'
+      // ''CRITICAL: Set started_at when status becomes 'in_progress'
       if (status === 'in_progress') {
         const startTime = started_at || now;
         updateFields.push(`started_at = $${idx++}`);
@@ -9237,7 +9237,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         const completeTime = completed_at || now;
         updateFields.push(`completed_at = $${idx++}`);
         values.push(completeTime);
-        console.log(`   ✅ Setting completed_at to: ${completeTime} (task COMPLETED)`);
+        console.log(`   ''Setting completed_at to: ${completeTime} (task COMPLETED)`);
       }
 
       // Always update updated_at
@@ -9245,8 +9245,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       values.push(now);
 
       if (existing.rows[0]) {
-        // ✅ UPDATE existing task progress
-        console.log('📝 Updating existing task progress record...');
+        // ''UPDATE existing task progress
+        console.log(' Updating existing task progress record...');
 
         if (updateFields.length > 1) { // More than just updated_at
           values.push(existing.rows[0].id);
@@ -9258,10 +9258,10 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           RETURNING *
         `;
 
-          console.log('📝 Executing UPDATE query...');
+          console.log(' Executing UPDATE query...');
           result = await DatabaseService.query(query, values);
 
-          console.log(`✅ Task ${taskIndex} updated in session ${sessionId}`);
+          console.log(`''Task ${taskIndex} updated in session ${sessionId}`);
           console.log('📊 Updated record:', {
             id: result.rows[0]?.id,
             task_index: result.rows[0]?.task_index,
@@ -9271,12 +9271,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             time_spent: result.rows[0]?.time_spent
           });
         } else {
-          console.log('⚠️ No fields to update, returning existing record');
+          console.log(' No fields to update, returning existing record');
           result = { rows: [existing.rows[0]] };
         }
       } else {
-        // ✅ CREATE new task progress record
-        console.log('📝 Creating NEW task progress record...');
+        // ''CREATE new task progress record
+        console.log(' Creating NEW task progress record...');
 
         const newStatus = status || 'in_progress';
         const newStartedAt = (newStatus === 'in_progress') ? (started_at || now) : null;
@@ -9300,7 +9300,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         const insertValues = [
           sessionId, taskIndex, newStatus, answer || null, score || null,
           feedback || null, githubCommitUrl || null, timeSpent || 0,
-          newStartedAt, status === 'completed' ? (completed_at || now) : null,
+          newStartedAt, status === 'completed'? (completed_at || now) : null,
           now, now
         ];
 
@@ -9312,7 +9312,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         RETURNING *
       `, insertValues);
 
-        console.log(`✅ NEW task ${taskIndex} created in session ${sessionId}`);
+        console.log(`''NEW task ${taskIndex} created in session ${sessionId}`);
         console.log('📊 Created record:', {
           id: result.rows[0]?.id,
           task_index: result.rows[0]?.task_index,
@@ -9323,7 +9323,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         });
       }
 
-      // ✅ Update session status if this is the first task being started
+      // ''Update session status if this is the first task being started
       if (status === 'in_progress') {
         console.log('🔍 Checking if this is the first task being started...');
 
@@ -9337,7 +9337,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         // If this is the only in_progress task, update session status
         if (inProgressCount === 1 && session.status === 'scheduled') {
-          console.log('✅ First task started - updating session status to in_progress');
+          console.log('First task started - updating session status to in_progress');
           await DatabaseService.query(`
           UPDATE simulation_sessions 
           SET status = 'in_progress', updated_at = NOW()
@@ -9347,14 +9347,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       }
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [updateTaskProgress] COMPLETED SUCCESSFULLY');
+      console.log('[updateTaskProgress] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════');
 
       ResponseService.success(res, result.rows[0], 'Task progress updated');
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [updateTaskProgress] ERROR');
+      console.error(' [updateTaskProgress] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -9373,7 +9373,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
   async getChatMessages(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const { sessionId, simulationId } = req.params;
-      const { limit = '20', offset = '0' } = req.query;
+      const { limit = '20', offset = '0'} = req.query;
 
       let sessionIds: string[] = [];
       let actualSimulationId: string | null = null;
@@ -9396,8 +9396,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         const session = sessionCheck.rows[0];
         actualSimulationId = session.simulation_id;
         const isOwner = session.session_owner_id === req.user.id;
-        const isRecruiter = req.user.user_type === 'recruiter' ||
-          req.user.user_type === 'company_admin' ||
+        const isRecruiter = req.user.user_type === 'recruiter'||
+          req.user.user_type === 'company_admin'||
           req.user.user_type === 'system_admin';
 
         if (!isOwner && !isRecruiter) {
@@ -9405,10 +9405,10 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           return;
         }
 
-        // ✅ FIX: Get ALL sessions that belong to this simulation
+        // ''FIX: Get ALL sessions that belong to this simulation
         sessionIds = [sessionId];
 
-        console.log('✅ [getChatMessages] Resolved:', {
+        console.log('[getChatMessages] Resolved:', {
           actualSimulationId,
           originalSessionId: sessionId,
           totalSessionsFound: sessionIds.length,
@@ -9433,8 +9433,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         const simulation = simulationCheck.rows[0];
         actualSimulationId = simulationId;
         const isOwner = simulation.user_id === req.user.id;
-        const isRecruiter = req.user.user_type === 'recruiter' ||
-          req.user.user_type === 'company_admin' ||
+        const isRecruiter = req.user.user_type === 'recruiter'||
+          req.user.user_type === 'company_admin'||
           req.user.user_type === 'system_admin';
 
         if (!isOwner && !isRecruiter) {
@@ -9448,7 +9448,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         sessionIds = sessionsResult.rows.map((row: any) => row.id);
 
-        console.log('✅ [getChatMessages] Resolved:', {
+        console.log('[getChatMessages] Resolved:', {
           actualSimulationId,
           totalSessionsFound: sessionIds.length,
           sessionIds
@@ -9579,7 +9579,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       console.log('═══════════════════════════════════════════════════════════════');
 
       const { sessionId, simulationId } = req.params;
-      const { limit = '50', offset = '0', filter = 'all' } = req.query;
+      const { limit = '50', offset = '0', filter = 'all'} = req.query;
 
       console.log('📋 REQUEST PARAMS:', {
         sessionId: sessionId || 'null',
@@ -9608,7 +9608,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         actualSimulationId = sessionResult.rows[0].simulation_id;
         sessionIds = [sessionId];
 
-        console.log('✅ Resolved:', { actualSimulationId, totalSessionsFound: sessionIds.length });
+        console.log('Resolved:', { actualSimulationId, totalSessionsFound: sessionIds.length });
 
         // CASE 2: If simulationId is provided
       } else if (simulationId && ValidationService.isValidUUID(simulationId)) {
@@ -9630,7 +9630,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         return;
       }
 
-      // ✅ FIXED: Get simulation with company info - REMOVED s.company_id
+      // ''FIXED: Get simulation with company info - REMOVED s.company_id
       const simulationCheck = await DatabaseService.query(`
       SELECT 
         s.id, 
@@ -9661,8 +9661,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       let isCompanyUser = false;
       let userCompanyId = null;
 
-      if (req.user.user_type === 'recruiter' || req.user.user_type === 'company_admin') {
-        // ✅ FIXED: Use company_team table (not company_users)
+      if (req.user.user_type === 'recruiter'|| req.user.user_type === 'company_admin') {
+        // ''FIXED: Use company_team table (not company_users)
         const companyUserCheck = await DatabaseService.query(`
         SELECT company_id FROM company_team WHERE user_id = $1
       `, [req.user.id]);
@@ -9753,7 +9753,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           break;
         case 'company_messages':
           // Get all company users for this simulation's company
-          // ✅ FIXED: Use company_team table
+          // ''FIXED: Use company_team table
           const companyUsersResult = await DatabaseService.query(`
           SELECT user_id FROM company_team WHERE company_id = $1
         `, [simulation.job_company_id]);
@@ -9763,7 +9763,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             params.push(companyUserIds);
             console.log('🔍 Filter: company_messages only', { companyUserIds });
           } else {
-            console.log('⚠️ No company users found, returning empty result');
+            console.log(' No company users found, returning empty result');
             ResponseService.success(res, {
               simulation_id: actualSimulationId,
               session_id: sessionId || null,
@@ -9842,7 +9842,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       FROM chat_messages cm
       LEFT JOIN users u ON cm.user_id = u.id
       LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
-      WHERE ${whereConditions.join(' AND ')}
+      WHERE ${whereConditions.join('AND ')}
       ORDER BY cm.timestamp ASC
       LIMIT $${paramIndex++} OFFSET $${paramIndex++}
     `;
@@ -9861,7 +9861,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         try {
           let parsed = JSON.parse(message.message);
           let parseDepth = 0;
-          while (typeof parsed === 'string' && parseDepth < 10) {
+          while (typeof parsed === 'string'&& parseDepth < 10) {
             try {
               parsed = JSON.parse(parsed);
               parseDepth++;
@@ -9910,7 +9910,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const stats = statsResult.rows[0];
 
       // Get company users info (for display)
-      // ✅ FIXED: Use company_team table with proper columns
+      // ''FIXED: Use company_team table with proper columns
       const companyUsersQuery = `
       SELECT 
         u.id,
@@ -9980,7 +9980,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       ResponseService.success(res, responseData);
 
     } catch (error: any) {
-      console.error('❌ Error:', error.message);
+      console.error(' Error:', error.message);
       ResponseService.error(res, 'Failed to fetch chat messages', 500);
     }
   }
@@ -10043,8 +10043,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       const sessionOwnerId = accessCheck.rows[0].session_owner_id;
       const isOwner = sessionOwnerId === req.user.id;
-      const isRecruiter = req.user.user_type === 'recruiter' ||
-        req.user.user_type === 'company_admin' ||
+      const isRecruiter = req.user.user_type === 'recruiter'||
+        req.user.user_type === 'company_admin'||
         req.user.user_type === 'system_admin';
 
       if (!isOwner && !isRecruiter) {
@@ -10198,14 +10198,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         const actualSimulationId = sessionResult.rows[0].simulation_id;
 
-        // ✅ FIX: Get ALL sessions that belong to this simulation
+        // ''FIX: Get ALL sessions that belong to this simulation
         const allSessionsResult = await DatabaseService.query(`
         SELECT id FROM simulation_sessions WHERE simulation_id = $1
       `, [actualSimulationId]);
 
         sessionIds = allSessionsResult.rows.map((row: any) => row.id);
 
-        console.log('✅ [getUnreadMessageCount] Resolved:', {
+        console.log('[getUnreadMessageCount] Resolved:', {
           actualSimulationId,
           originalSessionId: effectiveSessionId,
           totalSessionsFound: sessionIds.length
@@ -10220,7 +10220,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         sessionIds = sessionsResult.rows.map((row: any) => row.id);
 
-        console.log('✅ [getUnreadMessageCount] Resolved:', {
+        console.log('[getUnreadMessageCount] Resolved:', {
           effectiveSimulationId,
           totalSessionsFound: sessionIds.length
         });
@@ -10301,14 +10301,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         const actualSimulationId = sessionResult.rows[0].simulation_id;
 
-        // ✅ FIX: Get ALL sessions that belong to this simulation
+        // ''FIX: Get ALL sessions that belong to this simulation
         const allSessionsResult = await DatabaseService.query(`
         SELECT id FROM simulation_sessions WHERE simulation_id = $1
       `, [actualSimulationId]);
 
         sessionIds = allSessionsResult.rows.map((row: any) => row.id);
 
-        console.log('✅ [markMessagesAsRead] Resolved:', {
+        console.log('[markMessagesAsRead] Resolved:', {
           actualSimulationId,
           originalSessionId: effectiveSessionId,
           totalSessionsFound: sessionIds.length
@@ -10323,7 +10323,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         sessionIds = sessionsResult.rows.map((row: any) => row.id);
 
-        console.log('✅ [markMessagesAsRead] Resolved:', {
+        console.log('[markMessagesAsRead] Resolved:', {
           effectiveSimulationId,
           totalSessionsFound: sessionIds.length
         });
@@ -10409,14 +10409,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         const actualSimulationId = sessionResult.rows[0].simulation_id;
 
-        // ✅ FIX: Get ALL sessions that belong to this simulation
+        // ''FIX: Get ALL sessions that belong to this simulation
         const allSessionsResult = await DatabaseService.query(`
         SELECT id FROM simulation_sessions WHERE simulation_id = $1
       `, [actualSimulationId]);
 
         sessionIds = allSessionsResult.rows.map((row: any) => row.id);
 
-        console.log('✅ [getChatStatistics] Resolved:', {
+        console.log('[getChatStatistics] Resolved:', {
           actualSimulationId,
           originalSessionId: effectiveSessionId,
           totalSessionsFound: sessionIds.length
@@ -10431,7 +10431,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
         sessionIds = sessionsResult.rows.map((row: any) => row.id);
 
-        console.log('✅ [getChatStatistics] Resolved:', {
+        console.log('[getChatStatistics] Resolved:', {
           effectiveSimulationId,
           totalSessionsFound: sessionIds.length
         });
@@ -10579,14 +10579,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!validation.success) {
-        console.log('❌ Validation failed:', JSON.stringify(validation.error.issues));
+        console.log(' Validation failed:', JSON.stringify(validation.error.issues));
         ResponseService.error(res, 'Invalid input', 400, JSON.stringify(validation.error.issues));
         return;
       }
-      console.log('✅ Validation passed');
+      console.log('Validation passed');
 
       let { message, messageType = 'text', replyTo } = validation.data;
-      console.log('📝 Parsed message data:', { messageType, replyTo, messagePreview: message?.substring(0, 100) });
+      console.log(' Parsed message data:', { messageType, replyTo, messagePreview: message?.substring(0, 100) });
 
       // Deep recursive parser
       console.log('🔍 Starting deep recursive parsing...');
@@ -10595,7 +10595,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       const extractFromNested = (input: any, depth = 0, maxDepth = 20): string => {
         if (depth >= maxDepth) {
-          console.log(`⚠️ Max depth (${maxDepth}) reached in extractFromNested`);
+          console.log(` Max depth (${maxDepth}) reached in extractFromNested`);
           return String(input);
         }
 
@@ -10626,7 +10626,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       const extractAttachments = (input: any, depth = 0, maxDepth = 20): any[] => {
         if (depth >= maxDepth) {
-          console.log(`⚠️ Max depth (${maxDepth}) reached in extractAttachments`);
+          console.log(` Max depth (${maxDepth}) reached in extractAttachments`);
           return [];
         }
 
@@ -10654,7 +10654,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       const extractReplyTo = (input: any, depth = 0, maxDepth = 20): string | null => {
         if (depth >= maxDepth) {
-          console.log(`⚠️ Max depth (${maxDepth}) reached in extractReplyTo`);
+          console.log(` Max depth (${maxDepth}) reached in extractReplyTo`);
           return null;
         }
 
@@ -10668,7 +10668,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         }
 
         if (input && typeof input === 'object') {
-          if (input.replyTo && typeof input.replyTo === 'string' && input.replyTo.length > 10) {
+          if (input.replyTo && typeof input.replyTo === 'string'&& input.replyTo.length > 10) {
             console.log(`🔗 [depth ${depth}] Found replyTo: ${input.replyTo}`);
             return input.replyTo;
           }
@@ -10693,7 +10693,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       if (!replyTo && extractedReplyTo) {
         replyTo = extractedReplyTo;
-        console.log('✅ Using extracted replyTo:', replyTo);
+        console.log('Using extracted replyTo:', replyTo);
       }
 
       if (typeof extractedText === 'string') {
@@ -10717,7 +10717,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       console.log('🔍 Finding or creating session...');
       let actualSessionId: string | null = sessionId || validation.data.sessionId || req.body.session_id || null;
       let actualSimulationId: string | null = simulationId || validation.data.simulationId || req.body.simulation_id || null;
-      console.log('🎯 Initial IDs:', { actualSessionId, actualSimulationId });
+      console.log('Initial IDs:', { actualSessionId, actualSimulationId });
 
       if (!actualSessionId || !actualSimulationId) {
         console.log('Missing required chat IDs:', { actualSessionId, actualSimulationId });
@@ -10726,7 +10726,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       }
 
       if (!actualSessionId && actualSimulationId) {
-        console.log('📌 Case 1: Only simulationId provided, looking for existing session...');
+        console.log('Case 1: Only simulationId provided, looking for existing session...');
 
         console.log('🔍 Checking simulation exists and user has access...');
         const simulationCheck = await DatabaseService.query(`
@@ -10746,7 +10746,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         });
 
         if (!simulationCheck.rows[0]) {
-          console.log('❌ Simulation not found or access denied');
+          console.log(' Simulation not found or access denied');
           ResponseService.error(res, 'Simulation not found or access denied', 404);
           return;
         }
@@ -10767,18 +10767,18 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         if (existingSession.rows[0]) {
           actualSessionId = existingSession.rows[0].id;
 
-          console.log('✅ Found existing session for simulation:', {
+          console.log('Found existing session for simulation:', {
             simulationId: actualSimulationId,
             sessionId: actualSessionId,
             status: existingSession.rows[0].status
           });
         } else {
-          console.log('❌ No active session found for simulation:', actualSimulationId);
+          console.log(' No active session found for simulation:', actualSimulationId);
           ResponseService.error(res, 'No active session found. Please start the simulation first.', 400);
           return;
         }
       } else if (actualSessionId && !actualSimulationId) {
-        console.log('📌 Case 2: Only sessionId provided, looking up simulation...');
+        console.log('Case 2: Only sessionId provided, looking up simulation...');
 
         console.log('🔍 Looking up session info...');
         const sessionInfo = await DatabaseService.query(`
@@ -10793,29 +10793,29 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         });
 
         if (!sessionInfo.rows[0]) {
-          console.log('❌ Session not found');
+          console.log(' Session not found');
           ResponseService.error(res, 'Session not found', 404);
           return;
         }
 
         actualSimulationId = sessionInfo.rows[0].simulation_id;
-        console.log('✅ Found simulation ID:', actualSimulationId);
+        console.log('Found simulation ID:', actualSimulationId);
 
         const isOwner = sessionInfo.rows[0].session_owner_id === req.user.id;
-        const isRecruiter = req.user.user_type === 'recruiter' ||
-          req.user.user_type === 'company_admin' ||
+        const isRecruiter = req.user.user_type === 'recruiter'||
+          req.user.user_type === 'company_admin'||
           req.user.user_type === 'system_admin';
 
         console.log('🔐 Access check:', { isOwner, isRecruiter });
 
         if (!isOwner && !isRecruiter) {
-          console.log('❌ Access denied to this session');
+          console.log(' Access denied to this session');
           ResponseService.forbidden(res, 'Access denied to this session');
           return;
         }
-        console.log('✅ Access granted');
+        console.log('Access granted');
       } else if (actualSessionId && actualSimulationId) {
-        console.log('📌 Case 3: Both sessionId and simulationId provided, verifying...');
+        console.log('Case 3: Both sessionId and simulationId provided, verifying...');
 
         const verifyResult = await DatabaseService.query(`
         SELECT ss.id FROM simulation_sessions ss
@@ -10827,26 +10827,26 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         });
 
         if (!verifyResult.rows[0]) {
-          console.log('❌ Session does not belong to the specified simulation');
+          console.log(' Session does not belong to the specified simulation');
           ResponseService.error(res, 'Session does not belong to the specified simulation', 400);
           return;
         }
-        console.log('✅ Session verification passed');
+        console.log('Session verification passed');
       }
 
       if (!actualSessionId || !ValidationService.isValidUUID(actualSessionId)) {
-        console.log('❌ Invalid or missing session ID:', actualSessionId);
+        console.log(' Invalid or missing session ID:', actualSessionId);
         ResponseService.error(res, 'Valid session ID is required. Provide sessionId or simulationId', 400);
         return;
       }
 
       if (!actualSimulationId || !ValidationService.isValidUUID(actualSimulationId)) {
-        console.log('❌ Invalid or missing simulation ID:', actualSimulationId);
+        console.log(' Invalid or missing simulation ID:', actualSimulationId);
         ResponseService.error(res, 'Valid simulation ID is required', 400);
         return;
       }
 
-      console.log('✅ Final resolved IDs:', { actualSessionId, actualSimulationId });
+      console.log('Final resolved IDs:', { actualSessionId, actualSimulationId });
 
       console.log('🔍 Checking session status...');
       const sessionCheck = await DatabaseService.query(`
@@ -10862,7 +10862,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!sessionCheck.rows[0]) {
-        console.log('❌ Session not found');
+        console.log(' Session not found');
         ResponseService.error(res, 'Session not found', 404);
         return;
       }
@@ -10870,32 +10870,32 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const session = sessionCheck.rows[0];
 
       if (session.status === 'completed') {
-        console.log('❌ Cannot send messages to a completed session');
+        console.log(' Cannot send messages to a completed session');
         ResponseService.error(res, 'Cannot send messages to a completed session', 400);
         return;
       }
 
       if (session.status === 'expired') {
-        console.log('❌ Session has expired');
+        console.log(' Session has expired');
         ResponseService.error(res, 'Session has expired', 400);
         return;
       }
 
-      console.log('✅ Session is active, status:', session.status);
+      console.log('Session is active, status:', session.status);
 
       const isOwner = session.session_owner_id === req.user.id;
-      const isRecruiter = req.user.user_type === 'recruiter' ||
-        req.user.user_type === 'company_admin' ||
+      const isRecruiter = req.user.user_type === 'recruiter'||
+        req.user.user_type === 'company_admin'||
         req.user.user_type === 'system_admin';
 
       console.log('🔐 Permission check:', { isOwner, isRecruiter });
 
       if (!isOwner && !isRecruiter) {
-        console.log('❌ Access denied - user not owner or recruiter');
+        console.log(' Access denied - user not owner or recruiter');
         ResponseService.forbidden(res, 'Access denied');
         return;
       }
-      console.log('✅ User has permission to send messages');
+      console.log('User has permission to send messages');
 
       const recipientId = isOwner ? null : session.session_owner_id;
       let recipientUserIds: string[] = [];
@@ -10963,7 +10963,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       let threadId = null;
       let replyToId = null;
 
-      if (replyTo && replyTo !== 'null' && replyTo !== 'undefined' && replyTo.length > 10) {
+      if (replyTo && replyTo !== 'null'&& replyTo !== 'undefined'&& replyTo.length > 10) {
         console.log('📎 Processing reply to message:', replyTo);
 
         const originalMessage = await DatabaseService.query(`
@@ -11004,12 +11004,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           SET reply_count = COALESCE(reply_count, 0) + 1
           WHERE id = $1
         `, [replyTo]);
-          console.log('✅ Updated reply_count for parent message');
+          console.log('Updated reply_count for parent message');
         } else {
-          console.log('⚠️ Original message not found, proceeding without reply context');
+          console.log(' Original message not found, proceeding without reply context');
         }
       } else {
-        console.log('📝 No reply context, sending new message');
+        console.log(' No reply context, sending new message');
       }
 
       // Insert message
@@ -11027,7 +11027,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
     `, [actualSessionId, req.user.id, cleanMessage, messageType, replyToId, threadId, recipientId]);
 
       const insertEndTime = Date.now();
-      console.log(`✅ Message inserted in ${insertEndTime - insertStartTime}ms`);
+      console.log(`''Message inserted in ${insertEndTime - insertStartTime}ms`);
 
       const savedMessage = result.rows[0];
       console.log('📊 Saved message:', {
@@ -11040,7 +11040,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       // Fetch user info
-      console.log('👤 Fetching user info...');
+      console.log(' Fetching user info...');
       const userInfo = await DatabaseService.query(`
       SELECT 
         u.id, 
@@ -11054,7 +11054,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       WHERE u.id = $1
     `, [req.user.id]);
 
-      console.log('👤 User info retrieved:', {
+      console.log(' User info retrieved:', {
         id: userInfo.rows[0]?.id,
         email: userInfo.rows[0]?.email,
         user_type: userInfo.rows[0]?.user_type,
@@ -11121,7 +11121,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
           responseMessage.replied_to_message = {
             id: originalMsg.rows[0].id,
-            message: (typeof originalText === 'string' ? originalText : '').substring(0, 200),
+            message: (typeof originalText === 'string'? originalText : '').substring(0, 200),
             timestamp: originalMsg.rows[0].timestamp,
             author: {
               id: originalMsg.rows[0].user_id,
@@ -11132,7 +11132,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
               profile_photo_url: originalAuthor.rows[0]?.profile_photo_url
             }
           };
-          console.log('✅ Added replied_to_message context');
+          console.log('Added replied_to_message context');
         }
       }
 
@@ -11143,7 +11143,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       SET updated_at = NOW()
       WHERE id = $1
     `, [actualSessionId]);
-      console.log('✅ Session last activity updated');
+      console.log('Session last activity updated');
 
       // WebSocket broadcast
       console.log('📡 Broadcasting via WebSocket...');
@@ -11160,7 +11160,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         for (const userId of userRoomIds) {
           io.to(`user:${userId}`).emit('simulation_chat_message', responseMessage);
         }
-        console.log('✅ Messages broadcasted to rooms');
+        console.log('Messages broadcasted to rooms');
 
         const unreadCounts = await DatabaseService.query(`
         SELECT 
@@ -11182,20 +11182,20 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             unread_count: parseInt(uc.unread_count)
           });
         }
-        console.log('✅ Unread count updates sent');
+        console.log('Unread count updates sent');
       } else {
-        console.log('⚠️ WebSocket not available, skipping broadcast');
+        console.log(' WebSocket not available, skipping broadcast');
       }
 
-      // Persist notifications for the OTHER party (recruiters/admins/mentor — or
+      // Persist notifications for the OTHER party (recruiters/admins/mentor   or
       // the candidate when a recruiter writes) so they show up in the bell even
       // when offline, and are pushed live when online.
       try {
         const notifyUserIds = Array.from(new Set(recipientUserIds.filter((id: string) => id && id !== req.user.id)));
         if (notifyUserIds.length > 0) {
           const authorName = responseMessage.author?.name || 'Someone';
-          const snippet = (typeof extractedText === 'string' ? extractedText : cleanMessage || '')
-            .replace(/\s+/g, ' ')
+          const snippet = (typeof extractedText === 'string'? extractedText : cleanMessage || '')
+            .replace(/\s+/g, '')
             .trim()
             .substring(0, 140);
           await NotificationService.createForUsers(notifyUserIds, {
@@ -11213,12 +11213,12 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           });
         }
       } catch (notifyErr: any) {
-        console.warn('⚠️ Failed to create chat notifications:', notifyErr?.message);
+        console.warn(' Failed to create chat notifications:', notifyErr?.message);
       }
 
       const totalDuration = Date.now() - startTime;
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [sendChatMessage] COMPLETED SUCCESSFULLY');
+      console.log('[sendChatMessage] COMPLETED SUCCESSFULLY');
       console.log(`📊 Total execution time: ${totalDuration}ms`);
       console.log('═══════════════════════════════════════════════════════════════');
 
@@ -11227,7 +11227,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
     } catch (error: any) {
       const totalDuration = Date.now() - startTime;
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [sendChatMessage] ERROR');
+      console.error(' [sendChatMessage] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -11244,7 +11244,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
   async editChatMessage(req: AuthenticatedRequest, res: Response): Promise<void> {
     const extractFromNested = (input: any, depth = 0, maxDepth = 20): string => {
-      if (depth >= maxDepth) return typeof input === 'string' ? input : '';
+      if (depth >= maxDepth) return typeof input === 'string'? input : '';
       if (typeof input === 'string') {
         try { return extractFromNested(JSON.parse(input), depth + 1, maxDepth); }
         catch { return input; }
@@ -11253,7 +11253,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         if (input.text && typeof input.text === 'string') return input.text;
         if (input.message && typeof input.message === 'string') return input.message;
       }
-      return typeof input === 'string' ? input : '';
+      return typeof input === 'string'? input : '';
     };
 
     try {
@@ -11267,7 +11267,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         ResponseService.error(res, 'Invalid message ID format', 400);
         return;
       }
-      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+      if (!message || typeof message !== 'string'|| message.trim().length === 0) {
         ResponseService.error(res, 'Message content is required', 400);
         return;
       }
@@ -11340,7 +11340,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         }
       }
 
-      // ✅ FIXED: Removed updated_at column (doesn't exist in chat_messages)
+      // ''FIXED: Removed updated_at column (doesn't exist in chat_messages)
       const result = await DatabaseService.query(`
       UPDATE chat_messages
       SET message = $1
@@ -11518,7 +11518,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       }
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [deleteChatMessage] COMPLETED SUCCESSFULLY');
+      console.log('[deleteChatMessage] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════');
 
       ResponseService.success(res, {
@@ -11529,7 +11529,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [deleteChatMessage] ERROR');
+      console.error(' [deleteChatMessage] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -11640,7 +11640,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         e.completed_at as evaluation_completed_at,
         
         CASE 
-          WHEN e.overall_score IS NOT NULL AND st.scoring_rubric->>'passingScore' IS NOT NULL 
+          WHEN e.overall_score IS NOT NULL AND st.scoring_rubric->>'passingScore'IS NOT NULL 
           THEN e.overall_score >= (st.scoring_rubric->>'passingScore')::int
           WHEN e.overall_score IS NOT NULL 
           THEN e.overall_score >= 70
@@ -11670,11 +11670,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       const processedResults = result.rows.map((row: any) => ({
         ...row,
-        tasks: typeof row.tasks === 'string' ? JSON.parse(row.tasks) : row.tasks,
-        scoring_rubric: typeof row.scoring_rubric === 'string' ? JSON.parse(row.scoring_rubric) : row.scoring_rubric,
-        answers: typeof row.answers === 'string' ? JSON.parse(row.answers) : row.answers,
-        progress: typeof row.progress === 'string' ? JSON.parse(row.progress) : row.progress,
-        github_links: typeof row.github_links === 'string' ? JSON.parse(row.github_links) : row.github_links,
+        tasks: typeof row.tasks === 'string'? JSON.parse(row.tasks) : row.tasks,
+        scoring_rubric: typeof row.scoring_rubric === 'string'? JSON.parse(row.scoring_rubric) : row.scoring_rubric,
+        answers: typeof row.answers === 'string'? JSON.parse(row.answers) : row.answers,
+        progress: typeof row.progress === 'string'? JSON.parse(row.progress) : row.progress,
+        github_links: typeof row.github_links === 'string'? JSON.parse(row.github_links) : row.github_links,
       }));
 
       ResponseService.paginated(res, processedResults, {
@@ -11708,11 +11708,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-        console.log('❌ Invalid session ID format:', sessionId);
-        ResponseService.error(res, 'Invalid session ID format', 400);  // ✅ Fixed
+        console.log(' Invalid session ID format:', sessionId);
+        ResponseService.error(res, 'Invalid session ID format', 400);  // ''Fixed
         return;
       }
-      console.log('✅ Session ID validation passed');
+      console.log('Session ID validation passed');
 
       // First, check if session exists
       console.log('🔍 Checking if session exists...');
@@ -11723,11 +11723,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
     `, [sessionId]);
 
       if (sessionCheck.rows.length === 0) {
-        console.log('❌ Session not found for ID:', sessionId);
+        console.log(' Session not found for ID:', sessionId);
         this.sendError(res, 'Session not found', 404);
         return;
       }
-      console.log('✅ Session exists');
+      console.log('Session exists');
 
       // Get the full session data with all details including task progress
       console.log('🔍 Fetching full session details with task progress...');
@@ -12037,7 +12037,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       console.log(`📊 Query executed in ${detailsEnd - detailsStart}ms`);
 
       if (result.rows.length === 0) {
-        console.log('❌ Session details not found');
+        console.log(' Session details not found');
         this.sendError(res, 'Session details not found', 404);
         return;
       }
@@ -12048,7 +12048,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const isSystemAdmin = req.user.user_type === 'system_admin';
       let hasCompanyAccess = false;
 
-      if (!isSessionOwner && !isSystemAdmin && (req.user.user_type === 'company_admin' || req.user.user_type === 'recruiter')) {
+      if (!isSessionOwner && !isSystemAdmin && (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter')) {
         const accessResult = await DatabaseService.query(`
         SELECT 1
         WHERE EXISTS (
@@ -12098,7 +12098,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       console.log('🔍 Checking if simulation has expired...');
       const expirationCheck = await this.isSimulationExpired(row.simulation_record_id);
       if (expirationCheck.expired) {
-        console.log('❌ Simulation expired:', expirationCheck.reason);
+        console.log(' Simulation expired:', expirationCheck.reason);
         // Update session to expired status (commented out)
         // await DatabaseService.query(`
         //   UPDATE simulation_sessions 
@@ -12108,10 +12108,10 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         // this.sendError(res, expirationCheck.reason || 'Simulation has expired', 400);
         // return;
       }
-      console.log('✅ Simulation is not expired');
+      console.log('Simulation is not expired');
 
       // ============================================
-      // ✅ EXTRACT GITHUB REPO FROM github_links
+      // ''EXTRACT GITHUB REPO FROM github_links
       // ============================================
       let githubRepo = null;
       if (row.github_links) {
@@ -12120,7 +12120,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             ? JSON.parse(row.github_links)
             : row.github_links;
 
-          console.log('✅ GitHub repo data extracted from session:', {
+          console.log('GitHub repo data extracted from session:', {
             repoName: githubRepo.repoName,
             repoUrl: githubRepo.repoUrl,
             cloneUrl: githubRepo.cloneUrl,
@@ -12130,7 +12130,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
             issuesCount: githubRepo.issues?.length || 0
           });
         } catch (err) {
-          console.warn('⚠️ Failed to parse github_links:', err);
+          console.warn(' Failed to parse github_links:', err);
         }
       } else {
         console.log('📭 No github_links found in session');
@@ -12145,7 +12145,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           try {
             templateTasks = JSON.parse(row.template_tasks);
           } catch (e) {
-            console.log('⚠️ Failed to parse template_tasks');
+            console.log(' Failed to parse template_tasks');
             templateTasks = [];
           }
         }
@@ -12171,7 +12171,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         taskProgressMap.set(task.task_index, task);
       }
 
-      // ✅ Build complete task progress with 0-based indexing
+      // ''Build complete task progress with 0-based indexing
       const mergedTaskProgress = [];
       const totalTemplateTasks = templateTasks.length;
 
@@ -12226,7 +12226,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         }
       }
 
-      // ✅ Format the response WITH GITHUB REPO DATA
+      // ''Format the response WITH GITHUB REPO DATA
       const formattedResult = {
         // Session Info
         session: {
@@ -12253,7 +12253,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           updated_at: row.session_updated_at
         },
 
-        // ✅ GITHUB REPOSITORY DATA - This is what the frontend ResumeDialog needs
+        // ''GITHUB REPOSITORY DATA - This is what the frontend ResumeDialog needs
         githubRepo: githubRepo ? {
           repoName: githubRepo.repoName,
           repoUrl: githubRepo.repoUrl,
@@ -12393,7 +12393,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
           experience_level: row.experience_level
         } : null,
 
-        submission_results: row.submission_results ? (typeof row.submission_results === 'string' ? JSON.parse(row.submission_results) : row.submission_results) : null,
+        submission_results: row.submission_results ? (typeof row.submission_results === 'string'? JSON.parse(row.submission_results) : row.submission_results) : null,
 
         // Company Info
         company: row.company_id ? {
@@ -12432,14 +12432,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [getSimulationSessionById] COMPLETED SUCCESSFULLY');
+      console.log('[getSimulationSessionById] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════');
 
-      ResponseService.success(res, formattedResult, 'Session retrieved successfully');  // ✅ Fixed
+      ResponseService.success(res, formattedResult, 'Session retrieved successfully');  // ''Fixed
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [getSimulationSessionById] ERROR');
+      console.error(' [getSimulationSessionById] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -12448,7 +12448,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         detail: error.detail
       });
       console.error('═══════════════════════════════════════════════════════════════');
-      ResponseService.error(res, 'Failed to fetch session', 500, null, this.formatError(error));  // ✅ Fixed
+      ResponseService.error(res, 'Failed to fetch session', 500, null, this.formatError(error));  // ''Fixed
     }
   }
 
@@ -12585,7 +12585,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         return;
       }
 
-      ResponseService.success(res, { sessionId, status: 'cancelled' }, 'Session cancelled by admin');
+      ResponseService.success(res, { sessionId, status: 'cancelled'}, 'Session cancelled by admin');
     } catch (error: any) {
       ResponseService.error(res, 'Failed to cancel session', 500, null, this.formatError(error));
     }
@@ -12621,14 +12621,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         return;
       }
 
-      ResponseService.success(res, { sessionId, status: 'not_started' }, 'Session reset — candidate can redo from scratch');
+      ResponseService.success(res, { sessionId, status: 'not_started'}, 'Session reset   candidate can redo from scratch');
     } catch (error: any) {
       ResponseService.error(res, 'Failed to reset session', 500, null, this.formatError(error));
     }
   }
 
   // ============================================================
-  // ADMIN: Reopen session — keep all progress, let candidate continue
+  // ADMIN: Reopen session   keep all progress, let candidate continue
   // ============================================================
   async adminReopenSession(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -12681,7 +12681,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
           await emailService.sendEmail({
             to: info.email,
-            subject: `Your simulation has been reopened — continue from Task ${taskNum}`,
+            subject: `Your simulation has been reopened   continue from Task ${taskNum}`,
             html: `
               <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1f2937">
                 <div style="background:linear-gradient(135deg,#7c3aed,#4f46e5);padding:28px 32px;border-radius:12px 12px 0 0">
@@ -12692,11 +12692,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
                   <p style="font-size:16px;font-weight:600;margin:0 0 12px">Hello ${firstName},</p>
                   <p style="font-size:14px;color:#374151;line-height:1.7;margin:0 0 20px">
                     A recruiter has <strong>reopened your practical assessment</strong>${jobTitle}.
-                    All your previous progress is saved — you can pick up right where you left off at <strong>Task ${taskNum}</strong>.
+                    All your previous progress is saved   you can pick up right where you left off at <strong>Task ${taskNum}</strong>.
                   </p>
                   <div style="background:#f5f3ff;border-left:4px solid #7c3aed;border-radius:4px;padding:14px 18px;margin:0 0 24px">
                     <strong style="color:#5b21b6;font-size:14px">📋 ${simName}</strong><br/>
-                    <span style="font-size:13px;color:#6d28d9">Resuming from Task ${taskNum} — your previous answers are intact</span>
+                    <span style="font-size:13px;color:#6d28d9">Resuming from Task ${taskNum}   your previous answers are intact</span>
                   </div>
                   <a href="${dashUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:15px">
                     Open My Dashboard →
@@ -12708,13 +12708,13 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
               </div>
             `,
           });
-          console.log(`✅ Reopen email sent to ${info.email} for session ${sessionId}`);
+          console.log(`''Reopen email sent to ${info.email} for session ${sessionId}`);
         }
       } catch (emailErr: any) {
-        console.error('⚠️ Reopen email failed (session still reopened):', emailErr.message);
+        console.error(' Reopen email failed (session still reopened):', emailErr.message);
       }
 
-      ResponseService.success(res, { sessionId, status: 'in_progress', currentTask: current_task }, 'Session reopened — candidate notified by email');
+      ResponseService.success(res, { sessionId, status: 'in_progress', currentTask: current_task }, 'Session reopened   candidate notified by email');
     } catch (error: any) {
       ResponseService.error(res, 'Failed to reopen session', 500, null, this.formatError(error));
     }
@@ -12727,7 +12727,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
     try {
       const { id } = req.params;
-      const { page = '1', limit = '100', status = 'all' } = req.query;
+      const { page = '1', limit = '100', status = 'all'} = req.query;
 
       console.log('📋 REQUEST PARAMS:', {
         simulationTemplateId: id,
@@ -12740,11 +12740,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!id || !ValidationService.isValidUUID(id)) {
-        console.log('❌ Invalid simulation ID format:', id);
+        console.log(' Invalid simulation ID format:', id);
         ResponseService.error(res, 'Invalid simulation ID format', 400);
         return;
       }
-      console.log('✅ Simulation ID validation passed');
+      console.log('Simulation ID validation passed');
 
       // Verify user has access to this simulation template
       console.log('🔍 Checking simulation template access for ID:', id);
@@ -12761,7 +12761,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!simulationCheck.rows[0]) {
-        console.log('❌ Simulation template not found for ID:', id);
+        console.log(' Simulation template not found for ID:', id);
         ResponseService.notFound(res, 'Simulation not found');
         return;
       }
@@ -12781,8 +12781,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const isOwner = simulationTemplate.created_by === req.user.id;
       const isCompanyUser = simulationTemplate.company_id === userCompanyId;
       const isAdmin = req.user.user_type === 'system_admin';
-      const isRecruiter = req.user.user_type === 'recruiter' ||
-        req.user.user_type === 'company_admin' ||
+      const isRecruiter = req.user.user_type === 'recruiter'||
+        req.user.user_type === 'company_admin'||
         req.user.user_type === 'system_admin';
 
       console.log('🔐 Access check results:', {
@@ -12798,11 +12798,11 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       });
 
       if (!isCompanyUser && !isRecruiter) {
-        console.log('❌ Access denied to simulation template:', id);
+        console.log(' Access denied to simulation template:', id);
         ResponseService.forbidden(res, 'Access denied to this simulation');
         return;
       }
-      console.log('✅ Access granted to simulation template');
+      console.log('Access granted to simulation template');
 
       // Build status filter
       let statusFilter = '';
@@ -12813,7 +12813,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
         if (status === 'completed') {
           statusFilter = ` AND e.status = 'completed'`;
         } else if (status === 'in_progress') {
-          statusFilter = ` AND ss.status = 'in_progress' AND e.id IS NULL`;
+          statusFilter = ` AND ss.status = 'in_progress'AND e.id IS NULL`;
         }
         console.log('📊 Status filter applied:', { status, statusFilter });
       }
@@ -13109,7 +13109,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const total = parseInt(countResult.rows[0]?.total || '0');
       console.log('📊 Total sessions count:', total);
 
-      // ✅ FIXED: Use proper typing with 'as any' to avoid complex type definition
+      // ''FIXED: Use proper typing with 'as any'to avoid complex type definition
       const formattedResults = result.rows.map((row: any) => {
         // Determine the effective score and status
         const hasEvaluation = row.evaluation_id !== null;
@@ -13283,14 +13283,14 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
       console.log('📄 Pagination response:', responseData);
       console.log('═══════════════════════════════════════════════════════════════');
-      console.log('✅ [getSimulationCandidates] COMPLETED SUCCESSFULLY');
+      console.log('[getSimulationCandidates] COMPLETED SUCCESSFULLY');
       console.log('═══════════════════════════════════════════════════════════════');
 
       ResponseService.paginated(res, formattedResults, responseData);
 
     } catch (error: any) {
       console.error('═══════════════════════════════════════════════════════════════');
-      console.error('❌ [getSimulationCandidates] ERROR');
+      console.error(' [getSimulationCandidates] ERROR');
       console.error('═══════════════════════════════════════════════════════════════');
       console.error('Error details:', {
         message: error.message,
@@ -13315,23 +13315,23 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       console.log('📋 REQUEST PARAMS:', { sessionId, taskIndex, score });
 
       if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-        ResponseService.error(res, 'Invalid session ID format', 400);  // ✅ Fixed
+        ResponseService.error(res, 'Invalid session ID format', 400);  // ''Fixed
         return;
       }
 
       if (!taskIndex) {
-        ResponseService.error(res, 'Task index is required', 400);  // ✅ Fixed
+        ResponseService.error(res, 'Task index is required', 400);  // ''Fixed
         return;
       }
 
       const parsedTaskIndex = parseInt(taskIndex);
       if (isNaN(parsedTaskIndex) || parsedTaskIndex < 0) {
-        ResponseService.error(res, 'Invalid task index. Must be 0 or greater', 400);  // ✅ Fixed
+        ResponseService.error(res, 'Invalid task index. Must be 0 or greater', 400);  // ''Fixed
         return;
       }
 
-      if (typeof score !== 'number' || score < 0 || score > 100) {
-        ResponseService.error(res, 'Score must be a number between 0 and 100', 400);  // ✅ Fixed
+      if (typeof score !== 'number'|| score < 0 || score > 100) {
+        ResponseService.error(res, 'Score must be a number between 0 and 100', 400);  // ''Fixed
         return;
       }
 
@@ -13381,8 +13381,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const taskName = templateTasks[parsedTaskIndex]?.title || `Task ${parsedTaskIndex + 1}`;
 
       // Check permission
-      const isRecruiter = req.user.user_type === 'recruiter' ||
-        req.user.user_type === 'company_admin' ||
+      const isRecruiter = req.user.user_type === 'recruiter'||
+        req.user.user_type === 'company_admin'||
         req.user.user_type === 'system_admin';
 
       if (!isRecruiter) {
@@ -13413,7 +13413,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       `, [sessionId, parsedTaskIndex, score]);
       }
 
-      ResponseService.success(res, {  // ✅ Fixed
+      ResponseService.success(res, {  // ''Fixed
         ...result.rows[0],
         task_name: taskName,
         task_index: parsedTaskIndex
@@ -13421,7 +13421,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
     } catch (error: any) {
       console.error('Update task score error:', error);
-      ResponseService.error(res, 'Failed to update task score', 500, null, this.formatError(error));  // ✅ Fixed
+      ResponseService.error(res, 'Failed to update task score', 500, null, this.formatError(error));  // ''Fixed
     }
   }
 
@@ -13437,23 +13437,23 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       console.log('📋 REQUEST PARAMS:', { sessionId, taskIndex, feedbackLength: feedback?.length });
 
       if (!sessionId || !ValidationService.isValidUUID(sessionId)) {
-        ResponseService.error(res, 'Invalid session ID format', 400);  // ✅ Fixed
+        ResponseService.error(res, 'Invalid session ID format', 400);  // ''Fixed
         return;
       }
 
       if (!taskIndex) {
-        ResponseService.error(res, 'Task index is required', 400);  // ✅ Fixed
+        ResponseService.error(res, 'Task index is required', 400);  // ''Fixed
         return;
       }
 
       const parsedTaskIndex = parseInt(taskIndex);
       if (isNaN(parsedTaskIndex) || parsedTaskIndex < 0) {
-        ResponseService.error(res, 'Invalid task index. Must be 0 or greater', 400);  // ✅ Fixed
+        ResponseService.error(res, 'Invalid task index. Must be 0 or greater', 400);  // ''Fixed
         return;
       }
 
       if (!feedback || typeof feedback !== 'string') {
-        ResponseService.error(res, 'Feedback text is required', 400);  // ✅ Fixed
+        ResponseService.error(res, 'Feedback text is required', 400);  // ''Fixed
         return;
       }
 
@@ -13504,8 +13504,8 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       const taskName = templateTasks[parsedTaskIndex]?.title || `Task ${parsedTaskIndex + 1}`;
 
       // Check permission
-      const isRecruiter = req.user.user_type === 'recruiter' ||
-        req.user.user_type === 'company_admin' ||
+      const isRecruiter = req.user.user_type === 'recruiter'||
+        req.user.user_type === 'company_admin'||
         req.user.user_type === 'system_admin';
 
       if (!isRecruiter) {
@@ -13536,7 +13536,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
       `, [sessionId, parsedTaskIndex, feedback]);
       }
 
-      ResponseService.success(res, {  // ✅ Fixed
+      ResponseService.success(res, {  // ''Fixed
         ...result.rows[0],
         task_name: taskName,
         task_index: parsedTaskIndex
@@ -13544,7 +13544,7 @@ IMPORTANT: This is a short, timed simulation (not a full interview). Candidates 
 
     } catch (error: any) {
       console.error('Update task feedback error:', error);
-      ResponseService.error(res, 'Failed to update task feedback', 500, null, this.formatError(error));  // ✅ Fixed
+      ResponseService.error(res, 'Failed to update task feedback', 500, null, this.formatError(error));  // ''Fixed
     }
   }
 
