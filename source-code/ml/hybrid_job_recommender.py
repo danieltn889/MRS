@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SimuHire Rwanda- Recommendation Service  (Matcher + Hybrid Recommender, merged)
+Recommender System- Recommendation Service  (Matcher + Hybrid Recommender, merged)
 ====================================================================================
 One FastAPI process/port serving BOTH ML scorers that used to run as two
 separate services (ai_job_matcher_og.py on 8000 + hybrid_job_recommender.py
@@ -3521,6 +3521,18 @@ class ContentBasedModel:
         tfidf_blocks.append(sp.csr_matrix(self._exp_scaler.transform(exp)))
         tfidf_row = sk_normalize(sp.hstack(tfidf_blocks).tocsr())
 
+        # Compute BOTH vectors before mutating either matrix. self.encoder.encode()
+        # is a sentence-transformer forward pass that can release the GIL; if
+        # job_matrix were updated first and this ran afterward (the old order),
+        # a concurrent reader could see job_matrix already grown to N rows while
+        # job_semantic_matrix still has N-1, crashing _blend()'s broadcast.
+        semantic_vec = None
+        if self.encoder and self.encoder.available:
+            semantic_vec = self.encoder.encode(text["semantic_text"].iloc[0])
+            if semantic_vec is not None:
+                norm = np.linalg.norm(semantic_vec)
+                semantic_vec = semantic_vec / norm if norm > 0 else semantic_vec
+
         if job_id in self.job_id_to_idx:
             row_idx = self.job_id_to_idx[job_id]
         else:
@@ -3531,9 +3543,6 @@ class ContentBasedModel:
 
         self.job_matrix = self._replace_sparse_row(self.job_matrix, row_idx, tfidf_row)
         if self.encoder and self.encoder.available:
-            semantic_vec = self.encoder.encode(text["semantic_text"].iloc[0])
-            if semantic_vec is not None:
-                semantic_vec = semantic_vec / np.linalg.norm(semantic_vec) if np.linalg.norm(semantic_vec) > 0 else semantic_vec
             self.job_semantic_matrix = self._replace_dense_row(self.job_semantic_matrix, row_idx, semantic_vec)
 
     def delete_candidate(self, candidate_id: str) -> None:
