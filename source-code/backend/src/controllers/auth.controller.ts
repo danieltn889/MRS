@@ -708,6 +708,29 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
           return;
         }
 
+        // A newly self-registered company starts 'pending' until a system
+        // admin reviews it - block access to its team until then rather than
+        // letting an unapproved company post jobs/see candidates.
+        if (chosen.verification_status === 'pending') {
+          logger.warn(`Login attempt for company pending approval: ${user.email} / ${chosen.name}`);
+          res.status(401).json({
+            success: false,
+            message: 'Your company registration is pending review by our team. You will receive an email once it is approved.',
+            code: 'COMPANY_PENDING_APPROVAL'
+          });
+          return;
+        }
+
+        if (chosen.verification_status === 'rejected') {
+          logger.warn(`Login attempt for rejected company: ${user.email} / ${chosen.name}`);
+          res.status(401).json({
+            success: false,
+            message: 'Your company registration was not approved. Please contact support.',
+            code: 'COMPANY_REJECTED'
+          });
+          return;
+        }
+
         companyData = chosen;
         if (!chosen.is_default) {
           await query('UPDATE company_team SET is_default = false WHERE user_id = $1', [user.id]);

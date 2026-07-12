@@ -28,11 +28,16 @@ function AppRoutes() {
 
   const handleCompanySignupSuccess = (result) => {
     console.log('Company registration successful:', result);
-    alert(`Company registered! Check admin email: ${result.data.user.email}`);
+    alert(`Company registered! Check ${result.data.user.email} to verify your email. Your company will then be reviewed by our team - you'll get another email once it's approved and you can log in.`);
+    navigate('/login');
   };
 
   const handleSignUp = () => {
     navigate('/signup');
+  };
+
+  const handleCompanySignUp = () => {
+    navigate('/company-signup');
   };
 
   const handleLogin = () => {
@@ -51,7 +56,7 @@ function AppRoutes() {
           isAuthenticated ? (
             <Dashboard onSignUp={handleSignUp} onLogin={handleLogin} />
           ) : (
-            <LandingPage onSignUp={handleSignUp} onLogin={handleLogin} />
+            <LandingPage onSignUp={handleSignUp} onLogin={handleLogin} onCompanySignUp={handleCompanySignUp} />
           )
         } 
       />

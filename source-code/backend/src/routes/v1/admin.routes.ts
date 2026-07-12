@@ -170,11 +170,12 @@ router.put('/companies/:id', [
     const { id } = req.params;
     const { name, description, industry, city, country, website, size, verificationStatus } = req.body;
 
-    const existing = await dbQuery('SELECT headquarters_location FROM companies WHERE id = $1 AND deleted_at IS NULL', [id]);
+    const existing = await dbQuery('SELECT headquarters_location, name, verification_status FROM companies WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (existing.rows.length === 0) {
       res.status(404).json({ success: false, message: 'Company not found'});
       return;
     }
+    const wasPending = existing.rows[0].verification_status === 'pending';
 
     const fields: string[] = ['updated_at = NOW()'];
     const values: any[] = [];
@@ -203,6 +204,35 @@ router.put('/companies/:id', [
     );
 
     res.json({ success: true, data: result.rows[0], message: 'Company updated'});
+
+    if (wasPending && verificationStatus === 'verified') {
+      const admins = await dbQuery(
+        `SELECT u.email FROM company_team ct JOIN users u ON u.id = ct.user_id
+          WHERE ct.company_id = $1 AND ct.role = 'admin'`,
+        [id]
+      );
+      const companyName = existing.rows[0].name;
+      await Promise.all(admins.rows.map((a: any) =>
+        emailService.sendEmail({
+          to: a.email,
+          subject: `${companyName} is now approved - you can log in`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h1 style="color: #2563eb; text-align: center;">You're Approved!</h1>
+              <p>Hi,</p>
+              <p><strong>${companyName}</strong> has been reviewed and approved. Your account is now active and you can log in to start posting jobs and reviewing candidates.</p>
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login"
+                   style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">
+                  Log In
+                </a>
+              </div>
+            </div>
+          `,
+          text: `${companyName} has been reviewed and approved. Your account is now active - log in at ${process.env.FRONTEND_URL || 'http://localhost:3000'}/login`,
+        }).catch((emailError: unknown) => logger.error('Failed to send company-approved email:', emailError))
+      ));
+    }
   } catch (error) {
     logger.error('Admin update company error:', error);
     res.status(500).json({ success: false, message: 'Failed to update company'});

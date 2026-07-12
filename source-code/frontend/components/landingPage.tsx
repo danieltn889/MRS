@@ -58,6 +58,7 @@ interface SearchResponse {
 
 interface LandingPageProps {
   onLogin: () => void;
+  onCompanySignUp?: () => void;
 }
 
 // =====================================================
@@ -335,7 +336,7 @@ function JobCard({ job, isExpanded, onToggle, onViewJob, showMatchBadge = true }
 // LANDING PAGE COMPONENT
 // =====================================================
 
-export default function LandingPage({ onLogin }: LandingPageProps) {
+export default function LandingPage({ onLogin, onCompanySignUp }: LandingPageProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -1267,7 +1268,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <button
-                onClick={onLogin}
+                onClick={() => onCompanySignUp ? onCompanySignUp() : navigate('/company-signup')}
                 className="group flex items-center justify-center gap-2 px-8 py-4 bg-white text-blue-700 font-bold rounded-2xl text-lg hover:shadow-2xl hover:-translate-y-0.5 transition-all"
               >
                 Get Started Free
