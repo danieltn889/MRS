@@ -793,7 +793,7 @@ const seedDatabase = async (): Promise<void> => {
         `
         INSERT INTO github_connections (user_id, github_username, connected_at, last_synced_at)
         VALUES ($1::UUID, $2::VARCHAR, NOW(), NOW())
-        ON CONFLICT (user_id) DO NOTHING
+        ON CONFLICT DO NOTHING
         `,
         [candidate.id, githubUsername]
       );

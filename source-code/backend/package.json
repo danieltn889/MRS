@@ -13,8 +13,9 @@
     "test:signup": "tsx --test src/validators/__tests__/identityDocument.test.ts src/db/data/__tests__/rwandaLocations.test.ts",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",
+    "db:import-demo": "tsx src/db/import-demo-data.ts",
     "db:reset": "tsx src/db/reset.ts",
-    "db:setup": "npm run migrate && npm run seed",
+    "db:setup": "npm run migrate && npm run seed && npm run db:import-demo",
     "db:restore-backup": "tsx src/db/restore-backup.ts",
     "type-check": "tsc --noEmit",
     "clean": "rimraf dist"
