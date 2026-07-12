@@ -1,5 +1,6 @@
 import { Client } from 'pg';
 import { logger } from '../utils/logger.js';
+import 'dotenv/config';
 
 const resetDatabase = async (): Promise<void> => {
   const client = new Client({
