@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Eye, EyeOff, CheckCircle, AlertCircle, Mail, Loader, User, MapPin, CreditCard, Zap, Shield, Brain, Target, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, CheckCircle, AlertCircle, Mail, Loader, User, MapPin, CreditCard, Zap, Target, ArrowLeft, Sliders, BarChart3, Globe } from 'lucide-react';
 import { checkEmailExists, registerCandidate, resendVerificationEmail } from '../services/authAPI';
 import { getCountries, getProvinces, getDistricts, getSectors, getCells, getVillages, Country } from '../services/locationsAPI';
 import Combobox, { ComboboxOption } from './common/Combobox';
@@ -52,15 +52,16 @@ const BrandPanel = () => (
         MIFOTRA Recruitment System
       </h1>
       <p className="text-blue-100 text-lg leading-relaxed mb-10">
-        Empower smarter hiring decisions with AI-driven assessments, real-world job simulations,
-        and trusted verification tools designed to connect organisations with skilled and qualified talent.
+        Empower smarter hiring decisions with an explainable AI matching engine designed to
+        connect organisations with skilled and qualified talent.
       </p>
 
       <div className="space-y-4">
         {[
-          { icon: Brain, text: 'AI-powered behavioral analytics'},
-          { icon: Shield, text: 'Blockchain-verified credentials'},
-          { icon: Target, text: 'Real work practical assessments'},
+          { icon: Sliders, text: 'Customisable cultural fit parameters for your organisation'},
+          { icon: Target, text: 'Transparent, explainable match scoring for every candidate'},
+          { icon: BarChart3, text: 'Analytics dashboard with predictive insights'},
+          { icon: Globe, text: "Support for Rwanda's NICI III digital economy goals"},
         ].map(({ icon: Icon, text }) => (
           <div key={text} className="flex items-center gap-3">
             <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center backdrop-blur-sm flex-shrink-0">

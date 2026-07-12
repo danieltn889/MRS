@@ -1167,7 +1167,8 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   </div>
                   <h3 className="text-2xl font-extrabold text-gray-900 mb-2">Software Developer</h3>
                   <p className="text-gray-500 mb-6">See exactly why you match a job before you apply   not just a resume guess.</p>
-                  <div className="space-y-3 mb-6">
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Rule-Based Matcher</p>
+                  <div className="space-y-3 mb-5">
                     {[
                       { label: 'Skills', value: 90 },
                       { label: 'Qualifications', value: 85 },
@@ -1180,7 +1181,27 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                           <span className="font-semibold">{value}%</span>
                         </div>
                         <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full" style={{ width: `${value}%` }} />
+                          <div className="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full" style={{ width: `${value}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">AI Hybrid Recommender</p>
+                  <div className="space-y-3 mb-6">
+                    {[
+                      { label: 'Content', value: 89 },
+                      { label: 'Behavior', value: 84 },
+                      { label: 'Collaborative', value: 78 },
+                      { label: 'Freshness', value: 95 },
+                      { label: 'Popularity', value: 70 },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                          <span>{label}</span>
+                          <span className="font-semibold">{value}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-purple-500 to-purple-700 rounded-full" style={{ width: `${value}%` }} />
                         </div>
                       </div>
                     ))}

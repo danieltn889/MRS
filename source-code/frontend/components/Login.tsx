@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Mail, Eye, EyeOff, AlertCircle, Loader, CheckCircle, Clock, Zap, Shield, Brain, Target, ArrowLeft } from 'lucide-react';
+import { Mail, Eye, EyeOff, AlertCircle, Loader, CheckCircle, Clock, Zap, Target, ArrowLeft, Sliders, BarChart3, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { loginUser, resendVerificationEmail } from '../services/authAPI';
 import { useAuth } from '../context/AuthContext';
@@ -405,15 +405,16 @@ const Login: React.FC = () => {
             MIFOTRA Recruitment System
           </h1>
           <p className="text-blue-100 text-lg leading-relaxed mb-10">
-            Empower smarter hiring decisions with AI-driven assessments, real-world job simulations,
-            and trusted verification tools designed to connect organisations with skilled and qualified talent.
+            Empower smarter hiring decisions with an explainable AI matching engine designed to
+            connect organisations with skilled and qualified talent.
           </p>
 
           <div className="space-y-4">
             {[
-              { icon: Brain, text: 'AI-powered behavioral analytics'},
-              { icon: Shield, text: 'Blockchain-verified credentials'},
-              { icon: Target, text: 'Real work practical assessments'},
+              { icon: Sliders, text: 'Customisable cultural fit parameters for your organisation'},
+              { icon: Target, text: 'Transparent, explainable match scoring for every candidate'},
+              { icon: BarChart3, text: 'Analytics dashboard with predictive insights'},
+              { icon: Globe, text: "Support for Rwanda's NICI III digital economy goals"},
             ].map(({ icon: Icon, text }) => (
               <div key={text} className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center backdrop-blur-sm flex-shrink-0">
