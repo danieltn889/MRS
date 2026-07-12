@@ -787,7 +787,7 @@ const seedDatabase = async (): Promise<void> => {
     `);
 
     for (const candidate of allCandidatesRes.rows) {
-      const githubUsername = candidate.email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
+      const githubUsername = (candidate.email.split('@')[0] || '').replace(/[^a-zA-Z0-9]/g, '');
 
       await client.query(
         `
