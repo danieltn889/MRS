@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Zap, Menu, X, Brain, Shield, Target,
-  Badge, Clock, Award, ChevronRight, Star, Users,
+  Badge, Award, ChevronRight, Star,
   ArrowRight, Check, Search, Loader2, Briefcase, MapPin,
   Sparkles, GraduationCap, BookOpen, ExternalLink,
   Bookmark, DollarSign, Lock, LogIn
@@ -1013,28 +1013,28 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   Revolutionising Recruitment<br />in Rwanda
                 </h2>
                 <p className="text-xl text-gray-500 max-w-2xl mx-auto">
-                  Combining cutting-edge AI with blockchain technology for transparent, predictive hiring assessments.
+                  Combining an explainable rule-based matcher with a machine-learning recommender for transparent, accurate job matching.
                 </p>
               </div>
               <div className="grid md:grid-cols-3 gap-8">
                 {[
                   {
-                    icon: Brain, gradient: 'from-blue-500 to-blue-700', glow: 'shadow-blue-200',
-                    title: 'AI Behavioral Analytics',
-                    desc: 'NLP-powered communication analysis, punctuality tracking, and adaptability scoring tailored to Rwandan workplace norms.',
-                    tags: ['NLP Analysis', 'Soft Skills', 'Adaptability'],
+                    icon: Target, gradient: 'from-blue-500 to-blue-700', glow: 'shadow-blue-200',
+                    title: 'Explainable Rule-Based Matcher',
+                    desc: 'Scores every candidate against a job on Skills, Qualifications, Experience, and Preferences   with a full, transparent breakdown of what matched and what didn\'t.',
+                    tags: ['Skills', 'Qualifications', 'Experience'],
                   },
                   {
-                    icon: Shield, gradient: 'from-purple-500 to-purple-700', glow: 'shadow-purple-200',
-                    title: 'Blockchain Verification',
-                    desc: 'Tamper-proof assessment records and verifiable credentials. 100% transparent and immutable hiring decisions.',
-                    tags: ['Tamper-Proof', 'Immutable', 'Transparent'],
+                    icon: Brain, gradient: 'from-purple-500 to-purple-700', glow: 'shadow-purple-200',
+                    title: 'AI Hybrid Recommender',
+                    desc: 'A 5-signal machine-learning engine that learns from candidate behavior, content similarity, and job freshness to surface the best-fit roles.',
+                    tags: ['Behavior-Aware', 'ML-Driven', 'Personalised'],
                   },
                   {
-                    icon: Target, gradient: 'from-emerald-500 to-teal-600', glow: 'shadow-emerald-200',
-                    title: 'Real Work Practical Assessments',
-                    desc: 'Interactive tasks that mirror actual job responsibilities. Assess real skills, not just resumes.',
-                    tags: ['Real Tasks', 'Skill-Based', 'Job-Ready'],
+                    icon: Shield, gradient: 'from-emerald-500 to-teal-600', glow: 'shadow-emerald-200',
+                    title: 'One Transparent Match Score',
+                    desc: 'Both engines blend into a single % match on every job card, so candidates and recruiters always know exactly why a match is strong or weak.',
+                    tags: ['Transparent', 'Data-Driven', 'Fair'],
                   },
                 ].map(({ icon: Icon, gradient, glow, title, desc, tags }) => (
                   <div key={title} className="group relative bg-white rounded-3xl p-8 border border-gray-100 hover:border-blue-100 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300">
@@ -1071,9 +1071,9 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                 <div className="grid md:grid-cols-4 gap-8">
                   {[
                     { step: '01', title: 'Post a Job', desc: 'Define role requirements and cultural parameters' },
-                    { step: '02', title: 'Candidate Simulates', desc: 'Complete realistic work tasks in a virtual environment' },
-                    { step: '03', title: 'AI Analysis', desc: 'Behavioral scoring and blockchain recording of results' },
-                    { step: '04', title: 'Data-Driven Hire', desc: 'Make confident decisions with verified, immutable insights' },
+                    { step: '02', title: 'Candidates Apply', desc: 'Job seekers build a profile and apply to open roles' },
+                    { step: '03', title: 'AI Match Scoring', desc: 'The hybrid engine scores and ranks every candidate transparently' },
+                    { step: '04', title: 'Data-Driven Hire', desc: 'Make confident decisions with clear, explainable match insights' },
                   ].map(({ step, title, desc }) => (
                     <div key={step} className="relative flex flex-col items-center text-center">
                       <div className="relative z-10 w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-700 flex items-center justify-center shadow-xl mb-5">
@@ -1109,7 +1109,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   <ul className="space-y-4 mb-10">
                     {[
                       'Customisable cultural fit parameters for your organisation',
-                      'Blockchain-verified candidate assessments',
+                      'Transparent, explainable match scoring for every candidate',
                       'Analytics dashboard with predictive insights',
                       "Support for Rwanda's NICI III digital economy goals",
                     ].map(item => (
@@ -1159,27 +1159,31 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                       <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
                         <Badge className="w-5 h-5 text-blue-600" />
                       </div>
-                      <span className="text-sm font-bold text-gray-700">Featured Practical Assessment</span>
+                      <span className="text-sm font-bold text-gray-700">Sample Match Score</span>
                     </div>
                     <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-100 px-2.5 py-1 rounded-full">
-                      <Star className="w-3 h-3" /> Popular
+                      <Star className="w-3 h-3" /> 87% Match
                     </span>
                   </div>
                   <h3 className="text-2xl font-extrabold text-gray-900 mb-2">Software Developer</h3>
-                  <p className="text-gray-500 mb-6">Complete real development tasks and showcase your skills to top employers.</p>
+                  <p className="text-gray-500 mb-6">See exactly why you match a job before you apply   not just a resume guess.</p>
                   <div className="space-y-3 mb-6">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Clock className="w-4 h-4 text-blue-500" />
-                      <span>Duration: <strong>2 hours</strong></span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Award className="w-4 h-4 text-purple-500" />
-                      <span>Blockchain-verified certificate on completion</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Users className="w-4 h-4 text-green-500" />
-                      <span><strong>120+</strong> candidates completed this month</span>
-                    </div>
+                    {[
+                      { label: 'Skills', value: 90 },
+                      { label: 'Qualifications', value: 85 },
+                      { label: 'Experience', value: 80 },
+                      { label: 'Preferences', value: 92 },
+                    ].map(({ label, value }) => (
+                      <div key={label}>
+                        <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                          <span>{label}</span>
+                          <span className="font-semibold">{value}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full" style={{ width: `${value}%` }} />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                   <div className="flex gap-2">
                     {['JavaScript', 'React', 'Node.js', 'SQL'].map(tag => (
@@ -1198,8 +1202,8 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   </p>
                   <ul className="space-y-4 mb-10">
                     {[
-                      'Demonstrate technical and soft skills in real scenarios',
-                      'Blockchain-verified performance records',
+                      'Full transparency into every job match   skills, qualifications, experience',
+                      'Personalised recommendations that learn from your activity',
                       'Stand out to top Rwandan tech companies',
                       'Free access to all practical assessments',
                     ].map(item => (
@@ -1272,7 +1276,7 @@ export default function LandingPage({ onLogin }: LandingPageProps) {
                   <span className="font-extrabold text-white text-lg">SimuHire Rwanda</span>
                 </div>
                 <p className="text-sm leading-relaxed text-gray-500">
-                  AI + Blockchain powered recruitment practical assessments for Rwanda's digital economy.
+                  AI-powered recruitment matching for Rwanda's digital economy.
                 </p>
               </div>
               {[
