@@ -135,7 +135,7 @@ export class AIController extends BaseController {
         paramIndex++;
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
+      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
       // Get total count
       const countQuery = `SELECT COUNT(*) as total FROM ai_analysis ${whereClause}`;

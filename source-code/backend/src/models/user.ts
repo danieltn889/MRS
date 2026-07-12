@@ -2,9 +2,7 @@ import { BaseEntity, SoftDeleteEntity, UserType, UserStatus, UUID, TIMESTAMP, JS
 import { CandidateProfile, Education, WorkExperience, UserSkill, Resume, PortfolioLink } from './candidate.ts';
 import { Application } from './application.ts';
 import { SavedJob } from './job.ts';
-import { Simulation } from './simulation.ts';
 import { AIAnalysis, SkillGap, PerformanceTrend } from './ai.ts';
-import { BlockchainCredential } from './blockchain.ts';
 import { Notification, NotificationPreferences } from './notification.ts';
 
 export interface User extends SoftDeleteEntity {
@@ -32,11 +30,9 @@ export interface User extends SoftDeleteEntity {
   portfolioLinks?: PortfolioLink[];
   applications?: Application[];
   savedJobs?: SavedJob[];
-  simulations?: Simulation[];
   aiAnalyses?: AIAnalysis[];
   skillGaps?: SkillGap[];
   performanceTrends?: PerformanceTrend[];
-  blockchainCredentials?: BlockchainCredential[];
   notifications?: Notification[];
   notificationPreferences?: NotificationPreferences;
   loginHistory?: LoginHistory[];

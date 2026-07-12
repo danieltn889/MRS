@@ -37,6 +37,17 @@ const Login: React.FC = () => {
   const [isResendingEmail, setIsResendingEmail] = useState(false);
   const [resendMessage, setResendMessage] = useState('');
   const [resendStatus, setResendStatus] = useState<'idle'| 'loading'| 'success'| 'error'>('idle');
+  const [companyChoices, setCompanyChoices] = useState<Array<{ id: string; name: string; logoUrl?: string }> | null>(null);
+  const [selectingCompany, setSelectingCompany] = useState(false);
+  const [roleChoices, setRoleChoices] = useState<Array<{ userType: string }> | null>(null);
+  const [selectingRole, setSelectingRole] = useState(false);
+
+  const roleLabel = (userType: string): string => ({
+    candidate: 'Job Seeker',
+    recruiter: 'Recruiter',
+    company_admin: 'Company Admin',
+    system_admin: 'System Admin',
+  } as Record<string, string>)[userType] || userType;
 
   // Email validation regex
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -78,6 +89,107 @@ const Login: React.FC = () => {
     }
   }, [lockoutCountdown]);
 
+  // Shared by both the initial login and the post-company-selection login.
+  const completeLogin = (result: any) => {
+    setLoginState({
+      status: 'success',
+      message: `Welcome back, ${result.user?.firstName || 'User'}!`,
+    });
+
+    // Update auth context
+    login(result.user, result.token);
+
+    // ''Get redirect path and CLEAR it from sessionStorage
+    let redirectUrl = sessionStorage.getItem('redirectAfterLogin');
+
+    // ''Clear immediately after reading
+    if (redirectUrl) {
+      sessionStorage.removeItem('redirectAfterLogin');
+    }
+
+    // Get from location state as fallback
+    const fromState = (location.state as LocationState)?.from;
+
+    // Determine final redirect URL
+    let finalRedirectUrl = '/';
+
+    if (redirectUrl) {
+      finalRedirectUrl = redirectUrl;
+      console.log('🔀 Redirecting to saved URL:', finalRedirectUrl);
+    } else if (fromState && fromState !== '/login') {
+      finalRedirectUrl = fromState;
+      console.log('🔀 Redirecting from state:', finalRedirectUrl);
+    } else {
+      console.log('🔀 Redirecting to dashboard');
+    }
+
+    // Small delay to show success message
+    setTimeout(() => {
+      navigate(finalRedirectUrl, { replace: true });
+    }, 1000);
+  };
+
+  // A user can be ambiguous on role (same email, multiple accounts) and/or
+  // company (recruiter/admin on more than one company's team). Both resolve
+  // through this same attempt   picking one may reveal the next.
+  const [selectedUserType, setSelectedUserType] = useState<string | null>(null);
+
+  const attemptLogin = async (extra: { userType?: string; companyId?: string } = {}) => {
+    const result = await loginUser({
+      email: formData.email,
+      password: formData.password,
+      rememberMe: formData.rememberMe,
+      ...extra,
+    });
+
+    if (result.requiresRoleSelection) {
+      setRoleChoices(result.roles || []);
+      setCompanyChoices(null);
+      setLoginState({ status: 'idle', message: ''});
+      return;
+    }
+
+    if (result.requiresCompanySelection) {
+      setCompanyChoices(result.companies || []);
+      setRoleChoices(null);
+      setLoginState({ status: 'idle', message: ''});
+      return;
+    }
+
+    completeLogin(result);
+  };
+
+  const handleSelectRole = async (userType: string) => {
+    setSelectingRole(true);
+    setSelectedUserType(userType);
+    try {
+      await attemptLogin({ userType });
+    } catch (error: any) {
+      setRoleChoices(null);
+      setLoginState({
+        status: 'error',
+        message: error.message || 'Login failed. Please try again.',
+      });
+    } finally {
+      setSelectingRole(false);
+    }
+  };
+
+  const handleSelectCompany = async (companyId: string) => {
+    setSelectingCompany(true);
+    try {
+      await attemptLogin({ companyId, ...(selectedUserType ? { userType: selectedUserType } : {}) });
+    } catch (error: any) {
+      setCompanyChoices(null);
+      setLoginState({
+        status: 'error',
+        message: error.message || 'Login failed. Please try again.',
+      });
+    } finally {
+      setSelectingCompany(false);
+    }
+  };
+
   // Handle login form submission
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,49 +208,7 @@ const Login: React.FC = () => {
     });
 
     try {
-      const result = await loginUser({
-        email: formData.email,
-        password: formData.password,
-        rememberMe: formData.rememberMe,
-      });
-
-      setLoginState({
-        status: 'success',
-        message: `Welcome back, ${result.user?.firstName || 'User'}!`,
-      });
-
-      // Update auth context
-      login(result.user, result.token);
-
-      // ''Get redirect path and CLEAR it from sessionStorage
-      let redirectUrl = sessionStorage.getItem('redirectAfterLogin');
-      
-      // ''Clear immediately after reading
-      if (redirectUrl) {
-        sessionStorage.removeItem('redirectAfterLogin');
-      }
-      
-      // Get from location state as fallback
-      const fromState = (location.state as LocationState)?.from;
-      
-      // Determine final redirect URL
-      let finalRedirectUrl = '/';
-      
-      if (redirectUrl) {
-        finalRedirectUrl = redirectUrl;
-        console.log('🔀 Redirecting to saved URL:', finalRedirectUrl);
-      } else if (fromState && fromState !== '/login') {
-        finalRedirectUrl = fromState;
-        console.log('🔀 Redirecting from state:', finalRedirectUrl);
-      } else {
-        console.log('🔀 Redirecting to dashboard');
-      }
-      
-      // Small delay to show success message
-      setTimeout(() => {
-        navigate(finalRedirectUrl, { replace: true });
-      }, 1000);
-      
+      await attemptLogin();
     } catch (error: any) {
       const errorMessage = error.message || 'Login failed. Please try again.';
       const errorCode = error.code || 'LOGIN_ERROR';
@@ -424,7 +494,76 @@ const Login: React.FC = () => {
           )}
         </AnimatePresence>
 
+        {/* Role selection (same email, separate account per role) */}
+        {roleChoices && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-3"
+          >
+            <p className="text-sm text-gray-600 mb-2">Which account do you want to log in as?</p>
+            {roleChoices.map(r => (
+              <button
+                key={r.userType}
+                type="button"
+                disabled={selectingRole}
+                onClick={() => handleSelectRole(r.userType)}
+                className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded bg-purple-100 flex items-center justify-center text-purple-600 font-semibold text-sm">
+                  {roleLabel(r.userType).charAt(0)}
+                </div>
+                <span className="font-medium text-gray-900">{roleLabel(r.userType)}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setRoleChoices(null)}
+              className="text-sm text-gray-500 hover:text-gray-700 mt-2"
+            >
+              Back
+            </button>
+          </motion.div>
+        )}
+
+        {/* Company selection (recruiter/company_admin on more than one company) */}
+        {!roleChoices && companyChoices && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-3"
+          >
+            <p className="text-sm text-gray-600 mb-2">Which company do you want to log in as?</p>
+            {companyChoices.map(c => (
+              <button
+                key={c.id}
+                type="button"
+                disabled={selectingCompany}
+                onClick={() => handleSelectCompany(c.id)}
+                className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-blue-400 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left"
+              >
+                {c.logoUrl ? (
+                  <img src={c.logoUrl} alt="" className="w-8 h-8 rounded object-contain border border-gray-200" />
+                ) : (
+                  <div className="w-8 h-8 rounded bg-blue-100 flex items-center justify-center text-blue-600 font-semibold text-sm">
+                    {c.name.charAt(0)}
+                  </div>
+                )}
+                <span className="font-medium text-gray-900">{c.name}</span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setCompanyChoices(null)}
+              className="text-sm text-gray-500 hover:text-gray-700 mt-2"
+            >
+              Back
+            </button>
+          </motion.div>
+        )}
+
         {/* Login Form */}
+        {!companyChoices && !roleChoices && (
         <motion.form
           onSubmit={handleLogin}
           initial={{ opacity: 0 }}
@@ -532,6 +671,7 @@ const Login: React.FC = () => {
             )}
           </motion.button>
         </motion.form>
+        )}
 
         {/* Footer Links */}
         <motion.div

@@ -227,6 +227,8 @@ export const loginUser = async (payload: any) => {
         email: payload.email,
         password: payload.password,
         rememberMe: payload.rememberMe || false,
+        ...(payload.companyId ? { companyId: payload.companyId } : {}),
+        ...(payload.userType ? { userType: payload.userType } : {}),
       }),
     });
 
@@ -252,6 +254,22 @@ export const loginUser = async (payload: any) => {
         error.code = 'RATE_LIMIT_EXCEEDED';
       }
       throw error;
+    }
+
+    if (data.requiresRoleSelection) {
+      return {
+        success: true,
+        requiresRoleSelection: true,
+        roles: data.roles || [],
+      };
+    }
+
+    if (data.requiresCompanySelection) {
+      return {
+        success: true,
+        requiresCompanySelection: true,
+        companies: data.companies || [],
+      };
     }
 
     if (data.data?.token) {

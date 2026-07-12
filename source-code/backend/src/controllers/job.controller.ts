@@ -315,7 +315,7 @@ class JobController extends BaseController {
         paramIndex++;
       }
 
-      query += ` ORDER BY j.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      query += ` ORDER BY j.created_at DESC, j.id LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
       params.push(validLimit, (validPage - 1) * validLimit);
 
       const result = await DatabaseService.execute(query, params);
@@ -541,17 +541,10 @@ class JobController extends BaseController {
         return;
       }
 
-      // For company admins and recruiters, lookup company from company_team table first
+      // protect middleware already resolves this respecting is_default, for
+      // users on more than one company's team.
       if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
-        const teamResult = await DatabaseService.execute(
-          'SELECT company_id FROM company_team WHERE user_id = $1',
-          [userId]
-        );
-        if (teamResult.rows.length > 0) {
-          companyId = teamResult.rows[0].company_id;
-        } else {
-          companyId = req.user.company_id ? String(req.user.company_id) : null;
-        }
+        companyId = req.user.company_id ? String(req.user.company_id) : null;
       }
 
       if (!companyId) {
@@ -1025,19 +1018,10 @@ class JobController extends BaseController {
 
       let companyId: string | null = null;
 
-      // Use company from company_team table first, fallback to token
+      // protect middleware already resolves this respecting is_default, for
+      // users on more than one company's team.
       if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
-        // Always lookup from company_team table to ensure correct company
-        const teamResult = await DatabaseService.execute(
-          'SELECT company_id FROM company_team WHERE user_id = $1',
-          [req.user.id]
-        );
-        if (teamResult.rows.length > 0) {
-          companyId = teamResult.rows[0].company_id;
-        } else {
-          // Fallback to token company_id if not found in company_team
-          companyId = req.user.company_id ? String(req.user.company_id) : null;
-        }
+        companyId = req.user.company_id ? String(req.user.company_id) : null;
       }
 
       if (!companyId) {
@@ -1195,19 +1179,10 @@ class JobController extends BaseController {
 
       let companyId: string | null = null;
 
-      // Use company from company_team table first, fallback to token
+      // protect middleware already resolves this respecting is_default, for
+      // users on more than one company's team.
       if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
-        // Always lookup from company_team table to ensure correct company
-        const teamResult = await DatabaseService.execute(
-          'SELECT company_id FROM company_team WHERE user_id = $1',
-          [req.user.id]
-        );
-        if (teamResult.rows.length > 0) {
-          companyId = teamResult.rows[0].company_id;
-        } else {
-          // Fallback to token company_id if not found in company_team
-          companyId = req.user.company_id ? String(req.user.company_id) : null;
-        }
+        companyId = req.user.company_id ? String(req.user.company_id) : null;
       }
 
       if (!companyId) {
@@ -1775,7 +1750,7 @@ class JobController extends BaseController {
         AND (j.published_at IS NULL OR j.published_at <= NOW())
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
         AND j.locations::text ILIKE $1
-        ORDER BY j.created_at DESC
+        ORDER BY j.created_at DESC, j.id
         LIMIT $2 OFFSET $3
       `;
 
@@ -1832,7 +1807,7 @@ class JobController extends BaseController {
         paramIndex++;
       }
 
-      query += ` ORDER BY (j.salary_min + j.salary_max)/2 DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+      query += ` ORDER BY (j.salary_min + j.salary_max)/2 DESC, j.id LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
       params.push(validLimit, (validPage - 1) * validLimit);
 
       const result = await DatabaseService.execute(query, params);
@@ -1859,7 +1834,7 @@ class JobController extends BaseController {
         AND (j.published_at IS NULL OR j.published_at <= NOW())
         AND (j.expires_at IS NULL OR j.expires_at > NOW())
         AND j.experience_level = $1
-        ORDER BY j.created_at DESC
+        ORDER BY j.created_at DESC, j.id
         LIMIT $2 OFFSET $3
       `, [this.normalizeExperienceLevel(level), validLimit, offset]);
 
@@ -2924,18 +2899,28 @@ class JobController extends BaseController {
       // ============================================
       // SORTING OPTIONS
       // ============================================
+      // j.id as the final tiebreaker on every branch- published_at/created_at
+      // are frequently tied (bulk-generated data, many jobs sharing the same
+      // day-granularity timestamp: some pairs have 14+ rows), and a non-unique
+      // ORDER BY makes OFFSET pagination non-deterministic across separate
+      // queries- a tied row can land on neither page (or both) depending on
+      // how Postgres breaks the tie that particular execution. This is how a
+      // real, active, visible job silently never appeared in the Matcher's
+      // paginated backend.get_jobs() fetch while the Hybrid engine (a single
+      // unpaginated query) still saw it- "matcher_breakdown": null for a job
+      // the candidate should have gotten a real 4-factor score for.
       if (sortBy === 'salary_high') {
-        sql += ` ORDER BY j.salary_max DESC NULLS LAST`;
+        sql += ` ORDER BY j.salary_max DESC NULLS LAST, j.id`;
       } else if (sortBy === 'salary_low') {
-        sql += ` ORDER BY j.salary_min ASC NULLS LAST`;
+        sql += ` ORDER BY j.salary_min ASC NULLS LAST, j.id`;
       } else if (sortBy === 'recent') {
-        sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC`;
+        sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC, j.id`;
       } else if (sortBy === 'applications') {
-        sql += ` ORDER BY j.application_count DESC NULLS LAST`;
+        sql += ` ORDER BY j.application_count DESC NULLS LAST, j.id`;
       } else if (sortBy === 'expiring_soon') {
-        sql += ` ORDER BY j.expires_at ASC NULLS LAST`;
+        sql += ` ORDER BY j.expires_at ASC NULLS LAST, j.id`;
       } else {
-        sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC`;
+        sql += ` ORDER BY j.published_at DESC NULLS LAST, j.created_at DESC, j.id`;
       }
 
       // ============================================
@@ -3754,7 +3739,7 @@ class JobController extends BaseController {
     `, [jobId]);
 
       // ============================================
-      // STEP 2: Enrich each candidate with ALL data including simulations
+      // STEP 2: Enrich each candidate with ALL data
       // ============================================
       const candidates = await Promise.all(result.rows.map(async (row: any) => {
         const candidateId = row.candidate_id;
@@ -3898,248 +3883,6 @@ class JobController extends BaseController {
           row.ai_analysis = null;
         }
 
-        // ============================================
-        // SIMULATIONS - USE TEMPLATE TASKS AS SOURCE OF TRUTH
-        // ============================================
-        try {
-          // First, get the template task list (THIS IS THE SOURCE OF TRUTH)
-          const templateResult = await DatabaseService.execute(`
-          SELECT st.id, st.total_tasks, st.tasks
-          FROM simulation_templates st
-          JOIN simulations sim ON sim.template_id = st.id
-          WHERE sim.application_id = $1 AND sim.job_id = $2
-          GROUP BY st.id, st.total_tasks, st.tasks
-        `, [applicationId, jobId]);
-
-          const templateTasksMap = new Map();
-          for (const tmpl of templateResult.rows) {
-            const tasksList = parseJson(tmpl.tasks, []);
-            templateTasksMap.set(tmpl.id, {
-              total_tasks: tmpl.total_tasks || tasksList.length,
-              tasks: tasksList
-            });
-          }
-
-          const simResult = await DatabaseService.execute(`
-          SELECT 
-            -- Simulation record
-            sim.id as simulation_record_id,
-            sim.template_id,
-            sim.status as simulation_status,
-            sim.overall_score as simulation_overall_score,
-            sim.feedback as simulation_feedback,
-            sim.completed_at as simulation_completed_at,
-            
-            -- Template details
-            st.name as simulation_name,
-            st.description as simulation_description,
-            st.type as simulation_type,
-            st.difficulty,
-            st.duration_minutes,
-            st.total_tasks,
-            st.scoring_rubric,
-            st.pass_fail_criteria,
-            st.tasks as template_tasks,
-            
-            -- SESSION details
-            ss.id as session_id,
-            ss.status as session_status,
-            ss.started_at as session_started_at,
-            ss.completed_at as session_completed_at,
-            ss.time_spent as session_time_spent,
-            ss.score as session_score,
-            ss.github_links,
-            
-            -- Evaluation for this simulation
-            e.id as evaluation_id,
-            e.overall_score as evaluation_overall_score,
-            e.punctuality_score as evaluation_punctuality_score,
-            e.communication_score as evaluation_communication_score,
-            e.problem_solving_score as evaluation_problem_solving_score,
-            e.adaptability_score as evaluation_adaptability_score,
-            e.collaboration_score as evaluation_collaboration_score,
-            e.attention_to_detail_score,
-            e.initiative_score as evaluation_initiative_score,
-            e.status as evaluation_status,
-            e.completed_at as evaluation_completed_at
-            
-          FROM simulations sim
-          JOIN simulation_templates st ON sim.template_id = st.id
-          LEFT JOIN simulation_sessions ss ON ss.simulation_id = sim.id
-          LEFT JOIN evaluations e ON e.simulation_id = sim.id AND e.candidate_id = $1
-          WHERE sim.application_id = $2 AND sim.job_id = $3
-          ORDER BY ss.created_at DESC, ss.started_at DESC NULLS LAST
-        `, [candidateId, applicationId, jobId]);
-
-          // Process each session - USE TEMPLATE TASKS AS SOURCE OF TRUTH
-          row.simulations = simResult.rows.map((sim: any) => {
-            // Get template tasks (THIS IS THE SOURCE OF TRUTH)
-            let templateTasks = [];
-            if (sim.template_tasks) {
-              if (typeof sim.template_tasks === 'object') {
-                templateTasks = sim.template_tasks;
-              } else if (typeof sim.template_tasks === 'string') {
-                try {
-                  templateTasks = JSON.parse(sim.template_tasks);
-                } catch (e) {
-                  templateTasks = [];
-                }
-              }
-            }
-
-            const totalTasks = templateTasks.length;
-
-            return {
-              session_id: sim.session_id,
-              session_status: sim.session_status || 'not_started',
-              session_started_at: sim.session_started_at,
-              session_completed_at: sim.session_completed_at,
-              session_time_spent: sim.session_time_spent || 0,
-              session_score: sim.session_score ? parseFloat(sim.session_score) : null,
-
-              simulation_record_id: sim.simulation_record_id,
-              template_id: sim.template_id,
-              simulation_name: sim.simulation_name,
-              simulation_description: sim.simulation_description,
-              simulation_type: sim.simulation_type,
-              difficulty: sim.difficulty,
-              duration_minutes: sim.duration_minutes,
-              total_tasks: totalTasks,
-              completed_tasks: 0,
-              scoring_rubric: parseJson(sim.scoring_rubric, {}),
-              pass_fail_criteria: parseJson(sim.pass_fail_criteria, {}),
-
-              github_links: parseJson(sim.github_links, {}),
-              task_progress: [],
-              avg_task_score: 0,
-
-              evaluation_id: sim.evaluation_id,
-              evaluation_overall_score: sim.evaluation_overall_score,
-              evaluation_punctuality_score: sim.evaluation_punctuality_score,
-              evaluation_communication_score: sim.evaluation_communication_score,
-              evaluation_problem_solving_score: sim.evaluation_problem_solving_score,
-              evaluation_adaptability_score: sim.evaluation_adaptability_score,
-              evaluation_collaboration_score: sim.evaluation_collaboration_score,
-              attention_to_detail_score: sim.attention_to_detail_score,
-              evaluation_initiative_score: sim.evaluation_initiative_score,
-              evaluation_status: sim.evaluation_status,
-              evaluation_completed_at: sim.evaluation_completed_at,
-
-              overall_score: sim.session_score
-                ? parseFloat(sim.session_score)
-                : (sim.evaluation_overall_score || parseFloat(sim.simulation_overall_score) || 0),
-            };
-          });
-
-          // Now fetch task_progress for each session separately
-          for (let sIdx = 0; sIdx < row.simulations.length; sIdx++) {
-            const session = row.simulations[sIdx];
-            if (!session.session_id) continue;
-
-            const taskProgressResult = await DatabaseService.execute(`
-            SELECT 
-              stp.id,
-              stp.task_index,
-              stp.status,
-              stp.started_at,
-              stp.completed_at,
-              stp.time_spent,
-              stp.score,
-              stp.feedback,
-              stp.github_commit_url,
-              stp.answer,
-              stp.created_at,
-              stp.updated_at
-            FROM session_task_progress stp
-            WHERE stp.session_id = $1
-            ORDER BY stp.task_index
-          `, [session.session_id]);
-
-            const existingProgressMap = new Map();
-            for (const prog of taskProgressResult.rows) {
-              existingProgressMap.set(prog.task_index, prog);
-            }
-
-            const templateInfo = templateTasksMap.get(session.template_id);
-            const templateTasksList = templateInfo?.tasks || [];
-            const totalTemplateTasks = templateTasksList.length;
-
-            const completeTaskProgress = [];
-            let completedCount = 0;
-            let totalScoreSum = 0;
-
-            for (let i = 0; i < totalTemplateTasks; i++) {
-              const templateTask = templateTasksList[i];
-              const existingProgress = existingProgressMap.get(i);
-
-              if (existingProgress) {
-                const taskScore = existingProgress.score !== null && parseFloat(existingProgress.score) > 0
-                  ? parseFloat(existingProgress.score)
-                  : 0;
-                totalScoreSum += taskScore;
-                if (existingProgress.status === 'completed') {
-                  completedCount++;
-                }
-
-                completeTaskProgress.push({
-                  id: existingProgress.id,
-                  task_index: existingProgress.task_index,
-                  task_id: templateTask?.id || null,
-                  task_title: templateTask?.title || `Task ${i + 1}`,
-                  task_description: templateTask?.description || '',
-                  task_duration: templateTask?.duration || 0,
-                  task_type: templateTask?.type || 'technical',
-                  status: existingProgress.status,
-                  started_at: existingProgress.started_at,
-                  completed_at: existingProgress.completed_at,
-                  time_spent: existingProgress.time_spent,
-                  score: existingProgress.score ? parseFloat(existingProgress.score) : null,
-                  feedback: existingProgress.feedback,
-                  github_commit_url: existingProgress.github_commit_url,
-                  answer: existingProgress.answer,
-                  created_at: existingProgress.created_at,
-                  updated_at: existingProgress.updated_at,
-                  template_task: templateTask
-                });
-              } else {
-                completeTaskProgress.push({
-                  id: null,
-                  task_index: i,
-                  task_id: templateTask?.id || null,
-                  task_title: templateTask?.title || `Task ${i + 1}`,
-                  task_description: templateTask?.description || '',
-                  task_duration: templateTask?.duration || 0,
-                  task_type: templateTask?.type || 'technical',
-                  status: 'not_started',
-                  started_at: null,
-                  completed_at: null,
-                  time_spent: 0,
-                  score: null,
-                  feedback: null,
-                  github_commit_url: null,
-                  answer: null,
-                  created_at: null,
-                  updated_at: null,
-                  template_task: templateTask
-                });
-              }
-            }
-
-            // ''Calculate average task score with 2 decimal places
-            const avgTaskScore = totalTemplateTasks > 0
-              ? parseFloat((totalScoreSum / totalTemplateTasks).toFixed(2))
-              : 0;
-
-            session.task_progress = completeTaskProgress;
-            session.completed_tasks = completedCount;
-            session.avg_task_score = avgTaskScore;
-            session.total_tasks = totalTemplateTasks;
-          }
-
-        } catch (e) {
-          logger.error('simulations query failed:', e);
-          row.simulations = [];
-        }
 
         // Application timeline
         try {
@@ -4269,7 +4012,7 @@ class JobController extends BaseController {
     }
 
     const teamResult = await DatabaseService.execute(
-      'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
+      'SELECT company_id FROM company_team WHERE user_id = $1 ORDER BY is_default DESC, created_at ASC LIMIT 1',
       [userId]
     );
 
@@ -4612,15 +4355,7 @@ class JobController extends BaseController {
       console.log('Headers:', req.headers.authorization?.substring(0, 50) + '...');
 
       if (req.user.user_type === 'company_admin'|| req.user.user_type === 'recruiter') {
-        const teamResult = await DatabaseService.execute(
-          'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
-          [req.user.id]
-        );
-        if (teamResult.rows.length > 0) {
-          companyId = teamResult.rows[0].company_id;
-        } else {
-          companyId = req.user.company_id ? String(req.user.company_id) : null;
-        }
+        companyId = req.user.company_id ? String(req.user.company_id) : null;
       }
 
       if (!companyId) {
@@ -4701,642 +4436,6 @@ class JobController extends BaseController {
   }
 
 
-  /**
-   * Get all candidates who applied to a job with complete details including simulations, tasks, and marks
-   * @route GET /api/v1/jobs/:jobId/candidates/complete
-   * @access Private (Recruiters, Company Admins)
-   */
-  async getJobCandidatesComplete(req: AuthenticatedRequest, res: Response): Promise<void> {
-    try {
-      const { jobId } = req.params;
-      const {
-        page = '1',
-        limit = '50',
-        sortBy = 'overall_score',
-        sortOrder = 'DESC',
-        minScore,
-        maxScore,
-        status,
-        hasSimulation
-      } = req.query;
-
-      // Validate job exists and user has access
-      if (!jobId || !ValidationService.isValidUUID(jobId)) {
-        this.sendError(res, 'Invalid job ID format', 400);
-        return;
-      }
-
-      // Check permissions
-      const jobAccess = await DatabaseService.execute(`
-      SELECT j.id, j.company_id, j.created_by, j.title, j.status,
-             c.name as company_name, c.logo_url
-      FROM jobs j
-      LEFT JOIN companies c ON j.company_id = c.id
-      WHERE j.id = $1 AND j.deleted_at IS NULL
-    `, [jobId]);
-
-      if (jobAccess.rows.length === 0) {
-        this.sendError(res, 'Job not found', 404);
-        return;
-      }
-
-      const job = jobAccess.rows[0];
-      const userCompanyId = await this.getUserCompanyId(req.user.id, req.user.user_type);
-      const isOwner = job.created_by === req.user.id;
-      const isCompanyUser = job.company_id === userCompanyId;
-      const isAdmin = req.user.user_type === 'system_admin';
-
-      if (!isOwner && !isCompanyUser && !isAdmin) {
-        this.sendError(res, 'Access denied to this job', 403);
-        return;
-      }
-
-      // Pagination setup
-      const validPage = Math.max(1, parseInt(page as string));
-      const validLimit = Math.min(100, parseInt(limit as string));
-      const offset = (validPage - 1) * validLimit;
-
-      // Build filter conditions
-      let whereConditions = ['a.job_id = $1', 'a.deleted_at IS NULL'];
-      const queryParams: any[] = [jobId];
-      let paramIndex = 2;
-
-      if (status && status !== 'all') {
-        whereConditions.push(`a.status = $${paramIndex++}`);
-        queryParams.push(status);
-      }
-
-      if (minScore) {
-        whereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) >= $${paramIndex++}`);
-        queryParams.push(parseFloat(minScore as string));
-      }
-
-      if (maxScore) {
-        whereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) <= $${paramIndex++}`);
-        queryParams.push(parseFloat(maxScore as string));
-      }
-
-      if (hasSimulation === 'true') {
-        whereConditions.push(`s.id IS NOT NULL`);
-      } else if (hasSimulation === 'false') {
-        whereConditions.push(`s.id IS NULL`);
-      }
-
-      const whereClause = whereConditions.join('AND ');
-
-      // Determine sort column
-      let orderByColumn = '';
-      switch (sortBy) {
-        case 'overall_score':
-          orderByColumn = 'candidate_overall_score';
-          break;
-        case 'applied_at':
-          orderByColumn = 'a.applied_at';
-          break;
-        case 'completion_rate':
-          orderByColumn = 'candidate_completion_rate';
-          break;
-        case 'name':
-          orderByColumn = 'candidate_name';
-          break;
-        default:
-          orderByColumn = 'candidate_overall_score';
-      }
-      const orderDirection = sortOrder === 'ASC'? 'ASC': 'DESC';
-
-      // ============================================
-      // MAIN QUERY - Get ALL candidates with complete data
-      // ============================================
-      const result = await DatabaseService.execute(`
-      WITH candidate_data AS (
-        SELECT DISTINCT ON (a.user_id)
-          -- Application info
-          a.id as application_id,
-          a.application_number,
-          a.status as application_status,
-          a.current_stage,
-          a.applied_at,
-          a.updated_at as application_updated_at,
-          a.match_score as ai_match_score,
-          a.match_details,
-          a.rating as recruiter_rating,
-          a.ai_score,
-          a.screening_answers,
-          a.notes,
-          a.internal_notes,
-          a.tags as application_tags,
-          a.interview_date,
-          a.feedback as recruiter_feedback,
-          a.withdrawn_at,
-          a.withdrawn_reason,
-          a.rejection_reason,
-          a.source,
-          a.source_details,
-          a.referrer_id,
-          
-          -- Candidate profile
-          u.id as candidate_id,
-          u.email as candidate_email,
-          u.user_type,
-          u.status as user_status,
-          u.created_at as candidate_joined_date,
-          u.last_login_at,
-          cp.first_name,
-          cp.last_name,
-          CONCAT(cp.first_name, '', cp.last_name) as candidate_name,
-          cp.phone,
-          cp.country,
-          cp.city,
-          cp.timezone,
-          cp.profile_photo_url,
-          cp.headline,
-          cp.summary,
-          cp.linkedin_url,
-          cp.github_url,
-          cp.portfolio_url,
-          cp.website_url,
-          cp.profile_completion,
-          cp.willing_to_relocate,
-          cp.willing_to_travel,
-          cp.notice_period_days,
-          cp.current_salary,
-          cp.expected_salary,
-          cp.currency,
-          cp.languages,
-          cp.availability,
-          cp.job_preferences,
-          
-          -- Most recent simulation for this job
-          s.id as simulation_id,
-          s.status as simulation_status,
-          s.overall_score as simulation_overall_score,
-          s.punctuality_score,
-          s.communication_score,
-          s.problem_solving_score,
-          s.adaptability_score,
-          s.collaboration_score,
-          s.attention_score,
-          s.initiative_score,
-          s.feedback as simulation_feedback,
-          s.strengths,
-          s.improvements,
-          s.completed_at as simulation_completed_at,
-          s.time_spent as simulation_time_spent,
-          s.blockchain_tx_id,
-          s.blockchain_hash,
-          
-          -- Latest session for this simulation
-          ss.id as session_id,
-          ss.status as session_status,
-          ss.started_at,
-          ss.completed_at as session_completed_at,
-          ss.time_spent as session_time_spent,
-          ss.score as session_score,
-          ss.github_links,
-          ss.submission_results,
-          
-          -- Evaluation data
-          e.id as evaluation_id,
-          e.overall_score as evaluation_overall_score,
-          e.punctuality_score as evaluation_punctuality_score,
-          e.communication_score as evaluation_communication_score,
-          e.problem_solving_score as evaluation_problem_solving_score,
-          e.adaptability_score as evaluation_adaptability_score,
-          e.collaboration_score as evaluation_collaboration_score,
-          e.attention_to_detail_score,
-          e.initiative_score as evaluation_initiative_score,
-          e.status as evaluation_status,
-          e.completed_at as evaluation_completed_at,
-          
-          -- Template info
-          st.id as template_id,
-          st.name as simulation_name,
-          st.type as simulation_type,
-          st.difficulty,
-          st.duration_minutes,
-          st.total_tasks,
-          st.tasks as template_tasks,
-          st.scoring_rubric,
-          st.pass_fail_criteria,
-          
-          -- Calculate overall score (simulation > evaluation > match_score)
-          COALESCE(s.overall_score, e.overall_score, a.match_score, 0) as candidate_overall_score,
-          
-          -- Calculate completion rate from session_task_progress
-          (
-            SELECT COUNT(*) FILTER (WHERE status = 'completed') * 100.0 / NULLIF(COUNT(*), 0)
-            FROM session_task_progress stp
-            WHERE stp.session_id = ss.id
-          ) as candidate_completion_rate,
-          
-          -- Get task progress count
-          (
-            SELECT COUNT(*)
-            FROM session_task_progress stp
-            WHERE stp.session_id = ss.id AND stp.status = 'completed'
-          ) as tasks_completed_count,
-          
-          -- Get total tasks count from template
-          st.total_tasks as total_tasks_count
-
-        FROM applications a
-        INNER JOIN users u ON a.user_id = u.id
-        LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
-        LEFT JOIN simulations s ON s.application_id = a.id AND s.job_id = a.job_id
-        LEFT JOIN simulation_templates st ON s.template_id = st.id
-        LEFT JOIN simulation_sessions ss ON ss.simulation_id = s.id AND ss.session_type = 'candidate'
-        LEFT JOIN evaluations e ON e.simulation_id = s.id AND e.candidate_id = u.id
-        WHERE ${whereClause}
-        ORDER BY a.user_id, s.created_at DESC NULLS LAST
-      )
-      SELECT 
-        cd.*,
-        -- Get all education records as JSON
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id', ed.id,
-                'institution', ed.institution,
-                'degree', ed.degree,
-                'field_of_study', ed.field_of_study,
-                'start_date', ed.start_date,
-                'end_date', ed.end_date,
-                'is_current', ed.is_current,
-                'grade', ed.grade,
-                'grade_scale', ed.grade_scale,
-                'description', ed.description,
-                'verified', ed.verified
-              ) ORDER BY ed.end_date DESC NULLS LAST
-            )
-            FROM education ed
-            WHERE ed.user_id = cd.candidate_id
-          ),
-          '[]'::jsonb
-        ) as education,
-        
-        -- Get all work experience as JSON
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id', we.id,
-                'company', we.company,
-                'title', we.title,
-                'employment_type', we.employment_type,
-                'location', we.location,
-                'start_date', we.start_date,
-                'end_date', we.end_date,
-                'is_current', we.is_current,
-                'description', we.description,
-                'industry', we.industry
-              ) ORDER BY we.start_date DESC
-            )
-            FROM work_experience we
-            WHERE we.user_id = cd.candidate_id
-          ),
-          '[]'::jsonb
-        ) as work_experience,
-        
-        -- Get all skills as JSON
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'skill_id', us.skill_id,
-                'skill_name', s2.name,
-                'proficiency_level', us.proficiency_level,
-                'proficiency_label', us.proficiency_label,
-                'years_experience', us.years_experience,
-                'is_primary', us.is_primary,
-                'endorsement_count', us.endorsement_count,
-                'verified', us.verified
-              ) ORDER BY us.proficiency_level DESC
-            )
-            FROM user_skills us
-            JOIN skills s2 ON us.skill_id = s2.id
-            WHERE us.user_id = cd.candidate_id
-          ),
-          '[]'::jsonb
-        ) as skills,
-        
-        -- Get all certifications as JSON
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id', cert.id,
-                'name', cert.name,
-                'issuer', cert.issuer,
-                'issue_date', cert.issue_date,
-                'expiry_date', cert.expiry_date,
-                'credential_id', cert.credential_id,
-                'credential_url', cert.credential_url,
-                'verified', cert.verified
-              ) ORDER BY cert.issue_date DESC
-            )
-            FROM certifications cert
-            WHERE cert.user_id = cd.candidate_id AND cert.verified = true
-          ),
-          '[]'::jsonb
-        ) as certifications,
-        
-        -- Get all resumes as JSON with file URLs
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id', r.id,
-                'file_name', r.file_name,
-                'file_url', CONCAT('/uploads/', r.file_key),
-                'file_size', r.file_size,
-                'is_primary', r.is_primary,
-                'uploaded_at', r.created_at
-              ) ORDER BY r.is_primary DESC
-            )
-            FROM resumes r
-            WHERE r.user_id = cd.candidate_id
-          ),
-          '[]'::jsonb
-        ) as resumes,
-        
-        -- Get ALL task progress with detailed marks
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'task_index', stp.task_index,
-                'task_name', COALESCE(st.tasks->stp.task_index->>'title', 'Task '|| (stp.task_index + 1)),
-                'status', stp.status,
-                'score', stp.score,
-                'feedback', stp.feedback,
-                'time_spent_seconds', stp.time_spent,
-                'time_spent_formatted', CONCAT(FLOOR(stp.time_spent / 60), 'm ', (stp.time_spent % 60), 's'),
-                'started_at', stp.started_at,
-                'completed_at', stp.completed_at,
-                'github_commit_url', stp.github_commit_url,
-                'has_code', CASE WHEN stp.answer->>'code'IS NOT NULL THEN true ELSE false END,
-                'has_essay', CASE WHEN stp.answer->>'essay'IS NOT NULL THEN true ELSE false END,
-                'proficiency_level', 
-                  CASE 
-                    WHEN stp.score >= 90 THEN 'Master'
-                    WHEN stp.score >= 75 THEN 'Expert'
-                    WHEN stp.score >= 60 THEN 'Advanced'
-                    WHEN stp.score >= 40 THEN 'Intermediate'
-                    WHEN stp.score > 0 THEN 'Beginner'
-                    ELSE 'Not Started'
-                  END
-              ) ORDER BY stp.task_index
-            )
-            FROM session_task_progress stp
-            LEFT JOIN simulation_templates st ON st.id = cd.template_id
-            WHERE stp.session_id = cd.session_id
-          ),
-          '[]'::jsonb
-        ) as task_progress,
-        
-        -- Get AI analysis feedback
-        COALESCE(
-          (
-            SELECT jsonb_build_object(
-              'summary', eaf.summary,
-              'detailed_analysis', eaf.detailed_analysis,
-              'strengths', eaf.strengths,
-              'areas_for_improvement', eaf.areas_for_improvement,
-              'recommendations', eaf.recommendations,
-              'confidence', eaf.confidence
-            )
-            FROM evaluation_ai_feedback eaf
-            WHERE eaf.evaluation_id = cd.evaluation_id
-          ),
-          NULL
-        ) as ai_feedback,
-        
-        -- Get behavioral metrics
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'metric', ebm.metric,
-                'score', ebm.score,
-                'description', ebm.description,
-                'improvement_suggestion', ebm.improvement_suggestion
-              )
-            )
-            FROM evaluation_behavioral_metrics ebm
-            WHERE ebm.evaluation_id = cd.evaluation_id
-          ),
-          '[]'::jsonb
-        ) as behavioral_metrics,
-        
-        -- Get application timeline
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'event_type', atl.event_type,
-                'event_data', atl.event_data,
-                'created_at', atl.created_at,
-                'created_by_email', u2.email
-              ) ORDER BY atl.created_at DESC
-            )
-            FROM application_timeline atl
-            LEFT JOIN users u2 ON atl.created_by = u2.id
-            WHERE atl.application_id = cd.application_id
-          ),
-          '[]'::jsonb
-        ) as application_timeline,
-        
-        -- Get application reminders (interviews)
-        COALESCE(
-          (
-            SELECT jsonb_agg(
-              jsonb_build_object(
-                'id', ar.id,
-                'title', ar.title,
-                'description', ar.description,
-                'reminder_time', ar.reminder_time,
-                'status', ar.status,
-                'reminder_type', ar.reminder_type
-              ) ORDER BY ar.reminder_time
-            )
-            FROM application_reminders ar
-            WHERE ar.application_id = cd.application_id AND ar.status = 'pending'
-          ),
-          '[]'::jsonb
-        ) as upcoming_interviews
-
-      FROM candidate_data cd
-      ORDER BY ${orderByColumn} ${orderDirection}
-      LIMIT $${paramIndex++} OFFSET $${paramIndex++}
-    `, [...queryParams, validLimit, offset]);
-
-      // ============================================
-      // COUNT QUERY for pagination
-      // ============================================
-      const countParams: any[] = [jobId];
-      let countIdx = 2;
-      let countWhereConditions = ['a.job_id = $1', 'a.deleted_at IS NULL'];
-
-      if (status && status !== 'all') {
-        countWhereConditions.push(`a.status = $${countIdx++}`);
-        countParams.push(status);
-      }
-      if (minScore) {
-        countWhereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) >= $${countIdx++}`);
-        countParams.push(parseFloat(minScore as string));
-      }
-      if (maxScore) {
-        countWhereConditions.push(`COALESCE(s.overall_score, e.overall_score, a.match_score, 0) <= $${countIdx++}`);
-        countParams.push(parseFloat(maxScore as string));
-      }
-      if (hasSimulation === 'true') {
-        countWhereConditions.push(`s.id IS NOT NULL`);
-      } else if (hasSimulation === 'false') {
-        countWhereConditions.push(`s.id IS NULL`);
-      }
-
-      const countResult = await DatabaseService.execute(`
-      SELECT COUNT(DISTINCT a.user_id) as total
-      FROM applications a
-      LEFT JOIN simulations s ON s.application_id = a.id AND s.job_id = a.job_id
-      LEFT JOIN evaluations e ON e.simulation_id = s.id
-      WHERE ${countWhereConditions.join('AND ')}
-    `, countParams);
-
-      const total = parseInt(countResult.rows[0]?.total || '0');
-
-      // ============================================
-      // STATISTICS for this job
-      // ============================================
-      const statsResult = await DatabaseService.execute(`
-      SELECT 
-        COUNT(DISTINCT a.user_id) as total_applicants,
-        COUNT(DISTINCT CASE WHEN a.status = 'submitted'THEN a.user_id END) as submitted,
-        COUNT(DISTINCT CASE WHEN a.status = 'under_review'THEN a.user_id END) as under_review,
-        COUNT(DISTINCT CASE WHEN a.status = 'shortlisted'THEN a.user_id END) as shortlisted,
-        COUNT(DISTINCT CASE WHEN a.status = 'interview'THEN a.user_id END) as interviewing,
-        COUNT(DISTINCT CASE WHEN a.status = 'offer'THEN a.user_id END) as offers,
-        COUNT(DISTINCT CASE WHEN a.status = 'hired'THEN a.user_id END) as hired,
-        COUNT(DISTINCT CASE WHEN a.status = 'rejected'THEN a.user_id END) as rejected,
-        ROUND(AVG(COALESCE(s.overall_score, e.overall_score, a.match_score, 0))) as avg_score,
-        MAX(COALESCE(s.overall_score, e.overall_score, a.match_score, 0)) as max_score,
-        MIN(COALESCE(s.overall_score, e.overall_score, a.match_score, 0)) as min_score,
-        COUNT(DISTINCT CASE WHEN s.id IS NOT NULL THEN a.user_id END) as with_simulation,
-        COUNT(DISTINCT CASE WHEN s.id IS NULL THEN a.user_id END) as without_simulation
-      FROM applications a
-      LEFT JOIN simulations s ON s.application_id = a.id AND s.job_id = a.job_id
-      LEFT JOIN evaluations e ON e.simulation_id = s.id
-      WHERE a.job_id = $1 AND a.deleted_at IS NULL
-    `, [jobId]);
-
-      const stats = statsResult.rows[0] || {};
-
-      // Parse JSON fields for each candidate
-      const parsedCandidates = result.rows.map((row: any) => ({
-        ...row,
-        match_details: row.match_details ? (typeof row.match_details === 'string'? JSON.parse(row.match_details) : row.match_details) : null,
-        ai_score: row.ai_score ? (typeof row.ai_score === 'string'? JSON.parse(row.ai_score) : row.ai_score) : null,
-        screening_answers: row.screening_answers ? (typeof row.screening_answers === 'string'? JSON.parse(row.screening_answers) : row.screening_answers) : [],
-        notes: row.notes ? (typeof row.notes === 'string'? JSON.parse(row.notes) : row.notes) : [],
-        internal_notes: row.internal_notes ? (typeof row.internal_notes === 'string'? JSON.parse(row.internal_notes) : row.internal_notes) : [],
-        application_tags: row.application_tags || [],
-        current_salary: row.current_salary ? (typeof row.current_salary === 'string'? JSON.parse(row.current_salary) : row.current_salary) : null,
-        expected_salary: row.expected_salary ? (typeof row.expected_salary === 'string'? JSON.parse(row.expected_salary) : row.expected_salary) : null,
-        languages: row.languages || [],
-        availability: row.availability || {},
-        job_preferences: row.job_preferences || {},
-        github_links: row.github_links ? (typeof row.github_links === 'string'? JSON.parse(row.github_links) : row.github_links) : null,
-        submission_results: row.submission_results ? (typeof row.submission_results === 'string'? JSON.parse(row.submission_results) : row.submission_results) : null,
-        strengths: row.strengths || [],
-        improvements: row.improvements || [],
-        template_tasks: row.template_tasks ? (typeof row.template_tasks === 'string'? JSON.parse(row.template_tasks) : row.template_tasks) : [],
-        scoring_rubric: row.scoring_rubric ? (typeof row.scoring_rubric === 'string'? JSON.parse(row.scoring_rubric) : row.scoring_rubric) : {},
-        pass_fail_criteria: row.pass_fail_criteria ? (typeof row.pass_fail_criteria === 'string'? JSON.parse(row.pass_fail_criteria) : row.pass_fail_criteria) : {},
-      }));
-
-      /// Calculate rank for each candidate
-      let rankedCandidates = parsedCandidates;
-      if (sortBy === 'overall_score'&& sortOrder === 'DESC') {
-        type RankedCandidate = typeof parsedCandidates[0] & { rank: number | null };
-
-        let currentRank = 1;
-        let previousScore: number | null = null;
-
-        rankedCandidates = parsedCandidates.reduce((acc: RankedCandidate[], candidate: any, index: number) => {
-          const currentScore: number = typeof candidate.candidate_overall_score === 'number'
-            ? candidate.candidate_overall_score
-            : Number(candidate.candidate_overall_score) || 0;
-
-          if (index > 0 && currentScore !== previousScore) {
-            currentRank = index + 1;
-          }
-
-          previousScore = currentScore;
-          acc.push({
-            ...candidate,
-            rank: currentScore > 0 ? currentRank : null
-          });
-
-          return acc;
-        }, []);
-      }
-
-      // Final response
-      this.sendSuccess(res, {
-        job: {
-          id: job.id,
-          title: job.title,
-          company_id: job.company_id,
-          company_name: job.company_name,
-          logo_url: job.logo_url,
-          status: job.status
-        },
-        candidates: rankedCandidates,
-        stats: {
-          total_applicants: parseInt(stats.total_applicants || '0'),
-          by_status: {
-            submitted: parseInt(stats.submitted || '0'),
-            under_review: parseInt(stats.under_review || '0'),
-            shortlisted: parseInt(stats.shortlisted || '0'),
-            interviewing: parseInt(stats.interviewing || '0'),
-            offers: parseInt(stats.offers || '0'),
-            hired: parseInt(stats.hired || '0'),
-            rejected: parseInt(stats.rejected || '0')
-          },
-          scores: {
-            average: Math.round(parseFloat(stats.avg_score || '0')),
-            max: Math.round(parseFloat(stats.max_score || '0')),
-            min: Math.round(parseFloat(stats.min_score || '0'))
-          },
-          simulations: {
-            with_simulation: parseInt(stats.with_simulation || '0'),
-            without_simulation: parseInt(stats.without_simulation || '0')
-          }
-        },
-        pagination: {
-          current_page: validPage,
-          per_page: validLimit,
-          total_items: total,
-          total_pages: Math.ceil(total / validLimit),
-          has_next_page: validPage * validLimit < total,
-          has_prev_page: validPage > 1
-        },
-        filters: {
-          sort_by: sortBy,
-          sort_order: sortOrder,
-          min_score: minScore || null,
-          max_score: maxScore || null,
-          status: status || 'all',
-          has_simulation: hasSimulation || 'all'
-        }
-      });
-
-    } catch (error) {
-      logger.error('Error getting job candidates complete:', error);
-      this.sendError(res, 'Failed to fetch candidates', 500, error as Error);
-    }
-  }
 
 }
 

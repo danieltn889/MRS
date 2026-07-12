@@ -332,7 +332,7 @@ const EmailVerification: React.FC = () => {
       const data: VerificationResponse = await response.json();
 
       if (data.success) {
-        setResendMessage('✓ '+ data.message);
+        setResendMessage(' '+ data.message);
         setResendEmail('');
 
         // Start 5-minute cooldown
@@ -609,7 +609,7 @@ const EmailVerification: React.FC = () => {
 
                 {resendMessage && (
                   <div className={`p-3 rounded text-sm ${
-                    resendMessage.startsWith('✓')
+                    resendMessage.startsWith('')
                       ? 'bg-green-50 border border-green-200 text-green-600'
                       : 'bg-gray-50 border border-gray-200 text-gray-600'
                   }`}>

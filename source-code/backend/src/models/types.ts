@@ -107,30 +107,6 @@ export enum ApplicationStatus {
   WITHDRAWN = 'withdrawn'
 }
 
-// Simulation types and status
-export enum SimulationType {
-  CODING_CHALLENGE = 'coding_challenge',
-  SYSTEM_DESIGN = 'system_design',
-  CASE_STUDY = 'case_study',
-  BEHAVIORAL = 'behavioral',
-  TECHNICAL_INTERVIEW = 'technical_interview'
-}
-
-export enum SimulationStatus {
-  SCHEDULED = 'scheduled',
-  IN_PROGRESS = 'in_progress',
-  COMPLETED = 'completed',
-  CANCELLED = 'cancelled',
-  EXPIRED = 'expired'
-}
-
-export enum SimulationDifficulty {
-  EASY = 'easy',
-  MEDIUM = 'medium',
-  HARD = 'hard',
-  EXPERT = 'expert'
-}
-
 // AI analysis types
 export enum AnalysisType {
   RESUME_PARSING = 'resume_parsing',
@@ -214,7 +190,6 @@ export enum NotificationStatus {
 export enum NotificationCategory {
   APPLICATION = 'application',
   JOB = 'job',
-  SIMULATION = 'simulation',
   SECURITY = 'security',
   SYSTEM = 'system',
   MARKETING = 'marketing'

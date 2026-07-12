@@ -9,6 +9,7 @@ numpy
 scipy
 scikit-learn
 nltk
+spacy
 sentence-transformers
 transformers
 torch

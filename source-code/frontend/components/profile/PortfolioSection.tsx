@@ -540,7 +540,7 @@ const PortfolioSection: React.FC<PortfolioSectionProps> = ({ profile, onUpdate }
                           )}
                           {link.is_verified && (
                             <span className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                              ✓ Verified
+                               Verified
                             </span>
                           )}
                         </div>

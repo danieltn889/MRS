@@ -7,13 +7,11 @@ import { logger } from '../utils/logger.js';
  * Persists in-app notifications to the `notifications` table and pushes them in
  * real time over Socket.IO (via the global `sendToUser` helper installed in
  * server.ts). Used to notify candidates AND recruiters/admins/mentors when
- * something happens in a simulation (new message, simulation started/expired,
- * task assigned, submission reviewed, feedback available, repo changes).
+ * something happens on their applications (status changes, messages, billing).
  */
 
 export type NotificationCategory =
   | 'application'
-  | 'simulation'
   | 'message'
   | 'security'
   | 'billing'
@@ -22,16 +20,16 @@ export type NotificationCategory =
 
 export interface CreateNotificationInput {
   userId: string;
-  type: string;                 // e.g. 'chat_message', 'simulation_started'
+  type: string;                 // e.g. 'chat_message', 'application_update'
   category?: NotificationCategory;
   title: string;
   content?: string;
-  data?: Record<string, any>;   // e.g. { sessionId, simulationId, url }
+  data?: Record<string, any>;   // e.g. { applicationId, url }
   priority?: 'low'| 'normal'| 'high'| 'urgent';
 }
 
 const VALID_CATEGORIES: NotificationCategory[] = [
-  'application', 'simulation', 'message', 'security', 'billing', 'system', 'promotional',
+  'application', 'message', 'security', 'billing', 'system', 'promotional',
 ];
 
 /**
@@ -128,7 +126,7 @@ class NotificationService {
       conditions.push(`status <> 'read'`);
     }
 
-    const where = conditions.join('AND ');
+    const where = conditions.join(' AND ');
 
     const countResult = await query(
       `SELECT COUNT(*)::int AS total FROM notifications WHERE ${where}`,

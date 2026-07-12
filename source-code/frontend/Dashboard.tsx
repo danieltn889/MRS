@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
-import BlockchainExplorer from './components/BlockchainExplorer';
 import SecuritySettings from './components/SecuritySettings';
 import TeamManagement from './components/TeamManagement';
 import ProfileManagement from './components/ProfileManagement';
@@ -14,8 +13,6 @@ import ApplicationRequirements from './components/ApplicationRequirements';
 import ApplicationHistory from './components/ApplicationHistory';
 import JobManagement from './components/JobManagement';
 import JobPostingScreen from './components/jobs/JobPostingScreen';
-import JobSimulation from './components/jobs/JobSimulation';
-import Results from './components/Results';
 import BulkCandidateProcessing from './components/BulkCandidateProcessing';
 import AdvancedCandidateSearch from './components/AdvancedCandidateSearch';
 import RecruiterAnalytics from './components/RecruiterAnalytics';
@@ -29,18 +26,12 @@ import PlatformFeatures from './components/PlatformFeatures';
 import CompanyManagement from './components/CompanyManagement';
 import UserManagement from './components/UserManagement';
 import SystemAnalytics from './components/SystemAnalytics';
-import SimulationDesigner from './components/SimulationDesigner';
-import SimulationList from './components/Simulation/SimulationList';
-import SimulationSessionViewer from './components/SimulationSessionViewer';
 import DashboardHome from './components/DashboardHome';
 import JobCandidatesView from './components/jobs/JobCandidatesView';
 import { useTheme } from './context/ThemeContext';
 import { useAuth } from './context/AuthContext';
-import { GitHubRepoProvider } from './components/SimulationExecutor/context/GitHubRepoContext';
 import appliedJobsManager from './src/utils/AppliedJobsManager';
-import SessionReportComponent from './components/SessionReport';
 import CandidateDetailView from './components/CandidateDetailView';
-import CandidatePerformance from './components/CandidatePerformance';
 import PersonalizedFeed from './components/jobs/PersonalizedFeed';
 
 // Define the props for DashboardHome if needed, but it should accept these
@@ -78,16 +69,9 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedAdminCompany, setSelectedAdminCompany] = useState<any>(null);
   const [editingJobId, setEditingJobId] = useState<string | null>(null);
-  const [editingSimulationId, setEditingSimulationId] = useState<string | null>(null);
 
   // For Job Candidates View
   const [selectedJobForCandidates, setSelectedJobForCandidates] = useState<{ id: string; title: string } | null>(null);
-
-  // For Candidate Performance View
-  const [selectedSimulation, setSelectedSimulation] = useState<any>(null);
-
-  // Tracks which view to return to after closing a session report
-  const [reportReturnView, setReportReturnView] = useState('simulations-list');
 
   // Sync user from auth context or localStorage
   useEffect(() => {
@@ -129,13 +113,8 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const viewParam = params.get('view');
-    const sessionIdParam = params.get('sessionId');
     const jobIdParam = params.get('jobId');
-    if (viewParam === 'session-report'&& sessionIdParam) {
-      setReportReturnView('simulations-list');
-      setEditingSimulationId(sessionIdParam);
-      setCurrentView('session-report');
-    } else if (viewParam === 'job-candidates'&& jobIdParam) {
+    if (viewParam === 'job-candidates'&& jobIdParam) {
       setSelectedJobForCandidates({ id: jobIdParam, title: ''});
       setCurrentView('job-candidates');
     } else if (viewParam === 'application-history') {
@@ -164,21 +143,6 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
   const handleViewCandidates = (jobId: string, jobTitle: string) => {
     setSelectedJobForCandidates({ id: jobId, title: jobTitle });
     setCurrentView('job-candidates');
-  };
-
-  const handleEditSimulation = (simulationId: string) => {
-    setEditingSimulationId(simulationId);
-    setCurrentView('simulation-designer');
-  };
-
-  const handleCreateSimulation = () => {
-    setEditingSimulationId(null);
-    setCurrentView('simulation-designer');
-  };
-
-  const handleViewCandidatePerformance = (simulation: any) => {
-    setSelectedSimulation(simulation);
-    setCurrentView('candidate-performance');
   };
 
   const bgGradient: Record<string, string> = {
@@ -283,62 +247,6 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
 
       case 'job-posting-edit':
         return <JobPostingScreen onBack={() => setCurrentView('jobs')} isEditing={true} jobId={editingJobId || undefined} />;
-
-      case 'simulation':
-        return (
-          <GitHubRepoProvider>
-            <JobSimulation onBack={() => setCurrentView('dashboard')} />
-          </GitHubRepoProvider>
-        );
-
-      case 'my-simulations':
-        return <SimulationSessionViewer onBack={() => setCurrentView('dashboard')} />;
-
-      case 'simulations-list':
-        return (
-          <SimulationList
-            onBack={() => setCurrentView('dashboard')}
-            onEditSimulation={handleEditSimulation}
-            onCreateNew={handleCreateSimulation}
-            // ''REMOVED: onViewCandidatePerformance is not supported by SimulationList
-            // onViewCandidatePerformance={handleViewCandidatePerformance}
-          />
-        );
-
-      case 'simulation-designer':
-        return (
-          <SimulationDesigner
-            simulationId={editingSimulationId || undefined}
-            onBack={() => setCurrentView('simulations-list')}
-          />
-        );
-
-      case 'candidate-performance':
-        return (
-          <CandidatePerformance
-            simulation={selectedSimulation}
-            onBack={() => setCurrentView('simulations-list')}
-            onViewReport={(sessionId: string) => {
-              setReportReturnView('candidate-performance');
-              setEditingSimulationId(sessionId);
-              setCurrentView('session-report');
-            }}
-          />
-        );
-
-      case 'session-report':
-        return (
-          <SessionReportComponent
-            sessionId={editingSimulationId || ''}
-            onBack={() => setCurrentView(reportReturnView)}
-          />
-        );
-
-      case 'results':
-        return <Results onBack={() => setCurrentView('dashboard')} />;
-
-      case 'blockchain':
-        return <BlockchainExplorer />;
 
       case 'applications':
         return <ApplicationRequirements onBack={() => setCurrentView('dashboard')} />;

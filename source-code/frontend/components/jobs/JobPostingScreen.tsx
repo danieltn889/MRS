@@ -1736,7 +1736,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
 
                   {formData.salaryType === 'negotiable'? (
                     <div style={{ padding: '16px 20px', background: C.successGhost, borderRadius: C.radiusSm, color: C.success, fontSize: 14, fontWeight: 500 }}>
-                      ✓ This job will show "Competitive / Negotiable" salary to candidates.
+                       This job will show "Competitive / Negotiable" salary to candidates.
                     </div>
                   ) : formData.salaryType === 'range'? (
                     <FormRow cols="1fr 1fr 110px">

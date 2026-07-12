@@ -108,7 +108,7 @@ interface MatchDetailsType {
       years_score?: number;
       combined_score?: number;
     }>;
-    unmatched_requirements?: string[];
+    unmatched_requirements?: Array<{ title: string; years_required: number }>;
   };
   preferences_breakdown?: any;
   // Actual per-factor weights used AFTER redistribution (a factor the job
@@ -843,21 +843,6 @@ const JobApplicationModal = ({
                 {prefsBD.excluded_dimensions?.length > 0 && `Within Preferences: ${prefsBD.excluded_dimensions.join(', ')} not specified by this job.`}
               </p>
             )}
-            <div className="mt-4 pt-3 border-t border-gray-200">
-              <div className="flex justify-between text-sm font-bold text-gray-900 mb-1">
-                <span>Total Score</span>
-                <span style={{ color: ringColor }}>{matchScore.toFixed(1)} / 100 pts</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div className="h-2.5 rounded-full" style={{ width: `${matchScore}%`, background: ringColor }} />
-              </div>
-              <p className="text-center text-xs text-gray-500 mt-3">
-                {matchScore >= 80 ? '🎉 Excellent match! Strongly recommend applying.':
-                 matchScore >= 65 ? ' Good match! Consider applying.':
-                 matchScore >= 50 ? ' Partial match. Update your profile to improve.':
-                                    ' Low match. Focus on skill development.'}
-              </p>
-            </div>
           </div>
         )}
 
@@ -891,7 +876,7 @@ const JobApplicationModal = ({
                   {(() => {
                     const matched = Object.values(contentDetail.matched_terms_by_pair || {}).flat() as string[];
                     return matched.length > 0 && (
-                      <p className="text-xs text-fuchsia-700">✓ Matched terms: {matched.slice(0, 6).join(', ')}</p>
+                      <p className="text-xs text-fuchsia-700"> Matched terms: {matched.slice(0, 6).join(', ')}</p>
                     );
                   })()}
                 </div>
@@ -921,7 +906,7 @@ const JobApplicationModal = ({
                   ];
                   return matched.length > 0 && (
                     <p className="text-xs text-indigo-600 mt-1">
-                      ✓ Matches your usual {matched.slice(0, 3).join(', ')}
+                       Matches your usual {matched.slice(0, 3).join(', ')}
                     </p>
                   );
                 })()}
@@ -951,7 +936,7 @@ const JobApplicationModal = ({
                   </div>
                 )}
                 {hybridDetail.collaborative.similar_candidates_engaged && (
-                  <p className="text-xs text-pink-600 mt-1">✓ Candidates with similar interests engaged with this job.</p>
+                  <p className="text-xs text-pink-600 mt-1"> Candidates with similar interests engaged with this job.</p>
                 )}
               </div>
 
@@ -976,7 +961,7 @@ const JobApplicationModal = ({
                 <div>
                   <span className="flex items-center gap-1 text-xs mb-1"><Shield className="w-3 h-3 text-green-700" /> Business rules</span>
                   {hybridDetail.business_rules.reasons.map((r, idx) => (
-                    <p key={idx} className="text-xs text-green-700">✓ {r}</p>
+                    <p key={idx} className="text-xs text-green-700"> {r}</p>
                   ))}
                 </div>
               )}
@@ -1360,31 +1345,12 @@ const JobApplicationModal = ({
         // ''Store the full response
         setSubmissionResponse(responseData);
 
-        // ''Check using simulationTemplates fields only
-        const hasAnySimulation =
-          responseData?.hasSimulationTemplates === true ||
-          (Array.isArray(responseData?.simulationTemplates) && responseData.simulationTemplates.length > 0) ||
-          (responseData?.totalTemplates && responseData.totalTemplates > 0);
-
-        console.log('Has any simulation:', hasAnySimulation);
-
-        // Always switch to the "next steps" screen. It shows the simulation details
-        // when the job has one, or a "no simulation yet   you'll be notified" notice.
-        console.log('Showing next-steps screen, hasSimulation =', hasAnySimulation);
+        // Switch to the confirmation screen.
         setShowSimulationPrompt(true);
 
         if (onSuccess) {
           onSuccess({
             applicationId: responseData?.applicationId,
-            hasSimulation: hasAnySimulation,
-            simulationInfo: hasAnySimulation ? {
-              simulationTemplates: responseData.simulationTemplates || [],
-              totalTemplates: responseData.totalTemplates || 0,
-              hasSimulationTemplates: responseData.hasSimulationTemplates,
-              nextStep: responseData.nextStep || 'view_simulations',
-              message: responseData.message,
-              action: responseData.action || null,
-            } : null
           });
         }
       } else {
@@ -1400,432 +1366,26 @@ const JobApplicationModal = ({
   };
 
   // ============================================
-  // SIMULATION INFO RENDERER - Navigate to /simulations/my
+  // APPLICATION SUBMITTED CONFIRMATION
   // ============================================
   const renderSimulationInfo = () => {
-    console.log('🔍 Rendering simulation info:', submissionResponse);
-
     if (!submissionResponse) return null;
 
-    const simulationTemplates: any[] = submissionResponse?.simulationTemplates || [];
-    const totalTemplates: number = submissionResponse?.totalTemplates || 0;
-    const hasSimulationTemplates: boolean = submissionResponse?.hasSimulationTemplates || false;
-    const action = submissionResponse?.action || null;
-    const message: string = submissionResponse?.message || '';
-    const applicationId: string = submissionResponse?.applicationId || '';
-
-    const hasAnySimulation =
-      hasSimulationTemplates ||
-      simulationTemplates.length > 0 ||
-      totalTemplates > 0;
-
-    // No simulation set for this job yet → reassure the candidate they'll be notified.
-    if (!hasAnySimulation) {
-      return (
-        <div className="text-center py-8 max-w-lg mx-auto">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
-            <CheckCircle className="w-9 h-9 text-green-600" />
-          </div>
-          <h3 className="text-xl font-bold text-gray-900 mb-2">Application submitted! 🎉</h3>
-          <p className="text-gray-600 mb-4">
-            This job doesn&apos;t have a job practical assessment yet. <strong>As soon as the recruiter sets one,
-            you&apos;ll be notified</strong> and it will appear under <em>My Practical Assessments</em>.
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-800 mb-6 text-left">
-            💡 Tip: keep your profile up to date so you&apos;re ready the moment the practical assessment goes live.
-          </div>
-          <button
-            onClick={() => { setShowSimulationPrompt(false); onClose(); }}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
-          >
-            Got it
-          </button>
-        </div>
-      );
-    }
-
-    // Helper to format date
-    const formatAvailabilityDate = (dateStr: string | null | undefined): string => {
-      if (!dateStr) return 'Not specified';
-      try {
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return 'Invalid date';
-        return date.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        });
-      } catch {
-        return 'Invalid date';
-      }
-    };
-
-    // Helper to format time
-    const formatTime = (timeStr: string): string => {
-      if (!timeStr) return 'Not specified';
-      try {
-        const [hours, minutes] = timeStr.split(':');
-        const hour = parseInt(hours);
-        const ampm = hour >= 12 ? 'PM': 'AM';
-        const hour12 = hour % 12 || 12;
-        return `${hour12}:${minutes} ${ampm}`;
-      } catch {
-        return timeStr;
-      }
-    };
-
-    // Check if simulation is currently available
-    const isSimulationAvailable = (availability: any): { available: boolean; message: string } => {
-      if (!availability) return { available: true, message: 'Always available'};
-
-      const now = new Date();
-      const currentDay = now.getDay();
-      const currentTime = now.getHours() * 60 + now.getMinutes();
-
-      // Check start date
-      if (availability.startDate) {
-        const startDate = new Date(availability.startDate);
-        if (now < startDate) {
-          return {
-            available: false,
-            message: `📅 Available from ${formatAvailabilityDate(availability.startDate)}`
-          };
-        }
-      }
-
-      // Check end date
-      if (availability.endDate) {
-        const endDate = new Date(availability.endDate);
-        if (now > endDate) {
-          return {
-            available: false,
-            message: ` This practical assessment expired on ${formatAvailabilityDate(availability.endDate)}`
-          };
-        }
-      }
-
-      // Check daily windows
-      if (availability.dailyWindows && availability.dailyWindows.length > 0) {
-        const todayWindows = availability.dailyWindows.filter((w: any) => w.dayOfWeek === currentDay && w.enabled !== false);
-
-        if (todayWindows.length === 0) {
-          // Find next available day
-          let daysToAdd = 1;
-          let found = false;
-          const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-          let nextDayName = '';
-
-          for (let i = 1; i <= 7; i++) {
-            const checkDay = (currentDay + i) % 7;
-            const hasWindow = availability.dailyWindows.some((w: any) => w.dayOfWeek === checkDay && w.enabled !== false);
-            if (hasWindow) {
-              nextDayName = days[checkDay];
-              daysToAdd = i;
-              found = true;
-              break;
-            }
-          }
-
-          if (found) {
-            return {
-              available: false,
-              message: `📅 Next available: ${nextDayName} (in ${daysToAdd} day${daysToAdd > 1 ? 's': ''})`
-            };
-          }
-          return { available: false, message: ' No available time slots configured'};
-        }
-
-        // Check if current time is within any window
-        let inWindow = false;
-        let nextWindowTime: string | null = null;
-
-        for (const window of todayWindows) {
-          if (!window.enabled) continue;
-
-          const startMinutes = window.startTime ?
-            (parseInt(window.startTime.split(':')[0]) * 60 + parseInt(window.startTime.split(':')[1])) :
-            9 * 60;
-          const endMinutes = window.endTime ?
-            (parseInt(window.endTime.split(':')[0]) * 60 + parseInt(window.endTime.split(':')[1])) :
-            17 * 60;
-
-          if (currentTime >= startMinutes && currentTime <= endMinutes) {
-            inWindow = true;
-            break;
-          }
-
-          if (currentTime < startMinutes) {
-            if (!nextWindowTime || startMinutes < parseInt(nextWindowTime.split(':')[0]) * 60 + parseInt(nextWindowTime.split(':')[1])) {
-              nextWindowTime = window.startTime;
-            }
-          }
-        }
-
-        if (!inWindow) {
-          if (nextWindowTime) {
-            return {
-              available: false,
-              message: `⏰ Available from ${formatTime(nextWindowTime)} today`
-            };
-          }
-          return { available: false, message: '⏰ Outside of available hours'};
-        }
-      }
-
-      return { available: true, message: 'Available now!'};
-    };
-
-    // Get availability info from metadata
-    const getAvailabilityInfo = (metadata: any) => {
-      if (!metadata?.availability) return null;
-      const avail = metadata.availability;
-      return {
-        startDate: avail.startDate,
-        endDate: avail.endDate,
-        timezone: avail.timezone || 'UTC',
-        dailyWindows: avail.dailyWindows || [],
-        noticePeriod: avail.noticePeriod || 24,
-        allowRescheduling: avail.allowRescheduling !== false,
-        maxReschedules: avail.maxReschedules || 2,
-        maxConcurrentCandidates: avail.maxConcurrentCandidates || 10
-      };
-    };
-
-    // ''Get sorted daily windows
-    const getSortedWindows = (windows: any[]) => {
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      return windows
-        .filter((w: any) => w.enabled !== false)
-        .sort((a: any, b: any) => a.dayOfWeek - b.dayOfWeek)
-        .map((w: any) => ({
-          ...w,
-          dayName: days[w.dayOfWeek] || `Day ${w.dayOfWeek}`
-        }));
-    };
-
-    // ''Handle Start Simulation - Navigate to simulation view using onViewChange
-    const handleStartSimulation = () => {
-      console.log(' Navigating to Job Simulation page');
-      console.log('📋 Application ID:', applicationId);
-
-      // ''Close the modal first
-      setShowSimulationPrompt(false);
-      onClose();
-
-      // ''Then navigate using the onSuccess callback or directly
-      // The modal is closed and the parent component (DashboardHome) 
-      // will handle the view change via onSuccess
-      if (onSuccess) {
-        onSuccess({
-          action: 'start-simulation',
-          view: 'simulation',
-          applicationId: applicationId
-        });
-      }
-    };
-
-    // ''Handle Close
-    const handleClose = () => {
-      console.log('🔒 Closing simulation prompt');
-      setShowSimulationPrompt(false);
-      onClose();
-    };
-
     return (
-      <div className="space-y-4">
-        {/* Success message */}
-        {successMessage && (
-          <div className="p-4 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center gap-3">
-            <CheckCircle className="w-6 h-6 text-green-600 flex-shrink-0" />
-            <span className="font-semibold text-base">{successMessage}</span>
-          </div>
-        )}
-
-        {/* Header Banner */}
-        <div className="p-4 rounded-xl border-2 bg-blue-50 border-blue-300">
-          <div className="flex items-start gap-3">
-            <div className="p-2 rounded-full bg-blue-100">
-              <Rocket className="w-5 h-5 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-semibold text-blue-800 text-base">''Next Step: Complete the Practical Assessment</h4>
-              <p className="text-sm mt-1 text-blue-700">
-                {message || `This job requires ${totalTemplates} practical assessment${totalTemplates > 1 ? 's': ''} to evaluate your skills.`}
-              </p>
-            </div>
-          </div>
+      <div className="text-center py-8 max-w-lg mx-auto">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+          <CheckCircle className="w-9 h-9 text-green-600" />
         </div>
-
-        {/* Simulation Cards */}
-        {simulationTemplates.length > 0 && (
-          <div className="space-y-4">
-            {simulationTemplates.map((sim: any) => {
-              const availability = getAvailabilityInfo(sim.metadata);
-              const availabilityStatus = availability ? isSimulationAvailable(availability) : { available: true, message: 'Always available'};
-              const isAvailable = availabilityStatus.available;
-              const sortedWindows = availability ? getSortedWindows(availability.dailyWindows) : [];
-
-              return (
-                <div key={sim.id} className={`bg-white rounded-xl border p-5 transition-shadow ${isAvailable ? 'border-green-300 hover:shadow-md': 'border-gray-200'}`}>
-
-                  {/* Simulation Name */}
-                  <h4 className="font-bold text-gray-900 text-lg">{sim.name}</h4>
-
-                  {/* Duration & Difficulty */}
-                  <div className="flex flex-wrap gap-3 mt-2 text-sm text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" /> {sim.durationMinutes} minutes
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <BarChart3 className="w-4 h-4" /> {sim.difficulty || 'intermediate'}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Code className="w-4 h-4" /> {sim.type || 'technical'}
-                    </span>
-                    {sim.tasks?.length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <FileText className="w-4 h-4" /> {sim.tasks.length} tasks
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Availability Status */}
-                  <div className={`mt-4 p-4 rounded-lg border-2 ${isAvailable ? 'bg-green-50 border-green-400': 'bg-yellow-50 border-yellow-400'
-                    }`}>
-                    <div className="flex items-start gap-3">
-                      <div className={`p-2 rounded-full flex-shrink-0 ${isAvailable ? 'bg-green-200': 'bg-yellow-200'
-                        }`}>
-                        {isAvailable ? (
-                          <CheckCircle className="w-6 h-6 text-green-700" />
-                        ) : (
-                          <Clock className="w-6 h-6 text-yellow-700" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <p className={`text-base font-bold ${isAvailable ? 'text-green-800': 'text-yellow-800'}`}>
-                          {isAvailable ? 'Available Now!': '⏳ Not Currently Available'}
-                        </p>
-                        <p className={`text-sm mt-1 ${isAvailable ? 'text-green-700': 'text-yellow-700'}`}>
-                          {availabilityStatus.message}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ''FULL AVAILABILITY DETAILS */}
-                  {availability && (
-                    <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                      <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-blue-600" />
-                        Availability Schedule
-                      </h5>
-
-                      <div className="space-y-2 text-sm">
-                        {/* Date Range */}
-                        <div className="flex flex-wrap gap-4">
-                          {availability.startDate && (
-                            <span className="text-gray-600">
-                              📅 From: <strong>{formatAvailabilityDate(availability.startDate)}</strong>
-                            </span>
-                          )}
-                          {availability.endDate && (
-                            <span className="text-gray-600">
-                              📅 Until: <strong>{formatAvailabilityDate(availability.endDate)}</strong>
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Timezone */}
-                        {availability.timezone && (
-                          <div className="text-gray-600">
-                             Timezone: <strong>{availability.timezone}</strong>
-                          </div>
-                        )}
-
-                        {/* ''ALL Daily Windows - Show ALL days */}
-                        {sortedWindows.length > 0 && (
-                          <div className="mt-2">
-                            <p className="text-xs font-semibold text-gray-500 mb-2">Daily Windows:</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                              {sortedWindows.map((window: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between bg-white px-3 py-1.5 rounded border border-gray-200 text-sm">
-                                  <span className="font-medium text-gray-700">{window.dayName}</span>
-                                  <span className="text-gray-600">
-                                    {window.startTime || '09:00'} - {window.endTime || '17:00'}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Additional Info */}
-                        <div className="mt-3 pt-3 border-t border-gray-200 flex flex-wrap gap-3 text-xs text-gray-500">
-                          {availability.noticePeriod && (
-                            <span>⏰ Notice: {availability.noticePeriod}h required</span>
-                          )}
-                          {availability.allowRescheduling && (
-                            <span>🔄 Rescheduling allowed ({availability.maxReschedules} max)</span>
-                          )}
-                          {availability.maxConcurrentCandidates && (
-                            <span>👥 Max candidates: {availability.maxConcurrentCandidates}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ''Action Button - Navigate to /simulations/my */}
-                  <div className="mt-5 flex justify-center">
-                    {isAvailable ? (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleStartSimulation();
-                        }}
-                        className="w-full py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-base font-semibold rounded-lg hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 active:scale-95"
-                      >
-                        <Play className="w-5 h-5" />
-                        Start Practical Assessment
-                      </button>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleClose();
-                        }}
-                        className="w-full py-3 bg-gray-200 text-gray-700 text-base font-semibold rounded-lg hover:bg-gray-300 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <X className="w-5 h-5" />
-                        Close - Not Available Yet
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Tasks count note */}
-                  {sim.tasks && sim.tasks.length > 0 && (
-                    <div className="mt-3 text-center">
-                      <span className="text-xs text-gray-400">
-                        📋 {sim.tasks.length} task{sim.tasks.length > 1 ? 's': ''} • {sim.scoringRubric?.passingScore || 70}% passing score
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Skip/Close button at bottom */}
+        <h3 className="text-xl font-bold text-gray-900 mb-2">Application submitted! 🎉</h3>
+        <p className="text-gray-600 mb-6">
+          Your application has been sent to the recruiter. You can track its status under
+          <em> My Applications</em>.
+        </p>
         <button
-          onClick={handleClose}
-          className="w-full px-4 py-2.5 text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 text-sm transition-colors"
+          onClick={() => { setShowSimulationPrompt(false); onClose(); }}
+          className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700"
         >
-          {simulationTemplates.some((sim: any) => {
-            const availability = getAvailabilityInfo(sim.metadata);
-            const status = availability ? isSimulationAvailable(availability) : { available: true };
-            return status.available;
-          }) ? 'Skip for now   I\'ll start later': 'Close'}
+          Got it
         </button>
       </div>
     );

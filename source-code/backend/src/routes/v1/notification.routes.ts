@@ -82,7 +82,7 @@ router.put('/preferences', async (req: Request, res: Response): Promise<void> =>
     const result = await dbQuery(
       `INSERT INTO notification_preferences (user_id, email, sms, push, in_app, quiet_hours)
        VALUES ($1,
-               COALESCE($2, '{"application_updates": true, "simulation_reminders": true, "messages": true, "security": true, "billing": true, "promotional": false}'::jsonb),
+               COALESCE($2, '{"application_updates": true, "messages": true, "security": true, "billing": true, "promotional": false}'::jsonb),
                COALESCE($3, '{}'::jsonb), COALESCE($4, '{}'::jsonb), COALESCE($5, '{"all": true}'::jsonb), COALESCE($6, '{}'::jsonb))
        ON CONFLICT (user_id) DO UPDATE SET
          email = COALESCE($2, notification_preferences.email),

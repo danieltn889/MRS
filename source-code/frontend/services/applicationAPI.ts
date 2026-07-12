@@ -382,30 +382,6 @@ export const submitScreeningAnswers = async (
   }
 };
 
-// Schedule simulation from application
-export const scheduleSimulation = async (
-  applicationId: string,
-  simulationId: string,
-  scheduledAt: string
-): Promise<{ success: boolean; message: string }> => {
-  try {
-    const token = getAuthToken();
-    const response = await axios.post(`${API_BASE_URL}/applications/${applicationId}/schedule-simulation`, {
-      simulationId,
-      scheduledAt
-    }, {
-      headers: {
-        'Authorization': token ? `Bearer ${token}` : '',
-        'Content-Type': 'application/json'
-      }
-    });
-    return response.data;
-  } catch (error: any) {
-    console.error('Schedule simulation error:', error);
-    throw error.response?.data || { success: false, message: 'Failed to schedule simulation'};
-  }
-};
-
 // Get application history
 export const getApplicationHistory = async (params?: {
   page?: number;
@@ -702,7 +678,6 @@ export default {
   applyWithProfile,
   uploadApplicationDocument,
   submitScreeningAnswers,
-  scheduleSimulation,
   getApplicationHistory,
   getRecruiterFeed,
   bulkProcessApplications,

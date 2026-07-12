@@ -164,6 +164,8 @@ interface LoginRequest extends Request {
     email: string;
     password: string;
     rememberMe?: boolean;
+    companyId?: string;
+    userType?: string;
   };
 }
 
@@ -240,10 +242,11 @@ const register = async (req: RegisterRequest, res: Response): Promise<void> => {
 
     const { email, password, userType, firstName, lastName, companyId } = req.body;
 
-    // Check if user exists
+    // Check if this specific role already exists for this email - the same
+    // email can have a separate account per role (e.g. candidate + recruiter).
     const userExists = await client.query(
-      'SELECT id FROM users WHERE email = $1',
-      [email]
+      'SELECT id FROM users WHERE email = $1 AND user_type = $2',
+      [email, userType]
     );
 
     if (userExists.rows.length > 0) {
@@ -251,7 +254,7 @@ const register = async (req: RegisterRequest, res: Response): Promise<void> => {
       cleanupStagedFiles();
       res.status(400).json({
         success: false,
-        message: 'User already exists'
+        message: 'An account with this email already exists for this role'
       });
       return;
     }
@@ -522,18 +525,19 @@ This link expires in 24 hours.`
 // @access  Public
 const login = async (req: LoginRequest, res: Response): Promise<void> => {
   try {
-    const { email, password, rememberMe = false } = req.body;
+    const { email, password, rememberMe = false, companyId, userType } = req.body;
     const LOCKOUT_MINUTES = 15;
     const MAX_LOGIN_ATTEMPTS = 5;
     const LOCKOUT_MS = LOCKOUT_MINUTES * 60 * 1000;
 
-    // Get user with candidate profile if applicable
+    // The same email can have a separate account per role (e.g. one person who
+    // is both a candidate and a recruiter) - get user with candidate profile if applicable
     const userResult = await query(
-      `SELECT 
-        u.id, 
-        u.email, 
-        u.password_hash, 
-        u.user_type, 
+      `SELECT
+        u.id,
+        u.email,
+        u.password_hash,
+        u.user_type,
         u.status,
         u.login_attempts,
         u.locked_until,
@@ -542,8 +546,9 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
         cp.last_name
       FROM users u
       LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
-      WHERE LOWER(u.email) = LOWER($1)`,
-      [email]
+      WHERE LOWER(u.email) = LOWER($1) ${userType ? 'AND u.user_type = $2': ''}
+      ORDER BY u.created_at ASC`,
+      userType ? [email, userType] : [email]
     );
 
     if (userResult.rows.length === 0) {
@@ -556,7 +561,41 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
       return;
     }
 
-    const user = userResult.rows[0];
+    let user = userResult.rows[0];
+
+    // Ambiguous: more than one role registered under this email and the
+    // caller hasn't told us which one. Try the password against each -
+    // usually only one matches (different roles commonly have different
+    // passwords), so most multi-role users never see a picker at all.
+    if (userResult.rows.length > 1) {
+      const matches = [];
+      for (const row of userResult.rows) {
+        // eslint-disable-next-line no-await-in-loop
+        if (await bcrypt.compare(password, row.password_hash)) matches.push(row);
+      }
+
+      if (matches.length === 0) {
+        logger.warn(`Failed login attempt for ${email} (multi-role, no password match)`);
+        res.status(401).json({
+          success: false,
+          message: 'Invalid email or password',
+          code: 'INVALID_CREDENTIALS'
+        });
+        return;
+      }
+
+      if (matches.length > 1) {
+        res.json({
+          success: true,
+          requiresRoleSelection: true,
+          roles: matches.map((m: any) => ({ userType: m.user_type })),
+          message: 'Select which account to log in as',
+        });
+        return;
+      }
+
+      user = matches[0];
+    }
 
     // Check if account is locked
     if (user.locked_until) {
@@ -634,6 +673,52 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
       [user.id]
     );
 
+    // ── Resolve company for recruiter/company_admin before issuing a token ──
+    // A user can be on more than one company's team (e.g. a recruiter working
+    // with two companies). If ambiguous and no companyId was supplied, stop
+    // here and ask the client to pick one instead of silently guessing.
+    let companyData: any = null;
+    if (user.user_type === 'recruiter'|| user.user_type === 'company_admin') {
+      const companiesResult = await query(
+        `SELECT c.id, c.name, c.slug, c.logo_url, c.industry, c.size, c.verification_status, ct.is_default
+         FROM companies c
+         JOIN company_team ct ON c.id = ct.company_id
+         WHERE ct.user_id = $1
+         ORDER BY ct.is_default DESC, ct.created_at ASC`,
+        [user.id]
+      );
+
+      if (companiesResult.rows.length > 1 && !companyId) {
+        res.json({
+          success: true,
+          requiresCompanySelection: true,
+          companies: companiesResult.rows.map((c: any) => ({ id: c.id, name: c.name, logoUrl: c.logo_url })),
+          message: 'Select which company to log in as',
+        });
+        return;
+      }
+
+      if (companiesResult.rows.length > 0) {
+        const chosen = companyId
+          ? companiesResult.rows.find((c: any) => c.id === companyId)
+          : companiesResult.rows[0];
+
+        if (!chosen) {
+          res.status(400).json({ success: false, message: 'Invalid company selection'});
+          return;
+        }
+
+        companyData = chosen;
+        if (!chosen.is_default) {
+          await query('UPDATE company_team SET is_default = false WHERE user_id = $1', [user.id]);
+          await query('UPDATE company_team SET is_default = true WHERE user_id = $1 AND company_id = $2', [user.id, chosen.id]);
+        }
+        logger.info(`Company data found for user ${user.email}: ${companyData.name}`);
+      } else {
+        logger.warn(`No company found for recruiter/admin: ${user.email}`);
+      }
+    }
+
     let tokenExpiry = process.env.JWT_EXPIRE || '24h';
     if (rememberMe) {
       tokenExpiry = '30d';
@@ -682,26 +767,6 @@ const login = async (req: LoginRequest, res: Response): Promise<void> => {
        VALUES ($1, $2, $3, $4, NOW())`,
       [user.id, req.ip || 'unknown', req.get('User-Agent') || 'unknown', 'success']
     );
-
-    // ''''''ADD THIS: Get company info for recruiters and company admins
-    let companyData = null;
-    if (user.user_type === 'recruiter'|| user.user_type === 'company_admin') {
-      const companyResult = await query(
-        `SELECT c.id, c.name, c.slug, c.logo_url, c.industry, c.size, c.verification_status
-         FROM companies c
-         JOIN company_team ct ON c.id = ct.company_id
-         WHERE ct.user_id = $1
-         LIMIT 1`,
-        [user.id]
-      );
-      
-      if (companyResult.rows.length > 0) {
-        companyData = companyResult.rows[0];
-        logger.info(`Company data found for user ${user.email}: ${companyData.name}`);
-      } else {
-        logger.warn(`No company found for recruiter/admin: ${user.email}`);
-      }
-    }
 
     logger.info(`Successful login for user: ${email}`);
 
@@ -1040,12 +1105,12 @@ const resetPassword = async (req: ResetPasswordRequest, res: Response): Promise<
           subject: 'Password Changed - Recruitment Platform',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h1 style="color: #2563eb; text-align: center;">Password Changed ✓</h1>
+              <h1 style="color: #2563eb; text-align: center;">Password Changed </h1>
               <p>Hi ${user.first_name || 'User'},</p>
               <p>Your password has been successfully changed.</p>
               <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 15px; margin: 20px 0;">
                 <p style="margin: 0; color: #166534;">
-                  <strong>✓ Password updated:</strong> ${new Date().toLocaleString()}
+                  <strong> Password updated:</strong> ${new Date().toLocaleString()}
                 </p>
               </div>
               <p style="color: #666; font-size: 14px; margin-top: 20px;">
@@ -1804,9 +1869,11 @@ const registerCompanyComplete = async (req: Request, res: Response): Promise<voi
       company = updateResult.rows[0];
     }
 
-    // Check if user email already exists
+    // Check if a company_admin account already exists for this email - the
+    // same email may separately have a candidate/recruiter account, which
+    // shouldn't be reused here.
     const existingUser = await client.query(
-      'SELECT id FROM users WHERE email = $1',
+      "SELECT id FROM users WHERE email = $1 AND user_type = 'company_admin'",
       [email]
     );
 
@@ -2724,10 +2791,11 @@ const acceptTeamInvitation = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Check if user already exists
+    // Check if a recruiter account already exists for this email - the same
+    // email may separately have a candidate/company_admin account elsewhere.
     let userId;
     const existingUser = await client.query(
-      'SELECT id, user_type FROM users WHERE email = $1',
+      "SELECT id, user_type FROM users WHERE email = $1 AND user_type = 'recruiter'",
       [invitation.email]
     );
 

@@ -1,7 +1,6 @@
 import { BaseEntity, UUID, TIMESTAMP, JSONB, ApplicationStatus } from './types.ts';
 import { Job } from './job.ts';
 import { User } from './user.ts';
-import { Simulation } from './simulation.ts';
 import { Company } from './company.ts';
 
 export interface Application extends BaseEntity {
@@ -40,7 +39,6 @@ export interface Application extends BaseEntity {
   timeline?: ApplicationTimeline[];
   assignments?: ApplicationAssignment[];
   reminders?: ApplicationReminder[];
-  simulations?: Simulation[];
 }
 
 export interface ApplicationTimeline extends BaseEntity {

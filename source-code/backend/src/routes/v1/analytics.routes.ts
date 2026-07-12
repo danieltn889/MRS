@@ -96,35 +96,6 @@ router.get('/candidates', protect, [
   }
 });
 
-// @route   GET /api/v1/analytics/simulations
-// @desc    Get simulation analytics for candidates and admins
-// @access  Private (Candidates and Admins)
-router.get('/simulations', protect, [
-  query('period').optional().isInt({ min: 1, max: 365 }).toInt(),
-  validateRequest
-], async (req: Request, res: Response): Promise<void> => {
-  const authReq = req as AuthenticatedRequest;
-  try {
-    if (!['candidate', 'system_admin'].includes(authReq.user!.user_type)) {
-      res.status(403).json({ success: false, message: 'Access denied'});
-      return;
-    }
-    // Placeholder implementation
-    res.json({
-      success: true,
-      data: {
-        message: 'Simulation analytics not yet implemented'
-      }
-    });
-  } catch (error) {
-    logger.error('Get simulation analytics error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch simulation analytics'
-    });
-  }
-});
-
 // @route   GET /api/v1/analytics/reports/job-performance
 // @desc    Generate job performance report
 // @access  Private (Recruiters and Company Admins)
@@ -286,7 +257,6 @@ router.get('/reports/platform-usage', [protect, query('startDate').optional().is
       activeJobs: 'SELECT COUNT(*) as count FROM jobs WHERE status = \'active\'',
       totalApplications: `SELECT COUNT(*) as count FROM applications WHERE 1=1 ${dateFilter}`,
       totalCompanies: `SELECT COUNT(*) as count FROM companies WHERE 1=1 ${dateFilter}`,
-      totalSimulations: `SELECT COUNT(*) as count FROM simulations WHERE 1=1 ${dateFilter}`,
       userTypeBreakdown: `SELECT user_type, COUNT(*) as count FROM users WHERE 1=1 ${dateFilter} GROUP BY user_type`
     };
 

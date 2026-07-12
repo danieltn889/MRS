@@ -574,121 +574,6 @@ export const getJobCandidatesWithMatches = async (jobId: string, params: any = {
   }
 };
 
-// =====================================================
-// JOB CANDIDATES COMPLETE - WITH SIMULATIONS & TASKS
-// =====================================================
-
-/**
- * Get all candidates who applied to a job with complete details including simulations, tasks, and marks
- * @param jobId - The job ID
- * @param params - Query parameters for pagination, filtering, and sorting
- * @returns Complete candidate data with simulation results, task progress, and ranking
- */
-export const getJobCandidatesComplete = async (jobId: string, params: any = {}) => {
-  try {
-    const {
-      page = 1,
-      limit = 20,
-      sortBy = 'overall_score',
-      sortOrder = 'DESC',
-      minScore,
-      maxScore,
-      status,
-      hasSimulation = 'all'
-    } = params;
-    
-    const queryParams = new URLSearchParams({
-      page: page.toString(),
-      limit: limit.toString(),
-      sortBy,
-      sortOrder
-    });
-    
-    if (minScore) queryParams.append('minScore', minScore.toString());
-    if (maxScore) queryParams.append('maxScore', maxScore.toString());
-    if (status && status !== 'all') queryParams.append('status', status);
-    if (hasSimulation && hasSimulation !== 'all') queryParams.append('hasSimulation', hasSimulation);
-    
-    const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/candidates/complete?${queryParams}`, {
-      method: 'GET',
-      headers: getAuthHeaders(),
-    });
-    
-    const result = await handleResponse(response);
-    
-    if (result.success && result.data) {
-      return {
-        success: true,
-        data: {
-          job: result.data.job || {},
-          candidates: result.data.candidates || [],
-          stats: result.data.stats || {},
-          pagination: result.data.pagination || {},
-          filters: result.data.filters || {}
-        }
-      };
-    }
-    
-    return {
-      success: true,
-      data: {
-        job: {},
-        candidates: [],
-        stats: {
-          total_applicants: 0,
-          by_status: {
-            submitted: 0,
-            under_review: 0,
-            shortlisted: 0,
-            interviewing: 0,
-            offers: 0,
-            hired: 0,
-            rejected: 0
-          },
-          scores: {
-            average: 0,
-            max: 0,
-            min: 0
-          },
-          simulations: {
-            with_simulation: 0,
-            without_simulation: 0
-          }
-        },
-        pagination: {
-          current_page: 1,
-          per_page: 20,
-          total_items: 0,
-          total_pages: 0,
-          has_next_page: false,
-          has_prev_page: false
-        },
-        filters: {
-          sort_by: sortBy,
-          sort_order: sortOrder,
-          min_score: minScore || null,
-          max_score: maxScore || null,
-          status: status || 'all',
-          has_simulation: hasSimulation || 'all'
-        }
-      }
-    };
-    
-  } catch (error: any) {
-    console.error('Error getting job candidates complete:', error);
-    return {
-      success: false,
-      data: {
-        job: {},
-        candidates: [],
-        stats: {},
-        pagination: {},
-        filters: {}
-      },
-      error: error.message
-    };
-  }
-};
 
 // =====================================================
 // APPLICATION STATUS MANAGEMENT
@@ -810,10 +695,7 @@ export default {
   
   // Candidate Management with AI Match Scores
   getJobCandidatesWithMatches,
-  
-  // NEW: Candidate Management with Complete Simulation Data
-  getJobCandidatesComplete,
-  
+
   // Application Management
   updateApplicationStatus,
   addApplicationNote,

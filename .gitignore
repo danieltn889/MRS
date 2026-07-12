@@ -14,6 +14,8 @@ __pycache__/
 *.pyc
 venv/
 .env
+.env.*
+!.env.example
 
 # ======================================================
 # JAVA
@@ -53,6 +55,7 @@ local.properties
 # ======================================================
 
 .vscode/
+.claude/
 
 # ======================================================
 # LATEX BUILD FILES
@@ -87,3 +90,5 @@ db_backups/
 source-code/ml/models/
 *.tar.gz
 *.csv
+*.pem
+*.key

@@ -39,7 +39,7 @@ const ThemeSwitcher = () => {
                   className={`w-4 h-4 rounded-full bg-gradient-to-br ${theme.primary}`}
                 />
                 <span>{theme.name}</span>
-                {currentTheme === key && <span className="ml-auto">✓</span>}
+                {currentTheme === key && <span className="ml-auto"></span>}
               </button>
             ))}
           </div>

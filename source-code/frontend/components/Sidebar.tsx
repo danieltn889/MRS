@@ -54,11 +54,8 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'users', label: 'User Management', icon: Users },
           { id: 'platform', label: 'Platform Settings', icon: Settings },
           { id: 'analytics', label: 'System Analytics', icon: BarChart3 },
-          { id: 'simulations-list', label: 'All Practical Assessments', icon: List },
-          { id: 'simulation-designer', label: 'Practical Assessment Designer', icon: FileText },
-          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
-          { id: 'security', label: 'Security Settings', icon: Shield },
-          { id: 'profile', label: 'My Profile', icon: User }
+          { id: 'profile', label: 'My Profile', icon: User },
+          { id: 'security', label: 'Security Settings', icon: Shield }
         ];
       case 'company_admin':
         return [
@@ -67,12 +64,8 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'jobs', label: 'Job Management', icon: Briefcase },
           { id: 'candidates', label: 'Candidate Search', icon: Search },
           { id: 'onboarding', label: 'Candidate Onboarding', icon: UserCheck },
-          { id: 'performance', label: 'Performance Reporting', icon: Activity },
           { id: 'team', label: 'Team Management', icon: Users },
           { id: 'analytics', label: 'Company Analytics', icon: BarChart3 },
-          { id: 'simulations-list', label: 'My Practical Assessments', icon: List },
-          { id: 'simulation-designer', label: 'Practical Assessment Designer', icon: FileText },
-          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
         ];
@@ -84,21 +77,14 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'applications', label: 'Application Review', icon: CheckSquare },
           { id: 'interviews', label: 'Interview Scheduling', icon: UserCheck },
           { id: 'analytics', label: 'Recruitment Analytics', icon: TrendingUp },
-          { id: 'simulations-list', label: 'My Practical Assessments', icon: List },
-          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
         ];
       default: // candidate
         return [
           { id: 'dashboard', label: 'Applicant Dashboard', icon: BarChart3 },
-          { id: 'for-you', label: 'For You', icon: Sparkles },
           { id: 'saved-jobs', label: 'Saved Jobs', icon: Bookmark },
-          { id: 'simulation', label: 'Job Practical Assessment', icon: FileText },
-          { id: 'my-simulations', label: 'My Practical Assessments', icon: Play },
           { id: 'applications', label: 'My Applications', icon: CheckSquare },
-          { id: 'results', label: 'My Results', icon: TrendingUp },
-          { id: 'blockchain', label: 'Blockchain Explorer', icon: Shield },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
         ];

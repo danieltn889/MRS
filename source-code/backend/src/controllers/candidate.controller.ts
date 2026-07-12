@@ -3397,17 +3397,6 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
       WHERE user_id = $1 AND deleted_at IS NULL
     `, [userId]);
 
-    // Get simulations summary
-    const simulationsSummary = await query(`
-      SELECT 
-        COUNT(*) as total_simulations,
-        COUNT(CASE WHEN status = 'completed'THEN 1 END) as completed,
-        COUNT(CASE WHEN status = 'in_progress'THEN 1 END) as in_progress,
-        AVG(overall_score) as avg_score
-      FROM simulations
-      WHERE user_id = $1
-    `, [userId]);
-
     console.log('Sending response...');
 
     // ''Return response with isOwner flag and all data
@@ -3517,12 +3506,6 @@ export const getFullCandidateProfileById = async (req: AuthenticatedRequest, res
           offers: parseInt(applicationsSummary.rows[0]?.offers || '0'),
           hired: parseInt(applicationsSummary.rows[0]?.hired || '0'),
           rejected: parseInt(applicationsSummary.rows[0]?.rejected || '0')
-        },
-        simulations_summary: {
-          total: parseInt(simulationsSummary.rows[0]?.total_simulations || '0'),
-          completed: parseInt(simulationsSummary.rows[0]?.completed || '0'),
-          in_progress: parseInt(simulationsSummary.rows[0]?.in_progress || '0'),
-          average_score: Math.round(parseFloat(simulationsSummary.rows[0]?.avg_score || '0') * 10) / 10
         },
         education: parsedEducation,
         work_experience: parsedWorkExperience,

@@ -95,7 +95,7 @@ interface MatchDetails {
     total_requirements: number;
     matched_requirements: number;
     specific_matches: any[];
-    unmatched_requirements: string[];
+    unmatched_requirements: Array<{ title: string; years_required: number }>;
     total_years: number;
     relevant_years?: number;
     experience_analysis?: Array<{
@@ -128,7 +128,16 @@ interface MatchDetails {
     candidate_remote_preference: string;
     missing_job_data: string[];
     type_match_details?: any[];
+    type_match_note?: string | null;
+    remote_match_note?: string | null;
     location_match_details?: any;
+    location_match_note?: string | null;
+    industry_match_details?: any[];
+    industry_match_note?: string | null;
+    salary_match_details?: any;
+    salary_match_note?: string | null;
+    language_match_details?: any[];
+    language_match_note?: string | null;
   };
   explanation?: string;
   improvement_suggestions?: string[];
@@ -317,8 +326,8 @@ const JobDetails: React.FC = () => {
             best_similarity: result.match.qualifications_breakdown?.best_similarity || 0,
             best_matched_field: result.match.qualifications_breakdown?.best_matched_field || '',
             match_type: result.match.qualifications_breakdown?.match_type || 'none',
-            match_quality: result.match.qualifications_breakdown?.match_quality,  // ✓ Good
-            explanation: result.match.qualifications_breakdown?.explanation         // ✓ Good
+            match_quality: result.match.qualifications_breakdown?.match_quality,  //  Good
+            explanation: result.match.qualifications_breakdown?.explanation         //  Good
           },
           experience_breakdown: {
             match_type: result.match.experience_breakdown?.match_type || 'unknown',
@@ -347,8 +356,23 @@ const JobDetails: React.FC = () => {
             candidate_salary_max: result.match.preferences_breakdown?.candidate_salary_max || 0,
             candidate_remote_preference: result.match.preferences_breakdown?.candidate_remote_preference || 'flexible',
             missing_job_data: result.match.preferences_breakdown?.missing_job_data || [],
+            // "What the candidate has vs what the job requires" detail for
+            // every dimension, plus a human-readable note when a dimension
+            // was excluded (job didn't state a requirement) or the candidate
+            // has no data for it -- previously only type/location were
+            // passed through, so Industry/Salary/Language showed a bare
+            // percentage with no explanation of what produced it.
             type_match_details: result.match.preferences_breakdown?.type_match_details,
-            location_match_details: result.match.preferences_breakdown?.location_match_details
+            type_match_note: (result.match.preferences_breakdown as any)?.type_match_note,
+            remote_match_note: (result.match.preferences_breakdown as any)?.remote_match_note,
+            location_match_details: result.match.preferences_breakdown?.location_match_details,
+            location_match_note: (result.match.preferences_breakdown as any)?.location_match_note,
+            industry_match_details: (result.match.preferences_breakdown as any)?.industry_match_details,
+            industry_match_note: (result.match.preferences_breakdown as any)?.industry_match_note,
+            salary_match_details: (result.match.preferences_breakdown as any)?.salary_match_details,
+            salary_match_note: (result.match.preferences_breakdown as any)?.salary_match_note,
+            language_match_details: (result.match.preferences_breakdown as any)?.language_match_details,
+            language_match_note: (result.match.preferences_breakdown as any)?.language_match_note,
           },
           explanation: (result.match as any).explanation || '',
           improvement_suggestions: (result.match as any).improvement_suggestions || [],
@@ -382,7 +406,7 @@ const JobDetails: React.FC = () => {
         setIsSaved(false);
         alert('Job removed from saved!');
       } else {
-        await saveJob(id!, matchScore);
+        await saveJob(id!);
         setIsSaved(true);
         alert('Job saved successfully!');
       }
@@ -788,7 +812,7 @@ const JobDetails: React.FC = () => {
                           {matchDetails.qualifications_breakdown.candidate_degrees.length > 0 ? (
                             <div className="space-y-1">
                               {matchDetails.qualifications_breakdown.candidate_degrees.map((deg, idx) => (
-                                <p key={idx} className="text-sm text-blue-900">✓ {deg}</p>
+                                <p key={idx} className="text-sm text-blue-900"> {deg}</p>
                               ))}
                               {matchDetails.qualifications_breakdown.candidate_fields.map((field, idx) => (
                                 <p key={idx} className="text-xs text-blue-700"> {field}</p>
@@ -1316,8 +1340,7 @@ const JobDetails: React.FC = () => {
     }}
     onSuccess={() => {
       // Mark as applied, but DON'T close the modal or alert here   the modal shows its
-      // own next-steps screen (simulation details, or the "no simulation yet" notice)
-      // and closes itself when the user dismisses it.
+      // own confirmation screen and closes itself when the user dismisses it.
       setHasApplied(true);
     }}
     job={{

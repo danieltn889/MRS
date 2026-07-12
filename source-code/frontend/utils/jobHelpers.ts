@@ -131,7 +131,7 @@ interface ExperienceBreakdown {
   total_requirements?: number;
   matched_requirements?: number;
   specific_matches?: any[];
-  unmatched_requirements?: string[];
+  unmatched_requirements?: Array<{ title: string; years_required: number }>;
 }
 
 interface QualificationsBreakdown {

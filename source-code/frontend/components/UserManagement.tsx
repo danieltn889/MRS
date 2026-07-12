@@ -5,10 +5,13 @@ import {
 } from 'lucide-react';
 import {
   getAdminCompanies, getAdminCompanyUsers, createAdminCompanyUser, updateAdminUser, deleteAdminUser,
-  AdminCompany, AdminCompanyUser,
+  resendAdminUserCredentials, AdminCompany, AdminCompanyUser,
 } from '../services/adminAPI';
 
-interface Alert { id: number; type: 'success'| 'error'; message: string; }
+interface Alert {
+  id: number; type: 'success'| 'error'; message: string;
+  action?: { label: string; onClick: () => void };
+}
 
 const TEAM_ROLES: Array<{ value: 'admin'| 'recruiter'| 'reviewer'| 'viewer'; label: string }> = [
   { value: 'admin', label: 'Company Admin'},
@@ -34,10 +37,10 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const addAlert = (type: 'success'| 'error', message: string) => {
+  const addAlert = (type: 'success'| 'error', message: string, action?: Alert['action']) => {
     const id = Date.now();
-    setAlerts(prev => [...prev, { id, type, message }]);
-    setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== id)), 6000);
+    setAlerts(prev => [...prev, { id, type, message, action }]);
+    setTimeout(() => setAlerts(prev => prev.filter(a => a.id !== id)), action ? 15000 : 6000);
   };
 
   useEffect(() => {
@@ -77,9 +80,28 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
       setForm({ name: '', email: '', title: '', teamRole: 'recruiter'});
       loadUsers(selectedCompany.id);
     } catch (err: any) {
-      addAlert('error', err.message || 'Failed to create user');
+      if (err.code === 'USER_EXISTS'&& err.existingUserId) {
+        addAlert('error', err.message || 'A user with this email already exists', {
+          label: 'Resend welcome email',
+          onClick: () => resendCredentials(err.existingUserId, form.email),
+        });
+      } else {
+        addAlert('error', err.message || 'Failed to create user');
+      }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const resendCredentials = async (userId: string, email: string) => {
+    try {
+      setBusyId(userId);
+      await resendAdminUserCredentials(userId);
+      addAlert('success', `New login details emailed to ${email}`);
+    } catch (err: any) {
+      addAlert('error', err.message || 'Failed to resend credentials');
+    } finally {
+      setBusyId(null);
     }
   };
 
@@ -129,7 +151,15 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
       <div className="fixed top-4 right-4 z-50 w-96">
         {alerts.map(a => (
           <div key={a.id} className={`mb-2 p-3 rounded-lg shadow-lg text-sm font-medium ${a.type === 'success'? 'bg-green-50 text-green-800 border border-green-200': 'bg-red-50 text-red-800 border border-red-200'}`}>
-            {a.message}
+            <div>{a.message}</div>
+            {a.action && (
+              <button
+                onClick={() => { a.action!.onClick(); setAlerts(prev => prev.filter(x => x.id !== a.id)); }}
+                className="mt-2 text-xs font-semibold underline text-red-800 hover:text-red-900"
+              >
+                {a.action.label}
+              </button>
+            )}
           </div>
         ))}
       </div>
@@ -234,6 +264,12 @@ const UserManagement: React.FC<{ onBack?: () => void; initialCompany?: AdminComp
                       <td className="px-4 py-3 text-gray-500 text-xs">{u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {u.status === 'unverified'&& (
+                            <button onClick={() => resendCredentials(u.user_id, u.login_email)} disabled={busyId === u.user_id} title="Resend verification email"
+                              className="p-1.5 rounded border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50">
+                              <Mail size={14} />
+                            </button>
+                          )}
                           {u.status !== 'active'&& (
                             <button onClick={() => changeStatus(u, 'active')} disabled={busyId === u.user_id} title="Activate"
                               className="p-1.5 rounded border border-green-200 text-green-600 hover:bg-green-50 disabled:opacity-50">

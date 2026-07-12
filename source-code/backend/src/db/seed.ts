@@ -34,11 +34,6 @@ type CompanyRow = {
   id: string;
 };
 
-type TaskRow = {
-  id: string;
-  task_index: number;
-};
-
 const seedDatabase = async (): Promise<void> => {
   const client = new Client({
     host: process.env.DB_HOST || 'localhost',
@@ -96,11 +91,11 @@ const seedDatabase = async (): Promise<void> => {
         verification_badge, created_at, updated_at
       )
       VALUES (
-        '11111111-1111-1111-1111-111111111111'::UUID,
-        'Default Company', 'Default Company Inc.', 'default-company',
+        'c45f052d-e9f3-496e-bf1e-c5164df32b61'::UUID,
+        'Normal Company', 'Normal Company Inc.', 'normal-company',
         'Technology', '51-200', 2020,
         '{"country": "USA", "city": "San Francisco", "state": "CA"}'::JSONB,
-        'https://defaultcompany.com',
+        'https://normalcompany.com',
         'Default company for job templates and system use.',
         'verified', true, NOW(), NOW()
       )
@@ -276,7 +271,6 @@ const seedDatabase = async (): Promise<void> => {
             { title: "Product Management", years: "5", description: "in SaaS or technology products" },
             { title: "Team Leadership", years: "2", description: "leading cross-functional teams" }
           ],
-          age_requirement: ,
           is_degree_required: true,
           no_experience_needed: false,
           no_languages_needed: false,
@@ -340,7 +334,6 @@ const seedDatabase = async (): Promise<void> => {
             { title: "DevOps / SRE", years: "3", description: "in cloud infrastructure" },
             { title: "Kubernetes", years: "2", description: "in production environments" }
           ],
-          age_requirement: ,
           is_degree_required: true,
           no_experience_needed: false,
           no_languages_needed: true,
@@ -808,182 +801,6 @@ const seedDatabase = async (): Promise<void> => {
     logger.info('GitHub connections seeded');
 
     // =====================================================
-    // SIMULATION TEMPLATE (keep existing)
-    // =====================================================
-    logger.info('Seeding GitHub-based simulation template...');
-
-    const simulationTemplateId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
-
-    await client.query(
-      `
-      INSERT INTO simulation_templates (
-        id, company_id, name, slug, description, type, difficulty,
-        duration_minutes, tasks, scoring_rubric, pass_fail_criteria,
-        is_public, is_active, created_at, updated_at
-      )
-      VALUES (
-        $1::UUID, $2::UUID,
-        'GitHub Developer Assessment'::VARCHAR,
-        'github-dev-assessment'::VARCHAR,
-        'Complete a series of GitHub-based development tasks to demonstrate your skills.'::TEXT,
-        'technical'::VARCHAR, 'intermediate'::VARCHAR, 120::INTEGER,
-        '[
-          {"task_index":1,"task_name":"Fork and Clone Repository","task_type":"github_setup","description":"Fork the provided repository and clone it to your local machine.","requires_github_repo":true},
-          {"task_index":2,"task_name":"Fix Bug and Commit","task_type":"code_fix","description":"Fix the authentication bug in the codebase.","requires_github_repo":true,"min_commits":1,"depends_on":1},
-          {"task_index":3,"task_name":"Write Unit Tests","task_type":"testing","description":"Write unit tests for the authentication module.","requires_github_repo":true,"min_commits":1,"depends_on":2,"min_score":80},
-          {"task_index":4,"task_name":"Create Pull Request","task_type":"github_pr","description":"Create a Pull Request with your changes.","requires_pr":true,"depends_on":3}
-        ]'::JSONB,
-        '{"passing_score":70,"weights":{"technical":40,"communication":30,"github_usage":30}}'::JSONB,
-        '{"passing_score":70,"min_tasks_completed":3}'::JSONB,
-        true, true, NOW(), NOW()
-      )
-      ON CONFLICT (id) DO NOTHING
-      `,
-      [simulationTemplateId, defaultCompanyId]
-    );
-    logger.info('Simulation template seeded');
-
-    // =====================================================
-    // JOB-LINKED SIMULATION TEMPLATES
-    // Attach an ACTIVE simulation template to each seeded job (via job_id) so that
-    // applicants get a simulation instead of the "no simulation yet" notice.
-    // Idempotent   re-running re-links and keeps it active.
-    // =====================================================
-    logger.info('Seeding job-linked simulation templates...');
-
-    const jobSimTasks = `[
-      {"task_index":1,"task_name":"Fork and Clone Repository","task_type":"github_setup","description":"Fork the provided repository and clone it locally.","requires_github_repo":true},
-      {"task_index":2,"task_name":"Implement Feature / Fix Bug","task_type":"code_fix","description":"Implement the required change in the codebase.","requires_github_repo":true,"min_commits":1,"depends_on":1},
-      {"task_index":3,"task_name":"Write Tests","task_type":"testing","description":"Add tests for your change.","requires_github_repo":true,"min_commits":1,"depends_on":2,"min_score":70},
-      {"task_index":4,"task_name":"Open Pull Request","task_type":"github_pr","description":"Open a Pull Request with your changes.","requires_pr":true,"depends_on":3}
-    ]`;
-
-    const jobsForSim = await client.query<{ id: string; title: string; company_id: string }>(
-      `SELECT id, title, company_id FROM jobs ORDER BY title`
-    );
-    let simIdx = 0;
-    for (const job of jobsForSim.rows) {
-      simIdx += 1;
-      // 4-digit index (supports up to 9999 jobs)   a 2-digit pad silently overflowed
-      // the UUID's 12-char final segment once the seeded jobs count passed 99.
-      const tplId = `d0eebc99-9c0b-4ef8-bb6d-6bb9bd38${simIdx.toString().padStart(4, '0')}`;
-      const slug = `sim-${job.title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`.slice(0, 90);
-      await client.query(
-        `
-        INSERT INTO simulation_templates (
-          id, company_id, job_id, name, slug, description, type, difficulty,
-          duration_minutes, tasks, scoring_rubric, pass_fail_criteria,
-          is_public, is_active, created_at, updated_at
-        )
-        VALUES (
-          $1::UUID, $2::UUID, $3::UUID,
-          $4::VARCHAR, $5::VARCHAR, $6::TEXT,
-          'technical'::VARCHAR, 'intermediate'::VARCHAR, 90::INTEGER,
-          $7::JSONB,
-          '{"passing_score":70,"weights":{"technical":40,"communication":30,"github_usage":30}}'::JSONB,
-          '{"passing_score":70,"min_tasks_completed":3}'::JSONB,
-          true, true, NOW(), NOW()
-        )
-        ON CONFLICT (id) DO UPDATE SET
-          job_id = EXCLUDED.job_id, is_active = TRUE, tasks = EXCLUDED.tasks, updated_at = NOW()
-        `,
-        [tplId, job.company_id, job.id, `${job.title}   Technical Simulation`, slug, `Hands-on technical simulation for the ${job.title} role.`, jobSimTasks]
-      );
-    }
-    logger.info(`Job-linked simulation templates seeded (${jobsForSim.rows.length})`);
-
-    // =====================================================
-    // SIMULATION FOR CANDIDATE (keep existing)
-    // =====================================================
-    logger.info('Seeding simulation for candidate...');
-
-    const targetCandidateRes = await client.query<CompanyRow>(
-      `SELECT id FROM users WHERE email = $1::CITEXT`,
-      ['turikumwenimanadaniel727@gmail.com']
-    );
-    const candidateId = targetCandidateRes.rows[0]?.id;
-
-    if (candidateId) {
-      const simulationId = 'b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22';
-
-      await client.query(
-        `
-        INSERT INTO simulations (
-          id, template_id, user_id, status, tasks, created_at, updated_at
-        )
-        VALUES (
-          $1::UUID, $2::UUID, $3::UUID,
-          'scheduled'::VARCHAR,
-          '[
-            {"task_index":1,"task_name":"Fork and Clone Repository","status":"pending"},
-            {"task_index":2,"task_name":"Fix Bug and Commit","status":"locked"},
-            {"task_index":3,"task_name":"Write Unit Tests","status":"locked"},
-            {"task_index":4,"task_name":"Create Pull Request","status":"locked"}
-          ]'::JSONB,
-          NOW(), NOW()
-        )
-        ON CONFLICT (id) DO NOTHING
-        `,
-        [simulationId, simulationTemplateId, candidateId]
-      );
-      logger.info('Simulation seeded for candidate');
-    }
-
-    // =====================================================
-    // TASK DEPENDENCIES (keep existing)
-    // =====================================================
-    logger.info('Seeding task dependencies...');
-
-    const tasksResult = await client.query<TaskRow>(
-      `SELECT id, task_index FROM simulation_tasks WHERE simulation_id = $1::UUID`,
-      ['b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22']
-    );
-
-    const tasksMap = new Map<number, string>();
-    for (const task of tasksResult.rows) {
-      tasksMap.set(task.task_index, task.id);
-    }
-
-    if (tasksMap.size >= 4) {
-      const dependencies = [
-        { taskIdx: 2, dependsOn: 1, type: 'completion',    minScore: null },
-        { taskIdx: 3, dependsOn: 2, type: 'score_minimum', minScore: 80   },
-        { taskIdx: 4, dependsOn: 3, type: 'completion',    minScore: null },
-      ];
-
-      for (const dep of dependencies) {
-        const taskId = tasksMap.get(dep.taskIdx);
-        const dependsOnId = tasksMap.get(dep.dependsOn);
-        
-        if (taskId && dependsOnId) {
-          await client.query(
-            `
-            INSERT INTO task_dependencies (
-              simulation_id, task_id, depends_on_task_id,
-              dependency_type, min_score_required
-            )
-            VALUES (
-              $1::UUID, $2::UUID, $3::UUID,
-              $4::VARCHAR, $5::INTEGER
-            )
-            ON CONFLICT (task_id, depends_on_task_id) DO NOTHING
-            `,
-            [
-              'b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
-              taskId,
-              dependsOnId,
-              dep.type,
-              dep.minScore,
-            ]
-          );
-        }
-      }
-      logger.info('Task dependencies seeded');
-    } else {
-      logger.info('Task dependencies skipped (no simulation_tasks rows yet)');
-    }
-
-    // =====================================================
     // SUBSCRIPTION PLANS (keep existing)
     // =====================================================
     logger.info('Seeding subscription plans...');
@@ -999,22 +816,22 @@ const seedDatabase = async (): Promise<void> => {
       {
         name: 'Starter', slug: 'starter',
         description: 'For small teams getting started',
-        features: '{"max_team_members":5,"active_jobs":10,"simulations_per_month":50,"basic_analytics":true}',
-        limits:   '{"users":5,"active_jobs":10,"simulations_per_month":50,"api_calls_per_day":1000}',
+        features: '{"max_team_members":5,"active_jobs":10,"basic_analytics":true}',
+        limits:   '{"users":5,"active_jobs":10,"api_calls_per_day":1000}',
         price_monthly: 49, price_yearly: 490, currency: 'USD', sort_order: 1,
       },
       {
         name: 'Professional', slug: 'professional',
         description: 'For growing recruitment teams',
-        features: '{"max_team_members":20,"active_jobs":50,"simulations_per_month":200,"advanced_analytics":true,"ai_scoring":true,"api_access":true}',
-        limits:   '{"users":20,"active_jobs":50,"simulations_per_month":200,"api_calls_per_day":10000}',
+        features: '{"max_team_members":20,"active_jobs":50,"advanced_analytics":true,"ai_scoring":true,"api_access":true}',
+        limits:   '{"users":20,"active_jobs":50,"api_calls_per_day":10000}',
         price_monthly: 149, price_yearly: 1490, currency: 'USD', sort_order: 2,
       },
       {
         name: 'Enterprise', slug: 'enterprise',
         description: 'For large organizations with custom needs',
-        features: '{"unlimited_team_members":true,"unlimited_active_jobs":true,"unlimited_simulations":true,"blockchain_verification":true}',
-        limits:   '{"users":-1,"active_jobs":-1,"simulations_per_month":-1,"api_calls_per_day":100000}',
+        features: '{"unlimited_team_members":true,"unlimited_active_jobs":true}',
+        limits:   '{"users":-1,"active_jobs":-1,"api_calls_per_day":100000}',
         price_monthly: 499, price_yearly: 4990, currency: 'USD', sort_order: 3,
       },
     ];
@@ -1070,10 +887,7 @@ const seedDatabase = async (): Promise<void> => {
       { question: 'How do I reset my password?',            answer: 'Click "Forgot Password" on the login page and follow the email instructions.',                                                                      category: 'Account',      helpful_count: 25 },
       { question: 'How do I create an account?',            answer: 'Click the "Sign Up" button in the top right corner and follow the instructions.',                                                                   category: 'Account',      helpful_count: 80 },
       { question: 'How do I apply for a job?',              answer: 'Browse available jobs, click on a position, and click "Apply Now". You can apply with your saved profile.',                                         category: 'Applications', helpful_count: 72 },
-      { question: 'What are virtual work simulations?',     answer: 'Simulations are realistic job tasks that allow you to demonstrate your skills. They take 30-60 minutes.',                                           category: 'Simulations',  helpful_count: 55 },
-      { question: 'How are my simulation results used?',    answer: 'Your results are shared with recruiters. You can also share verified results with other employers.',                                                 category: 'Privacy',      helpful_count: 40 },
       { question: 'How do I connect my GitHub account?',    answer: 'Go to your profile settings and click "Connect GitHub". You will be redirected to authorize the connection.',                                       category: 'GitHub',       helpful_count: 35 },
-      { question: 'How does GitHub-based assessment work?', answer: 'You will complete tasks in your own GitHub repository. Our system analyzes your commits, PRs, and code quality.',                                   category: 'Simulations',  helpful_count: 28 },
     ];
 
     for (const f of faqs) {
@@ -1109,11 +923,6 @@ const seedDatabase = async (): Promise<void> => {
         title: 'Welcome to Recruitment Platform',
         content: 'Welcome to our comprehensive recruitment platform. Explore all features and get started with your first job posting!',
         announcement_type: 'general', severity: 'info', target_audience: 'all',
-      },
-      {
-        title: 'New GitHub Integration Available',
-        content: 'You can now assess candidates through GitHub-based simulations! Connect your GitHub account to get started.',
-        announcement_type: 'feature', severity: 'info', target_audience: 'all',
       },
       {
         title: 'AI-Powered Scoring Now Live',
@@ -1162,9 +971,9 @@ const seedDatabase = async (): Promise<void> => {
         )
         VALUES (
           $1::UUID,
-          '{"application_updates":true,"simulation_reminders":true,"messages":true,"security":true,"billing":true,"promotional":false}'::JSONB,
-          '{"application_updates":false,"simulation_reminders":true,"security":true,"billing":false}'::JSONB,
-          '{"application_updates":true,"simulation_reminders":true,"messages":true,"security":true}'::JSONB,
+          '{"application_updates":true,"messages":true,"security":true,"billing":true,"promotional":false}'::JSONB,
+          '{"application_updates":false,"security":true,"billing":false}'::JSONB,
+          '{"application_updates":true,"messages":true,"security":true}'::JSONB,
           '{"all":true}'::JSONB,
           '{"enabled":false,"start":"22:00","end":"07:00","timezone":"Africa/Kigali","days":["Monday","Tuesday","Wednesday","Thursday","Friday"]}'::JSONB,
           NOW()
@@ -1211,16 +1020,6 @@ const seedDatabase = async (): Promise<void> => {
         data: '{"job_title":"Software Engineer","company":"Default Company","action_url":"/applications"}',
         priority: 'normal', channels: ['in_app', 'email'], status: 'delivered',
         sentOffset: '25 minutes', deliveredOffset: '24 minutes', readOffset: null,
-      },
-      {
-        id: '9a000002-9c0b-4ef8-bb6d-6bb9bd380a02',
-        email: 'turikumwenimanadaniel727@gmail.com',
-        type: 'simulation_reminder', category: 'simulation',
-        title: 'Simulation reminder',
-        content: 'Your GitHub Developer Assessment is scheduled. Please start before the deadline.',
-        data: '{"simulation_id":"b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22","template":"GitHub Developer Assessment"}',
-        priority: 'high', channels: ['in_app', 'email', 'push'], status: 'sent',
-        sentOffset: '10 minutes', deliveredOffset: null, readOffset: null,
       },
       {
         id: '9a000003-9c0b-4ef8-bb6d-6bb9bd380a03',
@@ -1416,51 +1215,13 @@ const seedDatabase = async (): Promise<void> => {
 };
 
 // =====================================================
-// JOB FEED DEMO DATASET (queries/initial_db.sql)
-// =====================================================
-// Generated by Job_Feed/generator (real CSV data + the production schema)  
-// 1000 candidates/jobs with realistic applications, views, saves, searches,
-// and feed scores. It manages its own BEGIN/COMMIT and uses
-// ON CONFLICT DO NOTHING throughout, so it runs as an independent step
-// (its own connection/transaction) rather than nested inside
-// seedDatabase()'s transaction above, and is safe to re-run.
-const seedJobFeedDemoData = async (): Promise<void> => {
-  const sqlPath = path.join(__dirname, 'queries', 'initial_db.sql');
-  if (!fs.existsSync(sqlPath)) {
-    logger.warn(`Job feed demo dataset not found at ${sqlPath}   skipping`);
-    return;
-  }
-
-  const client = new Client({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '8090'),
-    database: process.env.DB_NAME || 'SVWR-CFE_DB',
-    user: process.env.DB_USER || 'postgres',
-    password: process.env.DB_PASSWORD || 'TN12',
-  });
-
-  try {
-    await client.connect();
-    logger.info('Seeding job feed demo dataset from initial_db.sql...');
-    const sql = fs.readFileSync(sqlPath, 'utf8');
-    await client.query(sql);
-    logger.info('Job feed demo dataset seeded successfully!');
-  } catch (error) {
-    logger.error(' Job feed demo dataset seeding failed:', error);
-    throw error;
-  } finally {
-    await client.end();
-  }
-};
-
-// =====================================================
 // RWANDA ADMINISTRATIVE LOCATIONS (Candidate Signup)
 // =====================================================
 // Populates rw_locations from the bundled MIT-licensed dataset
 // (db/data/rwanda-locations.json   sourced from jnkindi/rwanda-locations-json:
 // 5 provinces, 30 districts, 416 sectors, 2,148 cells, 14,842 villages).
 // Runs as its own connection/transaction, guarded by a row-count check, so
-// it's safe to re-run alongside seedDatabase()/seedJobFeedDemoData().
+// it's safe to re-run alongside seedDatabase().
 type RwLocationRow = {
   province_code: string;
   province_name: string;
@@ -1548,7 +1309,6 @@ const seed = async (): Promise<void> => {
     logger.info('Starting database seeding...');
     await seedRwandaLocations();
     await seedDatabase();
-    await seedJobFeedDemoData();
     logger.info('Seeding completed, exiting...');
     process.exit(0);
   } catch (error) {

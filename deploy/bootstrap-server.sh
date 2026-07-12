@@ -25,8 +25,8 @@ ENV_FILE="$ROOT/source-code/backend/.env"
 DB_NAME="SVWR_CFE_DB_OG"
 DB_PASSWORD=
 if [ -f "$ENV_FILE" ]; then
-  DB_NAME="$(grep -E '^DB_NAME='"$ENV_FILE" | head -1 | cut -d= -f2- || true)"
-  DB_PASSWORD="$(grep -E '^DB_PASSWORD='"$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  DB_NAME="$(grep -E '^DB_NAME=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
+  DB_PASSWORD="$(grep -E '^DB_PASSWORD=' "$ENV_FILE" | head -1 | cut -d= -f2- || true)"
 fi
 : "${DB_NAME:=SVWR_CFE_DB_OG}"
 if [ -z "$DB_PASSWORD" ]; then

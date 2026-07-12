@@ -227,7 +227,7 @@ interface SingleJobMatchResponse {
       total_requirements: number;
       matched_requirements: number;
       specific_matches: any[];
-      unmatched_requirements: string[];
+      unmatched_requirements: Array<{ title: string; years_required: number }>;
       total_years: number;
       relevant_years?: number;
       experience_analysis?: Array<{

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft, Mail, Phone, MapPin, Globe, Linkedin, Github,
-  FileText, ExternalLink, CheckCircle, XCircle, Clock, AlertCircle,
-  Star, Calendar, Download, ChevronDown, ChevronUp, Award, Briefcase,
-  GraduationCap, Code, Activity, Target, MessageSquare, User, BookOpen,
-  Layers, GitBranch
+  FileText, ExternalLink,
+  Star, Calendar, Download, Award, Briefcase,
+  GraduationCap, Code, MessageSquare, User, BookOpen,
+  Layers
 } from 'lucide-react';
-import type { Candidate, Simulation } from './jobs/JobCandidatesView';
+import type { Candidate } from './jobs/JobCandidatesView';
 import { resolveFileUrl } from '../utils/fileUrl';
 
 interface CandidateDetailViewProps {
@@ -14,20 +14,18 @@ interface CandidateDetailViewProps {
   onBack: () => void;
 }
 
-type TabId = 'overview'| 'experience'| 'education'| 'skills'| 'simulations'| 'timeline';
+type TabId = 'overview'| 'experience'| 'education'| 'skills'| 'timeline';
 
 const TAB_CONFIG: { id: TabId; label: string; icon: React.FC<any> }[] = [
   { id: 'overview', label: 'Overview', icon: User },
   { id: 'experience', label: 'Experience', icon: Briefcase },
   { id: 'education', label: 'Education', icon: GraduationCap },
   { id: 'skills', label: 'Skills', icon: Code },
-  { id: 'simulations', label: 'Practical Assessments', icon: Activity },
   { id: 'timeline', label: 'Timeline', icon: Calendar },
 ];
 
 const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c, onBack }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const [expandedSimulation, setExpandedSimulation] = useState<string | null>(null);
 
   /* ── helpers ── */
   const formatDate = (d?: string) => {
@@ -47,26 +45,9 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const formatDuration = (minutes?: number) => {
-    if (!minutes) return 'N/A';
-    const h = Math.floor(minutes / 60), m = minutes % 60;
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  };
-
-  const formatTimeSpent = (seconds?: number) => {
-    if (!seconds) return 'N/A';
-    const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = seconds % 60;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-  };
-
   const getMatchColor = (score: number) => score >= 80 ? '#22c55e': score >= 60 ? '#f59e0b': '#ef4444';
   const getMatchBg   = (score: number) => score >= 80 ? '#dcfce7': score >= 60 ? '#fef9c3': '#fee2e2';
   const getMatchLabel = (score: number) => score >= 80 ? 'Excellent Match': score >= 60 ? 'Good Match': 'Low Match';
-
-  const getScoreColor = (score: number) => score >= 80 ? '#22c55e': score >= 60 ? '#f59e0b': score >= 40 ? '#f97316': '#ef4444';
-  const getScoreBg   = (score: number) => score >= 80 ? '#dcfce7': score >= 60 ? '#fef9c3': score >= 40 ? '#ffedd5': '#fee2e2';
 
   const getStatusColor = (status: string) => {
     const map: Record<string, { bg: string; text: string }> = {
@@ -80,13 +61,6 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
       rejected:     { bg: '#fee2e2', text: '#dc2626'},
     };
     return map[status] || { bg: '#f1f5f9', text: '#475569'};
-  };
-
-  const getStatusIcon = (status: string) => {
-    if (status === 'completed') return <CheckCircle size={14} color="#22c55e" />;
-    if (status === 'expired')   return <XCircle size={14} color="#ef4444" />;
-    if (status === 'in_progress') return <Clock size={14} color="#f59e0b" />;
-    return <AlertCircle size={14} color="#94a3b8" />;
   };
 
   const downloadReport = () => {
@@ -109,7 +83,6 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
   };
 
   const statusStyle = getStatusColor(c.application_status);
-  const topSim = c.simulations?.find(s => s.session_status === 'completed') || c.simulations?.[0];
 
   /* ── layout ── */
   return (
@@ -181,12 +154,6 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
                 <div style={{ fontSize: 30, fontWeight: 800, color: getMatchColor(c.ai_match_score || 0), lineHeight: 1 }}>{c.ai_match_score || 0}%</div>
                 <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{getMatchLabel(c.ai_match_score || 0)}</div>
               </div>
-              {topSim && (
-                <div style={{ background: getScoreBg(topSim.avg_task_score || 0), borderRadius: 14, padding: '14px 20px', textAlign: 'center', minWidth: 90 }}>
-                  <div style={{ fontSize: 30, fontWeight: 800, color: getScoreColor(topSim.avg_task_score || 0), lineHeight: 1 }}>{Math.round(topSim.avg_task_score || 0)}%</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Sim Score</div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -237,8 +204,8 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
                 <div style={{ marginTop: 12 }}>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Languages</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap'}}>
-                    {(c.languages as string[]).map((l, i) => (
-                      <span key={i} style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: '#ede9fe', color: '#7c3aed'}}>{l}</span>
+                    {(c.languages as any[]).map((l, i) => (
+                      <span key={i} style={{ fontSize: 12, padding: '2px 10px', borderRadius: 12, background: '#ede9fe', color: '#7c3aed'}}>{typeof l === 'string'? l : l?.name || ''}</span>
                     ))}
                   </div>
                 </div>
@@ -250,7 +217,7 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
               <InfoRow label="Application #" value={`#${c.application_number}`} />
               <InfoRow label="Applied" value={formatDate(c.applied_at)} />
               <InfoRow label="Profile Completion" value={`${c.profile_completion || 0}%`} highlight />
-              {c.willing_to_relocate && <div style={{ marginTop: 8, fontSize: 13, color: '#22c55e', fontWeight: 500 }}>✓ Willing to relocate</div>}
+              {c.willing_to_relocate && <div style={{ marginTop: 8, fontSize: 13, color: '#22c55e', fontWeight: 500 }}> Willing to relocate</div>}
               {c.notice_period_days != null && <InfoRow label="Notice Period" value={`${c.notice_period_days} days`} />}
               {c.availability?.status && <InfoRow label="Availability" value={c.availability.status.replace('_', '')} />}
             </Card>
@@ -390,7 +357,7 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
                         <div style={{ fontSize: 13, color: '#94a3b8'}}>
                           {formatDate(edu.start_date)}   {edu.end_date ? formatDate(edu.end_date) : 'Present'}
                         </div>
-                        {edu.verified && <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, marginTop: 4 }}>✓ Verified</div>}
+                        {edu.verified && <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, marginTop: 4 }}> Verified</div>}
                       </div>
                     </div>
                   </div>
@@ -438,210 +405,6 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* ======= SIMULATIONS ======= */}
-        {activeTab === 'simulations'&& (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {!c.simulations?.length ? (
-              <EmptyState icon={<Activity size={48} color="#cbd5e1" />} message="No practical assessments taken" />
-            ) : (
-              c.simulations.map((sim, idx) => {
-                const overallScore = sim.overall_score ? parseFloat(sim.overall_score) : sim.evaluation_overall_score || 0;
-                const avgTaskScore = sim.avg_task_score || 0;
-                const completedTasks = sim.task_progress?.filter(t => t.status === 'completed').length || 0;
-                const totalTasks = sim.total_tasks || sim.task_progress?.length || 0;
-                const isExpanded = expandedSimulation === sim.session_id;
-
-                return (
-                  <div key={idx} style={{ background: '#fff', borderRadius: 20, border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.06)'}}>
-                    {/* Sim header */}
-                    <div style={{ background: 'linear-gradient(135deg, #f8fafc, #f1f5f9)', padding: '24px 28px', borderBottom: '1px solid #e2e8f0'}}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 20 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-                            <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: 0 }}>{sim.simulation_name}</h3>
-                            <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#ede9fe', color: '#7c3aed'}}>{sim.simulation_type}</span>
-                            <span style={{ padding: '2px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#fef3c7', color: '#92400e'}}>{sim.difficulty}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: sim.session_status === 'completed'? '#22c55e': '#f59e0b'}}>
-                              {getStatusIcon(sim.session_status)} {sim.session_status}
-                            </div>
-                          </div>
-                          <p style={{ fontSize: 13, color: '#64748b', margin: 0, lineHeight: 1.6, maxWidth: 600 }}>{sim.simulation_description?.slice(0, 220)}...</p>
-                        </div>
-
-                        {/* Score pair */}
-                        <div style={{ display: 'flex', gap: 16 }}>
-                          <div style={{ textAlign: 'center', background: getScoreBg(overallScore), borderRadius: 14, padding: '14px 20px', minWidth: 90 }}>
-                            <div style={{ fontSize: 32, fontWeight: 800, color: getScoreColor(overallScore), lineHeight: 1 }}>{Math.round(overallScore)}%</div>
-                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Overall</div>
-                          </div>
-                          {avgTaskScore > 0 && (
-                            <div style={{ textAlign: 'center', background: getScoreBg(avgTaskScore), borderRadius: 14, padding: '14px 20px', minWidth: 90 }}>
-                              <div style={{ fontSize: 32, fontWeight: 800, color: getScoreColor(avgTaskScore), lineHeight: 1 }}>{Math.round(avgTaskScore)}%</div>
-                              <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>Task Avg</div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* View Session Report button */}
-                      {sim.session_id && (
-                        <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap'}}>
-                          <a
-                            href={`/session-report/${sim.session_id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{
-                              display: 'inline-flex', alignItems: 'center', gap: 6,
-                              padding: '8px 18px', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                              background: sim.session_status === 'completed'? '#7c3aed': '#d97706',
-                              color: '#fff', textDecoration: 'none', cursor: 'pointer',
-                              border: 'none'
-                            }}
-                          >
-                            <Eye size={14} />
-                            {sim.session_status === 'completed'? 'View Full Session Report': sim.session_status === 'in_progress'? 'View Live Session': 'View Session'}
-                          </a>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Sim body */}
-                    <div style={{ padding: '24px 28px'}}>
-                      {/* Quick stats */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 16, marginBottom: 24, paddingBottom: 24, borderBottom: '1px solid #f1f5f9'}}>
-                        <QuickStat label="Duration" value={formatDuration(sim.duration_minutes)} />
-                        <QuickStat label="Time Spent" value={formatTimeSpent(sim.session_time_spent)} />
-                        <QuickStat label="Tasks Completed" value={`${completedTasks} / ${totalTasks}`} color="#22c55e" />
-                        {sim.session_started_at && <QuickStat label="Started" value={formatDateTime(sim.session_started_at)} small />}
-                        {sim.evaluation_completed_at && <QuickStat label="Evaluated" value={formatDateTime(sim.evaluation_completed_at)} small />}
-                      </div>
-
-                      {/* Evaluation metrics */}
-                      {(sim.evaluation_punctuality_score > 0 || sim.evaluation_communication_score > 0 || sim.evaluation_problem_solving_score > 0) && (
-                        <div style={{ marginBottom: 24 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 14, textTransform: 'uppercase', letterSpacing: '0.05em'}}>Evaluation Metrics</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-                            {[
-                              { label: 'Punctuality', val: sim.evaluation_punctuality_score },
-                              { label: 'Communication', val: sim.evaluation_communication_score },
-                              { label: 'Problem Solving', val: sim.evaluation_problem_solving_score },
-                              { label: 'Adaptability', val: sim.evaluation_adaptability_score },
-                              { label: 'Collaboration', val: sim.evaluation_collaboration_score },
-                              { label: 'Attention to Detail', val: sim.attention_to_detail_score },
-                              { label: 'Initiative', val: sim.evaluation_initiative_score },
-                            ].filter(m => m.val > 0).map((m, i) => (
-                              <div key={i} style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 14px'}}>
-                                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>{m.label}</div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <div style={{ flex: 1, background: '#e2e8f0', borderRadius: 999, height: 6, overflow: 'hidden'}}>
-                                    <div style={{ background: getScoreColor(m.val), height: '100%', width: `${m.val}%`, borderRadius: 999 }} />
-                                  </div>
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: getScoreColor(m.val), minWidth: 36 }}>{m.val}%</span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Task progress */}
-                      {sim.task_progress && sim.task_progress.length > 0 && (
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em'}}>Task Progress</div>
-                            <button
-                              onClick={() => setExpandedSimulation(isExpanded ? null : sim.session_id)}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px', fontSize: 12, background: '#f1f5f9', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 500, color: '#374151'}}
-                            >
-                              {isExpanded ? <><ChevronUp size={14} /> Show Less</> : <><ChevronDown size={14} /> Show All</>}
-                            </button>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                            {sim.task_progress.slice(0, isExpanded ? undefined : 3).map((task, tIdx) => {
-                              const taskScore = task.score != null ? parseFloat(task.score as any) : null;
-                              return (
-                                <div key={tIdx} style={{ background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden'}}>
-                                  <div style={{ padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                                      <div style={{
-                                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                                        background: task.status === 'completed'? '#dcfce7': task.status === 'in_progress'? '#fef3c7': '#f1f5f9',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontWeight: 700, fontSize: 13,
-                                        color: task.status === 'completed'? '#15803d': task.status === 'in_progress'? '#92400e': '#94a3b8',
-                                      }}>
-                                        {task.status === 'completed'? <CheckCircle size={16} /> : task.task_index + 1}
-                                      </div>
-                                      <div>
-                                        <div style={{ fontWeight: 600, fontSize: 14, color: '#0f172a'}}>{task.task_title}</div>
-                                        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
-                                          {task.task_type} · {formatDuration(task.task_duration)}
-                                          {task.time_spent > 0 && ` · spent ${formatTimeSpent(task.time_spent)}`}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    {taskScore !== null ? (
-                                      <div style={{ padding: '6px 16px', borderRadius: 20, background: getScoreBg(taskScore) }}>
-                                        <span style={{ fontSize: 18, fontWeight: 800, color: getScoreColor(taskScore) }}>{Math.round(taskScore)}%</span>
-                                      </div>
-                                    ) : (
-                                      <span style={{ fontSize: 12, color: '#94a3b8', padding: '4px 12px', background: '#f1f5f9', borderRadius: 20 }}>
-                                        {task.status === 'completed'? 'Pending Grade': task.status}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {task.feedback && (
-                                    <div style={{ padding: '10px 18px', background: '#fefce8', borderTop: '1px solid #fef08a'}}>
-                                      <span style={{ fontSize: 11, fontWeight: 700, color: '#d97706'}}>Feedback: </span>
-                                      <span style={{ fontSize: 13, color: '#78350f'}}>{task.feedback}</span>
-                                    </div>
-                                  )}
-                                  {task.github_commit_url && (
-                                    <div style={{ padding: '8px 18px', background: '#faf5ff', borderTop: '1px solid #e9d5ff'}}>
-                                      <a href={task.github_commit_url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#7c3aed', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                        <GitBranch size={12} /> View GitHub Commit
-                                      </a>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* GitHub links */}
-                      {sim.github_links && Object.keys(sim.github_links).length > 0 && (
-                        <div style={{ marginTop: 20, padding: '14px 18px', background: '#f8fafc', borderRadius: 12, border: '1px solid #e2e8f0'}}>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: '#374151', marginBottom: 10 }}>GitHub Repository Links</div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            {Object.entries(sim.github_links).map(([taskIdx, url], i) => (
-                              <a key={i} href={url as string} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: '#7c3aed', textDecoration: 'none', padding: '5px 14px', background: '#ede9fe', borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 500 }}>
-                                <Github size={12} /> Task {parseInt(taskIdx) + 1}
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Pass/fail */}
-                      {sim.pass_fail_criteria && (
-                        <div style={{ marginTop: 16, padding: '12px 16px', background: '#fef3c7', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <Target size={16} color="#d97706" />
-                          <div style={{ fontSize: 13, color: '#92400e'}}>
-                            <strong>Passing Criteria:</strong> {sim.pass_fail_criteria.overallScore?.minimum || 70}% or higher required
-                            {sim.pass_fail_criteria.criticalTasks?.length > 0 && ` · ${sim.pass_fail_criteria.criticalTasks.length} critical task(s)`}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
             )}
           </div>
         )}
@@ -698,13 +461,6 @@ const InfoRow: React.FC<{ icon?: React.ReactNode; label: string; value: string; 
       {icon}{label}
     </div>
     <span style={{ fontSize: 13, fontWeight: highlight ? 700 : 500, color: highlight ? '#8b5cf6': '#0f172a'}}>{value}</span>
-  </div>
-);
-
-const QuickStat: React.FC<{ label: string; value: string; color?: string; small?: boolean }> = ({ label, value, color, small }) => (
-  <div>
-    <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>{label}</div>
-    <div style={{ fontSize: small ? 13 : 15, fontWeight: 600, color: color || '#0f172a'}}>{value}</div>
   </div>
 );
 

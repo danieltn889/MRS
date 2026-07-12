@@ -147,7 +147,7 @@ const JobMatch = ({ onBack }) => {
     if (criteria.skills_match >= 70) {
       matchReasons.push({ type: 'positive', text: `${criteria.skills_match}% skill match with your ${match.skills.matched_skills?.join(', ') || 'skills'}` });
     } else if (match.skills.matched_skills?.length > 0) {
-      matchReasons.push({ type: 'positive', text: `✓ Matched skills: ${match.skills.matched_skills.join(', ')}` });
+      matchReasons.push({ type: 'positive', text: ` Matched skills: ${match.skills.matched_skills.join(', ')}` });
     }
     if (match.skills.missing_skills?.length > 0) {
       matchReasons.push({ type: 'improvement', text: `Consider learning: ${match.skills.missing_skills.slice(0, 3).join(', ')}` });
@@ -421,7 +421,7 @@ const JobMatch = ({ onBack }) => {
                     </div>
                   </div>
                   <p className="text-gray-700 mb-4 line-clamp-2">{match.description}</p>
-                  <div className="flex flex-wrap gap-2 mb-4">{match.skills.slice(0, 6).map((skill, index) => (<span key={index} className={`px-2 py-1 text-xs rounded-full ${match.matchedSkills.includes(skill) ? 'bg-green-100 text-green-800 border border-green-300': 'bg-gray-100 text-gray-600'}`}>{skill}{match.matchedSkills.includes(skill) && '✓'}</span>))}</div>
+                  <div className="flex flex-wrap gap-2 mb-4">{match.skills.slice(0, 6).map((skill, index) => (<span key={index} className={`px-2 py-1 text-xs rounded-full ${match.matchedSkills.includes(skill) ? 'bg-green-100 text-green-800 border border-green-300': 'bg-gray-100 text-gray-600'}`}>{skill}{match.matchedSkills.includes(skill) && ''}</span>))}</div>
                   <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 mb-4"><h4 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2"><CheckCircle className="w-4 h-4" />AI Match Analysis</h4><ul className="text-sm space-y-1">{match.matchReasons.slice(0, 4).map((reason, index) => (<li key={index} className="flex items-start gap-2">{reason.type === 'positive'&& <ThumbsUp className="w-4 h-4 text-green-600 mt-0.5" />}{reason.type === 'warning'&& <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5" />}{reason.type === 'improvement'&& <Info className="w-4 h-4 text-blue-600 mt-0.5" />}<span className={reason.type === 'positive'? 'text-green-800': reason.type === 'warning'? 'text-yellow-800': 'text-blue-800'}>{reason.text}</span></li>))}</ul></div>
                   <div className="flex flex-wrap gap-3 text-xs"><span className="px-2 py-1 bg-gray-100 rounded">Skills: {match.criteriaScores.skills_match}%</span><span className="px-2 py-1 bg-gray-100 rounded">Experience: {match.criteriaScores.experience_years_match}%</span><span className="px-2 py-1 bg-gray-100 rounded">Level: {match.criteriaScores.experience_level_match}%</span><span className="px-2 py-1 bg-gray-100 rounded">Salary: {match.criteriaScores.salary_match}%</span></div>
                 </div>

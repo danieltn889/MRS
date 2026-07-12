@@ -102,7 +102,7 @@ router.get('/', [
 
     // Location filter
     if (location) {
-      whereConditions.push(`c.location ILIKE $${paramIndex}`);
+      whereConditions.push(`c.headquarters_location::text ILIKE $${paramIndex}`);
       params.push(`%${location}%`);
       paramIndex++;
     }
@@ -118,7 +118,7 @@ router.get('/', [
       paramIndex++;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM companies c ${whereClause}`;
@@ -128,8 +128,8 @@ router.get('/', [
     // Get companies
     const companiesQuery = `
       SELECT
-        c.id, c.name, c.description, c.industry, c.location, c.website,
-        c.logo_url, c.company_size, c.founded_year, c.created_at,
+        c.id, c.name, c.description, c.industry, c.headquarters_location, c.website,
+        c.logo_url, c.size AS company_size, c.founded_year, c.created_at,
         (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.status = 'active') as active_jobs,
         (SELECT COUNT(*) FROM company_team ct WHERE ct.company_id = c.id) as team_size
       FROM companies c
@@ -1518,21 +1518,10 @@ router.get('/jobs', protect, authorize('recruiter', 'company_admin'), [
     });
 
     if (authReq.user.user_type === 'company_admin'|| authReq.user.user_type === 'recruiter') {
-      // Always lookup from company_team table first to ensure correct company
-      const teamResult = await dbQuery(
-        'SELECT company_id FROM company_team WHERE user_id = $1',
-        [authReq.user.id]
-      );
-      console.log('Company team lookup result:', teamResult.rows);
-
-      if (teamResult.rows.length > 0) {
-        companyId = teamResult.rows[0].company_id;
-        console.log('Found company_id from company_team:', companyId);
-      } else {
-        // Fallback to token company_id if not found in company_team
-        companyId = authReq.user.company_id ? String(authReq.user.company_id) : null;
-        console.log('Using fallback company_id from token:', companyId);
-      }
+      // protect middleware already resolves this respecting is_default, for
+      // users on more than one company's team   trust it rather than
+      // re-querying and silently taking an arbitrary row.
+      companyId = authReq.user.company_id ? String(authReq.user.company_id) : null;
     }
 
     if (!companyId) {
@@ -1565,7 +1554,7 @@ router.get('/jobs', protect, authorize('recruiter', 'company_admin'), [
       paramIndex++;
     }
 
-    const whereClause = whereConditions.join('AND ');
+    const whereClause = whereConditions.join(' AND ');
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM jobs j WHERE ${whereClause}`;
@@ -1580,9 +1569,7 @@ router.get('/jobs', protect, authorize('recruiter', 'company_admin'), [
         j.salary_max, j.salary_currency, j.salary_visible, j.status,
         j.visibility, j.created_at, j.updated_at,
         j.published_at, j.expires_at,
-        COUNT(a.id) as applications_count,
-        (SELECT COUNT(DISTINCT s2.user_id) FROM simulations s2
-           WHERE s2.job_id = j.id AND s2.status = 'completed') as results_count
+        COUNT(a.id) as applications_count
       FROM jobs j
       LEFT JOIN applications a ON j.id = a.job_id
       WHERE ${whereClause}

@@ -6,14 +6,12 @@ import {
 } from 'lucide-react';
 import { getPlatformStats, PlatformStats } from '../services/adminAPI';
 import ProfileProgressRing from './ProfileProgressRing';
-import SimulationScheduler from './Simulation/SimulationScheduler';
 import JobCard from './DashboardHome/JobCard';
 import AIMatchBanner from './DashboardHome/AIMatchBanner';
 import StatsCards from './DashboardHome/StatsCards';
 import { getJobs } from '../services/jobAPI';
 import { submitApplication, getApplications, getApplication, withdrawApplication } from '../services/applicationAPI';
 import { getProfileCompletionStatus } from '../services/candidateAPI';
-import { getMySimulations } from '../services/simulationAPI';
 import JobViewModal from './jobs/JobViewModal';
 import JobApplicationModal from './jobs/JobApplicationModal';
 import appliedJobsManager from '../src/utils/AppliedJobsManager';
@@ -108,19 +106,6 @@ interface CandidateInfo {
   skills?: string[];
 }
 
-interface Simulation {
-  id: string;
-  simulationName: string;
-  title: string;
-  description: string;
-  duration: number;
-  status: 'completed'| 'in_progress'| 'not_started';
-  score?: number;
-  companyName: string;
-  jobTitle: string;
-  progress: number;
-}
-
 interface AdditionalStats {
   draft_jobs: number;
   paused_jobs: number;
@@ -179,7 +164,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
   const [selectedMatch, setSelectedMatch] = useState<AIMatch | null>(null);
   const [fullCandidateProfile, setFullCandidateProfile] = useState<any>(null);
   const [completionStatus, setCompletionStatus] = useState<any>(null);
-  const [realSimulations, setRealSimulations] = useState<Simulation[]>([]);
 
   // Company dashboard stats state
   const [companyStats, setCompanyStats] = useState<CompanyDashboardStats>({
@@ -537,31 +521,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
     return 0;
   };
 
-  const fetchRealSimulations = async () => {
-    if (isCompanyUser) { setRealSimulations([]); return; }
-    try {
-      const response = await getMySimulations({ page: 1, limit: 10 });
-      if (response.success && response.data) {
-        const rawData = response.data.data || response.data;
-        const mappedSimulations = rawData.map((sim: any) => ({
-          id: sim.id,
-          simulationName: sim.simulationName,
-          title: sim.simulationName,
-          description: sim.description,
-          duration: sim.duration,
-          status: sim.completedAt ? 'completed': (sim.startedAt ? 'in_progress': 'not_started'),
-          score: sim.score,
-          companyName: sim.companyName,
-          jobTitle: sim.jobTitle,
-          progress: sim.completedAt ? 100 : (sim.startedAt ? 50 : 0)
-        }));
-        setRealSimulations(mappedSimulations);
-      }
-    } catch (error) {
-      console.error('Error fetching simulations:', error);
-    }
-  };
-
   // ''MAIN DATA LOADER   sequential, passes resolved percentage directly
   useEffect(() => {
     const loadData = async () => {
@@ -595,7 +554,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       setProfileLoading(true);
       const [resolvedPercentage] = await Promise.all([
         fetchFullCandidateProfile(),
-        fetchRealSimulations(),
       ]);
       setProfileLoading(false);
 
@@ -790,7 +748,11 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
       <div className="space-y-6">
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl shadow-lg p-8 text-white">
           <h1 className="text-3xl font-bold mb-2">Company Dashboard</h1>
-          <p className="text-blue-100 mb-6">Welcome to your recruitment management dashboard</p>
+          <p className="text-blue-100 mb-6">
+            {user?.companyName
+              ? <>Welcome to <span className="font-semibold text-white">{user.companyName}</span>'s recruitment management dashboard</>
+              : 'Welcome to your recruitment management dashboard'}
+          </p>
           <div className="flex flex-wrap gap-4">
             <button onClick={() => onViewChange?.('jobs')} className="px-6 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-gray-100 transition-colors">Post New Job</button>
             <button onClick={() => onViewChange?.('candidates')} className="px-6 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-400 transition-colors">Find Candidates</button>
@@ -874,11 +836,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
             <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-indigo-200 transition-colors"><Building2 className="w-6 h-6 text-indigo-600" /></div>
             <h3 className="text-lg font-semibold text-gray-800 mb-2">Company Profile</h3>
             <p className="text-gray-500 text-sm">Update your company information and branding</p>
-          </button>
-          <button onClick={() => onViewChange?.('simulations-list')} className="bg-white rounded-xl shadow-md p-6 text-left hover:shadow-lg transition-shadow group">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4 group-hover:bg-orange-200 transition-colors"><Target className="w-6 h-6 text-orange-600" /></div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Manage Practical Assessments</h3>
-            <p className="text-gray-500 text-sm">Create and manage skill assessment practical assessments</p>
           </button>
         </div>
       </div>
@@ -1080,13 +1037,6 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
               </button>
             </div>
           )}
-
-          <div>
-            <SimulationScheduler
-              simulations={realSimulations}
-              onStartSimulation={(sim) => onViewChange?.('simulation')}
-            />
-          </div>
         </div>
       </div>
 
@@ -1103,19 +1053,8 @@ const DashboardHome: React.FC<DashboardHomeProps> = ({ user, onApplyJob, onViewC
               setAppliedJobs(prev => [...prev, selectedMatchForApply.id]);
             }
 
-            // ''Check if we need to navigate to simulation
-            if (data?.action === 'start-simulation'&& data?.view === 'simulation') {
-              // Close the modal
-              setShowApplicationModal(false);
-              setSelectedMatchForApply(null);
-              // ''Navigate to simulation view using the onViewChange prop
-              onViewChange?.('simulation');
-              return;
-            }
-
-            // Leave the modal open in BOTH cases   it shows the simulation prompt when
-            // the job has one, or the "no simulation yet, you'll be notified" notice when
-            // it doesn't. The modal closes itself when the candidate dismisses it (onClose).
+            // Leave the modal open   it closes itself when the candidate dismisses it
+            // (onClose).
           }}
           job={{
             id: selectedMatchForApply.id,

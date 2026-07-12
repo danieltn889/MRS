@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { getApplications, withdrawApplication } from '../services/applicationAPI';
 import ApplicationStatus from './ApplicationStatus';
+import { useAuth } from '../context/AuthContext';
 
 interface Application {
   id: string;
@@ -68,6 +69,8 @@ interface ApplicationRequirementsProps {
 }
 
 const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBack }) => {
+  const { user } = useAuth();
+  const isCandidate = user?.userType === 'candidate'|| (user as any)?.user_type === 'candidate';
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
@@ -311,9 +314,9 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
                 <span>Back</span>
               </button>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">My Applications</h1>
+                <h1 className="text-2xl font-bold text-gray-900">{isCandidate ? 'My Applications': 'Application Review'}</h1>
                 <p className="text-sm text-gray-500 mt-0.5">
-                  Track the status of your job applications
+                  {isCandidate ? 'Track the status of your job applications': 'Review applications submitted to your job postings'}
                 </p>
               </div>
             </div>
@@ -521,7 +524,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
                     {/* ── Candidate info (compact) ── */}
                     {(candidateName || application.candidate_email || application.phone) && (
                       <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                        <p className="text-xs font-semibold text-blue-800 mb-1.5">Your Contact Info on File</p>
+                        <p className="text-xs font-semibold text-blue-800 mb-1.5">{isCandidate ? 'Your Contact Info on File': 'Applicant Contact Info'}</p>
                         <div className="space-y-1">
                           {candidateName && (
                             <p className="text-xs text-blue-700 flex items-center gap-1.5">
@@ -635,7 +638,7 @@ const ApplicationRequirements: React.FC<ApplicationRequirementsProps> = ({ onBac
                       <Eye size={14} />
                       View Details
                     </button>
-                    {canWithdraw(application.status) && (
+                    {isCandidate && canWithdraw(application.status) && (
                       <button
                         onClick={() => handleWithdraw(application.id)}
                         disabled={withdrawingId === application.id}

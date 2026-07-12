@@ -5,7 +5,6 @@ import { validateRequest } from '../../middleware/validation.middleware.js';
 import { query as dbQuery, getClient } from '../../config/database.js';
 import { logger } from '../../utils/logger.js';
 import { AuthenticatedRequest } from '../../types/auth.types.js';
-import SimulationController from '../../controllers/simulation.controller.js';
 import DatabaseService from '../../services/database.service.js';
 import ResponseService from '../../services/response.service.js';
 import emailService from '../../services/email.service.js';
@@ -39,7 +38,7 @@ const NON_WITHDRAWABLE_STATUSES = ['hired', 'withdrawn', 'rejected'];
  */
 async function notifyCandidateOfApplication(
   applicationId: string,
-  opts: { title: string; status?: string; statusLabel?: string; jobId?: string; emailKind?: 'received'| 'status'| 'withdrawn'; includeSimulation?: boolean }
+  opts: { title: string; status?: string; statusLabel?: string; jobId?: string; emailKind?: 'received'| 'status'| 'withdrawn' }
 ): Promise<void> {
   try {
     const info = await dbQuery(
@@ -58,43 +57,6 @@ async function notifyCandidateOfApplication(
     if (!row) return;
     const jobTitle = row.job_title || 'the role';
     const companyName = row.company_name || 'the company';
-
-    // When relevant (e.g. on shortlisting), include this job's simulation details if
-    // one exists   reuses simulations (per-application instance) and simulation_templates
-    // (per-job). No new schema.
-    let simulation: any = undefined;
-    if (opts.includeSimulation) {
-      try {
-        const simRes = await dbQuery(
-          `SELECT s.scheduled_at, s.status AS sim_status,
-                  COALESCE(st.name, 'Assessment') AS name,
-                  st.duration_minutes, st.instructions
-             FROM simulations s
-             LEFT JOIN simulation_templates st ON st.id = s.template_id
-            WHERE s.application_id = $1
-            ORDER BY s.created_at DESC
-            LIMIT 1`,
-          [applicationId]
-        );
-        if (simRes.rows[0]) {
-          simulation = { ...simRes.rows[0], scheduled: true };
-        } else {
-          // No instance yet   fall back to the job's active simulation template so we
-          // can tell the candidate a simulation is part of the role.
-          const tplRes = await dbQuery(
-            `SELECT st.name, st.duration_minutes, st.instructions
-               FROM simulation_templates st
-              WHERE st.job_id = $1 AND st.is_active = TRUE
-              ORDER BY st.created_at DESC
-              LIMIT 1`,
-            [row.job_id]
-          );
-          if (tplRes.rows[0]) simulation = { ...tplRes.rows[0], scheduled: false };
-        }
-      } catch (simErr) {
-        logger.warn(`Simulation lookup for application ${applicationId} failed: ${(simErr as Error).message}`);
-      }
-    }
 
     await NotificationService.create({
       userId: row.user_id,
@@ -119,7 +81,6 @@ async function notifyCandidateOfApplication(
           statusLabel: opts.statusLabel || STATUS_LABELS[opts.status || ''] || opts.status || 'Updated',
           applicationId,
           kind: opts.emailKind,
-          simulation,
         });
       } catch (emailErr) {
         logger.warn(`Application email failed for ${applicationId}: ${(emailErr as Error).message}`);
@@ -247,7 +208,7 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
       paramIndex++;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM applications a ${whereClause}`;
@@ -757,7 +718,7 @@ router.get('/', [protect, query('page').optional().isInt({ min: 1 }).toInt(), qu
       paramIndex++;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
     // Get total count
     const countQuery = `SELECT COUNT(*) as total FROM applications a ${whereClause}`;
@@ -950,22 +911,6 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
           message: 'Withdrawal is not allowed because the application period for this job has closed or the job is no longer active.'
         });
       }
-
-      // Block withdrawal if any simulation has been started or scheduled for this application.
-      const simCheck = await client.query(
-        `SELECT 1 FROM simulations WHERE application_id = $1
-         UNION ALL
-         SELECT 1 FROM scheduled_simulations WHERE application_id = $1
-         LIMIT 1`,
-        [id]
-      );
-      if (simCheck.rows.length > 0) {
-        await client.query('ROLLBACK');
-        return res.status(409).json({
-          success: false,
-          message: 'You cannot withdraw this application because a work simulation has already been started or scheduled for this position.'
-        });
-      }
     }
 
     // Update application
@@ -1046,8 +991,6 @@ router.put('/:id', [protect, param('id').isUUID(), body('status').optional().isI
         statusLabel: label,
         jobId: application.job_id,
         emailKind: status === 'withdrawn'? 'withdrawn': 'status',
-        // Include the simulation details in the shortlisted email (spec §9–11).
-        includeSimulation: status === 'shortlisted',
       });
 
       // On withdrawal, also notify the recruiter who owns the job.
@@ -1217,76 +1160,6 @@ router.delete('/:id', [protect, param('id').isUUID(), validateRequest], async (r
   }
 });
 
-// @route   POST /api/v1/applications/:id/send-results
-// @desc    Email a candidate their full simulation results breakdown (recruiter action)
-// @access  Private (recruiter, company_admin)
-router.post('/:id/send-results', [protect, authorize('recruiter', 'company_admin'), param('id').isUUID(), validateRequest], async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  try {
-    const { id } = req.params;
-    const { finalScore, aiScore, recruiterAvg, passed, competencies, tasks } = req.body || {};
-
-    const info = await dbQuery(
-      `SELECT u.email, COALESCE(cp.first_name, '') AS first_name,
-              j.title AS job_title, c.name AS company_name
-       FROM applications a
-       JOIN jobs j ON j.id = a.job_id
-       LEFT JOIN companies c ON c.id = j.company_id
-       JOIN users u ON u.id = a.user_id
-       LEFT JOIN candidate_profiles cp ON cp.user_id = a.user_id
-       WHERE a.id = $1`,
-      [id]
-    );
-    const row = info.rows[0];
-    if (!row || !row.email) {
-      return res.status(404).json({ success: false, message: 'Candidate email not found'});
-    }
-
-    const isPass = passed === true || passed === 'true';
-
-    await emailService.sendSimulationResultsEmail(row.email, {
-      candidateName: row.first_name || 'there',
-      jobTitle: row.job_title || 'the role',
-      companyName: row.company_name || 'the company',
-      finalScore: Number(finalScore) || 0,
-      aiScore: Number(aiScore) || 0,
-      recruiterAvg: Number(recruiterAvg) || 0,
-      passed: isPass,
-      competencies: Array.isArray(competencies) ? competencies : [],
-      tasks: Array.isArray(tasks) ? tasks : [],
-    });
-
-    // Persist the recruiter's decision so it survives a reload and is visible in the
-    // Status column: pass → hired (selected), fail → rejected. Reuses the existing
-    // applications.status field   no new schema. Records a timeline entry too.
-    await dbQuery(
-      `UPDATE applications SET status = $1, updated_at = NOW() WHERE id = $2`,
-      [isPass ? 'hired': 'rejected', id]
-    );
-    await dbQuery(
-      `INSERT INTO application_timeline (application_id, event_type, event_data, created_by)
-       VALUES ($1, 'status_changed', $2, $3)`,
-      [id, JSON.stringify({ description: `Results sent   marked ${isPass ? 'passed (hired)': 'failed (rejected)'}`, new_status: isPass ? 'hired': 'rejected'}), authReq.user!.id]
-    ).catch(() => {});
-
-    // Best-effort in-app notification too.
-    await NotificationService.create({
-      userId: (await dbQuery('SELECT user_id FROM applications WHERE id = $1', [id])).rows[0]?.user_id,
-      type: 'simulation_results',
-      category: 'application',
-      title: passed ? 'You passed the assessment': 'Your assessment results are available',
-      content: `${row.job_title || 'Your role'}   overall ${Math.round(Number(finalScore) || 0)}%`,
-      data: { applicationId: id, url: `/?view=application-history` },
-    });
-
-    logger.info(`Results email sent for application ${id} by ${authReq.user!.id}`);
-    return res.json({ success: true, message: 'Results sent to candidate'});
-  } catch (error) {
-    logger.error('Send results error:', error);
-    return res.status(500).json({ success: false, message: 'Failed to send results'});
-  }
-});
-
 // @route   GET /api/v1/applications/requirements/:jobId
 // @desc    See application requirements
 // @access  Private (Candidates)
@@ -1321,39 +1194,6 @@ router.get('/requirements/:jobId', [protect, authorize('candidate'), param('jobI
   }
 });
 
-interface SimulationTemplate {
-  id: string;
-  name: string;
-  description: string;
-  durationMinutes: number;
-  difficulty: string;
-  type: string;
-  category: string;
-  tasks: any[];
-  tasksStructure?: any;
-  scoringRubric: any;
-  passFailCriteria: any;
-  evaluationCriteria?: any;
-  isActive: boolean;
-  isPublic: boolean;
-  technologies: string[];
-  skillsAssessed: string[];
-  instructions: string;
-  preparationMaterials?: any;
-  languagesSupported?: string[];
-  totalTasks?: number;
-  usageCount?: number;
-  avgCompletionTime?: number;
-  avgScore?: number;
-  slug?: string;
-  sampleSimulationId?: string | null;
-  companyName: string | null;
-  companyLogo: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  metadata?: any;
-}
-
 // @route   POST /api/v1/applications
 // @desc    Submit a new job application
 // @access  Private (Candidates only)
@@ -1386,14 +1226,10 @@ router.post(
 
       // Check if job exists and is active
       const jobResult = await client.query(
-        `SELECT 
-          j.id, 
+        `SELECT
+          j.id,
           j.title,
-          j.company_id,
-          (
-            SELECT COUNT(*) FROM simulation_templates st 
-            WHERE st.job_id = j.id AND st.is_active = true
-          ) as template_count
+          j.company_id
         FROM jobs j
         WHERE j.id = $1 AND j.status = $2 AND j.deleted_at IS NULL`,
         [jobId, 'active']
@@ -1409,134 +1245,8 @@ router.post(
       }
 
       const job = jobResult.rows[0];
-      const hasTemplates = parseInt(job.template_count) > 0;
 
       console.log(`''Job found: "${job.title}" (ID: ${job.id})`);
-      console.log(`📊 Template count: ${job.template_count}`);
-      console.log(`''Has templates: ${hasTemplates}`);
-
-      // Get ALL simulation templates for this job - SELECTING ALL FIELDS
-      let simulations: SimulationTemplate[] = [];
-
-      console.log('🔍 [STEP 2] Fetching simulation templates for this job...');
-
-      if (hasTemplates) {
-        const simulationResult = await client.query(`
-          SELECT 
-            st.id,
-            st.company_id,
-            st.name,
-            st.slug,
-            st.description,
-            st.type,
-            st.category,
-            st.difficulty,
-            st.duration_minutes,
-            st.total_tasks,
-            st.tasks,
-            st.tasks_structure,
-            st.scoring_rubric,
-            st.pass_fail_criteria,
-            st.evaluation_criteria,
-            st.technologies,
-            st.skills_assessed,
-            st.languages_supported,
-            st.instructions,
-            st.preparation_materials,
-            st.sample_simulation_id,
-            st.is_public,
-            st.is_active,
-            st.usage_count,
-            st.avg_completion_time,
-            st.avg_score,
-            st.job_id,
-            st.created_at,
-            st.updated_at,
-            st.created_by,
-            st.metadata,
-            c.name as company_name,
-            c.logo_url as company_logo
-          FROM simulation_templates st
-          LEFT JOIN companies c ON st.company_id = c.id
-          WHERE st.job_id = $1 
-            AND st.is_active = true
-          ORDER BY st.created_at ASC
-        `, [jobId]);
-
-        console.log(`📊 Found ${simulationResult.rows.length} simulation templates`);
-
-        // Format simulations with proper type safety - including ALL fields
-        simulations = simulationResult.rows.map((row: any) => {
-          let tasks = row.tasks;
-          let tasksStructure = row.tasks_structure;
-          let scoringRubric = row.scoring_rubric;
-          let passFailCriteria = row.pass_fail_criteria;
-          let evaluationCriteria = row.evaluation_criteria;
-          let skillsAssessed = row.skills_assessed;
-          let technologies = row.technologies;
-          let languagesSupported = row.languages_supported;
-          let preparationMaterials = row.preparation_materials;
-          let metadata = row.metadata;
-
-          try {
-            if (typeof tasks === 'string') tasks = JSON.parse(tasks);
-            if (typeof tasksStructure === 'string') tasksStructure = JSON.parse(tasksStructure);
-            if (typeof scoringRubric === 'string') scoringRubric = JSON.parse(scoringRubric);
-            if (typeof passFailCriteria === 'string') passFailCriteria = JSON.parse(passFailCriteria);
-            if (typeof evaluationCriteria === 'string') evaluationCriteria = JSON.parse(evaluationCriteria);
-            if (typeof skillsAssessed === 'string') skillsAssessed = JSON.parse(skillsAssessed);
-            if (typeof technologies === 'string') technologies = JSON.parse(technologies);
-            if (typeof languagesSupported === 'string') languagesSupported = JSON.parse(languagesSupported);
-            if (typeof preparationMaterials === 'string') preparationMaterials = JSON.parse(preparationMaterials);
-            if (typeof metadata === 'string') metadata = JSON.parse(metadata);
-          } catch (e) {
-            logger.warn('Error parsing JSON for simulation template:', row.id);
-          }
-
-          return {
-            id: row.id,
-            name: row.name,
-            description: row.description || '',
-            durationMinutes: row.duration_minutes || 60,
-            difficulty: row.difficulty || 'intermediate',
-            type: row.type || 'technical',
-            category: row.category || 'general',
-            tasks: tasks || [],
-            tasksStructure: tasksStructure || {},
-            scoringRubric: scoringRubric || {},
-            passFailCriteria: passFailCriteria || {},
-            evaluationCriteria: evaluationCriteria || {},
-            isActive: row.is_active,
-            isPublic: row.is_public,
-            technologies: technologies || [],
-            skillsAssessed: skillsAssessed || [],
-            instructions: row.instructions || '',
-            preparationMaterials: preparationMaterials || {},
-            languagesSupported: languagesSupported || [],
-            totalTasks: row.total_tasks || 0,
-            usageCount: row.usage_count || 0,
-            avgCompletionTime: row.avg_completion_time || null,
-            avgScore: row.avg_score || null,
-            slug: row.slug || '',
-            sampleSimulationId: row.sample_simulation_id || null,
-            companyName: row.company_name,
-            companyLogo: row.company_logo,
-            createdAt: row.created_at,
-            updatedAt: row.updated_at,
-            metadata: metadata || {}
-          };
-        });
-
-        // Log simulation details with more info
-        simulations.forEach((sim, index) => {
-          console.log(`  ''Simulation ${index + 1}: "${sim.name}"`);
-          console.log(`     - Type: ${sim.type}, Difficulty: ${sim.difficulty}, Duration: ${sim.durationMinutes}min`);
-          console.log(`     - Tasks: ${sim.tasks?.length || 0}, Skills: ${sim.skillsAssessed?.length || 0}`);
-          console.log(`     - Public: ${sim.isPublic}, Active: ${sim.isActive}`);
-        });
-      } else {
-        console.log('ℹ️ No simulation templates found for this job');
-      }
 
       console.log('🔍 [STEP 3] Checking if user already applied...');
 
@@ -1657,7 +1367,7 @@ router.post(
           emailKind: 'received',
         });
 
-        const candidateName = authReq.user!.name || authReq.user!.email.split('@')[0];
+        const candidateName = authReq.user!.name || authReq.user!.email.split('@')[0] || 'Candidate';
         await notifyRecruiterOfApplication(applicationId, {
           candidateName,
           candidateEmail: authReq.user!.email,
@@ -1667,80 +1377,18 @@ router.post(
         });
       }
 
-      // Build response with simulation data
-      const responseData: any = {
+      const responseData = {
         applicationId,
         isNewApplication,
         jobId,
         jobTitle: job.title,
-        hasSimulationTemplates: hasTemplates,
-        simulationTemplates: simulations,
-        totalTemplates: simulations.length,
-        nextStep: hasTemplates ? 'view_simulations': 'awaiting_review',
-        message: ''
+        message: 'Application submitted successfully!'
       };
-
-      console.log('🔍 [STEP 4] Building response...');
-
-      // Add contextual messages based on templates availability
-      if (hasTemplates && simulations.length > 0) {
-        console.log(`''${simulations.length} simulation(s) available for this job`);
-
-        if (simulations.length === 1) {
-          const sim = simulations[0]!;
-          console.log(`''Single simulation: "${sim.name}"`);
-
-          responseData.action = {
-            type: 'start',
-            simulationId: sim.id,
-            url: `/api/v1/simulations/start-session?simulationId=${sim.id}&applicationId=${applicationId}`,
-            message: 'Start Simulation',
-            simulationName: sim.name,
-            durationMinutes: sim.durationMinutes,
-            difficulty: sim.difficulty,
-            simulationType: sim.type,
-            category: sim.category,
-            totalTasks: sim.totalTasks || sim.tasks?.length || 0
-          };
-          responseData.message = `''Application submitted! This job requires a simulation. Please start "${sim.name}" to complete your application.`;
-          console.log(`''Response: Single simulation - "${sim.name}"`);
-        } else {
-          console.log(`''Multiple simulations (${simulations.length}):`);
-          simulations.forEach((sim, index) => {
-            console.log(`  ${index + 1}. "${sim.name}" (${sim.difficulty}, ${sim.durationMinutes}min, ${sim.tasks?.length || 0} tasks)`);
-          });
-
-          responseData.action = {
-            type: 'choose',
-            message: 'Choose a simulation to start',
-            options: simulations.map((sim: SimulationTemplate) => ({
-              id: sim.id,
-              name: sim.name,
-              description: sim.description,
-              durationMinutes: sim.durationMinutes,
-              difficulty: sim.difficulty,
-              simulationType: sim.type,
-              category: sim.category,
-              totalTasks: sim.totalTasks || sim.tasks?.length || 0,
-              skillsAssessed: sim.skillsAssessed || [],
-              technologies: sim.technologies || [],
-              url: `/api/v1/simulations/start-session?simulationId=${sim.id}&applicationId=${applicationId}`
-            }))
-          };
-          responseData.message = `''Application submitted! This job requires a simulation. Please choose one of ${simulations.length} available simulations to complete your application.`;
-          console.log(`''Response: Multiple simulations available`);
-        }
-      } else {
-        console.log('ℹ️ No simulation required for this position');
-        responseData.message = 'Application submitted successfully! No simulation required for this position.';
-        responseData.nextStep = 'awaiting_review';
-      }
 
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`''Application submission completed successfully`);
       console.log(`📋 Application ID: ${applicationId}`);
       console.log(`🆕 New application: ${isNewApplication}`);
-      console.log(`''Next step: ${responseData.nextStep}`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       return res.status(isNewApplication ? 201 : 200).json({
@@ -2040,46 +1688,6 @@ router.post('/:id/questions', [protect, authorize('candidate'), param('id').isUU
   }
 });
 
-// @route   POST /api/v1/applications/:id/schedule-simulation
-// @desc    Schedule simulation from application
-// @access  Private (Candidates)
-router.post('/:id/schedule-simulation', [protect, authorize('candidate'), param('id').isUUID(), body('simulationId').isUUID(), body('scheduledAt').isISO8601(), validateRequest], async (req: Request, res: Response) => {
-  const authReq = req as AuthenticatedRequest;
-  try {
-    const { id } = req.params;
-    const { simulationId, scheduledAt } = req.body;
-
-    // Verify application belongs to user
-    const applicationResult = await dbQuery(
-      'SELECT id FROM applications WHERE id = $1 AND user_id = $2',
-      [id, authReq.user.id]
-    );
-
-    if (applicationResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Application not found'
-      });
-    }
-
-    await dbQuery(
-      'INSERT INTO scheduled_simulations (application_id, simulation_id, user_id, scheduled_at, status) VALUES ($1, $2, $3, $4, $5)',
-      [id, simulationId, authReq.user.id, scheduledAt, 'scheduled']
-    );
-
-    return res.status(201).json({
-      success: true,
-      message: 'Simulation scheduled successfully'
-    });
-  } catch (error) {
-    logger.error('Schedule simulation error:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to schedule simulation'
-    });
-  }
-});
-
 // @route   GET /api/v1/applications/history
 // @desc    See application history
 // @access  Private (Candidates)
@@ -2155,7 +1763,7 @@ router.get('/recruiter/feed', [protect, authorize('recruiter', 'company_admin'),
        FROM applications a
        JOIN jobs j ON a.job_id = j.id
        JOIN users u ON a.user_id = u.id
-       WHERE ${whereConditions.join('AND ')}
+       WHERE ${whereConditions.join(' AND ')}
        ORDER BY a.applied_at DESC`,
       params
     );
@@ -2509,7 +2117,7 @@ router.get('/recruiter/export', [protect, authorize('recruiter', 'company_admin'
        JOIN jobs j ON a.job_id = j.id
        JOIN companies c ON j.company_id = c.id
        JOIN users u ON a.user_id = u.id
-       WHERE ${whereConditions.join('AND ')}
+       WHERE ${whereConditions.join(' AND ')}
        ORDER BY a.applied_at DESC`,
       params
     );
@@ -2560,7 +2168,7 @@ router.get('/recruiter/sources', [protect, authorize('recruiter', 'company_admin
       `SELECT a.source, COUNT(*) as count
        FROM applications a
        JOIN jobs j ON a.job_id = j.id
-       WHERE ${whereConditions.join('AND ')}
+       WHERE ${whereConditions.join(' AND ')}
        GROUP BY a.source
        ORDER BY count DESC`,
       params
@@ -2587,24 +2195,11 @@ router.post('/recruiter/blacklist', [protect, authorize('recruiter', 'company_ad
   try {
     const { candidateId, reason } = req.body;
 
-    // Get company_id from user's context
+    // protect middleware already resolves this respecting is_default, for
+    // users on more than one company's team.
     let companyId = null;
-    if (authReq.user.user_type === 'company_admin') {
-      const companyResult = await dbQuery(
-        'SELECT id FROM companies WHERE created_by = $1 LIMIT 1',
-        [authReq.user.id]
-      );
-      if (companyResult.rows.length > 0) {
-        companyId = companyResult.rows[0].id;
-      }
-    } else if (authReq.user.user_type === 'recruiter') {
-      const companyResult = await dbQuery(
-        'SELECT company_id FROM company_team WHERE user_id = $1 LIMIT 1',
-        [authReq.user.id]
-      );
-      if (companyResult.rows.length > 0) {
-        companyId = companyResult.rows[0].company_id;
-      }
+    if (authReq.user.user_type === 'company_admin'|| authReq.user.user_type === 'recruiter') {
+      companyId = authReq.user.company_id ? String(authReq.user.company_id) : null;
     }
 
     if (!companyId) {

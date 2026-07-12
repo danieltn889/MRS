@@ -496,7 +496,7 @@ const SignUp = ({ onSignupSuccess }) => {
                 ].map((req) => (
                   <div key={req.label} className="flex items-center">
                     <div className={`w-4 h-4 rounded-full mr-2 flex items-center justify-center ${req.test ? 'bg-green-500': 'bg-gray-300'}`}>
-                      {req.test && <span className="text-white text-xs">✓</span>}
+                      {req.test && <span className="text-white text-xs"></span>}
                     </div>
                     <span className={req.test ? 'text-green-700': 'text-gray-600'}>{req.label}</span>
                   </div>

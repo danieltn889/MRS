@@ -248,7 +248,7 @@ const AdvancedCandidateSearch = ({ onBack }: AdvancedCandidateSearchProps) => {
 
         let languages: string[] = [];
         if (app.languages && Array.isArray(app.languages)) {
-          languages = app.languages;
+          languages = app.languages.map((l: any) => typeof l === 'string'? l : l?.name || '').filter(Boolean);
         }
 
         return {

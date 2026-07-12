@@ -198,7 +198,7 @@ class BaseController {
           }
           paramIndex++;
         }
-        whereClause = `WHERE ${conditions.join('AND ')}`;
+        whereClause = `WHERE ${conditions.join(' AND ')}`;
       }
 
       // Build JOIN clause
@@ -320,7 +320,7 @@ class BaseController {
         paramIndex++;
       }
 
-      const query = `SELECT 1 FROM ${tableName} WHERE ${whereConditions.join('AND ')} LIMIT 1`;
+      const query = `SELECT 1 FROM ${tableName} WHERE ${whereConditions.join(' AND ')} LIMIT 1`;
       const result = await dbQuery(query, params);
 
       return result.rows.length > 0;

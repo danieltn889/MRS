@@ -40,8 +40,10 @@ if [ -f requirements.txt ]; then
   pip install -r requirements.txt
 else
   # No requirements.txt yet   install the libraries the services use.
-  pip install fastapi uvicorn httpx "sentence-transformers" scikit-learn nltk numpy pandas psycopg2-binary python-dotenv
+  pip install fastapi uvicorn httpx "sentence-transformers" scikit-learn nltk spacy numpy pandas psycopg2-binary python-dotenv
 fi
+# feed_recommender.py needs the spaCy English model   pip install alone doesn't fetch it.
+python -m spacy download en_core_web_md || true
 deactivate
 
 # ── (Re)start everything with pm2 ────────────────────────────────────────────

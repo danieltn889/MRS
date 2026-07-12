@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   Plus, Search, Edit, Trash2, Eye, Copy, Users,
   Briefcase, MapPin, Clock, CheckCircle,
-  AlertCircle, UserCheck, BarChart3, ArrowLeft,
+  AlertCircle, UserCheck, ArrowLeft,
   Star, Award, Medal, TrendingUp, XCircle
 } from 'lucide-react';
 import { getCompanyJobs, deleteJob, duplicateJob, getJob } from '../services/jobAPI';
 import JobViewModal from './jobs/JobViewModal';
 import type { Job, JobStatus, JobManagementProps } from './types/jobTypes';
-import CandidatesResultsScreen from './jobs/CandidatesResultsScreen';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -131,10 +130,6 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedJob, setSelectedJob] = useState<any | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  
-  // State for results screen
-  const [showResultsScreen, setShowResultsScreen] = useState(false);
-  const [selectedJobForResults, setSelectedJobForResults] = useState<{ id: string; title: string } | null>(null);
 
   useEffect(() => { loadJobs(); }, [refreshTrigger]);
 
@@ -202,12 +197,6 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
     }
   };
 
-  // Handle View Results button click
-  const handleViewResults = (jobId: string, jobTitle: string) => {
-    setSelectedJobForResults({ id: jobId, title: jobTitle });
-    setShowResultsScreen(true);
-  };
-
   const filtered = jobs.filter(j => {
     const q = searchTerm.toLowerCase();
     return (j.title.toLowerCase().includes(q) || j.department.toLowerCase().includes(q))
@@ -220,26 +209,6 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
     draft: jobs.filter(j => j.status === 'draft').length,
     applications: jobs.reduce((s, j) => s + (j.applications_count ?? 0), 0),
   };
-
-  // Show results screen when a job is selected
-  if (showResultsScreen && selectedJobForResults) {
-    return (
-      <div style={{
-        minHeight: '100vh', background: '#f8fafc',
-        fontFamily: "'DM Sans', 'Helvetica Neue', sans-serif",
-        padding: '24px'
-      }}>
-        <CandidatesResultsScreen
-          jobId={selectedJobForResults.id}
-          jobTitle={selectedJobForResults.title}
-          onBack={() => {
-            setShowResultsScreen(false);
-            setSelectedJobForResults(null);
-          }}
-        />
-      </div>
-    );
-  }
 
   // Styles
   const s = {
@@ -514,13 +483,6 @@ const JobManagement: React.FC<ExtendedJobManagementProps> = ({
                           title="View applicants for this job"
                         >
                           <UserCheck size={14} /> Candidates ({job.applications_count ?? 0})
-                        </button>
-                        <button
-                          onClick={() => handleViewResults(job.id, job.title)}
-                          style={s.actionBtn('#16a34a')}
-                          title="View candidate results & scores"
-                        >
-                          <BarChart3 size={14} /> Results ({job.results_count ?? 0})
                         </button>
                         <button
                           onClick={() => handleDelete(job.id, job.title)}

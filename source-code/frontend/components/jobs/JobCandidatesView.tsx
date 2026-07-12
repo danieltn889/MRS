@@ -17,88 +17,6 @@ interface JobCandidatesViewProps {
   onViewCandidate: (candidate: Candidate) => void;
 }
 
-export interface Simulation {
-  simulation_id: string;
-  template_id: string;
-  simulation_status: string;
-  scheduled_at: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  time_limit: number | null;
-  time_remaining: number | null;
-  time_spent: number | null;
-  current_task: number;
-  overall_score: string;
-  punctuality_score: number | null;
-  communication_score: number | null;
-  problem_solving_score: number | null;
-  adaptability_score: number | null;
-  collaboration_score: number | null;
-  attention_score: number | null;
-  initiative_score: number | null;
-  feedback: string | null;
-  strengths: string | null;
-  improvements: string | null;
-  evaluator_notes: string | null;
-  evaluated_by: string | null;
-  evaluated_at: string | null;
-  blockchain_tx_id: string | null;
-  simulation_name: string;
-  simulation_description: string;
-  simulation_type: string;
-  difficulty: string;
-  duration_minutes: number;
-  total_tasks: number;
-  completed_tasks: number;
-  avg_task_score: number;
-  scoring_rubric: any;
-  pass_fail_criteria: any;
-  evaluation_id: string;
-  evaluation_overall_score: number;
-  evaluation_punctuality_score: number;
-  evaluation_communication_score: number;
-  evaluation_problem_solving_score: number;
-  evaluation_adaptability_score: number;
-  evaluation_collaboration_score: number;
-  attention_to_detail_score: number;
-  evaluation_initiative_score: number;
-  evaluation_status: string;
-  evaluation_completed_at: string;
-  reviewed_at: string | null;
-  session_id: string;
-  session_status: string;
-  session_started_at: string;
-  session_completed_at: string;
-  session_time_spent: number;
-  session_current_task: number;
-  session_score: number | null;
-  github_links: Record<string, string>;
-  task_progress: Array<{
-    id: string | null;
-    task_index: number;
-    task_id: string;
-    task_title: string;
-    task_description: string;
-    task_duration: number;
-    task_type: string;
-    status: string;
-    score: number | null;
-    feedback: string | null;
-    started_at: string | null;
-    completed_at: string | null;
-    time_spent: number;
-    github_commit_url: string | null;
-    answer: any;
-    template_task: any;
-  }>;
-  evaluation_sections: any[];
-  behavioral_metrics: any[];
-  skill_assessments: any[];
-  ai_feedback: any;
-  qualitative_feedback: any;
-  interview_questions: any[];
-}
-
 export interface Candidate {
   application_id: string;
   application_number: string;
@@ -179,7 +97,6 @@ export interface Candidate {
     url: string;
     title: string;
   }>;
-  simulations?: Simulation[];
   application_timeline?: Array<{
     id: string;
     event_type: string;
@@ -359,14 +276,6 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
     return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric'});
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed': return <CheckCircle size={14} color="#22c55e" />;
-      case 'expired': return <AlertCircle size={14} color="#ef4444" />;
-      default: return <AlertCircle size={14} color="#94a3b8" />;
-    }
-  };
-
   const downloadCandidateReport = (candidate: Candidate) => {
     const report = {
       candidate: {
@@ -499,7 +408,7 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
             <table style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse'}}>
               <thead>
                 <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0'}}>
-                  {['Candidate', 'Match', 'Status', 'Applied', 'Top Skills', 'Current Role', 'Practical Assessment', 'Actions'].map(h => (
+                  {['Candidate', 'Match', 'Status', 'Applied', 'Top Skills', 'Current Role', 'Actions'].map(h => (
                     <th key={h} style={{ padding: '12px 16px', textAlign: 'left', fontSize: 12, fontWeight: 600, color: '#64748b'}}>{h}</th>
                   ))}
                 </tr>
@@ -507,9 +416,6 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
               <tbody>
                 {filteredCandidates.map(c => {
                   const statusStyle = getStatusColor(c.application_status);
-                  const topSim = c.simulations?.find(s => s.session_status === 'completed') || c.simulations?.[0];
-                  const overallScore = topSim ? (topSim.overall_score ? parseFloat(topSim.overall_score) : topSim.evaluation_overall_score || 0) : 0;
-                  const avgTaskScore = topSim?.avg_task_score || 0;
 
                   return (
                     <tr
@@ -576,32 +482,6 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                         )}
                       </td>
 
-                      {/* Simulation */}
-                      <td style={{ padding: '14px 16px'}}>
-                        {topSim ? (
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                              <div>
-                                <span style={{ fontSize: 20, fontWeight: 700, color: overallScore >= 70 ? '#22c55e': overallScore >= 50 ? '#f59e0b': '#ef4444'}}>{Math.round(overallScore)}%</span>
-                                <span style={{ fontSize: 10, color: '#64748b', marginLeft: 2 }}>overall</span>
-                              </div>
-                              {avgTaskScore > 0 && (
-                                <div style={{ paddingLeft: 8, borderLeft: '1px solid #e2e8f0'}}>
-                                  <span style={{ fontSize: 16, fontWeight: 600, color: avgTaskScore >= 70 ? '#22c55e': avgTaskScore >= 50 ? '#f59e0b': '#ef4444'}}>{Math.round(avgTaskScore)}%</span>
-                                  <span style={{ fontSize: 10, color: '#64748b', marginLeft: 2 }}>avg tasks</span>
-                                </div>
-                              )}
-                            </div>
-                            <div style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              {getStatusIcon(topSim.session_status)}
-                              <span style={{ color: topSim.session_status === 'completed'? '#22c55e': '#f59e0b'}}>{topSim.session_status}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: 12, color: '#cbd5e1'}}>No practical assessment</span>
-                        )}
-                      </td>
-
                       {/* Actions */}
                       <td style={{ padding: '14px 16px'}}>
                         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center'}}>
@@ -611,18 +491,6 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                           >
                             <Eye size={14} /> View
                           </button>
-
-                          {topSim?.session_id && (
-                            <a
-                              href={`/session-report/${topSim.session_id}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              title={topSim.session_status === 'in_progress'? 'View live session': 'View session report'}
-                              style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${topSim.session_status === 'completed'? '#7c3aed': '#d97706'}`, background: topSim.session_status === 'completed'? '#ede9fe': '#fef3c7', fontSize: 13, cursor: 'pointer', fontWeight: 500, color: topSim.session_status === 'completed'? '#7c3aed': '#92400e', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none'}}
-                            >
-                              <Activity size={14} /> {topSim.session_status === 'in_progress'? 'Live': 'Report'}
-                            </a>
-                          )}
 
                           {c.application_status !== 'shortlisted'&& (
                             <button

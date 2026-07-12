@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"
+"""
 PRIORITY-BASED JOB SEARCH API - 5 LEXICAL LEVELS + SEMANTIC FALLBACK
 NO HARDCODED TERMS - PURE NLP, WITH TYPO CORRECTION
-"
+"""
 
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -124,11 +124,11 @@ STOP_WORDS = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
 def correct_typos(tokens: List[str], vocab: set) -> List[str]:
-    "Fuzzy-correct each token against a vocabulary built from the real job
+    """Fuzzy-correct each token against a vocabulary built from the real job
     postings (see PrioritySearchEngine.add_to_vocab)   same difflib approach
     ai_job_matcher_og.py uses for skill matching. Only touches tokens longer
     than 3 chars and not already a known word, so short/valid words are never
-    altered. A no-op when no vocabulary has been built yet."
+    altered. A no-op when no vocabulary has been built yet."""
     if not tokens or not vocab:
         return tokens
     corrected = []
@@ -143,9 +143,9 @@ def correct_typos(tokens: List[str], vocab: set) -> List[str]:
     return corrected
 
 def display_corrected_query(query: str, vocab: set) -> str:
-    "A readable 'did you mean'string   typo-corrected only, keeping
+    """A readable 'did you mean' string   typo-corrected only, keeping
     stopwords and word forms intact (unlike preprocess_text's TF-IDF-ready
-    output) so it's fit to show back to a user."
+    output) so it's fit to show back to a user."""
     if not query or not vocab:
         return query
     tokens = re.sub(r'[^a-z0-9\s]', '', query.lower()).split()
@@ -153,9 +153,9 @@ def display_corrected_query(query: str, vocab: set) -> str:
     return ''.join(corrected)
 
 def preprocess_text(text: str, context: str = "general", vocab: set = None) -> str:
-    "Pure NLP preprocessing - NO hardcoded terms.
+    """Pure NLP preprocessing - NO hardcoded terms.
     `vocab`, when given (only for the incoming search query, not job text),
-    fuzzy-corrects typos against real terms seen in the job postings."
+    fuzzy-corrects typos against real terms seen in the job postings."""
     if not text:
         return 
 
@@ -450,9 +450,9 @@ class PrioritySearchEngine:
                     self.dynamic_vocab.add(tok)
 
     def _job_semantic_text(self, job: dict) -> str:
-        "A compact 'concept'string per job (title + skills) for the
+        """A compact 'concept' string per job (title + skills) for the
         semantic embedding   short and focused, unlike the full TF-IDF texts,
-        since sentence-transformers work best on phrase-length input."
+        since sentence-transformers work best on phrase-length input."""
         parts = [job.get('title', '') or '']
         for key in ('skills_required', 'skills_preferred'):
             skills = job.get(key, [])
@@ -732,10 +732,10 @@ class BackendClient:
             return False
     
     def _fetch_all_job_summaries(self):
-        "/jobs/candidate/list paginates (default limit=20, max=100) since it's
+        """/jobs/candidate/list paginates (default limit=20, max=100) since it's
         built for candidates browsing the UI   search needs the full active set,
         not just the most recent 20 (same fix as ai_job_matcher_og.py's
-        BackendClient.get_jobs())."
+        BackendClient.get_jobs())."""
         all_jobs = []
         page = 1
         page_size = 100
@@ -867,7 +867,7 @@ def format_job(job: dict, match_info: dict = None) -> dict:
 
 @app.get("/search")
 async def search_jobs(
-    q: str = Query(default=, description="Search query"),
+    q: str = Query(default="", description="Search query"),
     limit: int = Query(default=50, ge=1, le=100)
 ):
     "5-level priority search with complete logging"

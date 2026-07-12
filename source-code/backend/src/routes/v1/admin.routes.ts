@@ -285,24 +285,45 @@ router.post('/companies/:id/users', [
     }
     const company = companyRes.rows[0];
 
-    const dupe = await client.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (dupe.rows.length > 0) {
+    const userType = teamRole === 'admin'? 'company_admin': 'recruiter';
+
+    // Scoped by user_type - the same email may separately have an unrelated
+    // account under a different role (e.g. a candidate account).
+    const dupe = await client.query('SELECT id, deleted_at FROM users WHERE email = $1 AND user_type = $2', [email, userType]);
+    if (dupe.rows.length > 0 && dupe.rows[0].deleted_at === null) {
       await client.query('ROLLBACK');
-      res.status(409).json({ success: false, message: 'A user with this email already exists'});
+      res.status(409).json({
+        success: false,
+        message: 'A user with this email already exists',
+        code: 'USER_EXISTS',
+        existingUserId: dupe.rows[0].id,
+      });
       return;
     }
 
-    const userType = teamRole === 'admin'? 'company_admin': 'recruiter';
     const tempPassword = genTempPassword();
     const salt = await bcrypt.genSalt(12);
     const passwordHash = await bcrypt.hash(tempPassword, salt);
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    const userRes = await client.query(
-      `INSERT INTO users (email, password_hash, user_type, status)
-       VALUES ($1, $2, $3, 'active')
-       RETURNING id, email, user_type, status, created_at`,
-      [email, passwordHash, userType]
-    );
+    // email has a hard UNIQUE constraint (not scoped to non-deleted rows), so a
+    // previously-deleted account with this email can't be INSERTed again   reactivate
+    // the old row instead, matching what a fresh signup would give them.
+    const userRes = dupe.rows.length > 0
+      ? await client.query(
+          `UPDATE users SET password_hash = $1, user_type = $2, status = 'unverified', deleted_at = NULL,
+                            verification_token = $3, token_expiry = $4, updated_at = NOW()
+           WHERE id = $5
+           RETURNING id, email, user_type, status, created_at`,
+          [passwordHash, userType, verificationToken, tokenExpiry, dupe.rows[0].id]
+        )
+      : await client.query(
+          `INSERT INTO users (email, password_hash, user_type, status, verification_token, token_expiry)
+           VALUES ($1, $2, $3, 'unverified', $4, $5)
+           RETURNING id, email, user_type, status, created_at`,
+          [email, passwordHash, userType, verificationToken, tokenExpiry]
+        );
     const newUser = userRes.rows[0];
 
     const teamRes = await client.query(
@@ -330,6 +351,7 @@ router.post('/companies/:id/users', [
         roleLabel: teamRole === 'admin'? 'Company Admin': teamRole.charAt(0).toUpperCase() + teamRole.slice(1),
         companyName: company.name,
         loginUrl: `${process.env.FRONTEND_URL || ''}/login`,
+        verifyUrl: `${process.env.FRONTEND_URL || ''}/verify-email?token=${verificationToken}`,
       });
     } catch (emailErr) {
       logger.warn(`Admin-created-account email failed for ${email}: ${(emailErr as Error).message}`);
@@ -346,6 +368,73 @@ router.post('/companies/:id/users', [
     res.status(500).json({ success: false, message: 'Failed to create user'});
   } finally {
     client.release();
+  }
+});
+
+// @route   POST /api/v1/admin/users/:userId/resend-credentials
+// @desc    Regenerate the temp password and resend the "account created" email
+//          for a user that already exists   the escape hatch for the 409 a
+//          system admin hits when POST /companies/:id/users targets an email
+//          that was already created (e.g. the original email never arrived).
+router.post('/users/:userId/resend-credentials', [
+  param('userId').isUUID(),
+  validateRequest,
+], async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+
+    const userRes = await dbQuery(
+      `SELECT u.id, u.email, u.user_type, u.status,
+              ct.name, ct.title, ct.role AS team_role, c.name AS company_name
+       FROM users u
+       LEFT JOIN company_team ct ON ct.user_id = u.id
+       LEFT JOIN companies c ON c.id = ct.company_id
+       WHERE u.id = $1 AND u.deleted_at IS NULL
+       LIMIT 1`,
+      [userId]
+    );
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ success: false, message: 'User not found'});
+      return;
+    }
+    const user = userRes.rows[0];
+
+    const tempPassword = genTempPassword();
+    const salt = await bcrypt.genSalt(12);
+    const passwordHash = await bcrypt.hash(tempPassword, salt);
+
+    // Still unverified   the old link may have expired, so mint a fresh one alongside
+    // the new password rather than resending a token that might no longer work.
+    let verifyUrl: string | undefined;
+    if (user.status === 'unverified') {
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const tokenExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      await dbQuery(
+        'UPDATE users SET password_hash = $1, verification_token = $2, token_expiry = $3, updated_at = NOW() WHERE id = $4',
+        [passwordHash, verificationToken, tokenExpiry, userId]
+      );
+      verifyUrl = `${process.env.FRONTEND_URL || ''}/verify-email?token=${verificationToken}`;
+    } else {
+      await dbQuery('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [passwordHash, userId]);
+    }
+
+    await emailService.sendAdminCreatedAccountEmail(user.email, {
+      name: user.name || user.email,
+      email: user.email,
+      tempPassword,
+      roleLabel: user.team_role
+        ? (user.team_role === 'admin'? 'Company Admin': user.team_role.charAt(0).toUpperCase() + user.team_role.slice(1))
+        : user.user_type,
+      companyName: user.company_name,
+      loginUrl: `${process.env.FRONTEND_URL || ''}/login`,
+      ...(verifyUrl ? { verifyUrl } : {}),
+    });
+
+    logger.info(`Credentials resent by system admin for user ${userId}`);
+    res.json({ success: true, message: `New login details emailed to ${user.email}`});
+  } catch (error) {
+    logger.error('Admin resend credentials error:', error);
+    res.status(500).json({ success: false, message: 'Failed to resend credentials'});
   }
 });
 

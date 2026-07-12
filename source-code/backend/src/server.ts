@@ -4,7 +4,6 @@ import { Server as SocketServer } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import app from './app.js';
 import { logger } from './utils/logger.js';
-import DatabaseService from './services/database.service.js';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -93,17 +92,6 @@ try {
       socket.broadcast.emit('user_status_change', { userId, status: 'online'});
     }
 
-    socket.on('join_simulation', (simulationId: string) => {
-      if (simulationId) {
-        socket.join(`simulation:${simulationId}`);
-        logger.info(`Socket ${socket.id} joined simulation:${simulationId}`);
-      }
-    });
-
-    socket.on('leave_simulation', (simulationId: string) => {
-      if (simulationId) socket.leave(`simulation:${simulationId}`);
-    });
-
     socket.on('join_session', (sessionId: string) => {
       if (sessionId) {
         socket.join(`session:${sessionId}`);
@@ -126,42 +114,6 @@ try {
 
     socket.on('leave_user', (userId: string) => {
       if (userId) socket.leave(`user:${userId}`);
-    });
-
-    socket.on('join_simulation_session', (sessionId: string) => {
-      if (sessionId) socket.join(`simulation:${sessionId}`);
-    });
-
-    socket.on('leave_simulation_session', (sessionId: string) => {
-      if (sessionId) socket.leave(`simulation:${sessionId}`);
-    });
-
-    // Mark messages as read
-    socket.on('mark_read', async (data: { sessionId: string; simulationId?: string }) => {
-      const { sessionId, simulationId } = data;
-      const currentUserId = socket.data.userId;
-      
-      if (!currentUserId || !sessionId) return;
-      
-      try {
-        // Update unread count in database
-        await DatabaseService.query(`
-          UPDATE simulation_sessions 
-          SET unread_count = 0 
-          WHERE id = $1 AND user_id = $2
-        `, [sessionId, currentUserId]);
-        
-        // Notify others that user read messages
-        socket.to(`session:${sessionId}`).emit('messages_read', {
-          userId: currentUserId,
-          sessionId,
-          simulationId
-        });
-        
-        logger.info(`User ${currentUserId} marked messages as read in session ${sessionId}`);
-      } catch (err) {
-        logger.error('Error marking messages as read:', err);
-      }
     });
 
     // Typing indicator

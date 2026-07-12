@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Settings, LogOut, User, Menu, X, UserPlus, Building, ChevronDown, Briefcase, MessageCircle, Loader2, ExternalLink, Send } from 'lucide-react';
+import { Search, Bell, Settings, LogOut, User, Menu, UserPlus, Building, ChevronDown, Briefcase, MessageCircle, Loader2, ExternalLink, Send } from 'lucide-react';
 import { io } from 'socket.io-client';
 import ThemeSwitcher from './ThemeSwitcher';
-import { SOCKET_BASE_URL } from '../services/simulationAPI';
 import {
   getNotifications,
   getUnreadCount,
@@ -19,33 +18,10 @@ import { resolveFileUrl } from '../utils/fileUrl';
 // navbar is only shown to logged-in users).
 const SEARCH_API_URL = import.meta.env.VITE_SEARCH_URL || 'http://localhost:8001/search';
 
-// Add proper type definitions
-interface ChatNotification {
-  id: string;
-  title: string;
-  body: string;
-  sessionId?: string;
-  simulationId?: string;
-  createdAt: string;
-  read: boolean;
-}
-
-interface ChatMessage {
-  id: string;
-  session_id?: string;
-  simulation_id?: string;
-  user_id?: string;
-  author?: {
-    id?: string;
-    first_name?: string;
-    last_name?: string;
-    email?: string;
-  };
-  user_email?: string;
-  message: string;
-  timestamp?: string;
-  created_at?: string;
-}
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
+const SOCKET_BASE_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  API_BASE_URL.replace(/\/api\/v1\/?$/, '');
 
 interface HeaderProps {
   onToggleSidebar?: () => void;
@@ -74,18 +50,14 @@ const Header: React.FC<HeaderProps> = ({
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [showSearchResults, setShowSearchResults] = useState<boolean>(false);
   const [showNotifications, setShowNotifications] = useState<boolean>(false);
-  const [chatNotifications, setChatNotifications] = useState<ChatNotification[]>([]);
   const [appNotifications, setAppNotifications] = useState<AppNotification[]>([]);
   const [notifUnread, setNotifUnread] = useState<number>(0);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [chatToast, setChatToast] = useState<ChatNotification | null>(null);
   const [showSignupDropdown, setShowSignupDropdown] = useState<boolean>(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
-  const lastSoundAtRef = useRef<number>(0);
-  const chatNotificationIdsRef = useRef<Set<string>>(new Set());
 
   // ============================================
   // 🔧 FIXED: Better user and company data extraction
@@ -210,87 +182,6 @@ const Header: React.FC<HeaderProps> = ({
   const companyName = getCompanyName();
   const companyInitial = getCompanyInitial();
   const showCompanyInfo = isLoggedIn && isCompanyUser() && !!companyName;
-  const chatNotificationStorageKey = normalizedUser?.id
-    ? `simulationChatNotifications:${normalizedUser.id}`
-    : null;
-
-  const playIncomingSound = (): void => {
-    const now = Date.now();
-    if (now - lastSoundAtRef.current < 900) return;
-    lastSoundAtRef.current = now;
-
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      const audioContext = new AudioContextClass();
-      const oscillator = audioContext.createOscillator();
-      const gain = audioContext.createGain();
-
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(740, audioContext.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(980, audioContext.currentTime + 0.08);
-      gain.gain.setValueAtTime(0.0001, audioContext.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.12, audioContext.currentTime + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.18);
-
-      oscillator.connect(gain);
-      gain.connect(audioContext.destination);
-      oscillator.start();
-      oscillator.stop(audioContext.currentTime + 0.2);
-      window.setTimeout(() => audioContext.close().catch(() => undefined), 300);
-    } catch {
-      // Browser may block notification audio before the first user interaction.
-    }
-  };
-
-  const parseChatText = (message: string): string => {
-    if (!message) return 'New chat message';
-    try {
-      let current: any = message;
-      let depth = 0;
-      while (typeof current === 'string'&& depth < 10) {
-        const trimmed = current.trim();
-        if (!trimmed.startsWith('{') && !trimmed.startsWith('"')) return current;
-        current = JSON.parse(current);
-        depth += 1;
-      }
-      return current?.text || 'New chat message';
-    } catch {
-      return String(message).slice(0, 140);
-    }
-  };
-
-  const getMessageAuthor = (message: ChatMessage): string => {
-    const fullName = `${message?.author?.first_name || ''} ${message?.author?.last_name || ''}`.trim();
-    return fullName || message?.author?.email?.split('@')[0] || message?.user_email?.split('@')[0] || 'Chat';
-  };
-
-  const buildChatNotification = (message: ChatMessage, fallback: Partial<ChatNotification> = {}): ChatNotification => ({
-    id: message.id,
-    title: fallback.title || `Message from ${getMessageAuthor(message)}`,
-    body: fallback.body || parseChatText(message.message),
-    sessionId: message.session_id,
-    simulationId: message.simulation_id,
-    createdAt: message.timestamp || message.created_at || new Date().toISOString(),
-    read: false,
-  });
-
-  const addChatNotification = (notification: ChatNotification, shouldPlaySound: boolean = true): void => {
-    if (chatNotificationIdsRef.current.has(notification.id)) return;
-    chatNotificationIdsRef.current.add(notification.id);
-    setChatNotifications((prev: ChatNotification[]) => [notification, ...prev].slice(0, 20));
-
-    if (shouldPlaySound) playIncomingSound();
-    setChatToast(notification);
-    window.setTimeout(() => {
-      setChatToast((current: ChatNotification | null) => current?.id === notification.id ? null : current);
-    }, 5000);
-  };
-
-  useEffect(() => {
-    chatNotificationIdsRef.current = new Set(chatNotifications.map((item: ChatNotification) => item.id));
-  }, [chatNotifications]);
 
   // 🔍 DEBUG: Log all data to console
   useEffect(() => {
@@ -340,7 +231,7 @@ const Header: React.FC<HeaderProps> = ({
       socket.emit('join_user', normalizedUser.id);
     });
 
-    // Persistent notifications pushed from the backend (chat, simulation events, etc.)
+    // Persistent notifications pushed from the backend (application updates, etc.)
     socket.on('notification', (n: AppNotification) => {
       if (!n?.id) return;
       setAppNotifications((prev) => (prev.some((x) => x.id === n.id) ? prev : [n, ...prev].slice(0, 50)));
@@ -350,60 +241,11 @@ const Header: React.FC<HeaderProps> = ({
       setNotifUnread(typeof data?.count === 'number'? data.count : 0);
     });
 
-    socket.on('simulation_chat_message', (message: ChatMessage) => {
-      const senderId = message?.user_id || message?.author?.id;
-      if (!message?.id || senderId === normalizedUser.id) return;
-
-      const isOnChatRoute =
-        window.location.pathname.startsWith('/simulation/execute/') &&
-        new URLSearchParams(window.location.search).get('tab') === 'chat'&&
-        (!message.session_id || window.location.pathname.includes(message.session_id));
-
-      if (isOnChatRoute) return;
-
-      addChatNotification(buildChatNotification(message), true);
-    });
-
     return () => {
       if (socket.connected) socket.emit('leave_user', normalizedUser.id);
       socket.disconnect();
     };
   }, [isLoggedIn, normalizedUser?.id]);
-
-  useEffect(() => {
-    if (!chatNotificationStorageKey) {
-      setChatNotifications([]);
-      return;
-    }
-
-    try {
-      const stored = JSON.parse(localStorage.getItem(chatNotificationStorageKey) || '[]');
-      setChatNotifications(Array.isArray(stored) ? stored.slice(0, 20) : []);
-    } catch {
-      setChatNotifications([]);
-    }
-  }, [chatNotificationStorageKey]);
-
-  useEffect(() => {
-    if (!chatNotificationStorageKey) return;
-    localStorage.setItem(chatNotificationStorageKey, JSON.stringify(chatNotifications.slice(0, 20)));
-  }, [chatNotificationStorageKey, chatNotifications]);
-
-  useEffect(() => {
-    const handleChatNotification = (event: CustomEvent<{ message: ChatMessage; title?: string; body?: string }>) => {
-      const message = event.detail?.message;
-      if (!message?.id) return;
-      const senderId = message?.user_id || message?.author?.id;
-      if (senderId === normalizedUser?.id) return;
-      addChatNotification(buildChatNotification(message, {
-        title: event.detail?.title,
-        body: event.detail?.body,
-      }), false);
-    };
-
-    window.addEventListener('simulation-chat-message', handleChatNotification as EventListener);
-    return () => window.removeEventListener('simulation-chat-message', handleChatNotification as EventListener);
-  }, [normalizedUser?.id]);
 
   // Load persisted notifications + unread count when the user logs in.
   useEffect(() => {
@@ -474,7 +316,7 @@ const Header: React.FC<HeaderProps> = ({
     if (url) {
       window.location.href = url;
     } else if (onViewChange) {
-      onViewChange('my-simulations');
+      onViewChange('dashboard');
     }
   };
 
@@ -501,20 +343,6 @@ const Header: React.FC<HeaderProps> = ({
       { label: 'Yesterday', items: groups.Yesterday },
       { label: 'Earlier', items: groups.Earlier },
     ].filter((g) => g.items.length > 0);
-  };
-
-  const openChatNotification = (notification: ChatNotification): void => {
-    setChatNotifications((prev: ChatNotification[]) =>
-      prev.map((item: ChatNotification) => item.id === notification.id ? { ...item, read: true } : item)
-    );
-    setShowNotifications(false);
-    setChatToast(null);
-
-    if (notification.sessionId) {
-      window.location.href = `/simulation/execute/${notification.sessionId}?tab=chat`;
-    } else if (onViewChange) {
-      onViewChange('my-simulations');
-    }
   };
 
   const handleCompanySignup = (): void => {
@@ -920,32 +748,6 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         )}
 
-        {chatToast && isLoggedIn && !showNotifications && (
-          <button
-            onClick={() => openChatNotification(chatToast)}
-            className="absolute right-4 sm:right-6 top-16 sm:top-20 w-80 bg-white rounded-lg shadow-xl border border-blue-100 z-50 text-left p-4 hover:bg-blue-50 transition-colors"
-          >
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
-                <MessageCircle size={16} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-gray-800 truncate">{chatToast.title}</p>
-                <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words">{chatToast.body}</p>
-                <p className="text-[11px] text-blue-600 mt-2 font-medium">Open chat to reply</p>
-              </div>
-              <span
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setChatToast(null);
-                }}
-                className="text-gray-400 hover:text-gray-700"
-              >
-                <X size={14} />
-              </span>
-            </div>
-          </button>
-        )}
       </div>
     </div>
   );

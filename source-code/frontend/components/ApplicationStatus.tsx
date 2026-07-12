@@ -20,6 +20,7 @@ import {
   Award
 } from 'lucide-react';
 import { getApplication, withdrawApplication } from '../services/applicationAPI';
+import { useAuth } from '../context/AuthContext';
 
 // ── Type Definitions ─────────────────────────────────────────────────────────
 
@@ -220,6 +221,8 @@ const getTimelineIcon = (eventType: string) => {
 // ── Main component ─────────────────────────────────────────────────────────
 
 const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, onBack }) => {
+  const { user } = useAuth();
+  const isCandidate = user?.userType === 'candidate'|| (user as any)?.user_type === 'candidate';
   const [application, setApplication] = useState<ApplicationData | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -743,7 +746,7 @@ const ApplicationStatus: React.FC<ApplicationStatusProps> = ({ applicationId, on
             )}
 
             {/* Withdraw action */}
-            {!['withdrawn', 'hired', 'rejected'].includes(application.status) && (
+            {isCandidate && !['withdrawn', 'hired', 'rejected'].includes(application.status) && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
                 <h3 className="text-sm font-semibold text-gray-900 mb-3">Actions</h3>
                 <button

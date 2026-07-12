@@ -73,7 +73,7 @@ async function main() {
 
         await client.query('COMMIT');
         created += 1;
-        console.log(`✓ ${company.name} -> ${email}`);
+        console.log(` ${company.name} -> ${email}`);
       } catch (err) {
         await client.query('ROLLBACK');
         skipped += 1;

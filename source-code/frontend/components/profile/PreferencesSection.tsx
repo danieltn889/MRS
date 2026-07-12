@@ -414,7 +414,7 @@ const PreferencesSection: React.FC<PreferencesSectionProps> = ({
           <h2 className="text-xl font-semibold text-gray-900">Job Preferences</h2>
           {completionSections.preferences ? (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-              ✓ Complete
+               Complete
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">

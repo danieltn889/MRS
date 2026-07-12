@@ -15,7 +15,6 @@ interface JobCardProps {
   isAiMatch?: number;
   isApplied?: boolean;
   isSaved?: boolean;
-  hasSimulation?: boolean;
   getMatchColor?: (score: number) => string;
   getScoreColor?: (score: number) => string;
   onViewDetails?: (job: any) => void;
@@ -50,7 +49,6 @@ const JobCard: React.FC<JobCardProps> = ({
   isAiMatch,
   isApplied = false,
   isSaved   = false,
-  hasSimulation = false,
   getMatchColor = () => 'bg-green-100 text-green-800',
   getScoreColor = () => 'bg-green-600',
   onViewDetails          = () => {},
@@ -517,25 +515,10 @@ const JobCard: React.FC<JobCardProps> = ({
                   View Application
                 </button>
                 {!isExpired && (
-                  hasSimulation ? (
-                    <div className="relative group">
-                      <button
-                        type="button"
-                        disabled
-                        className="w-full px-4 py-2 bg-gray-200 text-gray-400 rounded-xl text-sm font-semibold cursor-not-allowed flex items-center justify-center gap-1.5"
-                      >
-                        <Shield size={14} /> Withdraw Locked
-                      </button>
-                      <div className="absolute bottom-full left-0 right-0 mb-1 bg-gray-800 text-white text-xs rounded-lg p-2 hidden group-hover:block z-10 text-center leading-snug pointer-events-none">
-                        Cannot withdraw   a practical assessment has been started for this position.
-                      </div>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={() => onWithdrawApplication(job)}
-                      className="w-full px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-semibold transition-colors">
-                      Withdraw
-                    </button>
-                  )
+                  <button type="button" onClick={() => onWithdrawApplication(job)}
+                    className="w-full px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 text-sm font-semibold transition-colors">
+                    Withdraw
+                  </button>
                 )}
               </>
             ) : (

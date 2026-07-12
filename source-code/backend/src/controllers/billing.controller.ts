@@ -79,7 +79,6 @@ interface UsageStats {
     jobsPosted: number;
     applicationsReceived: number;
     aiAnalyses: number;
-    simulationsRun: number;
   };
 }
 
@@ -612,8 +611,7 @@ export class BillingController extends BaseController {
           JOIN jobs j ON a.job_id = j.id
           WHERE j.created_by = $1 AND a.created_at >= CURRENT_DATE - INTERVAL '30 days'
         `,
-        aiAnalyses: 'SELECT COUNT(*) FROM ai_analysis WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL \'30 days\'',
-        simulationsRun: 'SELECT COUNT(*) FROM simulations WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL \'30 days\''
+        aiAnalyses: 'SELECT COUNT(*) FROM ai_analysis WHERE user_id = $1 AND created_at >= CURRENT_DATE - INTERVAL \'30 days\''
       };
 
       const usage: { [key: string]: number } = {};

@@ -47,10 +47,12 @@ const protect = async (req: Request, res: Response, next: NextFunction): Promise
 
       let user = result.rows[0] as User;
 
-      // For company_admin, get company_id from companies table
-      if (user.user_type === 'company_admin') {
+      // For company_admin/recruiter, resolve which company they're operating as.
+      // A user can be on more than one company's team; is_default (set at login,
+      // see auth.controller.ts) picks the one they're currently working with.
+      if (user.user_type === 'company_admin'|| user.user_type === 'recruiter') {
         const companyResult = await query(
-          'SELECT id as company_id FROM companies WHERE created_by = $1',
+          'SELECT company_id FROM company_team WHERE user_id = $1 ORDER BY is_default DESC, created_at ASC LIMIT 1',
           [user.id]
         );
         if (companyResult.rows.length > 0) {
@@ -58,7 +60,7 @@ const protect = async (req: Request, res: Response, next: NextFunction): Promise
         }
       }
 
-      if (user.status !== 'verified') {
+      if (user.status !== 'active'&& user.status !== 'verified') {
         res.status(401).json({
           success: false,
           message: 'Account is not verified'

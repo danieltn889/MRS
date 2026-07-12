@@ -13,7 +13,10 @@ const getAuthHeaders = () => {
 const handleResponse = async (response: Response) => {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    const err = new Error(data.message || `HTTP error! status: ${response.status}`) as Error & Record<string, any>;
+    err.code = data.code;
+    err.existingUserId = data.existingUserId;
+    throw err;
   }
   return data;
 };
@@ -108,6 +111,13 @@ export const createAdminCompanyUser = async (companyId: string, payload: {
 }) => {
   const response = await fetch(`${API_BASE_URL}/admin/companies/${companyId}/users`, {
     method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(payload),
+  });
+  return handleResponse(response);
+};
+
+export const resendAdminUserCredentials = async (userId: string) => {
+  const response = await fetch(`${API_BASE_URL}/admin/users/${userId}/resend-credentials`, {
+    method: 'POST', headers: getAuthHeaders(),
   });
   return handleResponse(response);
 };

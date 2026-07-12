@@ -2,7 +2,6 @@ import { BaseEntity, UUID, TIMESTAMP, JSONB, VerificationStatus } from './types.
 import { User } from './user.ts';
 import { Job } from './job.ts';
 import { Application, BlacklistedCandidate } from './application.ts';
-import { SimulationTemplate } from './simulation.ts';
 
 export interface Company extends BaseEntity {
   name: string;
@@ -46,7 +45,6 @@ export interface Company extends BaseEntity {
   contacts?: CompanyContact[];
   verification?: CompanyVerification[];
   jobs?: Job[];
-  simulationTemplates?: SimulationTemplate[];
   blacklistedCandidates?: BlacklistedCandidate[];
 }
 

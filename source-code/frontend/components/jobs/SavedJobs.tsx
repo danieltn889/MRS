@@ -303,8 +303,8 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
   // success   so here we ONLY sync local state (mark applied, close the modal).
   // Re-submitting here would cause a duplicate application.
   const handleApplicationSubmit = (_data?: any): void => {
-    // Mark as applied but keep the modal open   it shows its own next-steps screen
-    // (simulation details, or the "no simulation yet" notice) and closes itself (onClose).
+    // Mark as applied but keep the modal open   it shows its own confirmation screen
+    // and closes itself (onClose).
     if (selectedJobForApply) {
       appliedJobsManager.addAppliedJob(selectedJobForApply.id);
       setAppliedJobs(appliedJobsManager.getAllAppliedJobs());
@@ -573,7 +573,7 @@ const SavedJobs: React.FC<SavedJobsProps> = ({ onBack, user }) => {
                             : 'bg-blue-600 text-white hover:bg-blue-700'
                         }`}
                       >
-                        {appliedJobs.includes(job.id) ? 'Applied ✓': 'Apply Now'}
+                        {appliedJobs.includes(job.id) ? 'Applied ': 'Apply Now'}
                       </button>
                     </div>
                   </div>

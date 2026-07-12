@@ -464,7 +464,7 @@ router.get('/search', protect, authorize('recruiter', 'company_admin'), [
       paramIndex += 2;
     }
 
-    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '';
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
     const countQuery = `SELECT COUNT(*) as total FROM candidate_profiles cp ${whereClause}`;
     const countResult = await dbQuery(countQuery, params);

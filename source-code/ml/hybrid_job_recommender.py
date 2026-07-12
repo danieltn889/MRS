@@ -989,19 +989,30 @@ class Factor2_QualificationsMatcher:
         # Degree level hierarchy (Lower number = lower degree)
         self.degree_levels = {
             # Level 0 - No degree
-            "no formal education": 0, 
-            "high school": 0, 
+            "no formal education": 0,
+            "high school": 0,
             "secondary school": 0,
             "ged": 0,
-            
+
+            # Rwanda's TVET/NQF levels (A2/A1/A0), extremely common in this
+            # dataset's government job postings ("A1 Electricity Sciences",
+            # "A2 certificate in accounting", etc.) and NOT expressible via
+            # the Western degree names below- checked before "advanced
+            # diploma"/"diploma"/"bachelor" so e.g. "A1 ..." doesn't fall
+            # through to a substring match on an unrelated word. Trailing
+            # space avoids matching "a1"/"a2"/"a0" inside an unrelated word.
+            "a2 ": 1,   # secondary-level TVET certificate ~ Certificate/Diploma
+            "a1 ": 2,   # advanced diploma (TVET)
+            "a0 ": 3,   # bachelor's degree
+
             # Level 1 - Certificate/Diploma
-            "certificate": 1, 
+            "certificate": 1,
             "diploma": 1,
             "certification": 1,
-            
+
             # Level 2 - Advanced Diploma/Associate
-            "advanced diploma": 2, 
-            "associate degree": 2, 
+            "advanced diploma": 2,
+            "associate degree": 2,
             "hnd": 2,
             "foundation degree": 2,
             
@@ -1046,45 +1057,68 @@ class Factor2_QualificationsMatcher:
         }
     
     def get_degree_level(self, degree_text: str) -> int:
-        """Get hierarchical level - returns -1 if not found"""
+        """Get hierarchical level. Returns -1 only when degree_text is empty
+        (genuinely no degree/no requirement stated) and 0 when degree_text is
+        present but doesn't match any known level- these are NOT the same
+        thing to check_degree_hierarchy() below: -1 means "nothing to
+        compare" (free pass for a job with no requirement), 0 means "there IS
+        a requirement/degree here, we just can't place it on the hierarchy"
+        and must not be treated as if no requirement existed."""
         if not degree_text:
             return -1
-        
+
         degree_lower = degree_text.lower().strip()
-        
+
         # Direct match first
         for degree_name, level in self.degree_levels.items():
             if degree_name in degree_lower:
                 return level
-        
+
         # Try semantic similarity with known levels
         highest_score = 0.0
         best_level = -1
-        
+
         for degree_name, level in self.degree_levels.items():
             sim = self.tp.semantic_similarity(degree_lower, degree_name)
             if sim > highest_score and sim > 0.4:
                 highest_score = sim
                 best_level = level
-        
-        return best_level if best_level >= 0 else -1
+
+        return best_level if best_level >= 0 else 0
     
     def check_degree_hierarchy(self, candidate_level: int, required_level: int, exact_match_only: bool = False) -> float:
         """
         Calculate degree hierarchy score.
         """
-        # No requirement - always 100%
-        if required_level <= 0:
+        # Genuinely no requirement stated (get_degree_level's -1, empty text
+        # only) - always 100%. required_level == 0 means the job DID state a
+        # degree but it wasn't recognized (e.g. Rwanda's A0/A1/A2 TVET naming
+        # slipping past the dictionary)- that must NOT be treated the same as
+        # "no requirement," or an unqualified candidate gets a free pass on a
+        # real requirement just because the matcher couldn't parse it.
+        if required_level == -1:
             return 1.0
-        
-        # Candidate has no degree - 0%
+
+        # Candidate has no degree (or their degree text was itself
+        # unrecognized) - 0%. Applies whether the job's requirement was
+        # recognized or not: with no known candidate level there is nothing
+        # to compare, so this must not fall through to a hierarchy/free-pass
+        # branch below.
         if candidate_level <= 0:
             return 0.0
-        
+
         # EXACT MATCH MODE (strict)
         if exact_match_only:
             return 1.0 if candidate_level == required_level else 0.0
-        
+
+        # Job's requirement text is present but unrecognized, and the
+        # candidate DOES have a real, recognized degree- we can't place the
+        # job's requirement on the hierarchy to compare properly, so give
+        # partial (not full, not zero) credit rather than guessing either
+        # extreme.
+        if required_level == 0:
+            return 0.5
+
         # HIERARCHY MODE
         if candidate_level >= required_level:
             # Candidate meets or exceeds requirement - ALWAYS 100%
@@ -1369,15 +1403,25 @@ class Factor2_QualificationsMatcher:
         # Check if job has multiple qualification entries
         qualification_entries = job_quals.get("qualification_entries", [])
         has_qualification_entries = len(qualification_entries) > 0
-        
+
         # =====================================================
         # DEGREE HIERARCHY SCORE
         # =====================================================
         exact_match_only = False
-        
+
+        # job_required_level == -1 from an empty root minimum_degree field is
+        # only a genuine "no requirement" when qualification_entries is ALSO
+        # empty. When entries exist, the job's real requirement lives there
+        # instead (this dataset structures degree requirements either way)-
+        # letting the empty root field give an automatic free pass here would
+        # let it win over a correctly-computed (and possibly zero) entries
+        # score via the max() below, even though the job clearly does have a
+        # requirement. Pass 0 (present-but-uncomparable) instead of -1 so
+        # check_degree_hierarchy falls through to the real candidate check.
+        root_level_for_hierarchy = 0 if (job_required_level == -1 and has_qualification_entries) else job_required_level
         hierarchy_score = self.check_degree_hierarchy(
-            candidate_highest_level, 
-            job_required_level,
+            candidate_highest_level,
+            root_level_for_hierarchy,
             exact_match_only
         )
         
@@ -1789,7 +1833,10 @@ class Factor3_ExperienceMatcher:
                 "matches": matches,
                 "total_requirements": len(specific_reqs),
                 "matched_count": len(matches),
-                "unmatched_requirements": [r["title"] for r in specific_reqs if not any(m["requirement_title"] == r["title"] for m in matches)]
+                "unmatched_requirements": [
+                    {"title": r["title"], "years_required": r["years_required"]}
+                    for r in specific_reqs if not any(m["requirement_title"] == r["title"] for m in matches)
+                ]
             }
         
         return None
@@ -5341,17 +5388,29 @@ class RecommendationEngine:
         threading.Thread(target=_runner, daemon=True).start()
 
     def _retrain_collaborative_from_cache(self) -> None:
-        if self.candidates is None or self.jobs is None:
+        # Snapshot once: self.jobs/self.candidates can be reassigned by the
+        # realtime worker thread (job/candidate upsert or removal) at any
+        # point, unlocked. Re-reading self.jobs/self.candidates separately
+        # for fit_id_maps(), build_interaction_matrix() and
+        # collaborative_model.fit() let those three calls see different
+        # snapshots of the same attribute mid-retrain- the preprocessor's
+        # job_id_to_idx could then hand out an index one past the end of the
+        # item embedding matrix the model actually ended up trained with
+        # ("index N out of bounds for axis 0 with size N"). A single
+        # snapshot makes the whole retrain pass internally consistent.
+        candidates_snapshot = self.candidates
+        jobs_snapshot = self.jobs
+        if candidates_snapshot is None or jobs_snapshot is None:
             return
         try:
             preprocessor = Preprocessor(self.cfg)
-            preprocessor.fit_id_maps(self.candidates, self.jobs)
+            preprocessor.fit_id_maps(candidates_snapshot, jobs_snapshot)
             events = preprocessor.build_events(
                 self.views if self.views is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date"]),
                 self.applications if self.applications is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date", "status"]),
                 self.saves if self.saves is not None else pd.DataFrame(columns=["user_id", "job_id", "event_date"]),
             )
-            matrix = preprocessor.build_interaction_matrix(events, len(self.candidates), len(self.jobs))
+            matrix = preprocessor.build_interaction_matrix(events, len(candidates_snapshot), len(jobs_snapshot))
 
             hard_negatives: Dict[int, List[int]] = {}
             if self.ignored is not None and not self.ignored.empty:
@@ -5363,7 +5422,7 @@ class RecommendationEngine:
                     hard_negatives[int(cand_idx)] = sub["job_idx"].astype(int).tolist()
 
             collaborative_model = CollaborativeModel(self.cfg.mf)
-            collaborative_model.fit(matrix, len(self.candidates), len(self.jobs), self.cfg.interaction_weights.max_weight,
+            collaborative_model.fit(matrix, len(candidates_snapshot), len(jobs_snapshot), self.cfg.interaction_weights.max_weight,
                                      hard_negatives=hard_negatives)
             with self._lock:
                 self.preprocessor = preprocessor
@@ -6013,7 +6072,7 @@ def score_candidate_against_jobs(candidate_id: str) -> dict:
                 "job": job_details
             })
 
-            log_info(f"   ✓ Score: {total_score}% - {match_level}")
+            log_info(f"    Score: {total_score}% - {match_level}")
         
         results.sort(key=lambda x: x['match_score'], reverse=True)
         
@@ -6304,7 +6363,7 @@ async def score(req: ScoreRequest):
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        log.error("Scoring failed for %s: %s", req.candidate_id, e)
+        log.error("Scoring failed for %s: %s", req.candidate_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
     if req.cache_result and result["scored_jobs"]:
@@ -6338,7 +6397,7 @@ async def score_combined(req: CombinedScoreRequest):
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        log.error("Combined scoring failed for %s: %s", req.candidate_id, e)
+        log.error("Combined scoring failed for %s: %s", req.candidate_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
     if req.cache_result and result["scored_jobs"]:
@@ -6420,7 +6479,7 @@ async def score_combined_job(job_id: str, req: CombinedJobScoreRequest):
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        log.error("Combined single-job scoring failed for %s/%s: %s", req.candidate_id, job_id, e)
+        log.error("Combined single-job scoring failed for %s/%s: %s", req.candidate_id, job_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
     match = next((j for j in result["scored_jobs"] if j["job_id"] == job_id), None)

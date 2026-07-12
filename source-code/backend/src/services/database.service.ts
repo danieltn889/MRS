@@ -166,7 +166,7 @@ class DatabaseService {
     }
 
     return {
-      clause: whereConditions.length > 0 ? `WHERE ${whereConditions.join('AND ')}` : '',
+      clause: whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '',
       params,
       nextParamIndex: paramIndex
     };

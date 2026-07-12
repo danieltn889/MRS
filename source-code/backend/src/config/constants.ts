@@ -33,23 +33,9 @@ export const JOB_STATUSES = {
 
 export type JobStatus = typeof JOB_STATUSES[keyof typeof JOB_STATUSES];
 
-// Simulation statuses
-export const SIMULATION_STATUSES = {
-  SCHEDULED: 'scheduled',
-  IN_PROGRESS: 'in_progress',
-  PAUSED: 'paused',
-  COMPLETED: 'completed',
-  EXPIRED: 'expired',
-  CANCELLED: 'cancelled',
-  FAILED: 'failed'
-} as const;
-
-export type SimulationStatus = typeof SIMULATION_STATUSES[keyof typeof SIMULATION_STATUSES];
-
 // Notification types
 export const NOTIFICATION_TYPES = {
   APPLICATION_UPDATE: 'application_update',
-  SIMULATION_REMINDER: 'simulation_reminder',
   JOB_MATCH: 'job_match',
   MESSAGE: 'message',
   SECURITY: 'security',
@@ -63,8 +49,7 @@ export type NotificationType = typeof NOTIFICATION_TYPES[keyof typeof NOTIFICATI
 export const UPLOAD_LIMITS = {
   RESUME: 5 * 1024 * 1024, // 5MB
   PROFILE_IMAGE: 2 * 1024 * 1024, // 2MB
-  COMPANY_LOGO: 1 * 1024 * 1024, // 1MB
-  SIMULATION_FILES: 10 * 1024 * 1024 // 10MB
+  COMPANY_LOGO: 1 * 1024 * 1024 // 1MB
 } as const;
 
 // Rate limiting

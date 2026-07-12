@@ -158,105 +158,6 @@ class EmailService {
   }
 
   /**
-   * Confirmation email sent after a simulation is successfully submitted.
-   * Sent to the candidate (thank-you / under review) and, with a recruiter-facing
-   * intro, to the company.
-   */
-  async sendSubmissionConfirmation(
-    to: string,
-    data: {
-      candidateName: string;
-      simulationName: string;
-      submissionId: string;
-      submittedAt: string;
-      taskNames: string[];
-      githubUrl?: string | null;
-      recipientRole?: 'candidate'| 'company';
-      score?: number | null;
-      passed?: boolean | null;
-      scoreBreakdown?: Record<string, { score: number; weight: number; contribution?: string }> | null;
-    }
-  ): Promise<void> {
-    const { candidateName, simulationName, submissionId, submittedAt, taskNames, githubUrl, recipientRole = 'candidate', score, passed, scoreBreakdown } = data;
-
-    const tasksHtml = taskNames && taskNames.length
-      ? `<ul style="margin:8px 0;padding-left:20px;color:#374151">${taskNames.map((t) => `<li>${t}</li>`).join('')}</ul>`
-      : '<p style="margin:8px 0;color:#6b7280"> </p>';
-
-    const githubHtml = githubUrl
-      ? `<tr><td style="padding:6px 0;color:#6b7280;width:160px">Repository</td><td style="padding:6px 0"><a href="${githubUrl}" style="color:#2563eb">${githubUrl}</a></td></tr>`
-      : '';
-
-    // Marks section shown only to the candidate when score data is available.
-    const categoryLabels: Record<string, string> = {
-      quality: 'Code Quality', speed: 'Speed', behavioral: 'Behavioral', github: 'GitHub'
-    };
-    const scoresHtml = recipientRole === 'candidate'&& score != null
-      ? `
-        <div style="margin-top:20px;padding:16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px">
-          <div style="text-align:center;margin-bottom:12px">
-            <div style="font-size:32px;font-weight:800;color:#5b21b6">${Math.round(score)}%</div>
-            <div style="margin-top:6px">
-              <span style="display:inline-block;padding:4px 14px;border-radius:999px;font-size:13px;font-weight:700;background:${passed ? '#dcfce7': '#fee2e2'};color:${passed ? '#166534': '#991b1b'}">
-                ${passed ? '✓ PASSED': '✗ DID NOT PASS'}
-              </span>
-            </div>
-          </div>
-          ${scoreBreakdown && Object.keys(scoreBreakdown).length > 0 ? `
-          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">
-            <tr style="border-bottom:1px solid #e5e7eb">
-              <th style="padding:6px 0;text-align:left;color:#6b7280;font-weight:600">Category</th>
-              <th style="padding:6px 0;text-align:right;color:#6b7280;font-weight:600">Score</th>
-              <th style="padding:6px 0;text-align:right;color:#6b7280;font-weight:600">Weight</th>
-            </tr>
-            ${Object.entries(scoreBreakdown).map(([key, val]) => `
-            <tr style="border-bottom:1px solid #f3f4f6">
-              <td style="padding:6px 0;color:#374151">${categoryLabels[key] || key}</td>
-              <td style="padding:6px 0;text-align:right;color:#111827;font-weight:600">${Math.round(val.score)}%</td>
-              <td style="padding:6px 0;text-align:right;color:#6b7280">${Math.round(val.weight * 100)}%</td>
-            </tr>`).join('')}
-          </table>` : ''}
-        </div>`
-      : '';
-
-    const intro =
-      recipientRole === 'company'
-        ? `<p style="color:#374151;margin:0 0 8px"><strong>${candidateName}</strong> has submitted the <strong>${simulationName}</strong> simulation. The submission is now under review.</p>`
-        : `<p style="color:#374151;margin:0 0 8px">Hi <strong>${candidateName}</strong>,</p>
-           <p style="color:#374151;margin:0 0 8px">Thank you   your simulation has been <strong>submitted successfully</strong>. Here are your results.</p>`;
-
-    const subject =
-      recipientRole === 'company'
-        ? `New simulation submission   ${simulationName}`
-        : `Your results   ${simulationName}`;
-
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
-        <div style="background:linear-gradient(135deg,#7c3aed,#2563eb);border-radius:12px;padding:24px;text-align:center">
-          <h1 style="color:#fff;margin:0;font-size:20px">✓ Submission Received</h1>
-        </div>
-        <div style="background:#fff;border-radius:12px;padding:24px;margin-top:16px">
-          ${intro}
-          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:12px">
-            <tr><td style="padding:6px 0;color:#6b7280;width:160px">Simulation</td><td style="padding:6px 0;color:#111827;font-weight:600">${simulationName}</td></tr>
-            <tr><td style="padding:6px 0;color:#6b7280">Submission ID</td><td style="padding:6px 0"><code>${submissionId}</code></td></tr>
-            <tr><td style="padding:6px 0;color:#6b7280">Submitted at</td><td style="padding:6px 0;color:#111827">${submittedAt}</td></tr>
-            ${githubHtml}
-          </table>
-          ${scoresHtml}
-          <div style="margin-top:12px">
-            <div style="color:#6b7280;font-size:14px;margin-bottom:4px">Tasks completed</div>
-            ${tasksHtml}
-          </div>
-          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
-        </div>
-      </div>
-      ${this.standardFooter()}`;
-
-    await this.sendEmail({ to, subject, html });
-  }
-
-  /**
    * Standard legitimacy footer for notification emails: sender identity, a "why you
    * received this" line, and a visible Unsubscribe link. Expected by CAN-SPAM and by
    * Gmail/Yahoo bulk-sender rules   its absence is a common spam signal. Address and
@@ -292,9 +193,10 @@ class EmailService {
       roleLabel: string;
       companyName?: string;
       loginUrl: string;
+      verifyUrl?: string;
     }
   ): Promise<void> {
-    const { name, email, tempPassword, roleLabel, companyName, loginUrl } = data;
+    const { name, email, tempPassword, roleLabel, companyName, loginUrl, verifyUrl } = data;
     const subject = companyName
       ? `Your account for ${companyName} has been created`
       : 'Your account has been created';
@@ -306,14 +208,15 @@ class EmailService {
         </div>
         <div style="background:#fff;border-radius:12px;padding:24px;margin-top:16px">
           <p style="color:#374151;margin:0 0 8px">Hi <strong>${name || 'there'}</strong>,</p>
-          <p style="color:#374151;margin:0 0 12px">An administrator created an account for you${companyName ? ` at <strong>${companyName}</strong>` : ''} as <strong>${roleLabel}</strong>. Use the credentials below to log in:</p>
+          <p style="color:#374151;margin:0 0 12px">An administrator created an account for you${companyName ? ` at <strong>${companyName}</strong>` : ''} as <strong>${roleLabel}</strong>.${verifyUrl ? ' Verify your email to activate it, then log in with the credentials below:': ' Use the credentials below to log in:'}</p>
           <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:8px">
             <tr><td style="padding:6px 0;color:#6b7280;width:160px">Login email</td><td style="padding:6px 0;color:#111827;font-weight:600">${email}</td></tr>
             <tr><td style="padding:6px 0;color:#6b7280">Temporary password</td><td style="padding:6px 0;color:#111827;font-weight:600;font-family:monospace">${tempPassword}</td></tr>
           </table>
           <div style="margin-top:20px">
-            <a href="${loginUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">Log in</a>
+            <a href="${verifyUrl || loginUrl}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">${verifyUrl ? 'Verify Email': 'Log in'}</a>
           </div>
+          ${verifyUrl ? `<p style="color:#666;font-size:14px;margin-top:16px">Or copy this link: <br><span style="color:#2563eb;word-break:break-all;font-size:12px">${verifyUrl}</span></p><p style="color:#666;font-size:13px">This verification link expires in 24 hours. Once verified, log in at <a href="${loginUrl}" style="color:#2563eb">${loginUrl}</a>.</p>` : ''}
           <p style="color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:13px;margin-top:20px">For your security, please log in and change this password as soon as possible.</p>
           <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
         </div>
@@ -336,39 +239,12 @@ class EmailService {
       statusLabel: string;
       applicationId: string;
       kind?: 'received'| 'status'| 'withdrawn';
-      simulation?: {
-        name?: string;
-        scheduled?: boolean;
-        scheduled_at?: string | Date | null;
-        sim_status?: string | null;
-        duration_minutes?: number | null;
-        instructions?: string | null;
-      };
     }
   ): Promise<void> {
-    const { candidateName, jobTitle, companyName, statusLabel, applicationId, kind = 'status', simulation } = data;
-
-    // Optional simulation/assessment block   included e.g. in the shortlisted email.
-    const simBlock = simulation ? `
-          <div style="margin-top:16px;padding:16px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px">
-            <h2 style="margin:0 0 8px;font-size:15px;color:#5b21b6">Simulation / Assessment</h2>
-            <table style="width:100%;border-collapse:collapse;font-size:14px">
-              <tr><td style="padding:5px 0;color:#6b7280;width:160px">Simulation</td><td style="padding:5px 0;color:#111827;font-weight:600">${simulation.name || 'Assessment'}</td></tr>
-              ${simulation.duration_minutes ? `<tr><td style="padding:5px 0;color:#6b7280">Duration</td><td style="padding:5px 0;color:#111827">${simulation.duration_minutes} minutes</td></tr>` : ''}
-              ${simulation.scheduled && simulation.scheduled_at ? `<tr><td style="padding:5px 0;color:#6b7280">Scheduled for</td><td style="padding:5px 0;color:#111827">${new Date(simulation.scheduled_at).toLocaleString()}</td></tr>` : ''}
-              ${simulation.scheduled && simulation.sim_status ? `<tr><td style="padding:5px 0;color:#6b7280">Status</td><td style="padding:5px 0;color:#111827">${simulation.sim_status}</td></tr>` : ''}
-            </table>
-            ${simulation.instructions ? `<p style="margin:10px 0 0;color:#4b5563;font-size:13px"><strong>Instructions:</strong> ${simulation.instructions}</p>` : ''}
-            <p style="margin:10px 0 0;color:#4b5563;font-size:13px">${simulation.scheduled
-              ? 'Please note: the simulation cannot be started before its scheduled start time.'
-              : 'A simulation is part of this role. You will receive the schedule and a link to begin   and you cannot start it before the scheduled time.'}</p>
-            <div style="margin-top:12px">
-              <a href="${process.env.FRONTEND_URL || ''}/applications/${applicationId}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600;font-size:14px">View Simulation Details</a>
-            </div>
-          </div>` : '';
+    const { candidateName, jobTitle, companyName, statusLabel, kind = 'status'} = data;
 
     const header =
-      kind === 'received'? '✓ Application Received'
+      kind === 'received'? ' Application Received'
         : kind === 'withdrawn'? 'Application Withdrawn'
           : 'Application Update';
 
@@ -404,7 +280,6 @@ class EmailService {
             <tr><td style="padding:6px 0;color:#6b7280">Company</td><td style="padding:6px 0;color:#111827">${companyName}</td></tr>
             <tr><td style="padding:6px 0;color:#6b7280">Status</td><td style="padding:6px 0"><span style="color:${statusColor};font-weight:700">${statusLabel}</span></td></tr>
           </table>
-          ${simBlock}
           <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
         </div>
       </div>
@@ -453,62 +328,6 @@ class EmailService {
     await this.sendEmail({ to, subject, html });
   }
 
-  /**
-   * Send a candidate their full simulation result breakdown   used when a recruiter
-   * selects candidates and sends results. Shows the final weighted score, the AI (70%)
-   * and recruiter (30%) contributions, AI competencies, and per-task recruiter marks.
-   */
-  async sendSimulationResultsEmail(
-    to: string,
-    data: {
-      candidateName: string;
-      jobTitle: string;
-      companyName: string;
-      finalScore: number;
-      aiScore: number;
-      recruiterAvg: number;
-      passed?: boolean;
-      competencies?: Array<{ label: string; score: number }>;
-      tasks?: Array<{ name: string; score: number; comment?: string }>;
-    }
-  ): Promise<void> {
-    const { candidateName, jobTitle, companyName, finalScore, aiScore, recruiterAvg, passed, competencies = [], tasks = [] } = data;
-
-    const header = passed === true ? 'Congratulations   You Passed!': 'Your Assessment Results';
-    const subject = passed === true ? `Congratulations   your results for ${jobTitle}` : `Your assessment results   ${jobTitle}`;
-
-    const competenciesHtml = competencies.length
-      ? `<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:6px">${competencies.map((c) => `<tr><td style="padding:4px 0;color:#6b7280">${c.label}</td><td style="padding:4px 0;text-align:right;color:#111827;font-weight:600">${Math.round(c.score)}%</td></tr>`).join('')}</table>` : '';
-
-    const tasksHtml = tasks.length
-      ? `<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:6px">${tasks.map((t, i) => `<tr><td style="padding:4px 0;color:#374151">Task ${i + 1}: ${t.name || ''}</td><td style="padding:4px 0;text-align:right;font-weight:600">${Math.round(t.score)}%</td></tr>${t.comment ? `<tr><td colspan="2" style="padding:0 0 6px;color:#6b7280;font-size:12px">${t.comment}</td></tr>` : ''}`).join('')}</table>` : '';
-
-    const html = `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;border-radius:12px">
-        <div style="background:linear-gradient(135deg,#7c3aed,#2563eb);border-radius:12px;padding:24px;text-align:center">
-          <h1 style="color:#fff;margin:0;font-size:20px">${header}</h1>
-        </div>
-        <div style="background:#fff;border-radius:12px;padding:24px;margin-top:16px">
-          <p style="color:#374151;margin:0 0 8px">Hi <strong>${candidateName}</strong>,</p>
-          <p style="color:#374151;margin:0 0 12px">Here are your assessment results for <strong>${jobTitle}</strong> at <strong>${companyName}</strong>.</p>
-          <div style="text-align:center;margin:16px 0;padding:16px;background:#f5f3ff;border-radius:10px">
-            <div style="font-size:34px;font-weight:800;color:#5b21b6">${Math.round(finalScore)}%</div>
-            <div style="color:#6b7280;font-size:13px">Overall Score</div>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:14px">
-            <tr><td style="padding:6px 0;color:#6b7280">AI Evaluation (70%)</td><td style="padding:6px 0;text-align:right;font-weight:600">${Math.round(aiScore)}% &rarr; ${(aiScore * 0.7).toFixed(1)}</td></tr>
-            <tr><td style="padding:6px 0;color:#6b7280">Recruiter Task Evaluation (30%)</td><td style="padding:6px 0;text-align:right;font-weight:600">${Math.round(recruiterAvg)}% &rarr; ${(recruiterAvg * 0.3).toFixed(1)}</td></tr>
-            <tr><td style="padding:6px 0;color:#111827;font-weight:700">Final Weighted Score</td><td style="padding:6px 0;text-align:right;font-weight:700">${Math.round(finalScore)}%</td></tr>
-          </table>
-          ${competencies.length ? `<h3 style="font-size:14px;color:#5b21b6;margin:16px 0 0">AI Competency Scores</h3>${competenciesHtml}` : ''}
-          ${tasks.length ? `<h3 style="font-size:14px;color:#5b21b6;margin:16px 0 0">Recruiter Task Evaluation (30%)</h3>${tasksHtml}` : ''}
-          <p style="color:#9ca3af;font-size:12px;margin-top:20px">This is an automated message   please do not reply.</p>
-        </div>
-      </div>
-      ${this.standardFooter()}`;
-
-    await this.sendEmail({ to, subject, html });
-  }
 }
 
 export const sendEmail = (options: EmailOptions) => {

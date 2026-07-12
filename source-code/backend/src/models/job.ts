@@ -1,7 +1,6 @@
 import { BaseEntity, UUID, TIMESTAMP, JSONB, JobStatus, JobType, JobVisibility } from './types.ts';
 import { Company } from './company.ts';
 import { Application } from './application.ts';
-import { Simulation } from './simulation.ts';
 import { User } from './user.ts';
 
 // =====================================================
@@ -82,7 +81,6 @@ export interface Job extends BaseEntity {
   createdBy?: User;
   approvedBy?: User;
   applications?: Application[];
-  simulations?: Simulation[];
   savedJobs?: SavedJob[];
   applicationsTracking?: JobApplicationsTracking;
 }

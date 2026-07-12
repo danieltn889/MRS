@@ -5,7 +5,6 @@ import {
   TrendingDown,
   Users,
   Clock,
-  CheckCircle,
   XCircle,
   AlertTriangle,
   Calendar,
@@ -27,7 +26,7 @@ interface PerformanceMetric {
   previousValue: number;
   unit: string;
   trend: 'up'| 'down'| 'stable';
-  category: 'recruitment'| 'onboarding'| 'retention'| 'quality';
+  category: 'recruitment'| 'retention'| 'quality';
 }
 
 interface ReportData {
@@ -150,37 +149,6 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
       });
 
       // ============================================
-      // 3. GET SIMULATIONS FROM DATABASE
-      // ============================================
-      const simResponse = await fetch(`${API_BASE_URL}/simulations/my-simulations`, {
-        headers: getAuthHeaders(),
-      });
-      
-      let allSimulations: any[] = [];
-      if (simResponse.ok) {
-        const simData = await simResponse.json();
-        if (simData.success && simData.data) {
-          const rawData = simData.data.data || simData.data;
-          allSimulations = Array.isArray(rawData) ? rawData : [];
-        }
-      }
-
-      // ============================================
-      // 4. GET EVALUATIONS FROM DATABASE
-      // ============================================
-      const evalResponse = await fetch(`${API_BASE_URL}/evaluations`, {
-        headers: getAuthHeaders(),
-      });
-      
-      let allEvaluations: any[] = [];
-      if (evalResponse.ok) {
-        const evalData = await evalResponse.json();
-        if (evalData.success && evalData.data) {
-          allEvaluations = Array.isArray(evalData.data) ? evalData.data : [];
-        }
-      }
-
-      // ============================================
       // CALCULATE CURRENT PERIOD METRICS
       // ============================================
       
@@ -215,10 +183,8 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
       const prevOfferAcceptanceRate = offersPrevious > 0 ? Math.round((acceptedPrevious / offersPrevious) * 100) : 0;
 
       // Candidate Quality Score
-      const evaluationScores = allEvaluations.filter(e => e.overall_score).map(e => e.overall_score);
       const matchScores = currentApps.filter(a => a.match_score).map(a => a.match_score);
-      const allScores = [...evaluationScores, ...matchScores];
-      const avgQualityScore = allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : 0;
+      const avgQualityScore = matchScores.length > 0 ? matchScores.reduce((a, b) => a + b, 0) / matchScores.length : 0;
       
       const prevMatchScores = previousApps.filter(a => a.match_score).map(a => a.match_score);
       const prevAvgQualityScore = prevMatchScores.length > 0 ? prevMatchScores.reduce((a, b) => a + b, 0) / prevMatchScores.length : 0;
@@ -242,11 +208,6 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
       // Interview → Offer Rate
       const interviewToOfferRate = interviewedCurrent > 0 ? Math.round((offersCurrent / interviewedCurrent) * 100) : 0;
       const prevInterviewToOfferRate = interviewedPrevious > 0 ? Math.round((offersPrevious / interviewedPrevious) * 100) : 0;
-
-      // Onboarding Completion Rate
-      const completedSimulations = allSimulations.filter(s => s.status === 'completed').length;
-      const totalSimulations = allSimulations.length;
-      const onboardingCompletionRate = totalSimulations > 0 ? Math.round((completedSimulations / totalSimulations) * 100) : 0;
 
       // Retention Rate
       const totalProcessed = acceptedCurrent + (currentApps.filter((app: any) => app.status === 'rejected').length);
@@ -328,15 +289,6 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
           unit: '%',
           trend: interviewToOfferRate >= prevInterviewToOfferRate ? ('up'as const) : ('down'as const),
           category: 'recruitment'as const
-        },
-        {
-          id: '7',
-          name: 'Onboarding Completion',
-          value: onboardingCompletionRate,
-          previousValue: onboardingCompletionRate,
-          unit: '%',
-          trend: 'stable'as const,
-          category: 'onboarding'as const
         },
         {
           id: '8',
@@ -428,9 +380,6 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
       }
       if (offerAcceptanceRate < 65) {
         recommendations.push('Review compensation packages and benefits to improve offer acceptance');
-      }
-      if (onboardingCompletionRate < 80) {
-        recommendations.push('Enhance onboarding program with better documentation and mentor support');
       }
       if (retentionRate < 85) {
         recommendations.push('Implement stay interviews and career development programs');
@@ -561,7 +510,6 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'recruitment': return <Users size={20} />;
-      case 'onboarding': return <CheckCircle size={20} />;
       case 'retention': return <Target size={20} />;
       case 'quality': return <Award size={20} />;
       default: return <BarChart3 size={20} />;
@@ -571,7 +519,6 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
   const getCategoryColor = (category: string) => {
     switch (category) {
       case 'recruitment': return 'bg-blue-100 text-blue-800';
-      case 'onboarding': return 'bg-green-100 text-green-800';
       case 'retention': return 'bg-purple-100 text-purple-800';
       case 'quality': return 'bg-orange-100 text-orange-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -675,7 +622,6 @@ const PerformanceReporting = ({ onBack }: PerformanceReportingProps) => {
               >
                 <option value="all">All Categories</option>
                 <option value="recruitment">Recruitment</option>
-                <option value="onboarding">Onboarding</option>
                 <option value="retention">Retention</option>
                 <option value="quality">Quality</option>
               </select>
