@@ -1,13 +1,13 @@
 {
   "name": "recruitment-platform-backend",
   "version": "1.0.0",
-  "description": "Backend for 195-story recruitment platform with React + Python AI",
+  "description": "Backend for recruitment platform with React + Python AI",
   "main": "dist/server.js",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit",
     "start": "node dist/server.js",
-    "dev": "npm run db:setup && (npx kill-port 3001 || true) && tsx src/server.ts",
+    "dev": "(npx kill-port 3001 || true) && tsx src/server.ts",
     "test": "jest",
     "test:audit-chain": "tsx --test src/services/__tests__/audit-chain.test.ts",
     "test:signup": "tsx --test src/validators/__tests__/identityDocument.test.ts src/db/data/__tests__/rwandaLocations.test.ts",
