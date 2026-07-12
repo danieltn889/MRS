@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "start": "node dist/server.js",
-    "dev": "(npx kill-port 3001 || true) && tsx src/server.ts",
+    "dev": "npm run db:setup && (npx kill-port 3001 || true) && tsx src/server.ts",
     "test": "jest",
     "test:audit-chain": "tsx --test src/services/__tests__/audit-chain.test.ts",
     "test:signup": "tsx --test src/validators/__tests__/identityDocument.test.ts src/db/data/__tests__/rwandaLocations.test.ts",
