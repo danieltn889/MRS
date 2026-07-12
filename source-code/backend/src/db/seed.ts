@@ -452,7 +452,7 @@ const seedDatabase = async (): Promise<void> => {
           two_factor_enabled, created_at, updated_at
         )
         VALUES ($1::CITEXT, $2::VARCHAR, $3::VARCHAR, 'verified'::VARCHAR, false, NOW(), NOW())
-        ON CONFLICT (email) DO NOTHING
+        ON CONFLICT (email, user_type) DO NOTHING
         `,
         [u.email, hashedPassword, u.user_type]
       );
