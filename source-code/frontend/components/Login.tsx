@@ -398,11 +398,11 @@ const Login: React.FC = () => {
             <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center backdrop-blur-sm">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="font-extrabold text-xl tracking-tight">SimuHire Rwanda</span>
+            <span className="font-extrabold text-xl tracking-tight">Hybrid recommender system</span>
           </div>
 
           <h1 className="text-4xl font-extrabold leading-tight mb-4 tracking-tight">
-            MIFOTRA Recruitment System
+            MIFOTRA Hybrid recommender system
           </h1>
           <p className="text-blue-100 text-lg leading-relaxed mb-10">
             Empower smarter hiring decisions with an explainable AI matching engine designed to

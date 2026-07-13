@@ -1,7 +1,7 @@
-# MRS Frontend
+# HRS Frontend
 
 React + Vite + TypeScript single-page application for candidates, recruiters, and
-administrators. Part of the [MRS platform](../README.md).
+administrators. Part of the [HRS platform](../README.md).
 
 ## Tech stack
 

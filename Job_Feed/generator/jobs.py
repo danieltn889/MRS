@@ -188,7 +188,7 @@ def build_job_tables(job_profile_df: pd.DataFrame, seed: int,
             "experience_level": experience_level,
             "education_required": json.dumps(education_required),
             "screening_questions": json.dumps([]),
-            "application_instructions": "Submit your application through the SimuHire Rwanda portal.",
+            "application_instructions": "Submit your application through the Hybrid recommender system portal.",
             "documents": json.dumps([]), "department_info": None, "tags": None,  # set below
             "application_limit": None,
             "language_requirements": json.dumps([{"name": lang, "required": True}

@@ -588,7 +588,7 @@ export default function LandingPage({ onLogin, onCompanySignUp }: LandingPagePro
                 <Zap className="w-5 h-5 text-white" />
               </div>
               <span className="font-extrabold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-tight">
-                SimuHire Rwanda
+                Hybrid recommender system
               </span>
             </div>
 
@@ -658,7 +658,7 @@ export default function LandingPage({ onLogin, onCompanySignUp }: LandingPagePro
             <h1 className="text-5xl md:text-7xl font-extrabold text-gray-900 leading-tight mb-6 tracking-tight">
               Hire Smarter in<br />
               <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                MIFOTRA recruitment system
+                MIFOTRA Hybrid recommender system
               </span>
             </h1>
 
@@ -1062,7 +1062,7 @@ export default function LandingPage({ onLogin, onCompanySignUp }: LandingPagePro
             <div className="max-w-6xl mx-auto">
               <div className="text-center mb-16">
                 <p className="text-sm font-bold text-purple-600 uppercase tracking-widest mb-3">Simple Process</p>
-                <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">How SimuHire Works</h2>
+                <h2 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4 tracking-tight">How Hybrid recommender system Works</h2>
                 <p className="text-xl text-gray-500 max-w-xl mx-auto">
                   A simple, transparent process for better hiring outcomes.
                 </p>
@@ -1295,7 +1295,7 @@ export default function LandingPage({ onLogin, onCompanySignUp }: LandingPagePro
                   <div className="w-9 h-9 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
                     <Zap className="w-5 h-5 text-white" />
                   </div>
-                  <span className="font-extrabold text-white text-lg">SimuHire Rwanda</span>
+                  <span className="font-extrabold text-white text-lg">Hybrid recommender system</span>
                 </div>
                 <p className="text-sm leading-relaxed text-gray-500">
                   AI-powered recruitment matching for Rwanda's digital economy.
@@ -1319,7 +1319,7 @@ export default function LandingPage({ onLogin, onCompanySignUp }: LandingPagePro
               ))}
             </div>
             <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-gray-600">
-              <p>© 2026 SimuHire Rwanda. Supporting Rwanda's Vision 2050 and NICI III.</p>
+              <p>© 2026 Hybrid recommender system. Supporting Rwanda's Vision 2050 and NICI III.</p>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-green-600 font-medium">All systems operational</span>

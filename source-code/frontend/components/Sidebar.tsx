@@ -105,7 +105,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
             <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center font-bold text-lg text-white">
               M
             </div>
-            <div className="text-xl font-bold"> MRS</div>
+            <div className="text-xl font-bold"> HRS</div>
           </div>
           <button onClick={onClose} className={`md:hidden p-1 rounded-lg transition-colors ${theme.hover}`}>
             <X size={24} />
@@ -159,7 +159,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
             <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center font-bold text-lg text-white">
               M
             </div>
-            <div className="text-lg sm:text-xl font-bold"> MRS</div>
+            <div className="text-lg sm:text-xl font-bold"> HRS</div>
           </div>
         </div>
 

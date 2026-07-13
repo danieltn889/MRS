@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Recommender System- Recommendation Service  (Matcher + Hybrid Recommender, merged)
+Hybrid recommender system- Recommendation Service  (Matcher + Hybrid Recommender, merged)
 ====================================================================================
 One FastAPI process/port serving BOTH ML scorers that used to run as two
 separate services (ai_job_matcher_og.py on 8000 + hybrid_job_recommender.py
@@ -763,7 +763,7 @@ def log_match(message):
 
 log_info("="*70)
 log_info("🚀 AI JOB MATCHING API - PURE SEMANTIC MATCHING")
-log_info("✅ EVERYTHING COMES FROM DATABASE - NO HARDCODED VALUES")
+log_info(" EVERYTHING COMES FROM DATABASE - NO HARDCODED VALUES")
 log_info(f"📁 Log directory: {LOG_DIR}")
 log_info("="*70)
 
@@ -1213,7 +1213,7 @@ class Factor2_QualificationsMatcher:
         qualification_entries = edu_required.get('qualification_entries', [])
         processed_entries = []
         
-        # ✅ COLLECT ALL FIELDS FROM QUALIFICATION ENTRIES
+        #  COLLECT ALL FIELDS FROM QUALIFICATION ENTRIES
         all_fields_from_entries = []
         
         for entry in qualification_entries:
@@ -1229,7 +1229,7 @@ class Factor2_QualificationsMatcher:
             elif not isinstance(entry_fields, list):
                 entry_fields = []
             
-            # ✅ ADD ALL FIELDS TO THE COLLECTION
+            #  ADD ALL FIELDS TO THE COLLECTION
             for field in entry_fields:
                 if field and field not in all_fields_from_entries:
                     all_fields_from_entries.append(field)
@@ -1241,7 +1241,7 @@ class Factor2_QualificationsMatcher:
                 "fields_cleaned": [self.tp.clean(f) for f in entry_fields if f]
             })
         
-        # ✅ MERGE root fields_of_study with fields from qualification_entries
+        #  MERGE root fields_of_study with fields from qualification_entries
         root_fields = edu_required.get('fields_of_study', [])
         if isinstance(root_fields, str):
             try:
@@ -1312,7 +1312,7 @@ class Factor2_QualificationsMatcher:
                 processed_experience.append({"title": exp, "years_required": 0})
         
         # ============================================
-        # ✅ ENHANCED LOGGING - SHOW COMPLETE EDUCATION REQUIREMENTS
+        #  ENHANCED LOGGING - SHOW COMPLETE EDUCATION REQUIREMENTS
         # ============================================
         log_job(f"   ============================================")
         log_job(f"   📚 COMPLETE EDUCATION REQUIREMENTS FROM DB:")
@@ -1341,12 +1341,12 @@ class Factor2_QualificationsMatcher:
             log_job(f"   ")
         
         if certifications:
-            log_job(f"   ✅ Certifications Required ({len(certifications)}):")
+            log_job(f"    Certifications Required ({len(certifications)}):")
             for cert in certifications:
                 log_job(f"      - {cert}")
             log_job(f"   ")
         else:
-            log_job(f"   ✅ Certifications: None")
+            log_job(f"    Certifications: None")
             log_job(f"   ")
         
         if processed_experience:
@@ -1384,7 +1384,7 @@ class Factor2_QualificationsMatcher:
             "languages": processed_languages,
             "experience_requirements": processed_experience,
             "age_requirement": age_requirement,
-            # ✅ ADD THESE FOR COMPLETE DATA
+            #  ADD THESE FOR COMPLETE DATA
             "raw_education_required": edu_required,
             "has_qualification_entries": len(processed_entries) > 0,
             "total_qualification_options": len(processed_entries),
@@ -1492,10 +1492,10 @@ class Factor2_QualificationsMatcher:
                 # guaranteed 0.2 "something's better than nothing" credit.
                 if best_field_sim >= 0.8:
                     field_match_score = 1.0
-                    log_match(f"   ✅ Field match: EXCELLENT ({best_field_sim:.2f})")
+                    log_match(f"    Field match: EXCELLENT ({best_field_sim:.2f})")
                 elif best_field_sim >= 0.6:
                     field_match_score = 0.8
-                    log_match(f"   ✅ Field match: GOOD ({best_field_sim:.2f})")
+                    log_match(f"    Field match: GOOD ({best_field_sim:.2f})")
                 elif best_field_sim >= 0.4:
                     field_match_score = 0.5
                     log_match(f"   ️ Field match: PARTIAL ({best_field_sim:.2f})")
@@ -2738,7 +2738,7 @@ def extract_all_job_fields(job: Dict) -> Dict:
     education_required = job.get('education_required', {})
     
     
-     # ✅ CRITICAL: Extract age requirement
+     #  CRITICAL: Extract age requirement
     age_requirement = education_required.get('age_requirement', '')
     if not age_requirement:
         age_requirement = education_required.get('age_requirement_text', '')
@@ -2800,7 +2800,7 @@ def extract_all_job_fields(job: Dict) -> Dict:
         "metadata": metadata,
         "deleted_at": job.get('deleted_at'),
         "education_required": education_required, 
-         "age_requirement": age_requirement,  # ✅ ADD THIS
+         "age_requirement": age_requirement,  #  ADD THIS
         "company": {
             "id": job.get('company_id', ''),
             "name": job.get('company_name', 'Unknown'),
@@ -6024,12 +6024,12 @@ def score_candidate_against_jobs(candidate_id: str) -> dict:
                     "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
                     "job_degree_required": job_quals.get("minimum_degree", ""),
                     "job_allowed_fields": job_quals.get("fields_of_study", []),
-                    "qualification_entries": job_quals.get("qualification_entries", []),  # ✅ ADD THIS
+                    "qualification_entries": job_quals.get("qualification_entries", []),  #  ADD THIS
                     "best_similarity": q.get("best_similarity", 0),
                     "best_matched_field": q.get("best_matched_field", None),
                     "match_type": q.get("match_type", "none"),
-                    "match_quality": q.get("match_quality", ""),  # ✅ ADD THIS
-                    "explanation": q.get("explanation", ""),      # ✅ ADD THIS
+                    "match_quality": q.get("match_quality", ""),  #  ADD THIS
+                    "explanation": q.get("explanation", ""),      #  ADD THIS
                     "applicable": q.get("applicable", True),
                     "excluded_dimensions": q.get("excluded_dimensions", []),
                     "redistributed_weights": q.get("redistributed_weights", {})
@@ -6639,7 +6639,7 @@ async def match_candidate_for_job(job_id: str, request: Request):
         if total_raw >= 0.80:
             match_level = "Excellent Match 🌟"
         elif total_raw >= 0.65:
-            match_level = "Strong Match ✅"
+            match_level = "Strong Match "
         elif total_raw >= 0.50:
             match_level = "Good Match 👍"
         elif total_raw >= 0.35:
@@ -6680,12 +6680,12 @@ async def match_candidate_for_job(job_id: str, request: Request):
                 "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
                 "job_degree_required": job_quals.get("minimum_degree", ""),
                 "job_allowed_fields": job_quals.get("fields_of_study", []),
-                "qualification_entries": job_quals.get("qualification_entries", []),  # ✅ ADD THIS
+                "qualification_entries": job_quals.get("qualification_entries", []),  #  ADD THIS
                 "best_similarity": q.get("best_similarity", 0),
                 "best_matched_field": q.get("best_matched_field", None),
                 "match_type": q.get("match_type", "none"),
-                "match_quality": q.get("match_quality", ""),  # ✅ ADD THIS
-                "explanation": q.get("explanation", ""),      # ✅ ADD THIS
+                "match_quality": q.get("match_quality", ""),  #  ADD THIS
+                "explanation": q.get("explanation", ""),      #  ADD THIS
                 "applicable": q.get("applicable", True),
                 "excluded_dimensions": q.get("excluded_dimensions", []),
                 "redistributed_weights": q.get("redistributed_weights", {})

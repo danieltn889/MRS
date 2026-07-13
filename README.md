@@ -1,8 +1,8 @@
-# MRS Capstone Project
+# HRS Capstone Project
 
 ## Rwanda Polytechnic Capstone Project
 
-**Project title:** MIFOTRA Recruitment System (SimuHire) — an AI-powered job matching and recruitment platform
+**Project title:** MIFOTRA Hybrid recommender system (SimuHire) — an AI-powered job matching and recruitment platform
 
 **Student name:** TURIKUMWENIMANA Daniel
 **Registration number:** 25RP19824
@@ -23,7 +23,7 @@
 
 ## Project Overview
 
-SimuHire (MIFOTRA Recruitment System) is a multi-tenant recruitment platform that scores every
+SimuHire (MIFOTRA Hybrid recommender system) is a multi-tenant recruitment platform that scores every
 candidate–job pair using two independent engines blended together: a rule-based Matcher (four
 weighted, fully explainable factors — Skills, Qualifications, Experience, Preferences) and a
 5-signal AI Hybrid Recommender (Content, Behavior, Collaborative, Freshness, Popularity) that

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SimuHire Rwanda- API GATEWAY
+Hybrid recommender system- API GATEWAY
 ==============================
 Single entry point on port 8080 that proxies all 4 microservices.
 
@@ -56,17 +56,6 @@ SERVICES = {
             "GET  /feed/health - Health check",
         ],
     },
-    "commits": {
-        "name": "Commit-Task Matcher",
-        "file": "commit_task_matcher.py",
-        "port": 8097,
-        "prefix": "/commits",
-        "description": "Matches git commit messages to tasks using spaCy + TF-IDF + VADER",
-        "endpoints": [
-            "POST /commits/match  - Match a commit message against a task list",
-            "GET  /commits/health - Health check",
-        ],
-    },
     "search": {
         "name": "ML Job Search",
         "file": "ml_search.py",
@@ -78,22 +67,6 @@ SERVICES = {
             "GET  /search/health         - Health check",
             "POST /search/refresh        - Refresh job index",
             "GET  /search/logs/all       - View all logs",
-        ],
-    },
-    "vwes": {
-        "name": "V-WES Communication Classifier",
-        "file": "vwes_api.py",
-        "port": 8091,
-        "prefix": "/vwes",
-        "description": "Communication style classifier using Random Forest",
-        "endpoints": [
-            "POST   /vwes/train           - Train model in background",
-            "POST   /vwes/train/sync      - Train model synchronously",
-            "POST   /vwes/predict         - Classify a single message",
-            "POST   /vwes/predict/batch   - Classify multiple messages",
-            "POST   /vwes/analyze/chat    - Analyse a full chat conversation",
-            "GET    /vwes/status          - Training status",
-            "GET    /vwes/health          - Health check",
         ],
     },
     "hybrid": {
@@ -175,7 +148,7 @@ def start_service(key: str, svc: dict):
     log_files[key] = log_path
     log_fh = open(log_path, "w", encoding="utf-8")
 
-    print(f"  🚀 Starting {svc['name']} (port {svc['port']})…")
+    print(f"  Starting {svc['name']} (port {svc['port']})…")
     print(f"     Log: {log_path}")
 
     # Fix Windows cp1252 UnicodeEncodeError- emoji in print() crash child processes
@@ -271,7 +244,7 @@ def background_status_watcher():
                 continue
             if _port_open(SERVICES[key]["port"]):
                 service_status[key] = "up"
-                print(f"\n  ✅ {SERVICES[key]['name']} is now UP on port {SERVICES[key]['port']} 🎉")
+                print(f"\n   {SERVICES[key]['name']} is now UP on port {SERVICES[key]['port']} 🎉")
                 pending.discard(key)
 
     for key in pending:
@@ -302,7 +275,7 @@ async def lifespan(app: FastAPI):
     http_client = httpx.AsyncClient(timeout=300.0)  # 5 minutes for AI processing
 
     print("\n" + "=" * 65)
-    print("🌐  SimuHire Rwanda- API GATEWAY")
+    print("🌐  Hybrid recommender system- API GATEWAY")
     print(f"  Services folder: {SERVICES_DIR}")
     print("=" * 65)
 
@@ -332,7 +305,7 @@ async def lifespan(app: FastAPI):
     for key, svc in SERVICES.items():
         st = service_status[key]
         icons = {
-            "up":       ("✅", "ready"),
+            "up":       ("", "ready"),
             "missing":  ("️ ", "file not found- skipped"),
             "crashed":  ("💥", f"CRASHED- check {log_files.get(key)}"),
             "starting": ("⏳", f"still loading… (background watcher active, up to {STARTUP_WAIT//60} min)"),
@@ -367,7 +340,7 @@ async def lifespan(app: FastAPI):
 # ── APP ──────────────────────────────────────────────────────
 
 app = FastAPI(
-    title="SimuHire Rwanda- API Gateway",
+    title="Hybrid recommender system- API Gateway",
     description=(
         "Single entry point for all SimuHire microservices.\n\n"
         "| Prefix | Service |\n"
@@ -481,7 +454,7 @@ async def route_hybrid(request: Request, path: str = ""):
 @app.get("/", tags=["Gateway"])
 async def root():
     return {
-        "gateway": "SimuHire Rwanda API Gateway",
+        "gateway": "Hybrid recommender system API Gateway",
         "version": "1.0.0",
         "port": GATEWAY_PORT,
         "docs": f"http://localhost:{GATEWAY_PORT}/docs",
@@ -543,13 +516,13 @@ async def view_service_log(service_key: str, lines: int = 50):
 
 if __name__ == "__main__":
     print("\n" + "=" * 65)
-    print("🌐  SimuHire Rwanda- API GATEWAY  v1.0.0")
+    print("🌐  Hybrid recommender system- API GATEWAY  v1.0.0")
     print("=" * 65)
     print(f"  Single port : http://localhost:{GATEWAY_PORT}")
     print(f"  Services dir: {SERVICES_DIR}")
     print()
     for key, svc in SERVICES.items():
-        exists = "✅" if (SERVICES_DIR / svc["file"]).exists() else "❌ NOT FOUND"
+        exists = "" if (SERVICES_DIR / svc["file"]).exists() else "❌ NOT FOUND"
         print(f"  /{key:<10} → {svc['name']} (:{svc['port']})  {exists}")
     print(f"\n  Docs: http://localhost:{GATEWAY_PORT}/docs")
     print("=" * 65 + "\n")

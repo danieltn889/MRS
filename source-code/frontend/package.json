@@ -1,7 +1,7 @@
 {
   "name": "v-rec-dashboard",
   "version": "1.0.0",
-  "description": "High-fidelity Applicant Dashboard for  MRS recruitment platform",
+  "description": "High-fidelity Applicant Dashboard for  HRS recruitment platform",
   "type": "module",
   "main": "App.jsx",
   "dependencies": {
@@ -45,6 +45,6 @@
     "blockchain",
     "v-rec"
   ],
-  "author": " MRS Team",
+  "author": " HRS Team",
   "license": "MIT"
 }
