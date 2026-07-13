@@ -1258,6 +1258,11 @@ router.post(
 
       let applicationId: string;
       let isNewApplication = false;
+      // isNewApplication tracks INSERT vs UPDATE (for the audit operation type and
+      // the 201-vs-200 HTTP status). A resubmission after withdrawal/rejection is
+      // an UPDATE, but it's still a genuinely new application EVENT the candidate
+      // and recruiter should be notified about - gate notifications on this instead.
+      let shouldNotify = false;
 
       if (existingApplication.rows.length > 0) {
         const existingApp = existingApplication.rows[0];
@@ -1297,6 +1302,7 @@ router.post(
           );
           applicationId = updateResult.rows[0].id;
           isNewApplication = false;
+          shouldNotify = true;
           console.log(`''Application updated successfully: ${applicationId}`);
         }
       } else {
@@ -1321,6 +1327,7 @@ router.post(
         );
         applicationId = applicationResult.rows[0].id;
         isNewApplication = true;
+        shouldNotify = true;
         console.log(`''New application created successfully: ${applicationId}`);
       }
 
@@ -1341,10 +1348,11 @@ router.post(
         source: 'backend',
       });
 
-      // Best-effort side effects for a NEW application: a submission timeline entry,
-      // an in-app notification, and a confirmation email. None of these may break the
+      // Best-effort side effects for a new application EVENT (fresh insert, or a
+      // resubmission after withdrawal/rejection): a submission timeline entry, an
+      // in-app notification, and a confirmation email. None of these may break the
       // application response if they fail.
-      if (isNewApplication) {
+      if (shouldNotify) {
         try {
           await dbQuery(
             `INSERT INTO application_timeline (application_id, event_type, event_data, created_by)
