@@ -9,7 +9,6 @@
     "start": "node dist/server.js",
     "dev": "npm run db:setup && (npx kill-port 3001 || true) && tsx src/server.ts",
     "test": "jest",
-    "test:audit-chain": "tsx --test src/services/__tests__/audit-chain.test.ts",
     "test:signup": "tsx --test src/validators/__tests__/identityDocument.test.ts src/db/data/__tests__/rwandaLocations.test.ts",
     "migrate": "tsx src/db/migrate.ts",
     "seed": "tsx src/db/seed.ts",

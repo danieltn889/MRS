@@ -29,7 +29,7 @@ jobs:
         run: |
           cd source-code/backend
           npm ci || npm install
-          npm run test:audit-chain
+          npm run test:signup
 
       - name: Set up SSH
         run: |
