@@ -276,31 +276,67 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
     return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric'});
   };
 
-  const downloadCandidateReport = (candidate: Candidate) => {
-    const report = {
-      candidate: {
-        name: candidate.full_name,
-        email: candidate.candidate_email,
-        match_score: candidate.ai_match_score,
-        skills: candidate.candidate_skills,
-        work_experience: candidate.work_experience,
-        education: candidate.education,
-      },
-      application: {
-        id: candidate.application_id,
-        number: candidate.application_number,
-        status: candidate.application_status,
-        applied_at: candidate.applied_at,
-      },
-      generated_at: new Date().toISOString(),
-    };
-    const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json'});
+  const CSV_HEADERS = [
+    'Name', 'Email', 'Phone', 'Location', 'Headline',
+    'Application Number', 'Status', 'Applied Date', 'AI Match Score (%)',
+    'Skills', 'Education', 'Work Experience',
+    'Current Salary', 'Expected Salary', 'Notice Period (days)', 'Willing to Relocate',
+    'LinkedIn', 'GitHub', 'Portfolio', 'Resume URL',
+  ];
+
+  const csvEscape = (value: any): string => {
+    const s = value == null ? '' : String(value);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+
+  const candidateToCSVRow = (c: Candidate): string[] => [
+    c.full_name || '',
+    c.candidate_email || '',
+    c.phone || '',
+    [c.city, c.country].filter(Boolean).join(', '),
+    c.headline || '',
+    c.application_number || '',
+    c.application_status || 'submitted',
+    formatDate(c.applied_at),
+    String(c.ai_match_score ?? 0),
+    (c.candidate_skills || []).map(s => s.skill_name).join('; '),
+    (c.education || []).map(e => `${e.degree || ''}${e.field_of_study ? ' in ' + e.field_of_study : ''} - ${e.institution || ''}`).join('; '),
+    (c.work_experience || []).map(w => `${w.title || ''} at ${w.company || ''}`).join('; '),
+    c.current_salary != null ? String(c.current_salary) : '',
+    c.expected_salary != null ? String(c.expected_salary) : '',
+    c.notice_period_days != null ? String(c.notice_period_days) : '',
+    c.willing_to_relocate ? 'Yes' : 'No',
+    c.linkedin_url || '',
+    c.github_url || '',
+    c.portfolio_url || '',
+    c.primary_resume?.[0]?.file_url || '',
+  ];
+
+  const buildCSV = (rows: Candidate[]): string => {
+    const lines = [CSV_HEADERS, ...rows.map(candidateToCSVRow)]
+      .map(row => row.map(csvEscape).join(','));
+    return lines.join('\r\n');
+  };
+
+  const downloadCSV = (csv: string, filename: string) => {
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `candidate_${candidate.full_name?.replace(/\s/g, '_')}_report.json`;
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const downloadCandidateReport = (candidate: Candidate) => {
+    downloadCSV(buildCSV([candidate]), `candidate_${candidate.full_name?.replace(/\s/g, '_') || 'report'}.csv`);
+  };
+
+  const downloadAllReports = () => {
+    const statusLabel = statusFilter === 'all'? 'all-statuses': statusFilter;
+    const jobSlug = jobTitle.replace(/\s/g, '_');
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    downloadCSV(buildCSV(filteredCandidates), `${jobSlug}_candidates_${statusLabel}_${dateStamp}.csv`);
   };
 
   const filteredCandidates = candidates
@@ -388,6 +424,14 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
             <option value="name">Sort: Name</option>
           </select>
           <span style={{ fontSize: 13, color: '#64748b'}}>{filteredCandidates.length} result{filteredCandidates.length !== 1 ? 's': ''}</span>
+          <button
+            onClick={downloadAllReports}
+            disabled={filteredCandidates.length === 0}
+            title="Download a CSV report of every candidate currently shown (respects the status filter above)"
+            style={{ marginLeft: 'auto', padding: '9px 14px', borderRadius: 10, border: '1px solid #8b5cf6', background: '#f5f3ff', fontSize: 14, fontWeight: 600, color: '#7c3aed', cursor: filteredCandidates.length === 0 ? 'not-allowed': 'pointer', opacity: filteredCandidates.length === 0 ? 0.5 : 1, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <Download size={15} /> Download Report ({filteredCandidates.length})
+          </button>
         </div>
 
         {/* Candidates Table */}
