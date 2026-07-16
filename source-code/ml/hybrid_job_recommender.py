@@ -215,6 +215,7 @@ class BehaviorConfig:
 class InteractionWeights:
     view: float = 1.0
     save: float = 3.0
+    incomplete_application: float = 2.5  # opened the Apply form but didn't submit- stronger than a view, weaker than a save
     application_status: Dict[str, float] = field(default_factory=lambda: {
         "submitted": 5.0, "under_review": 5.0, "shortlisted": 7.0,
         "interview": 8.0, "assessment": 8.0, "reference_check": 8.5,
@@ -224,7 +225,7 @@ class InteractionWeights:
 
     @property
     def max_weight(self) -> float:
-        return max([self.view, self.save] + list(self.application_status.values()))
+        return max([self.view, self.save, self.incomplete_application] + list(self.application_status.values()))
 
 
 @dataclass
@@ -327,12 +328,14 @@ class Database:
                 cur.execute("""
                     SELECT
                         (SELECT COUNT(*) FROM applications) + (SELECT COUNT(*) FROM job_views)
-                      + (SELECT COUNT(*) FROM saved_jobs) + (SELECT COUNT(*) FROM job_searches),
+                      + (SELECT COUNT(*) FROM saved_jobs) + (SELECT COUNT(*) FROM job_searches)
+                      + (SELECT COUNT(*) FROM application_starts WHERE submitted = FALSE),
                         GREATEST(
                             (SELECT MAX(applied_at) FROM applications),
                             (SELECT MAX(viewed_at) FROM job_views),
                             (SELECT MAX(saved_at) FROM saved_jobs),
-                            (SELECT MAX(searched_at) FROM job_searches)
+                            (SELECT MAX(searched_at) FROM job_searches),
+                            (SELECT MAX(started_at) FROM application_starts WHERE submitted = FALSE)
                         )
                 """)
                 inter_count, inter_max = cur.fetchone()
@@ -446,6 +449,14 @@ class Database:
 
     def fetch_ignored_pairs(self) -> pd.DataFrame:
         return self._query_df("SELECT user_id, job_id FROM ignored_jobs")
+
+    def fetch_incomplete_application_events(self) -> pd.DataFrame:
+        """Candidates who opened the Apply form but never submitted   a
+        weaker-than-apply, stronger-than-view signal of interest."""
+        return self._query_df("""
+            SELECT user_id, job_id, started_at AS event_date
+            FROM application_starts WHERE submitted = FALSE
+        """)
 
     def fetch_search_events(self) -> pd.DataFrame:
         return self._query_df("SELECT user_id, query, searched_at FROM job_searches")
@@ -3188,11 +3199,15 @@ class Preprocessor:
         self.job_id_to_idx = {jid: i for i, jid in enumerate(self.idx_to_job_id)}
 
     def build_events(self, views: pd.DataFrame, applications: pd.DataFrame,
-                      saves: pd.DataFrame) -> pd.DataFrame:
+                      saves: pd.DataFrame,
+                      incomplete_applications: Optional[pd.DataFrame] = None) -> pd.DataFrame:
         iw = self.cfg.interaction_weights
         parts = []
 
-        for df, weight_col in ((views, None), (saves, None)):
+        if incomplete_applications is None:
+            incomplete_applications = pd.DataFrame(columns=["user_id", "job_id", "event_date"])
+
+        for df, weight in ((views, iw.view), (saves, iw.save), (incomplete_applications, iw.incomplete_application)):
             if df.empty:
                 continue
             d = df.copy()
@@ -3200,7 +3215,7 @@ class Preprocessor:
                   d["job_id"].astype(str).isin(self.job_id_to_idx)]
             d["candidate_idx"] = d["user_id"].astype(str).map(self.candidate_id_to_idx)
             d["job_idx"] = d["job_id"].astype(str).map(self.job_id_to_idx)
-            d["weight"] = iw.view if df is views else iw.save
+            d["weight"] = weight
             parts.append(d[["candidate_idx", "job_idx", "event_date", "weight"]])
 
         if not applications.empty:
@@ -3943,7 +3958,7 @@ class BehaviorModel:
     # training signal. Rejected/withdrawn contribute nothing: they are not a
     # positive interest signal.
     TYPE_WEIGHTS = {
-        "view": 1.0, "search_click": 2.0, "save": 3.0,
+        "view": 1.0, "search_click": 2.0, "incomplete_application": 2.5, "save": 3.0,
         "submitted": 5.0, "under_review": 5.0, "apply": 5.0,
         "shortlisted": 6.0, "on_hold": 4.0,
         "interview": 7.0, "assessment": 7.0, "reference_check": 7.5,
@@ -4852,6 +4867,7 @@ class RecommendationEngine:
         self.views: Optional[pd.DataFrame] = None
         self.applications: Optional[pd.DataFrame] = None
         self.saves: Optional[pd.DataFrame] = None
+        self.incomplete_applications: Optional[pd.DataFrame] = None
         self.search_events: Optional[pd.DataFrame] = None
         self._realtime_queue: "queue.Queue[dict]" = queue.Queue(maxsize=5000)
         self._realtime_stop = threading.Event()
@@ -4896,6 +4912,7 @@ class RecommendationEngine:
             self.work_df, self.certifications_df = state["work_df"], state["certifications_df"]
             self.ignored = state["ignored"]
             self.views, self.applications, self.saves = state["views"], state["applications"], state["saves"]
+            self.incomplete_applications = state.get("incomplete_applications", pd.DataFrame(columns=["user_id", "job_id", "event_date"]))
             self.search_events = state["search_events"]
             self.events = state["events"]
             self.preprocessor = state["preprocessor"]
@@ -4937,10 +4954,11 @@ class RecommendationEngine:
         views = self.db.fetch_view_events()
         applications = self.db.fetch_application_events()
         saves = self.db.fetch_save_events()
+        incomplete_applications = self.db.fetch_incomplete_application_events()
         ignored = self.db.fetch_ignored_pairs()
         search_events = self.db.fetch_search_events()
 
-        events = preprocessor.build_events(views, applications, saves)
+        events = preprocessor.build_events(views, applications, saves, incomplete_applications)
         matrix = preprocessor.build_interaction_matrix(events, len(candidates), len(jobs))
 
         hard_negatives: Dict[int, List[int]] = {}
@@ -4967,6 +4985,7 @@ class RecommendationEngine:
             self.certifications_df = certifications_df
             self.ignored = ignored
             self.views, self.applications, self.saves = views, applications, saves
+            self.incomplete_applications = incomplete_applications
             self.search_events = search_events
             self.events = events
             self.preprocessor = preprocessor
@@ -4985,7 +5004,7 @@ class RecommendationEngine:
         self._persist(content_model, behavior_model, collaborative_model, jobs, candidates,
                       skills_df, education_df, work_df, certifications_df, ignored,
                       views, applications, saves, search_events, events, preprocessor,
-                      fingerprints, stats, bump="patch")
+                      fingerprints, stats, bump="patch", incomplete_applications=incomplete_applications)
         return stats
 
     def _full_fit(self, fingerprints: dict, t0: float) -> dict:
@@ -5003,6 +5022,7 @@ class RecommendationEngine:
         views = self.db.fetch_view_events()
         applications = self.db.fetch_application_events()
         saves = self.db.fetch_save_events()
+        incomplete_applications = self.db.fetch_incomplete_application_events()
         ignored = self.db.fetch_ignored_pairs()
         search_events = self.db.fetch_search_events()
 
@@ -5015,7 +5035,7 @@ class RecommendationEngine:
 
         preprocessor = Preprocessor(self.cfg)
         preprocessor.fit_id_maps(candidates, jobs)
-        events = preprocessor.build_events(views, applications, saves)
+        events = preprocessor.build_events(views, applications, saves, incomplete_applications)
         matrix = preprocessor.build_interaction_matrix(events, len(candidates), len(jobs))
 
         content_model = ContentBasedModel(self.cfg.content, encoder=self.semantic_encoder)
@@ -5045,6 +5065,7 @@ class RecommendationEngine:
             self.certifications_df = certifications_df
             self.ignored = ignored
             self.views, self.applications, self.saves = views, applications, saves
+            self.incomplete_applications = incomplete_applications
             self.search_events = search_events
             self.events = events
             self.preprocessor = preprocessor
@@ -5063,13 +5084,14 @@ class RecommendationEngine:
         self._persist(content_model, behavior_model, collaborative_model, jobs, candidates,
                       skills_df, education_df, work_df, certifications_df, ignored,
                       views, applications, saves, search_events, events, preprocessor,
-                      fingerprints, stats, bump="minor")
+                      fingerprints, stats, bump="minor", incomplete_applications=incomplete_applications)
         return stats
 
     def _persist(self, content_model, behavior_model, collaborative_model, jobs, candidates,
                  skills_df, education_df, work_df, certifications_df, ignored,
                  views, applications, saves, search_events, events, preprocessor,
-                 fingerprints: dict, stats: dict, bump: str) -> None:
+                 fingerprints: dict, stats: dict, bump: str,
+                 incomplete_applications: Optional[pd.DataFrame] = None) -> None:
         """Shallow-copies content_model/behavior_model with .encoder
         stripped (the SentenceTransformer is loaded once per process and
         reused- pickling it too would bloat the snapshot for no benefit,
@@ -5089,6 +5111,7 @@ class RecommendationEngine:
                 "skills_df": skills_df, "education_df": education_df,
                 "work_df": work_df, "certifications_df": certifications_df,
                 "ignored": ignored, "views": views, "applications": applications, "saves": saves,
+                "incomplete_applications": incomplete_applications,
                 "search_events": search_events, "events": events, "preprocessor": preprocessor,
             }
 
@@ -5479,7 +5502,7 @@ class RecommendationEngine:
                             applied += 1
                     continue
 
-                if entity_type in {"view", "job_views", "saved_job", "saved_jobs", "save", "application", "applications", "ignored_job", "ignored_jobs", "ignore", "search", "job_searches"}:
+                if entity_type in {"view", "job_views", "saved_job", "saved_jobs", "save", "application", "applications", "ignored_job", "ignored_jobs", "ignore", "search", "job_searches", "application_started", "application_starts"}:
                     behavior_change = True
                     if entity_type in {"search", "job_searches"}:
                         search_change = True
@@ -5525,6 +5548,15 @@ class RecommendationEngine:
                                 "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
                                 "status": payload.get("status") or operation or "submitted",
                             })
+                    elif entity_type in {"application_started", "application_starts"}:
+                        # application_starts is also UNIQUE(user_id, job_id)- same
+                        # defensive upsert as views/saves (re-opening the Apply form
+                        # for the same job refreshes one row, not a duplicate).
+                        self.incomplete_applications = self._upsert_interaction_row(self.incomplete_applications, candidate_id, job_id, {
+                            "user_id": candidate_id,
+                            "job_id": job_id,
+                            "event_date": payload.get("event_date") or event.get("created_at") or datetime.utcnow().isoformat(),
+                        })
                     elif entity_type in {"ignored_job", "ignored_jobs", "ignore"}:
                         if operation in {"delete", "removed"}:
                             self.ignored = self._remove_interaction_row(self.ignored, candidate_id, job_id)
@@ -6527,6 +6559,25 @@ async def health():
     }
 
 
+@app.get("/behavior/stats")
+async def behavior_stats():
+    """Raw interaction counts currently held by the engine- lets a candidate-
+    facing 'My Activity' page confirm interactions (including incomplete/
+    abandoned applications) have actually reached the ML model, not just
+    the database."""
+    def _n(df: Optional[pd.DataFrame]) -> int:
+        return int(len(df)) if df is not None else 0
+
+    return {
+        "views": _n(engine.views),
+        "saves": _n(engine.saves),
+        "applications": _n(engine.applications),
+        "incomplete_applications": _n(engine.incomplete_applications),
+        "search_events": _n(engine.search_events),
+        "last_trained_at": engine.last_trained_at.isoformat() if engine.last_trained_at else None,
+    }
+
+
 # ==========================================================================
 # MATCHER ROUTES -- mounted at /matcher (was its own service on port 8000;
 # gateway.py now proxies /matcher/* to this same merged process/port
@@ -6883,6 +6934,7 @@ def main():
         print("Job views:", len(db.fetch_view_events()))
         print("Applications:", len(db.fetch_application_events()))
         print("Saved jobs:", len(db.fetch_save_events()))
+        print("Incomplete applications:", len(db.fetch_incomplete_application_events()))
         print("Ignored jobs:", len(db.fetch_ignored_pairs()))
         print("Search events:", len(db.fetch_search_events()))
         return

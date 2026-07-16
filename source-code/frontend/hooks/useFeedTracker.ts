@@ -50,6 +50,12 @@ export function useFeedTracker() {
     fire(`${API}/feed/ignore/${jobId}`, 'POST', undefined, token);
   }, [token, isCandidate]);
 
+  // Call when the Apply form is opened for a job (not when it's submitted   see submitApplication)
+  const trackApplicationStart = useCallback((jobId: string) => {
+    if (!isCandidate || !jobId) return;
+    fire(`${API}/feed/application-start/${jobId}`, 'POST', undefined, token);
+  }, [token, isCandidate]);
+
   // Call on mouseenter of a job card
   const onHoverStart = useCallback((jobId: string) => {
     if (!isCandidate || !jobId) return;
@@ -68,5 +74,5 @@ export function useFeedTracker() {
     }
   }, [isCandidate, trackView]);
 
-  return { trackView, trackSearch, trackSave, trackUnsave, trackIgnore, onHoverStart, onHoverEnd };
+  return { trackView, trackSearch, trackSave, trackUnsave, trackIgnore, trackApplicationStart, onHoverStart, onHoverEnd };
 }

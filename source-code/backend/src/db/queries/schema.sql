@@ -889,6 +889,23 @@ CREATE TABLE job_searches (
 );
 CREATE INDEX idx_job_searches_user ON job_searches(user_id, searched_at DESC);
 
+-- Tracks when a candidate opens the application form for a job (started_at)
+-- and whether they ever went on to actually submit it (submitted/submitted_at).
+-- A row with submitted = FALSE is a candidate who clicked "Apply" but
+-- abandoned the form   a signal the ML behavior model also reads
+-- (see hybrid_job_recommender.py fetch_incomplete_application_events()).
+CREATE TABLE application_starts (
+    id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    job_id        UUID NOT NULL REFERENCES jobs(id)  ON DELETE CASCADE,
+    started_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    submitted     BOOLEAN NOT NULL DEFAULT FALSE,
+    submitted_at  TIMESTAMP WITH TIME ZONE,
+    UNIQUE (user_id, job_id)
+);
+CREATE INDEX idx_application_starts_user      ON application_starts(user_id);
+CREATE INDEX idx_application_starts_incomplete ON application_starts(user_id) WHERE submitted = FALSE;
+
 CREATE TABLE feed_scores (
     candidate_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     job_id       UUID NOT NULL REFERENCES jobs(id)  ON DELETE CASCADE,

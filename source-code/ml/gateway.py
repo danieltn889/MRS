@@ -346,9 +346,9 @@ app = FastAPI(
         "| Prefix | Service |\n"
         "|--------|---------|\n"
         "| `/matcher` | AI Job Matcher |\n"
-        "| `/commits` | Commit-Task Matcher |\n"
         "| `/search`  | ML Job Search |\n"
-        "| `/vwes`    | V-WES Classifier |\n"
+        "| `/feed`    | Job Feed Recommender |\n"
+        "| `/hybrid`  | Hybrid Job Recommender |\n"
     ),
     version="1.0.0",
     lifespan=lifespan,
@@ -429,20 +429,10 @@ async def route_matcher(request: Request, path: str = ""):
     # app's own /matcher routes expect it, unlike /hybrid's bare paths below.
     return await proxy(request, 8003, None)
 
-@app.api_route("/commits",             methods=METHODS)
-@app.api_route("/commits/{path:path}", methods=METHODS)
-async def route_commits(request: Request, path: str = ""):
-    return await proxy(request, 8097, "/commits")
-
 @app.api_route("/search",              methods=METHODS)
 @app.api_route("/search/{path:path}",  methods=METHODS)
 async def route_search(request: Request, path: str = ""):
     return await proxy(request, 8001, "/search")
-
-@app.api_route("/vwes",                methods=METHODS)
-@app.api_route("/vwes/{path:path}",    methods=METHODS)
-async def route_vwes(request: Request, path: str = ""):
-    return await proxy(request, 8091, "/vwes")
 
 @app.api_route("/hybrid",              methods=METHODS)
 @app.api_route("/hybrid/{path:path}",  methods=METHODS)

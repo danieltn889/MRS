@@ -85,6 +85,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'dashboard', label: 'Applicant Dashboard', icon: BarChart3 },
           { id: 'saved-jobs', label: 'Saved Jobs', icon: Bookmark },
           { id: 'applications', label: 'My Applications', icon: CheckSquare },
+          { id: 'my-activity', label: 'My Activity', icon: Activity },
           { id: 'profile', label: 'My Profile', icon: User },
           { id: 'security', label: 'Security Settings', icon: Shield }
         ];

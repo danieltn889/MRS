@@ -1334,6 +1334,19 @@ router.post(
       await client.query('COMMIT');
       console.log('💾 Database transaction committed successfully');
 
+      // This submission means the Apply form was NOT abandoned   clear the
+      // "incomplete application" signal so it stops showing under My Activity
+      // and stops being read as an incomplete-application interaction by the ML model.
+      try {
+        await dbQuery(
+          `UPDATE application_starts SET submitted = TRUE, submitted_at = NOW()
+           WHERE user_id = $1 AND job_id = $2`,
+          [authReq.user!.id, jobId]
+        );
+      } catch (startErr) {
+        logger.warn(`application_starts update failed: ${(startErr as Error).message}`);
+      }
+
       // Tell the hybrid recommender an application happened   a strong positive
       // signal for both the behavior model (recency-weighted interest profile)
       // and collaborative filtering (this candidate x job interaction).

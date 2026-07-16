@@ -33,6 +33,7 @@ import { useAuth } from './context/AuthContext';
 import appliedJobsManager from './src/utils/AppliedJobsManager';
 import CandidateDetailView from './components/CandidateDetailView';
 import PersonalizedFeed from './components/jobs/PersonalizedFeed';
+import MyActivity from './components/MyActivity';
 
 // Define the props for DashboardHome if needed, but it should accept these
 interface DashboardProps {
@@ -192,6 +193,9 @@ export default function Dashboard({ onSignUp, onLogin }: DashboardProps) {
         );
       case 'saved-jobs':
         return <SavedJobs onBack={() => setCurrentView('dashboard')} />;
+
+      case 'my-activity':
+        return <MyActivity onBack={() => setCurrentView('dashboard')} />;
 
       case 'profile':
         return <ProfileManagement onNavigate={setCurrentView} />;

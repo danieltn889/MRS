@@ -12,6 +12,7 @@ import {
 } from '../services/notificationAPI';
 import { getCandidateProfile } from '../services/candidateAPI';
 import { resolveFileUrl } from '../utils/fileUrl';
+import { useFeedTracker } from '../hooks/useFeedTracker';
 
 // Same search endpoint the landing page uses, so the navbar search behaves
 // exactly like the public search (just without the auth gate, since the
@@ -45,6 +46,7 @@ const Header: React.FC<HeaderProps> = ({
   onViewChange 
 }) => {
   const navigate = useNavigate();
+  const { trackSearch } = useFeedTracker();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState<boolean>(false);
@@ -362,6 +364,7 @@ const Header: React.FC<HeaderProps> = ({
     setIsSearching(true);
     setShowSearchResults(true);
     localStorage.setItem('searchQuery', q);
+    trackSearch(q);
 
     try {
       const response = await fetch(`${SEARCH_API_URL}?q=${encodeURIComponent(q)}&limit=20`);

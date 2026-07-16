@@ -11,6 +11,7 @@ import {
   Play, Rocket, BarChart3, Users
 } from 'lucide-react';
 import { submitApplication } from '../../services/applicationAPI';
+import { useFeedTracker } from '../../hooks/useFeedTracker';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -247,6 +248,8 @@ const JobApplicationModal = ({
   const [submissionResponse, setSubmissionResponse] = useState<any>(null);
   const [showSimulationPrompt, setShowSimulationPrompt] = useState<boolean>(false);
 
+  const { trackApplicationStart } = useFeedTracker();
+
   // Normalize profile data
   const profile = normaliseProfile(candidateProfileProp);
   const matchScore = matchScoreProp ?? 0;
@@ -475,6 +478,7 @@ const JobApplicationModal = ({
   // ─── EFFECTS ──────────────────────────────────────────────────
   useEffect(() => {
     if (isOpen) {
+      if (job?.id) trackApplicationStart(job.id);
       setCurrentStep(1);
       setAnswers({});
       // Pre-attach the candidate's existing primary resume so they don't re-upload it.

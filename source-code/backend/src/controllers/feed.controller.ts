@@ -9,6 +9,9 @@ import axios from 'axios';
 const ML_GATEWAY = process.env.ML_GATEWAY_URL || 'http://localhost:8080';
 
 class FeedController extends BaseController {
+  constructor() {
+    super('feed');
+  }
 
   // GET /api/v1/feed    returns personalized ranked jobs for the logged-in candidate
   async getPersonalizedFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
@@ -348,6 +351,122 @@ class FeedController extends BaseController {
       ResponseService.success(res, null, 'Search logged');
     } catch (err: any) {
       ResponseService.error(res, 'Failed to log search', 500, null, err?.message);
+    }
+  }
+
+  // POST /api/v1/feed/application-start/:jobId    candidate opened the Apply form
+  async logApplicationStart(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const { jobId } = req.params;
+      await DatabaseService.query(`
+        INSERT INTO application_starts (user_id, job_id, started_at)
+        VALUES ($1, $2, NOW())
+        ON CONFLICT (user_id, job_id)
+        DO UPDATE SET started_at = NOW()
+        WHERE application_starts.submitted = FALSE
+      `, [req.user.id, jobId]);
+      RecommendationSyncService.queueEvent({
+        event_type: 'recommendation_update',
+        entity_type: 'application_started',
+        operation: 'upsert',
+        candidate_id: req.user.id,
+        job_id: jobId,
+        payload: {},
+        source: 'backend',
+      });
+      ResponseService.success(res, null, 'Application start logged');
+    } catch (err: any) {
+      ResponseService.error(res, 'Failed to log application start', 500, null, err?.message);
+    }
+  }
+
+  // GET /api/v1/feed/activity    full interaction history for "My Activity", grouped by type
+  async getActivity(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = req.user.id;
+      const [viewed, saved, applied, searched, incomplete] = await Promise.all([
+        DatabaseService.query(`
+          SELECT jv.job_id, jv.viewed_at, jv.seconds_spent,
+            j.title, c.name AS company_name
+          FROM job_views jv
+          JOIN jobs j ON j.id = jv.job_id
+          JOIN companies c ON c.id = j.company_id
+          WHERE jv.user_id = $1
+          ORDER BY jv.viewed_at DESC
+          LIMIT 100
+        `, [userId]),
+
+        DatabaseService.query(`
+          SELECT sj.job_id, sj.saved_at,
+            j.title, c.name AS company_name
+          FROM saved_jobs sj
+          JOIN jobs j ON j.id = sj.job_id
+          JOIN companies c ON c.id = j.company_id
+          WHERE sj.user_id = $1
+          ORDER BY sj.saved_at DESC
+          LIMIT 100
+        `, [userId]),
+
+        DatabaseService.query(`
+          SELECT a.job_id, a.applied_at, a.status,
+            j.title, c.name AS company_name
+          FROM applications a
+          JOIN jobs j ON j.id = a.job_id
+          JOIN companies c ON c.id = j.company_id
+          WHERE a.user_id = $1 AND a.deleted_at IS NULL
+          ORDER BY a.applied_at DESC
+          LIMIT 100
+        `, [userId]),
+
+        DatabaseService.query(`
+          SELECT query, searched_at
+          FROM job_searches
+          WHERE user_id = $1
+          ORDER BY searched_at DESC
+          LIMIT 100
+        `, [userId]),
+
+        DatabaseService.query(`
+          SELECT aps.job_id, aps.started_at,
+            j.title, c.name AS company_name
+          FROM application_starts aps
+          JOIN jobs j ON j.id = aps.job_id
+          JOIN companies c ON c.id = j.company_id
+          WHERE aps.user_id = $1 AND aps.submitted = FALSE
+          ORDER BY aps.started_at DESC
+          LIMIT 100
+        `, [userId]),
+      ]);
+
+      ResponseService.success(res, {
+        viewed: viewed.rows,
+        saved: saved.rows,
+        applied: applied.rows,
+        searched: searched.rows,
+        incomplete_applications: incomplete.rows,
+        counts: {
+          viewed: viewed.rowCount,
+          saved: saved.rowCount,
+          applied: applied.rowCount,
+          searched: searched.rowCount,
+          incomplete_applications: incomplete.rowCount,
+        },
+      }, 'Activity history loaded');
+    } catch (err: any) {
+      ResponseService.error(res, 'Failed to load activity history', 500, null, err?.message);
+    }
+  }
+
+  // GET /api/v1/feed/ml-status    proxies the ML gateway's behavior/stats so the
+  // frontend never has to call the ML gateway directly from the browser (avoids
+  // browser-CORS entirely by keeping this a server-to-server call, same as
+  // getPersonalizedFeed's own ML gateway call above).
+  async getMlStatus(_req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const mlRes = await axios.get(`${ML_GATEWAY}/hybrid/behavior/stats`, { timeout: 15000 });
+      ResponseService.success(res, mlRes.data, 'ML status loaded');
+    } catch (err: any) {
+      ResponseService.error(res, 'ML service unavailable', 503, null, err?.message);
     }
   }
 
