@@ -39,7 +39,7 @@ app.use(morgan('combined', { stream: (logger as any).stream }));
 
 // CORS
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:8080'],
+  origin: ['http://localhost:3000', 'http://localhost:8085'],
   credentials: true
 }));
 

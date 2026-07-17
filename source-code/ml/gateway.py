@@ -2,12 +2,12 @@
 """
 Hybrid recommender system- API GATEWAY
 ==============================
-Single entry point on port 8080 that proxies all 4 microservices.
+Single entry point on port 8085 that proxies all 4 microservices.
 
 Run from the folder that contains all 4 service files:
   python gateway.py
 
-Docs: http://localhost:8080/docs
+Docs: http://localhost:8085/docs
 """
 
 import subprocess
@@ -89,7 +89,7 @@ SERVICES = {
     },
 }
 
-GATEWAY_PORT  = 8080
+GATEWAY_PORT  = int(os.environ.get("GATEWAY_PORT", "8085"))
 QUICK_WAIT    = 60    # seconds for initial startup check
 STARTUP_WAIT  = 300   # seconds for background watcher
 POLL_INTERVAL = 2
@@ -516,5 +516,14 @@ if __name__ == "__main__":
         print(f"  /{key:<10} → {svc['name']} (:{svc['port']})  {exists}")
     print(f"\n  Docs: http://localhost:{GATEWAY_PORT}/docs")
     print("=" * 65 + "\n")
+
+    # Free our own port too- a prior gateway run that didn't shut down cleanly
+    # (or crashed after starting its sub-services) can leave a stale process
+    # bound to GATEWAY_PORT, which makes every subsequent start fail with
+    # "only one usage of each socket address" before the app even boots.
+    if _port_open(GATEWAY_PORT):
+        print(f"  ️  Port {GATEWAY_PORT} already in use- attempting to free it…")
+        _kill_port(GATEWAY_PORT)
+        time.sleep(1)
 
     uvicorn.run(app, host="0.0.0.0", port=GATEWAY_PORT)

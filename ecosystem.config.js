@@ -16,7 +16,7 @@ module.exports = {
       cwd: './source-code/ml',
       // Uses the venv created by deploy.sh; the gateway boots all ML services
       // (including the merged hybrid+matcher recommender on 8003) and
-      // exposes the gateway on 8080.
+      // exposes the gateway on 8085.
       script: './.venv/bin/python',
       args: 'gateway.py',
       autorestart: true,

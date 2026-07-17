@@ -29,7 +29,7 @@ cd "$ROOT/source-code/frontend"
 npm ci || npm install
 npm run build
 
-# ── ML (Python FastAPI: gateway 8080, all services incl. the merged hybrid+matcher on 8003) ─────────────────────────
+# ── ML (Python FastAPI: gateway 8085, all services incl. the merged hybrid+matcher on 8003) ─────────────────────────
 echo "── ML ──"
 cd "$ROOT/source-code/ml"
 python3 -m venv .venv 2>/dev/null || true

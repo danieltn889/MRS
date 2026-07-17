@@ -6,11 +6,11 @@
 // (full details) plus a human-readable "reasons" list   the UI should show
 // those reasons, not just a bare percentage.
 
-const HYBRID_GATEWAY_URL = import.meta.env.VITE_HYBRID_GATEWAY_URL || 'http://localhost:8080/hybrid';
+const HYBRID_GATEWAY_URL = import.meta.env.VITE_HYBRID_GATEWAY_URL || 'http://localhost:8085/hybrid';
 // Kept only for getJobMatchForCandidate (single-job match, used by
 // ApplicationScreen/JobDetails) which the combined feed has no equivalent
 // for yet   see aiJobMatchingService.ts's getJobMatchForCandidate.
-const MATCHER_GATEWAY_URL = import.meta.env.VITE_ML_GATEWAY_URL || 'http://localhost:8080/matcher';
+const MATCHER_GATEWAY_URL = import.meta.env.VITE_ML_GATEWAY_URL || 'http://localhost:8085/matcher';
 const AI_MATCH_TIMEOUT_MS = 300000;
 // High enough to cover every currently-active, published job rather than
 // just a top slice   the dashboard should show all active jobs with their

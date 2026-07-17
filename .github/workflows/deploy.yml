@@ -83,7 +83,7 @@ jobs:
               echo " $1 FAILED ($2)"; ok=false
             }
             check "backend"  "http://127.0.0.1:3001/health"
-            check "ml"       "http://127.0.0.1:8080/matcher/health"
+            check "ml"       "http://127.0.0.1:8085/matcher/health"
             check "frontend" "http://127.0.0.1:3000"
             echo "--- pm2 ---"; pm2 status || true
             $ok || { echo "🔴 Deployment verification failed"; exit 1; }

@@ -6,7 +6,7 @@ import RecommendationSyncService from '../services/recommendation-sync.service.j
 import { AuthenticatedRequest } from '../types/auth.types.js';
 import axios from 'axios';
 
-const ML_GATEWAY = process.env.ML_GATEWAY_URL || 'http://localhost:8080';
+const ML_GATEWAY = process.env.ML_GATEWAY_URL || 'http://localhost:8085';
 
 class FeedController extends BaseController {
   constructor() {

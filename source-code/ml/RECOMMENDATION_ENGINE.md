@@ -16,7 +16,7 @@ Dashboard / Job Details / Application Modal
 frontend/services/aiJobMatchingService.ts
         │  POST /hybrid/score/combined  { candidate_id, top_n }
         ▼
-   nginx  →  ml-gateway (8080)  →  hybrid_job_recommender.py (8003)
+   nginx  →  ml-gateway (8085)  →  hybrid_job_recommender.py (8003)
                                           │
                                           ├── calls → ai_job_matcher_og.py (8000)   [Matcher]
                                           └── computes its own score               [Hybrid]
@@ -35,7 +35,7 @@ frontend/services/aiJobMatchingService.ts
 GET /api/v1/feed?page=1&top_n=10  (feed.controller.ts)
         │
         ▼
-   ml-gateway (8080)  →  feed_recommender.py (8002)   [Feed   fully separate, no relation to the above]
+   ml-gateway (8085)  →  feed_recommender.py (8002)   [Feed   fully separate, no relation to the above]
 ```
 
 ## 1. The Matcher   `ai_job_matcher_og.py` (port 8000)
@@ -281,7 +281,7 @@ happened for that request (including the adjusted split).
 `VITE_ML_GATEWAY_URL` (Matcher) and `VITE_HYBRID_GATEWAY_URL` (Hybrid/
 combined)   both must be set in `.env.production` (baked in at Vite build
 time) or every combined-feed request silently falls back to
-`http://localhost:8080/...`, which only exists on a developer's own machine.
+`http://localhost:8085/...`, which only exists on a developer's own machine.
 This exact gap caused a full "No job matches found" outage in production once
 (missing `VITE_HYBRID_GATEWAY_URL`)   see git history, "Fix missing
 VITE_HYBRID_GATEWAY_URL" commit.
@@ -364,7 +364,7 @@ with nothing to compare against.
 | `source-code/ml/ai_job_matcher_og.py` | Matcher service (port 8000) |
 | `source-code/ml/hybrid_job_recommender.py` | Hybrid Recommender service (port 8003)   `ContentBasedModel`, `BehaviorModel` (17-pair unified), `CollaborativeModel`, `combined_score_candidate()`, `/score`, `/score/combined`, `/score/combined/job/{id}` endpoints |
 | `source-code/ml/feed_recommender.py` | Feed service (port 8002)   `DynamicTextProcessor`, `BehaviorModel` (unified, feed-specific), `profile_match()`   powers only `/api/v1/feed`, unrelated to the other two |
-| `source-code/ml/gateway.py` | Reverse-proxy (port 8080): `/matcher/*`→8000, `/hybrid/*`→8003, `/feed/*`→8002; launches/monitors all ML subprocesses |
+| `source-code/ml/gateway.py` | Reverse-proxy (port 8085): `/matcher/*`→8000, `/hybrid/*`→8003, `/feed/*`→8002; launches/monitors all ML subprocesses |
 | `source-code/backend/src/controllers/feed.controller.ts` | `GET /api/v1/feed`   fetches candidate profile + activity + jobs, calls `feed_recommender.py` |
 | `source-code/frontend/services/aiJobMatchingService.ts` | Frontend client for `/hybrid/score/combined` (Matcher+Hybrid combined feed)   reads `VITE_ML_GATEWAY_URL`/`VITE_HYBRID_GATEWAY_URL` |
 | `source-code/frontend/components/jobs/PersonalizedFeed.tsx` | "For You" tab   calls `/api/v1/feed` directly (not the combined feed) |
