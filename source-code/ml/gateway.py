@@ -521,6 +521,7 @@ if __name__ == "__main__":
     # (or crashed after starting its sub-services) can leave a stale process
     # bound to GATEWAY_PORT, which makes every subsequent start fail with
     # "only one usage of each socket address" before the app even boots.
+    #push
     if _port_open(GATEWAY_PORT):
         print(f"  ️  Port {GATEWAY_PORT} already in use- attempting to free it…")
         _kill_port(GATEWAY_PORT)
