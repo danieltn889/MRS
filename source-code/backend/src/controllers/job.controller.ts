@@ -3682,6 +3682,8 @@ class JobController extends BaseController {
         cp.phone,
         cp.country,
         cp.city,
+        cp.date_of_birth,
+        cp.gender,
         cp.timezone,
         cp.profile_photo_url,
         cp.headline,

@@ -10,6 +10,7 @@ from typing import List, Dict
 import requests
 import json
 import uvicorn
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 import re
@@ -775,30 +776,35 @@ class BackendClient:
             log_success(f"Found {len(jobs)} jobs")
             write_log(DATA_LOG, f"Found {len(jobs)} jobs in list response", "INFO")
 
-            # Fetch full details
-            enriched_jobs = []
-            for job in jobs:
+            # Fetch full details. Sequential requests.get() calls here used to take
+            # ~2.3s each- for a few hundred jobs that's 10+ minutes, which blows past
+            # the gateway's 5-minute startup watcher every single run (port 8001
+            # never opens in time). A thread pool fetches them concurrently instead;
+            # the backend's DB pool (max: 20) has headroom for this.
+            def _fetch_one(job: dict):
                 job_id = job.get('id')
                 job_title = job.get('title', 'Unknown')
-                if job_id:
+                if not job_id:
+                    return job
+                try:
                     detail_resp = requests.get(
                         f"{self.base_url}/jobs/candidate/{job_id}",
                         headers=self.headers,
                         timeout=30
                     )
-                    if detail_resp.status_code == 200:
-                        detail_data = detail_resp.json()
-                        if detail_data.get("success"):
-                            full_job = detail_data.get("data", job)
-                            enriched_jobs.append(full_job)
-                            log_success(f"  Fetched details for: {job_title}")
-                            write_log(DATA_LOG, f"Fetched details for job {job_id}: {job_title}", "SUCCESS")
-                        else:
-                            enriched_jobs.append(job)
-                    else:
-                        enriched_jobs.append(job)
-                else:
-                    enriched_jobs.append(job)
+                except requests.RequestException as e:
+                    log_error(f"Detail fetch failed for {job_title}: {e}")
+                    return job
+                if detail_resp.status_code == 200:
+                    detail_data = detail_resp.json()
+                    if detail_data.get("success"):
+                        log_success(f"  Fetched details for: {job_title}")
+                        write_log(DATA_LOG, f"Fetched details for job {job_id}: {job_title}", "SUCCESS")
+                        return detail_data.get("data", job)
+                return job
+
+            with ThreadPoolExecutor(max_workers=15) as pool:
+                enriched_jobs = list(pool.map(_fetch_one, jobs))
 
             self.jobs_cache = enriched_jobs
             active_jobs = [j for j in enriched_jobs if j.get('status') == 'active']
@@ -1041,6 +1047,17 @@ async def root():
     }
 
 if __name__ == "__main__":
+    # write_log() opens every log file in append mode with no cap, so across
+    # dev restarts these grow unbounded- nlp_processing.log alone reached
+    # 79MB in one session (a debug line per token per skill per job, every
+    # retrain, forever). Clear them here so each run starts from empty.
+    for _log_file in [TRAINING_LOG, SEARCH_LOG, ERROR_LOG, DEBUG_LOG, NLP_LOG,
+                       DATA_LOG, MATCH_LOG, VECTOR_LOG, SKILLS_LOG, QUERY_LOG]:
+        try:
+            open(_log_file, "w", encoding="utf-8").close()
+        except OSError:
+            pass
+
     print("\n" + "=" * 80)
     print("''5-LEVEL PRIORITY JOB SEARCH API - PURE NLP (NO HARDCODED TERMS)")
     print("=" * 80)

@@ -33,6 +33,8 @@ export interface Candidate {
   phone?: string;
   country?: string;
   city?: string;
+  date_of_birth?: string;
+  gender?: string;
   profile_photo_url?: string;
   profile_completion?: number;
   linkedin_url?: string;
@@ -478,6 +480,10 @@ const JobCandidatesView: React.FC<JobCandidatesViewProps> = ({
                             <div style={{ fontWeight: 600, color: '#0f172a', fontSize: 14 }}>{c.full_name || 'Unknown'}</div>
                             <div style={{ fontSize: 12, color: '#64748b'}}>{c.candidate_email}</div>
                             {c.headline && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>{c.headline}</div>}
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6, fontSize: 11, color: '#64748b' }}>
+                              {c.phone && <span>{c.phone}</span>}
+                              {(c.city || c.country) && <span>{[c.city, c.country].filter(Boolean).join(', ')}</span>}
+                            </div>
                           </div>
                         </div>
                       </td>

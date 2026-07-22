@@ -200,6 +200,8 @@ const CandidateDetailView: React.FC<CandidateDetailViewProps> = ({ candidate: c,
               <InfoRow icon={<Mail size={15} color="#8b5cf6" />} label="Email" value={c.candidate_email} />
               {c.phone && <InfoRow icon={<Phone size={15} color="#8b5cf6" />} label="Phone" value={c.phone} />}
               {(c.city || c.country) && <InfoRow icon={<MapPin size={15} color="#8b5cf6" />} label="Location" value={[c.city, c.country].filter(Boolean).join(', ')} />}
+              {c.date_of_birth && <InfoRow icon={<Calendar size={15} color="#8b5cf6" />} label="Date of Birth" value={formatDate(c.date_of_birth)} />}
+              {c.gender && <InfoRow icon={<User size={15} color="#8b5cf6" />} label="Gender" value={c.gender} />}
               {c.languages && c.languages.length > 0 && (
                 <div style={{ marginTop: 12 }}>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 6 }}>Languages</div>

@@ -130,7 +130,12 @@ const PRIORITY_CONFIG: Record<string, {
   }
 };
 
-const SEARCH_API_URL = import.meta.env.VITE_SEARCH_URL || 'http://localhost:8001/search';
+// Routed through the gateway (single port 8085) instead of ml_search's raw
+// port 8001 directly, matching jobMatchService/aiJobMatchingService. The
+// gateway strips its own "/search" prefix before forwarding, and ml_search's
+// real route is "/search" (see ml_search.py), so the path needs "/search"
+// twice: gateway prefix + upstream route.
+const SEARCH_API_URL = import.meta.env.VITE_SEARCH_URL || 'http://localhost:8085/search/search';
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1';
 
 // =====================================================

@@ -556,6 +556,19 @@ def _jsonable(value):
     return value
 
 
+def _safe_int(value, default: int = 0) -> int:
+    """Coerce count-like DB values without crashing on NaN or strings."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return default
+
+
 def job_details_dict(job_row: pd.Series) -> dict:
     """Full job payload for the frontend- one call gets both the ranking
     score AND everything needed to render the job card, instead of a second
@@ -2806,8 +2819,8 @@ def extract_all_job_fields(job: Dict) -> Dict:
         "created_by": job.get('created_by'),
         "approved_by": job.get('approved_by'),
         "approved_at": job.get('approved_at'),
-        "view_count": int(job.get('view_count', 0)) if job.get('view_count') else 0,
-        "application_count": int(job.get('application_count', 0)) if job.get('application_count') else 0,
+        "view_count": _safe_int(job.get('view_count')),
+        "application_count": _safe_int(job.get('application_count')),
         "metadata": metadata,
         "deleted_at": job.get('deleted_at'),
         "education_required": education_required, 
@@ -5834,8 +5847,8 @@ class RecommendationEngine:
                     "freshness": {"score": round(float(fresh[job_col]), 4), "days_old": days_old},
                     "popularity": {
                         "score": round(float(pop[job_col]), 4),
-                        "application_count": int(job_row.get("application_count") or 0),
-                        "view_count": int(job_row.get("view_count") or 0),
+                        "application_count": _safe_int(job_row.get("application_count")),
+                        "view_count": _safe_int(job_row.get("view_count")),
                     },
                     "business_rules": {"modifier": round(biz_modifier, 3), "reasons": biz_reasons},
                 }
@@ -6922,6 +6935,18 @@ async def on_shutdown():
 # ==========================================================================
 
 def main():
+    # write_log() opens these in append mode with no cap, so across dev
+    # restarts they grow unbounded- match_results.log and job_data.log each
+    # reached 35-50MB in one session. Clear them here so each run starts
+    # fresh. hybrid_recommender.log is exempt- it's a RotatingFileHandler
+    # (maxBytes=10MB, backupCount=3) and already caps/rotates itself.
+    for _log_file in [MAIN_LOG, ERROR_LOG, PERFORMANCE_LOG, REQUEST_LOG,
+                       CANDIDATE_LOG, JOB_LOG, MATCH_LOG]:
+        try:
+            open(_log_file, "w", encoding="utf-8").close()
+        except OSError:
+            pass
+
     parser = argparse.ArgumentParser(description="Hybrid Job Recommender (live DB-backed service)")
     parser.add_argument("--check-db", action="store_true", help="Verify DB connectivity and print row counts, then exit.")
     parser.add_argument("--port", type=int, default=CFG.port)

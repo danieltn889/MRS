@@ -137,16 +137,29 @@ def start_service(key: str, svc: dict):
         service_status[key] = "missing"
         return
 
-    # Free the port if something is already on it
+    # Free the port if something is already on it- and always say so either
+    # way, so the log makes clear whether the port was already free or had
+    # to be freed, instead of only speaking up on the problem case.
     if _port_open(svc["port"]):
         print(f"  ️  Port {svc['port']} already in use- attempting to free it…")
         _kill_port(svc["port"])
         time.sleep(1)
+        if _port_open(svc["port"]):
+            print(f"  ❌ Port {svc['port']} still in use after kill attempt- {svc['name']} may fail to bind")
+        else:
+            print(f"  ✓ Port {svc['port']} freed")
+    else:
+        print(f"  ✓ Port {svc['port']} free")
 
-    # Log file for this service (next to the service file)
+    # Log file for this service (next to the service file). Truncated on
+    # every start- these previously accumulated forever across restarts
+    # (search_service.log alone reached 21MB in one dev session), which made
+    # "check the log" mean scrolling past megabytes of unrelated old runs.
     log_path = SERVICES_DIR / f"{key}_service.log"
     log_files[key] = log_path
     log_fh = open(log_path, "w", encoding="utf-8")
+    log_fh.write(f"===== RUN STARTED {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+    log_fh.flush()
 
     print(f"  Starting {svc['name']} (port {svc['port']})…")
     print(f"     Log: {log_path}")
