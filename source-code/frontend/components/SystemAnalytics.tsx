@@ -14,6 +14,45 @@ const StatCard: React.FC<{ label: string; value: number | string; icon: any; col
   </div>
 );
 
+// Validated categorical palette (blue/orange/aqua/yellow - slots 1-4 of the
+// standard order), fixed per-position so the same rank always gets the same
+// hue across every breakdown on this page.
+const BREAKDOWN_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100'];
+
+const MiniBreakdown: React.FC<{ items: { label: string; value: number }[] }> = ({ items }) => {
+  const max = Math.max(1, ...items.map(i => i.value));
+  return (
+    <div className="mt-2 space-y-2 text-left">
+      {items.map((item, i) => {
+        const color = BREAKDOWN_COLORS[i % BREAKDOWN_COLORS.length];
+        // Near-zero values still get a sliver of visible width- a true 0%
+        // bar reads as "missing" rather than "zero", and the number to the
+        // right already carries the exact value.
+        const widthPct = Math.max(2, (item.value / max) * 100);
+        return (
+          <div key={item.label}>
+            <div className="flex items-center justify-between text-xs mb-1">
+              <span className="flex items-center gap-1.5 text-gray-600">
+                <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+                {item.label}
+              </span>
+              <span className="font-semibold text-gray-800" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {item.value.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-2 rounded-sm bg-gray-100 overflow-hidden">
+              <div
+                className="h-full rounded-r-[3px]"
+                style={{ width: `${widthPct}%`, background: color }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
 const SystemAnalytics: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
@@ -63,22 +102,36 @@ const SystemAnalytics: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         <StatCard label="Applications" value={stats?.applications.total ?? 0} icon={Target} color="border-yellow-500" />
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-          <p className="text-xs text-gray-500 mb-1">Company verification</p>
-          <p className="text-sm text-gray-800">{stats?.companies.verified ?? 0} verified / {stats?.companies.pending ?? 0} pending</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-xs text-gray-500">Company verification</p>
+          <MiniBreakdown items={[
+            { label: 'Verified', value: stats?.companies.verified ?? 0 },
+            { label: 'Pending', value: stats?.companies.pending ?? 0 },
+          ]} />
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-          <p className="text-xs text-gray-500 mb-1">Users by role</p>
-          <p className="text-sm text-gray-800">{stats?.users.candidates ?? 0} candidates · {stats?.users.recruiters ?? 0} recruiters · {stats?.users.company_admins ?? 0} admins</p>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-xs text-gray-500">Users by role</p>
+          <MiniBreakdown items={[
+            { label: 'Candidates', value: stats?.users.candidates ?? 0 },
+            { label: 'Recruiters', value: stats?.users.recruiters ?? 0 },
+            { label: 'Company admins', value: stats?.users.company_admins ?? 0 },
+            { label: 'System admins', value: stats?.users.system_admins ?? 0 },
+          ]} />
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-          <p className="text-xs text-gray-500 mb-1">Hiring outcomes</p>
-          <p className="text-sm text-gray-800">{stats?.applications.hired ?? 0} hired · {stats?.applications.rejected ?? 0} rejected</p>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-xs text-gray-500">Hiring outcomes</p>
+          <MiniBreakdown items={[
+            { label: 'Hired', value: stats?.applications.hired ?? 0 },
+            { label: 'Rejected', value: stats?.applications.rejected ?? 0 },
+          ]} />
         </div>
-        <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
-          <p className="text-xs text-gray-500 mb-1">In progress</p>
-          <p className="text-sm text-gray-800">{stats?.applications.in_review ?? 0} in review · {stats?.applications.interview ?? 0} interviewing</p>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-xs text-gray-500">In progress</p>
+          <MiniBreakdown items={[
+            { label: 'In review', value: stats?.applications.in_review ?? 0 },
+            { label: 'Interviewing', value: stats?.applications.interview ?? 0 },
+          ]} />
         </div>
       </div>
 
