@@ -222,10 +222,9 @@ const JobDetails: React.FC = () => {
 
   useEffect(() => {
     if (id) {
-      loadJobDetails();
+      initJobAndMatch();
       checkIfSaved();
       checkIfApplied();
-      loadCandidateProfile();
       // Landing here counts as viewing the job regardless of entry point
       // (Job Feed, Header search, Saved Jobs "View Details")   the Job Feed
       // card already tracks its own view on click (see DashboardHome.tsx's
@@ -235,17 +234,56 @@ const JobDetails: React.FC = () => {
     }
   }, [id]);
 
+  // The combined-match response already carries the full job record
+  // (job_details_dict() in hybrid_job_recommender.py bundles it with the
+  // score specifically so job-detail pages don't need a second round trip),
+  // so job details are sourced from THAT call for a logged-in candidate
+  // instead of a separate GET /jobs/:id. loadJobDetails() below is only a
+  // fallback for anonymous viewers or when the match call fails/returns
+  // nothing.
+  const initJobAndMatch = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('authToken');
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
+      if (!token || !user?.id) {
+        await loadJobDetails();
+        return;
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'}/candidates/full-profile/${user.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      let gotJobFromMatch = false;
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          setFullCandidateProfile(data.data);
+          gotJobFromMatch = await loadMatchScore(user.id);
+        }
+      }
+      if (!gotJobFromMatch) {
+        await loadJobDetails();
+      }
+    } catch (error) {
+      console.error('Error loading candidate profile:', error);
+      await loadJobDetails();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadJobDetails = async () => {
     try {
-      setLoading(true);
       const response = await getJob(id!);
       let jobData = response?.data?.data || response?.data || response;
       setJob(jobData);
     } catch (err: any) {
       console.error('Error loading job details:', err);
       setError(err.message || 'Failed to load job details');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -263,34 +301,13 @@ const JobDetails: React.FC = () => {
     setHasApplied(applied);
   };
 
-  const loadCandidateProfile = async () => {
-    try {
-      const token = localStorage.getItem('authToken');
-      const userStr = localStorage.getItem('user');
-      const user = userStr ? JSON.parse(userStr) : null;
-
-      if (!token || !user?.id) return;
-
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001/api/v1'}/candidates/full-profile/${user.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setFullCandidateProfile(data.data);
-          await loadMatchScore(user.id);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading candidate profile:', error);
-    }
-  };
-
-  const loadMatchScore = async (candidateId: string) => {
+  // Returns whether it successfully sourced the job record from the match
+  // response, so the caller knows whether it still needs the getJob()
+  // fallback.
+  const loadMatchScore = async (candidateId: string): Promise<boolean> => {
     if (!candidateId || !id) {
       console.log('Cannot load match score - missing candidate or job ID');
-      return;
+      return false;
     }
 
     setIsLoadingMatch(true);
@@ -300,6 +317,8 @@ const JobDetails: React.FC = () => {
       const result = await getCombinedJobMatch(candidateId, id);
 
       if (result.success && result.match) {
+        const jobFromMatch = (result.match as any).job;
+        if (jobFromMatch) setJob(jobFromMatch);
         setMatchScore(result.match.match_score);
         setRequiredScore(
           (result.match as any).job?.ai_match_required_score ??
@@ -387,13 +406,16 @@ const JobDetails: React.FC = () => {
         });
 
         console.log('AI Match score loaded:', result.match.match_score);
+        return !!jobFromMatch;
       } else {
         console.log('No match score available:', result.error);
         setMatchError(result.error || 'AI match score unavailable for this job right now.');
+        return false;
       }
     } catch (error: any) {
       console.error('Error loading match score:', error);
       setMatchError(error?.message || 'AI match score unavailable for this job right now.');
+      return false;
     } finally {
       setIsLoadingMatch(false);
     }

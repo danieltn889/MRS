@@ -25,9 +25,13 @@ interface JobDetails {
   slug?: string | null;
   company_name: string;
   company_logo?: string | null;
+  company_industry?: string | null;
+  company_size?: string | null;
+  company_website?: string | null;
   department?: string | null;
   job_type?: string | null;
   work_arrangement?: string | null;
+  status?: string | null;
   experience_level?: string | null;
   experience_min?: number | null;
   experience_max?: number | null;
@@ -37,12 +41,19 @@ interface JobDetails {
   education_required?: Record<string, any>;
   qualifications?: string | null;
   description: string;
+  responsibilities?: string[];
+  requirements?: string[];
+  benefits?: string[];
+  tags?: string[];
   language_requirements: Array<{ name: string; required?: boolean } | string>;
   screening_questions?: any[];
   salary_min?: number | null;
   salary_max?: number | null;
   salary_currency?: string | null;
   salary_period?: string | null;
+  ai_match_required_score?: number | null;
+  application_count?: number;
+  view_count?: number;
   published_at?: string | null;
   expires_at?: string | null;
 }

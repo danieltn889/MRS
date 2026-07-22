@@ -356,8 +356,9 @@ class Database:
                    j.salary_currency, j.salary_period, j.screening_questions,
                    j.ai_match_required_score, j.published_at, j.expires_at,
                    j.created_at, j.view_count, j.application_count,
+                   j.status, j.tags,
                    c.id AS company_id, c.name AS company_name, c.verification_badge, c.logo_url,
-                   c.industry AS company_industry
+                   c.industry AS company_industry, c.size AS company_size, c.website AS company_website
             FROM jobs j
             JOIN companies c ON c.id = j.company_id
             WHERE j.status = 'active'
@@ -377,8 +378,9 @@ class Database:
                    j.salary_currency, j.salary_period, j.screening_questions,
                    j.ai_match_required_score, j.published_at, j.expires_at,
                    j.created_at, j.view_count, j.application_count,
+                   j.status, j.tags,
                    c.id AS company_id, c.name AS company_name, c.verification_badge, c.logo_url,
-                   c.industry AS company_industry
+                   c.industry AS company_industry, c.size AS company_size, c.website AS company_website
             FROM jobs j
             JOIN companies c ON c.id = j.company_id
             WHERE j.id = '{job_id}'::uuid
@@ -574,16 +576,26 @@ def job_details_dict(job_row: pd.Series) -> dict:
     score AND everything needed to render the job card, instead of a second
     round-trip per job. Field names mirror what ai_job_matcher_og.py already
     returned (job.locations, job.skills_required, etc.) so existing frontend
-    parsing logic for those needs minimal changes."""
+    parsing logic for those needs minimal changes.
+
+    Also carries responsibilities/requirements/benefits/tags/status/
+    application_count/company_size/company_website/ai_match_required_score-
+    added so JobDetails.tsx's "View Details" page can rely on this single
+    call (see /score/combined/job/{job_id}) instead of a second, separate
+    GET /jobs/:id round trip to the backend for the same job."""
     return {
         "id": str(job_row.get("id", "")),
         "title": _s(job_row.get("title")),
         "slug": _s(job_row.get("slug")) or None,
         "company_name": _s(job_row.get("company_name")),
         "company_logo": _s(job_row.get("logo_url")) or None,
+        "company_industry": _s(job_row.get("company_industry")) or None,
+        "company_size": _s(job_row.get("company_size")) or None,
+        "company_website": _s(job_row.get("company_website")) or None,
         "department": _s(job_row.get("department")) or None,
         "job_type": _s(job_row.get("job_type")) or None,
         "work_arrangement": _s(job_row.get("work_arrangement")) or None,
+        "status": _s(job_row.get("status")) or None,
         "experience_level": _s(job_row.get("experience_level")) or None,
         "experience_min": None if pd.isna(job_row.get("experience_min")) else int(job_row.get("experience_min")),
         "experience_max": None if pd.isna(job_row.get("experience_max")) else int(job_row.get("experience_max")),
@@ -593,12 +605,19 @@ def job_details_dict(job_row: pd.Series) -> dict:
         "education_required": _jsonable(job_row.get("education_required")) or {},
         "qualifications": _s(job_row.get("qualifications")) or None,
         "description": _s(job_row.get("description")),
+        "responsibilities": _jsonable(job_row.get("responsibilities")) or [],
+        "requirements": _jsonable(job_row.get("requirements")) or [],
+        "benefits": _jsonable(job_row.get("benefits")) or [],
+        "tags": _jsonable(job_row.get("tags")) or [],
         "language_requirements": _jsonable(job_row.get("language_requirements")) or [],
         "screening_questions": _jsonable(job_row.get("screening_questions")) or [],
         "salary_min": None if pd.isna(job_row.get("salary_min")) else float(job_row.get("salary_min")),
         "salary_max": None if pd.isna(job_row.get("salary_max")) else float(job_row.get("salary_max")),
         "salary_currency": _s(job_row.get("salary_currency")) or None,
         "salary_period": _s(job_row.get("salary_period")) or None,
+        "ai_match_required_score": None if pd.isna(job_row.get("ai_match_required_score")) else float(job_row.get("ai_match_required_score")),
+        "application_count": _safe_int(job_row.get("application_count")),
+        "view_count": _safe_int(job_row.get("view_count")),
         "published_at": _s(job_row.get("published_at")) or None,
         "expires_at": _s(job_row.get("expires_at")) or None,
     }
@@ -5349,6 +5368,7 @@ class RecommendationEngine:
         # The Matcher's cached result is now stale- it's a profile-vs-job
         # fit, so a profile change invalidates only THIS candidate's entry.
         _invalidate_matcher_cache(candidate_id)
+        _invalidate_hybrid_score_cache(candidate_id)
         return True
 
     def _upsert_job_snapshot(self, job_id: str) -> bool:
@@ -5367,6 +5387,7 @@ class RecommendationEngine:
         # the whole job set per call), so the whole cache is invalidated
         # rather than trying to track which candidates might be affected.
         _invalidate_matcher_cache()
+        _invalidate_hybrid_score_cache()
         return True
 
     def _remove_candidate_snapshot(self, candidate_id: str) -> None:
@@ -5377,6 +5398,7 @@ class RecommendationEngine:
         self.work_df = self._remove_frame_row(self.work_df, "user_id", candidate_id)
         self.certifications_df = self._remove_frame_row(self.certifications_df, "user_id", candidate_id)
         _invalidate_matcher_cache(candidate_id)
+        _invalidate_hybrid_score_cache(candidate_id)
 
     def _remove_job_snapshot(self, job_id: str) -> None:
         self.content_model.delete_job(job_id)
@@ -5385,6 +5407,7 @@ class RecommendationEngine:
         if self.events is not None and not self.events.empty:
             self.events = self.events[self.events["job_idx"].astype(str) != str(self.preprocessor.job_id_to_idx.get(str(job_id), job_id))].reset_index(drop=True)
         _invalidate_matcher_cache()
+        _invalidate_hybrid_score_cache()
 
     def _rebuild_cached_interactions(self) -> None:
         if self.preprocessor is None:
@@ -6237,9 +6260,53 @@ def fetch_matcher_scores(candidate_id: str, timeout: float = 60.0) -> Optional[D
     return result
 
 
+# combined_score_candidate() always asks engine.score_candidate() for
+# max(n_jobs, top_n)- i.e. every active job, every time (see call site)- so
+# the job-feed call (/score/combined) and the job-detail call
+# (/score/combined/job/{id}) were each independently recomputing the SAME
+# full-catalog hybrid pass for the same candidate. A candidate opening a job
+# detail page right after loading the feed (or several job details back to
+# back) re-ran it from scratch every single time. Same pattern as
+# _matcher_cache above: cache the full per-candidate result for a short TTL,
+# invalidated whenever this candidate's profile or ANY job changes.
+_HYBRID_SCORE_CACHE_TTL_SECONDS = 60.0
+_hybrid_score_cache: Dict[str, Tuple[float, dict]] = {}
+_hybrid_score_cache_lock = threading.Lock()
+
+
+def _invalidate_hybrid_score_cache(candidate_id: Optional[str] = None) -> None:
+    with _hybrid_score_cache_lock:
+        if candidate_id is None:
+            _hybrid_score_cache.clear()
+        else:
+            _hybrid_score_cache.pop(str(candidate_id), None)
+
+
+def _cached_score_candidate(candidate_id: str, top_n: int, exclude_content: bool) -> dict:
+    """Cache wrapper around engine.score_candidate() for the all-jobs case
+    used by combined_score_candidate(). Only caches the exclude_content=False,
+    "give me every job" shape (top_n already >= n_jobs at every call site)-
+    anything narrower just calls straight through uncached."""
+    n_jobs = len(engine.jobs) if engine.jobs is not None else 0
+    if exclude_content or top_n < n_jobs:
+        return engine.score_candidate(candidate_id, top_n=top_n, exclude_content=exclude_content)
+
+    now = time.time()
+    with _hybrid_score_cache_lock:
+        cached = _hybrid_score_cache.get(candidate_id)
+        if cached is not None and (now - cached[0]) < _HYBRID_SCORE_CACHE_TTL_SECONDS:
+            return cached[1]
+
+    result = engine.score_candidate(candidate_id, top_n=top_n, exclude_content=exclude_content)
+    with _hybrid_score_cache_lock:
+        _hybrid_score_cache[candidate_id] = (now, result)
+    return result
+
+
 def combined_score_candidate(candidate_id: str, top_n: int,
                               matcher_weight: float = DEFAULT_MATCHER_WEIGHT,
-                              hybrid_weight: float = DEFAULT_HYBRID_WEIGHT) -> dict:
+                              hybrid_weight: float = DEFAULT_HYBRID_WEIGHT,
+                              job_id: Optional[str] = None) -> dict:
     total_w = matcher_weight + hybrid_weight
     if total_w <= 0:
         matcher_weight, hybrid_weight = DEFAULT_MATCHER_WEIGHT, DEFAULT_HYBRID_WEIGHT
@@ -6261,7 +6328,7 @@ def combined_score_candidate(candidate_id: str, top_n: int,
     # which already exposes every raw signal (content/behavior/
     # collaborative/freshness/popularity) before weighting.
     n_jobs = len(engine.jobs) if engine.jobs is not None else top_n
-    hybrid_result = engine.score_candidate(candidate_id, top_n=max(n_jobs, top_n), exclude_content=False)
+    hybrid_result = _cached_score_candidate(candidate_id, top_n=max(n_jobs, top_n), exclude_content=False)
     hybrid_by_job_full = {j["job_id"]: j for j in hybrid_result["scored_jobs"]}
 
     has_behavior = hybrid_result.get("has_behavior", False)
@@ -6287,7 +6354,25 @@ def combined_score_candidate(candidate_id: str, top_n: int,
         age_modifier = d.get("content", {}).get("age_fit_score", 1.0)
         return round(raw * biz_modifier * age_modifier * 100, 2)
 
-    matcher_matches = fetch_matcher_scores(candidate_id)  # None => matcher unavailable
+    # Single-job callers (job-detail pages, via score_combined_job) only need
+    # ONE job's matcher result, not fetch_matcher_scores()'s full ~40-45s
+    # all-jobs pass (see its docstring) just to throw every job but one away.
+    # _match_candidate_against_job() runs the same factor1-4 logic
+    # /matcher/match/job/{job_id} uses, scoped to this one pair. Falls
+    # through to hybrid-only (matcher_matches=None) on ANY failure- job/
+    # candidate not found, matcher error- score_combined_job's existing
+    # "no score at all -> 404" check still applies further down.
+    if job_id is not None:
+        matcher_matches = None
+        try:
+            single_result, *_ = _match_candidate_against_job(candidate_id, job_id)
+            matcher_matches = {job_id: single_result}
+        except KeyError:
+            pass
+        except Exception as e:
+            log.warning("Single-job matcher scoring failed for %s/%s: %s", candidate_id, job_id, e)
+    else:
+        matcher_matches = fetch_matcher_scores(candidate_id)  # None => matcher unavailable
     matcher_used = matcher_matches is not None
 
     # Shift the OUTER matcher/hybrid split itself (not just weight redistribution
@@ -6315,13 +6400,15 @@ def combined_score_candidate(candidate_id: str, top_n: int,
         matcher_weight = matcher_weight + (hybrid_weight - adjusted_hybrid_weight)
         hybrid_weight = adjusted_hybrid_weight
 
-    all_job_ids = set(hybrid_by_job_full) | set(matcher_matches or {})
+    # In single-job mode there's nothing to gain from iterating every job
+    # hybrid_by_job_full has- only the requested one is ever looked at.
+    all_job_ids = {job_id} if job_id is not None else (set(hybrid_by_job_full) | set(matcher_matches or {}))
     combined = []
-    for job_id in all_job_ids:
-        matcher_entry = matcher_matches.get(job_id) if matcher_matches else None
+    for jid in all_job_ids:
+        matcher_entry = matcher_matches.get(jid) if matcher_matches else None
         matcher_pct = float(matcher_entry["match_score"]) if matcher_entry else None
 
-        hybrid_entry = hybrid_by_job_full.get(job_id)
+        hybrid_entry = hybrid_by_job_full.get(jid)
         # Content-excluded score ONLY when the matcher actually scored THIS
         # job too (a real blend is about to happen, and Content would
         # otherwise double-count the matcher's own profile-vs-job fit);
@@ -6345,12 +6432,12 @@ def combined_score_candidate(candidate_id: str, top_n: int,
 
         job_details = hybrid_entry["job"] if hybrid_entry else None
         if job_details is None and engine.jobs is not None:
-            match_rows = engine.jobs[engine.jobs["id"].astype(str) == job_id]
+            match_rows = engine.jobs[engine.jobs["id"].astype(str) == jid]
             if not match_rows.empty:
                 job_details = job_details_dict(match_rows.iloc[0])
 
         combined.append({
-            "job_id": job_id,
+            "job_id": jid,
             "title": hybrid_entry["title"] if hybrid_entry else (job_details or {}).get("title"),
             "company": hybrid_entry["company"] if hybrid_entry else (job_details or {}).get("company_name"),
             "job": job_details,
@@ -6529,7 +6616,8 @@ async def score_combined_job(job_id: str, req: CombinedJobScoreRequest):
     showing the blended score while the detail page shows matcher-only."""
     try:
         result = combined_score_candidate(req.candidate_id, top_n=len(engine.jobs) + 1,
-                                           matcher_weight=req.matcher_weight, hybrid_weight=req.hybrid_weight)
+                                           matcher_weight=req.matcher_weight, hybrid_weight=req.hybrid_weight,
+                                           job_id=job_id)
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
@@ -6609,6 +6697,192 @@ async def match_candidate(request: Request):
     return score_candidate_against_jobs(candidate_id)
 
 
+def _match_candidate_against_job(candidate_id: str, job_id: str):
+    """Core single (candidate, job) 4-factor match- the actual scoring logic
+    behind /matcher/match/job/{job_id}, extracted so combined_score_candidate()
+    can call it directly for its single-job path (score_combined_job) instead
+    of fetch_matcher_scores(), which computes and caches ALL jobs (~40-45s
+    uncached- see its docstring) just to throw away every job but one.
+
+    Raises KeyError('candidate') / KeyError('job') when either isn't found-
+    the two "not found" cases the route below used to return directly.
+    Returns (result, candidate_name, candidate_skills, candidate_quals,
+    complete_candidate_data)- result is the same shape as one entry from
+    score_candidate_against_jobs()'s batch (match_score, criteria_scores,
+    skills/qualifications/experience/preferences_breakdown, etc.)."""
+    profile_resp = backend.get_profile(candidate_id)
+    if not profile_resp or not profile_resp.get('data'):
+        raise KeyError('candidate')
+
+    profile_data = profile_resp.get('data', {})
+
+    candidate_age = factor4.extract_candidate_age(profile_data)
+
+    job = backend.get_job_by_id(job_id)
+    if not job:
+        raise KeyError('job')
+    job_age_requirement = job.get('education_required', {}).get('age_requirement', '')
+
+    # Dynamic correction vocabulary from the candidate's + this job's own skills.
+    tp.dynamic_vocab = set()
+    tp.add_to_vocab(_collect_skill_terms(profile_data, job))
+
+    candidate_skills = factor1.extract_candidate_skills(profile_data)
+    candidate_quals = factor2.extract_candidate_qualifications(profile_data)
+    candidate_prefs = factor4.extract_candidate_preferences(profile_data)
+
+    personal = profile_data.get('profile', {}).get('personal_info', {})
+    candidate_name = personal.get('full_name', 'Unknown')
+
+    log_candidate(f"Name: {candidate_name}")
+    log_candidate(f"Skills from DB ({len(candidate_skills)}): {', '.join(candidate_skills[:10])}")
+
+    job_title = job.get('title', 'Unknown')
+    job_details = extract_all_job_fields(job)
+    job_skills = factor1.extract_job_skills(job)
+    job_quals = factor2.extract_job_qualifications(job)
+
+    log_job(f"Job: {job_title}")
+    log_job(f"Required Skills from DB ({len(job_skills)}): {', '.join(job_skills[:10])}")
+
+    log_match("="*60)
+    log_match(f"MATCHING: {candidate_name} vs {job_title}")
+    log_match("="*60)
+
+    log_match("FACTOR 1: SKILLS (40%)")
+    s = factor1.match(candidate_skills, job_skills)
+
+    log_match("FACTOR 2: QUALIFICATIONS (25%)")
+    q = factor2.match(candidate_quals, job_quals)
+
+    log_match("FACTOR 3: EXPERIENCE (20%)")
+    e = factor3.match(profile_data, job)
+
+    log_match("FACTOR 4: PREFERENCES (15%)")
+    p = factor4.match(candidate_prefs, job, candidate_age, job_age_requirement)
+
+    # Same top-level redistribution as the batch path in
+    # score_candidate_against_jobs -- see the comment there.
+    factor_weights = redistribute_weights({
+        "skills": (s.get("applicable", True), 0.40),
+        "qualifications": (q.get("applicable", True), 0.25),
+        "experience": (True, 0.20),
+        "preferences": (p.get("applicable", True), 0.15),
+    })
+    total_raw = (s["score"] * factor_weights["skills"] + q["score"] * factor_weights["qualifications"]
+                + e["score"] * factor_weights["experience"] + p["score"] * factor_weights["preferences"])
+    total_score = round(total_raw * 100, 1)
+    excluded_factors = [name for name, w in factor_weights.items() if w == 0.0]
+
+    log_match("="*60)
+    log_match(f"TOTAL MATCH SCORE: {total_score}% (factor weights: {factor_weights}, excluded: {excluded_factors or 'none'})")
+    log_match("="*60)
+
+    if total_raw >= 0.80:
+        match_level = "Excellent Match 🌟"
+    elif total_raw >= 0.65:
+        match_level = "Strong Match "
+    elif total_raw >= 0.50:
+        match_level = "Good Match 👍"
+    elif total_raw >= 0.35:
+        match_level = "Partial Match ️"
+    else:
+        match_level = "Poor Match ❌"
+
+    candidate_job_types = candidate_prefs.get("job_types", [])
+    candidate_locations = candidate_prefs.get("locations", [])
+    candidate_industries = candidate_prefs.get("industries", [])
+    candidate_languages = candidate_prefs.get("languages", [])
+    candidate_salary_min = candidate_prefs.get("salary_min", 0)
+    candidate_salary_max = candidate_prefs.get("salary_max", 0)
+
+    result = {
+        "match_score": total_score,
+        "match_level": match_level,
+        "criteria_scores": {
+            "skills_match": s["match_percentage"],
+            "qualifications_match": q["match_percentage"],
+            "experience_match": e["match_percentage"],
+            "preferences_match": p["match_percentage"]
+        },
+        "factor_weights_used": factor_weights,
+        "excluded_factors": excluded_factors,
+        "skills_breakdown": {
+            "matched_skills": s.get("matched_skills", []),
+            "missing_skills": s.get("missing_skills", []),
+            "total_required": len(job_skills),
+            "total_matched": s.get("matched_count", 0),
+            "individual_scores": s.get("individual_scores", []),
+            "applicable": s.get("applicable", True),
+            "note": s.get("note")
+        },
+        "qualifications_breakdown": {
+            "candidate_degrees": [d["raw"] for d in candidate_quals["degrees"]],
+            "candidate_fields": [f["raw"] for f in candidate_quals["fields"]],
+            "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
+            "job_degree_required": job_quals.get("minimum_degree", ""),
+            "job_allowed_fields": job_quals.get("fields_of_study", []),
+            "qualification_entries": job_quals.get("qualification_entries", []),  #  ADD THIS
+            "best_similarity": q.get("best_similarity", 0),
+            "best_matched_field": q.get("best_matched_field", None),
+            "match_type": q.get("match_type", "none"),
+            "match_quality": q.get("match_quality", ""),  #  ADD THIS
+            "explanation": q.get("explanation", ""),      #  ADD THIS
+            "applicable": q.get("applicable", True),
+            "excluded_dimensions": q.get("excluded_dimensions", []),
+            "redistributed_weights": q.get("redistributed_weights", {})
+        },
+        "experience_breakdown": {
+            "match_type": e.get("match_type", "unknown"),
+            "total_requirements": e.get("total_requirements", 0),
+            "matched_requirements": e.get("matched_requirements", 0),
+            "specific_matches": e.get("specific_matches", []),
+            "unmatched_requirements": e.get("unmatched_requirements", []),
+            "total_years": e.get("total_years", 0),
+            "relevant_years": e.get("relevant_years", 0),
+            "experience_analysis": e.get("experience_analysis", []),
+            "required_years": e.get("required_years", 0),
+            "gap_years": e.get("gap", 0)
+        },
+        "preferences_breakdown": {
+            "applicable": p.get("applicable", True),
+            "excluded_dimensions": p.get("excluded_dimensions", []),
+            "redistributed_weights": p.get("redistributed_weights", {}),
+            "missing_job_data": p.get("missing_job_data", []),
+            "type_match": p.get("type_match", 0),
+            "type_match_details": p.get("type_match_details", []),
+            "type_match_note": p.get("type_match_note"),
+            "remote_match": p.get("remote_match", 0),
+            "remote_match_note": p.get("remote_match_note"),
+            "location_match": p.get("location_match", 0),
+            "location_match_details": p.get("location_match_details"),
+            "location_match_note": p.get("location_match_note"),
+            "industry_match": p.get("industry_match", 0),
+            "industry_match_details": p.get("industry_match_details", []),
+            "industry_match_note": p.get("industry_match_note"),
+            "salary_match": p.get("salary_match", 0),
+            "salary_match_details": p.get("salary_match_details", {}),
+            "salary_match_note": p.get("salary_match_note"),
+            "language_match": p.get("language_match", 0),
+            "language_match_details": p.get("language_match_details", []),
+            "language_match_note": p.get("language_match_note"),
+            "candidate_job_types": candidate_job_types,
+            "candidate_locations": candidate_locations,
+            "candidate_industries": candidate_industries,
+            "candidate_languages": candidate_languages,
+            "candidate_salary_min": candidate_salary_min,
+            "candidate_salary_max": candidate_salary_max,
+            "candidate_remote_preference": candidate_prefs.get("remote_preference", "flexible")
+        },
+        "explanation": build_match_narrative(s, q, e, total_score, job)[0],
+        "improvement_suggestions": build_match_narrative(s, q, e, total_score, job)[1],
+        "job": job_details
+    }
+
+    complete_candidate_data = extract_complete_candidate_data(profile_data)
+    return result, candidate_name, candidate_skills, candidate_quals, complete_candidate_data
+
+
 @matcher_router.post("/match/job/{job_id}")
 async def match_candidate_for_job(job_id: str, request: Request):
     """
@@ -6617,196 +6891,33 @@ async def match_candidate_for_job(job_id: str, request: Request):
     Body: {"candidate_id": "..."}
     """
     request_start = time.time()
-    
+
     try:
         candidate_id, request_error = await parse_candidate_id_request(request)
         if request_error:
             return request_error
-        
+
         log_info(f"\n{'='*70}")
         log_info(f"👤 Candidate ID: {candidate_id}")
         log_info(f"💼 Job ID: {job_id}")
         log_info(f"{'='*70}")
-        
+
         if not candidate_id:
             return {"success": False, "error": "Missing candidate_id"}
-        
-        profile_resp = backend.get_profile(candidate_id)
-        if not profile_resp or not profile_resp.get('data'):
-            return {"success": False, "error": "Candidate not found"}
-        
-        profile_data = profile_resp.get('data', {})
-         
-        candidate_age = factor4.extract_candidate_age(profile_data)
-        
-        job = backend.get_job_by_id(job_id)
-        
-        if not job:
+
+        try:
+            result, candidate_name, candidate_skills, candidate_quals, complete_candidate_data = \
+                _match_candidate_against_job(candidate_id, job_id)
+        except KeyError as e:
+            if str(e).strip("'") == 'candidate':
+                return {"success": False, "error": "Candidate not found"}
             return {"success": False, "error": f"Job not found: {job_id}"}
-        job_age_requirement = job.get('education_required', {}).get('age_requirement', '')
-
-        # Dynamic correction vocabulary from the candidate's + this job's own skills.
-        tp.dynamic_vocab = set()
-        tp.add_to_vocab(_collect_skill_terms(profile_data, job))
-
-        candidate_skills = factor1.extract_candidate_skills(profile_data)
-        candidate_quals = factor2.extract_candidate_qualifications(profile_data)
-        candidate_prefs = factor4.extract_candidate_preferences(profile_data)
-        
-        personal = profile_data.get('profile', {}).get('personal_info', {})
-        candidate_name = personal.get('full_name', 'Unknown')
-        
-        log_candidate(f"Name: {candidate_name}")
-        log_candidate(f"Skills from DB ({len(candidate_skills)}): {', '.join(candidate_skills[:10])}")
-        
-        job_title = job.get('title', 'Unknown')
-        job_details = extract_all_job_fields(job)
-        job_skills = factor1.extract_job_skills(job)
-        job_quals = factor2.extract_job_qualifications(job)
-        
-        log_job(f"Job: {job_title}")
-        log_job(f"Required Skills from DB ({len(job_skills)}): {', '.join(job_skills[:10])}")
-        
-        log_match("="*60)
-        log_match(f"MATCHING: {candidate_name} vs {job_title}")
-        log_match("="*60)
-        
-        log_match("FACTOR 1: SKILLS (40%)")
-        s = factor1.match(candidate_skills, job_skills)
-        
-        log_match("FACTOR 2: QUALIFICATIONS (25%)")
-        q = factor2.match(candidate_quals, job_quals)
-        
-        log_match("FACTOR 3: EXPERIENCE (20%)")
-        e = factor3.match(profile_data, job)
-        
-        log_match("FACTOR 4: PREFERENCES (15%)")
-        p = factor4.match(candidate_prefs, job, candidate_age, job_age_requirement)
-
-        # Same top-level redistribution as the batch path in
-        # score_candidate_against_jobs -- see the comment there.
-        factor_weights = redistribute_weights({
-            "skills": (s.get("applicable", True), 0.40),
-            "qualifications": (q.get("applicable", True), 0.25),
-            "experience": (True, 0.20),
-            "preferences": (p.get("applicable", True), 0.15),
-        })
-        total_raw = (s["score"] * factor_weights["skills"] + q["score"] * factor_weights["qualifications"]
-                    + e["score"] * factor_weights["experience"] + p["score"] * factor_weights["preferences"])
-        total_score = round(total_raw * 100, 1)
-        excluded_factors = [name for name, w in factor_weights.items() if w == 0.0]
-
-        log_match("="*60)
-        log_match(f"TOTAL MATCH SCORE: {total_score}% (factor weights: {factor_weights}, excluded: {excluded_factors or 'none'})")
-        log_match("="*60)
-        
-        if total_raw >= 0.80:
-            match_level = "Excellent Match 🌟"
-        elif total_raw >= 0.65:
-            match_level = "Strong Match "
-        elif total_raw >= 0.50:
-            match_level = "Good Match 👍"
-        elif total_raw >= 0.35:
-            match_level = "Partial Match ️"
-        else:
-            match_level = "Poor Match ❌"
-        
-        candidate_job_types = candidate_prefs.get("job_types", [])
-        candidate_locations = candidate_prefs.get("locations", [])
-        candidate_industries = candidate_prefs.get("industries", [])
-        candidate_languages = candidate_prefs.get("languages", [])
-        candidate_salary_min = candidate_prefs.get("salary_min", 0)
-        candidate_salary_max = candidate_prefs.get("salary_max", 0)
-        
-        result = {
-            "match_score": total_score,
-            "match_level": match_level,
-            "criteria_scores": {
-                "skills_match": s["match_percentage"],
-                "qualifications_match": q["match_percentage"],
-                "experience_match": e["match_percentage"],
-                "preferences_match": p["match_percentage"]
-            },
-            "factor_weights_used": factor_weights,
-            "excluded_factors": excluded_factors,
-            "skills_breakdown": {
-                "matched_skills": s.get("matched_skills", []),
-                "missing_skills": s.get("missing_skills", []),
-                "total_required": len(job_skills),
-                "total_matched": s.get("matched_count", 0),
-                "individual_scores": s.get("individual_scores", []),
-                "applicable": s.get("applicable", True),
-                "note": s.get("note")
-            },
-            "qualifications_breakdown": {
-                "candidate_degrees": [d["raw"] for d in candidate_quals["degrees"]],
-                "candidate_fields": [f["raw"] for f in candidate_quals["fields"]],
-                "candidate_combined": [c["raw"] for c in candidate_quals["combined"]],
-                "job_degree_required": job_quals.get("minimum_degree", ""),
-                "job_allowed_fields": job_quals.get("fields_of_study", []),
-                "qualification_entries": job_quals.get("qualification_entries", []),  #  ADD THIS
-                "best_similarity": q.get("best_similarity", 0),
-                "best_matched_field": q.get("best_matched_field", None),
-                "match_type": q.get("match_type", "none"),
-                "match_quality": q.get("match_quality", ""),  #  ADD THIS
-                "explanation": q.get("explanation", ""),      #  ADD THIS
-                "applicable": q.get("applicable", True),
-                "excluded_dimensions": q.get("excluded_dimensions", []),
-                "redistributed_weights": q.get("redistributed_weights", {})
-            },
-            "experience_breakdown": {
-                "match_type": e.get("match_type", "unknown"),
-                "total_requirements": e.get("total_requirements", 0),
-                "matched_requirements": e.get("matched_requirements", 0),
-                "specific_matches": e.get("specific_matches", []),
-                "unmatched_requirements": e.get("unmatched_requirements", []),
-                "total_years": e.get("total_years", 0),
-                "relevant_years": e.get("relevant_years", 0),
-                "experience_analysis": e.get("experience_analysis", []),
-                "required_years": e.get("required_years", 0),
-                "gap_years": e.get("gap", 0)
-            },
-            "preferences_breakdown": {
-                "applicable": p.get("applicable", True),
-                "excluded_dimensions": p.get("excluded_dimensions", []),
-                "redistributed_weights": p.get("redistributed_weights", {}),
-                "missing_job_data": p.get("missing_job_data", []),
-                "type_match": p.get("type_match", 0),
-                "type_match_details": p.get("type_match_details", []),
-                "type_match_note": p.get("type_match_note"),
-                "remote_match": p.get("remote_match", 0),
-                "remote_match_note": p.get("remote_match_note"),
-                "location_match": p.get("location_match", 0),
-                "location_match_details": p.get("location_match_details"),
-                "location_match_note": p.get("location_match_note"),
-                "industry_match": p.get("industry_match", 0),
-                "industry_match_details": p.get("industry_match_details", []),
-                "industry_match_note": p.get("industry_match_note"),
-                "salary_match": p.get("salary_match", 0),
-                "salary_match_details": p.get("salary_match_details", {}),
-                "salary_match_note": p.get("salary_match_note"),
-                "language_match": p.get("language_match", 0),
-                "language_match_details": p.get("language_match_details", []),
-                "language_match_note": p.get("language_match_note"),
-                "candidate_job_types": candidate_job_types,
-                "candidate_locations": candidate_locations,
-                "candidate_industries": candidate_industries,
-                "candidate_languages": candidate_languages,
-                "candidate_salary_min": candidate_salary_min,
-                "candidate_salary_max": candidate_salary_max,
-                "candidate_remote_preference": candidate_prefs.get("remote_preference", "flexible")
-            },
-            "explanation": build_match_narrative(s, q, e, total_score, job)[0],
-            "improvement_suggestions": build_match_narrative(s, q, e, total_score, job)[1],
-            "job": job_details
-        }
 
         total_duration = (time.time() - request_start) * 1000
         log_info(f"⏱️ Total time: {total_duration:.2f}ms")
-        
+
         cache_stats = tp.get_cache_stats()
-        complete_candidate_data = extract_complete_candidate_data(profile_data)
-        
+
         return {
             "success": True,
             "candidate": {
@@ -6828,7 +6939,7 @@ async def match_candidate_for_job(job_id: str, request: Request):
                 "cache_misses": cache_stats['misses']
             }
         }
-        
+
     except Exception as e:
         import traceback
         log_error(f"ERROR: {e}")
