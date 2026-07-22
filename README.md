@@ -88,6 +88,8 @@ deploy/
 - [`report/USER_GUIDE.md`](report/USER_GUIDE.md) — architecture, the hybrid matching engine, and
   how the job feed is scored
 - [`source-code/frontend/README.md`](source-code/frontend/README.md) — frontend setup guide
+- [`source-code/ml/README.md`](source-code/ml/README.md) — ML services setup guide (venv,
+  requirements, spaCy model, running `gateway.py`)
 - [`report/capstone_report.tex`](report/capstone_report.tex) — full capstone report
 
 ## Documentation Notes

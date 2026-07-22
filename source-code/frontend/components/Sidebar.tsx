@@ -63,7 +63,7 @@ const Sidebar = ({ isOpen, onClose, activeView, onViewChange, userType, onLogout
           { id: 'company-profile', label: 'Company Profile', icon: Building },
           { id: 'jobs', label: 'Job Management', icon: Briefcase },
           { id: 'candidates', label: 'Candidate Search', icon: Search },
-          { id: 'onboarding', label: 'Candidate Onboarding', icon: UserCheck },
+          // { id: 'onboarding', label: 'Candidate Onboarding', icon: UserCheck },
           { id: 'team', label: 'Team Management', icon: Users },
           { id: 'analytics', label: 'Company Analytics', icon: BarChart3 },
           { id: 'profile', label: 'My Profile', icon: User },

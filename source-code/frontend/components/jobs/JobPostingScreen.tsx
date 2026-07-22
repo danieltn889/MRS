@@ -967,6 +967,15 @@ const toArray = (value: any): any[] => {
 const cleanList = (values: any[] = []) =>
   [...new Set(values.map(v => String(v ?? '').trim()).filter(Boolean))];
 
+// Some legacy job records have responsibilities/requirements/benefits/tags
+// stored as arrays containing objects instead of plain strings (bad data
+// from an older schema or import). This component's list-editing UI and
+// handleSave's r.trim() both assume every element is already a string, so
+// a stray object crashes the whole form on load or save- drop anything
+// that isn't actually text rather than letting it through.
+const toStringArray = (values: any[] = []): string[] =>
+  values.filter((v): v is string => typeof v === 'string');
+
 const looksLikeCombinedQualification = (value: string) =>
   /\s+in\s+/i.test(value) || /\s+or\s+/i.test(value) || value.includes(';') || value.length > 60;
 
@@ -1209,8 +1218,8 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         workArrangement: job.work_arrangement || 'onsite',
         locations: locations.length ? locations : [''],
         description: job.description || '',
-        responsibilities: toArray(job.responsibilities),
-        requirements: Array.isArray(job.requirements) ? job.requirements : toArray(job.requirements?.required ?? job.requirements),
+        responsibilities: toStringArray(toArray(job.responsibilities)),
+        requirements: toStringArray(Array.isArray(job.requirements) ? job.requirements : toArray(job.requirements?.required ?? job.requirements)),
         qualifications: job.qualifications || edObj.minimum_degree || '',
         qualificationEntries,
         salaryType,
@@ -1222,7 +1231,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         salaryCurrency: job.salary_currency || 'Rwf',
         salaryPeriod: job.salary_period || 'month',
         salaryVisible: job.salary_visible !== false,
-        benefits: toArray(job.benefits),
+        benefits: toStringArray(toArray(job.benefits)),
         requiredSkills: toArray(job.skills_required),
         preferredSkills: toArray(job.skills_preferred),
         experienceLevel: job.experience_level || 'mid',
@@ -1255,7 +1264,7 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         expiresAt: job.expires_at ? new Date(job.expires_at).toISOString().slice(0, 16) : DEFAULT_FORM_DATA.expiresAt,
         visibility: job.visibility || 'public',
         applicationLimit: job.application_limit?.toString() || '100000',
-        tags: job.tags || [],
+        tags: toStringArray(toArray(job.tags)),
         noExperienceNeeded: edObj.no_experience_needed || false,
         noCertificationsNeeded: edObj.no_certifications_needed || false,
         noLanguagesNeeded: edObj.no_languages_needed || false,
@@ -1426,11 +1435,11 @@ const JobPostingScreen: React.FC<{ onBack: () => void; jobId?: string; isEditing
         workArrangement: finalFormData.workArrangement,
         locations,
         description: finalFormData.description,
-        responsibilities: finalFormData.responsibilities.filter(r => r.trim()),
-        requirements: finalFormData.requirements.filter(r => r.trim()),
+        responsibilities: toStringArray(finalFormData.responsibilities).filter(r => r.trim()),
+        requirements: toStringArray(finalFormData.requirements).filter(r => r.trim()),
         qualifications: qualificationsText,
-        benefits: finalFormData.benefits.filter(b => b.trim()),
-        tags: finalFormData.tags.filter(t => t.trim()),
+        benefits: toStringArray(finalFormData.benefits).filter(b => b.trim()),
+        tags: toStringArray(finalFormData.tags).filter(t => t.trim()),
         requiredSkills: finalFormData.requiredSkills.map(s => ({
           name: s.name,
           proficiency_level: s.proficiency_level || 3,

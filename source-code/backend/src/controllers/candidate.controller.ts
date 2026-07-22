@@ -2607,7 +2607,10 @@ export const completeProfile = async (req: AuthenticatedRequest, res: Response):
 
     // Check if profile has all required sections
     const profileResult = await query(`
-      SELECT cp.* FROM candidate_profiles cp WHERE cp.user_id = $1
+      SELECT cp.*, u.email
+      FROM candidate_profiles cp
+      JOIN users u ON cp.user_id = u.id
+      WHERE cp.user_id = $1
     `, [userId]);
 
     if (profileResult.rows.length === 0) {
@@ -2634,7 +2637,10 @@ export const completeProfile = async (req: AuthenticatedRequest, res: Response):
     // Calculate completion percentage
     let completionScore = 0;
     const fields = {
-      basicInfo: !!(profile.first_name && profile.last_name && profile.headline && profile.city),
+      // Same fields getProfileCompletionStatus checks for Basic Info- keeping
+      // these in lockstep so "100% on the Overview tab" and "Complete Profile
+      // succeeds" never disagree on what counts as basic info.
+      basicInfo: !!(profile.first_name && profile.last_name && profile.email && profile.phone && profile.date_of_birth),
       education: educationCount > 0,
       experience: experienceCount > 0,
       skills: skillsCount > 0,
@@ -2761,15 +2767,15 @@ export const getProfileCompletionStatus = async (req: AuthenticatedRequest, res:
       (profile.privacy_settings.profile_visibility !== undefined ||
         profile.privacy_settings.show_education !== undefined));
 
-    // ''All fields now available from the JOIN
+    // Same fields completeProfile checks for Basic Info- kept in lockstep so
+    // "100% on the Overview tab" and "Complete Profile succeeds" never
+    // disagree on what counts as basic info.
     const hasBasicInfo = !!(
       profile.first_name &&
       profile.last_name &&
-      profile.city &&
-      profile.email &&        // ''Now available
+      profile.email &&        // from the JOIN
       profile.phone &&
-      profile.user_type &&    // ''Now available
-      profile.user_status     // ''Now available
+      profile.date_of_birth
     );
 
     const hasSkills = skillsCount > 0;

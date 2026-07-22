@@ -29,6 +29,38 @@ if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
 
+# Each child service gets its own log file, but gateway.py's OWN output-
+# "file not found", port already in use, crash summaries, the final
+# UP/timeout announcements- only ever went to the console. If nobody was
+# watching that console when something went wrong (or it scrolled away),
+# there was no file to check afterward. Mirror everything gateway.py itself
+# prints into gateway.log too, truncated fresh on every start like the
+# per-service logs.
+class _Tee:
+    def __init__(self, *streams):
+        self._streams = streams
+
+    def write(self, data):
+        for s in self._streams:
+            s.write(data)
+
+    def flush(self):
+        for s in self._streams:
+            s.flush()
+
+    def __getattr__(self, name):
+        # Delegate anything else- isatty(), encoding, fileno()- to the first
+        # (real console) stream. uvicorn's own logging setup calls isatty()
+        # to decide whether to color its output, and crashes at startup
+        # without this: 'AttributeError: _Tee object has no attribute isatty'.
+        return getattr(self._streams[0], name)
+
+_gateway_log_path = Path(__file__).resolve().parent / "gateway.log"
+_gateway_log_fh = open(_gateway_log_path, "w", encoding="utf-8")
+_gateway_log_fh.write(f"===== RUN STARTED {time.strftime('%Y-%m-%d %H:%M:%S')} =====\n")
+sys.stdout = _Tee(sys.stdout, _gateway_log_fh)
+sys.stderr = _Tee(sys.stderr, _gateway_log_fh)
+
 # ── AUTO-INSTALL ──────────────────────────────────────────────
 for pkg in ["fastapi", "uvicorn", "httpx"]:
     try:

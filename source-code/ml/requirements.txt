@@ -10,6 +10,12 @@ scipy
 scikit-learn
 nltk
 spacy
+# spacy is just the library- feed_recommender.py also needs its English
+# model, which is a separate download `pip install` never fetches:
+#   python -m spacy download en_core_web_md
+# deploy.sh already runs this after installing requirements.txt; a manual
+# `pip install -r requirements.txt` setup needs to run it separately, or
+# feed_recommender.py crashes on startup with OSError [E050].
 sentence-transformers
 transformers
 torch

@@ -3199,7 +3199,7 @@ class SemanticEncoder:
             vecs = self.model.encode(missing, show_progress_bar=False, batch_size=64)
             for t, v in zip(missing, vecs):
                 self._cache[t] = v
-        dim = self.model.get_sentence_embedding_dimension()
+        dim = self.model.get_embedding_dimension()
         return np.array([self._cache.get(t, np.zeros(dim)) for t in texts])
 
     def similarity(self, text_a: str, text_b: str) -> float:
@@ -3509,11 +3509,21 @@ class ContentBasedModel:
         return matrix[keep]
 
     def _replace_dense_row(self, matrix: Optional[np.ndarray], row_idx: int, new_row: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        """Mirrors _replace_sparse_row's append case- without it, a genuinely
+        NEW job/candidate (row_idx == matrix.shape[0], one past the end) hit
+        the bounds check below and returned the matrix UNCHANGED, silently
+        dropping the new row instead of appending it. job_matrix (sparse)
+        grew correctly via _replace_sparse_row while job_semantic_matrix
+        quietly stayed one row short- guaranteed on every new job's first
+        upsert, not a rare race- until _blend() crashed with a shape
+        mismatch like (1,355) vs (1,354)."""
         if new_row is None:
             return matrix
         if matrix is None:
             return np.asarray([new_row], dtype=np.float32)
-        if row_idx < 0 or row_idx >= matrix.shape[0]:
+        if row_idx == matrix.shape[0]:
+            return np.vstack([matrix, new_row]).astype(matrix.dtype)
+        if row_idx < 0 or row_idx > matrix.shape[0]:
             return matrix
         updated = matrix.copy()
         updated[row_idx] = new_row
@@ -4117,11 +4127,17 @@ class BehaviorModel:
 
     @staticmethod
     def _replace_dense_row(matrix: Optional[np.ndarray], row_idx: int, new_row: Optional[np.ndarray]) -> Optional[np.ndarray]:
+        """Same append-case fix as ContentBasedModel._replace_dense_row-
+        see its docstring. Without it, a new job's row_idx == matrix.shape[0]
+        hit the bounds check and silently dropped the row instead of
+        appending, leaving job_semantic_matrix one row short of job_matrix."""
         if new_row is None:
             return matrix
         if matrix is None:
             return np.asarray([new_row], dtype=np.float32)
-        if row_idx < 0 or row_idx >= matrix.shape[0]:
+        if row_idx == matrix.shape[0]:
+            return np.vstack([matrix, new_row]).astype(matrix.dtype)
+        if row_idx < 0 or row_idx > matrix.shape[0]:
             return matrix
         updated = matrix.copy()
         updated[row_idx] = new_row
