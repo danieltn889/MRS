@@ -80,7 +80,10 @@ router.get('/stats', async (_req: Request, res: Response) => {
 // All aggregation happens in SQL (GROUP BY / COUNT FILTER)- no N+1, no
 // per-row JS loops over raw records.
 router.get('/analytics', [
-  query('days').optional().isInt({ min: 7, max: 365 }).toInt(),
+  // 3650 (~10 years) doubles as the "All time" option on the frontend-
+  // simpler than a separate no-filter code path, and this platform has
+  // nowhere near a decade of data for the interval math to matter.
+  query('days').optional().isInt({ min: 7, max: 3650 }).toInt(),
   validateRequest,
 ], async (req: Request, res: Response) => {
   try {

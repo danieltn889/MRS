@@ -141,13 +141,26 @@ const ChartCard: React.FC<{ title: string; subtitle?: string; height?: number; e
   );
 };
 
+// "All time" (days = ALL_DAYS = 3650) would otherwise densify 3650 empty
+// daily points- unreadable and pointless. Cap how far back the dense series
+// goes to whatever the real data actually spans (or this cap, whichever is
+// smaller), so "All" shows the platform's real history at a readable
+// day-by-day resolution instead of a decade of mostly-zero points.
+const MAX_DENSE_DAYS = 180;
+
 // ── Dense daily series: fills gaps the SQL GROUP BY leaves for quiet days ──
 const buildDailySeries = (rows: { date: string; count: string }[], days: number): { labels: string[]; values: number[] } => {
   const byDate = new Map(rows.map(r => [r.date, toNum(r.count)]));
+  const today = new Date();
+  let spanDays = Math.min(days, MAX_DENSE_DAYS);
+  if (days > MAX_DENSE_DAYS && rows.length > 0) {
+    const earliest = rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0].date);
+    const spanFromData = Math.ceil((today.getTime() - new Date(earliest).getTime()) / 86_400_000) + 1;
+    spanDays = Math.min(Math.max(spanFromData, 1), days);
+  }
   const labels: string[] = [];
   const values: number[] = [];
-  const today = new Date();
-  for (let i = days - 1; i >= 0; i--) {
+  for (let i = spanDays - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const key = d.toISOString().slice(0, 10);
@@ -157,16 +170,36 @@ const buildDailySeries = (rows: { date: string; count: string }[], days: number)
   return { labels, values };
 };
 
-const DAY_RANGES = [7, 30, 90] as const;
+// 3650 days (~10 years) doubles as "All time"- see the backend comment on
+// the /admin/analytics days validator.
+const ALL_DAYS = 3650;
+const DAY_RANGES: { value: number; label: string }[] = [
+  { value: 7, label: '7d' },
+  { value: 30, label: '30d' },
+  { value: 90, label: '90d' },
+  { value: ALL_DAYS, label: 'All' },
+];
+
+const DAYS_STORAGE_KEY = 'sysAnalytics.days';
+const AUTO_REFRESH_STORAGE_KEY = 'sysAnalytics.autoRefresh';
 
 const SystemAnalytics: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   const [stats, setStats] = useState<PlatformStats | null>(null);
   const [analytics, setAnalytics] = useState<PlatformAnalytics | null>(null);
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [loading, setLoading] = useState(true);
-  const [days, setDays] = useState<number>(30);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  // Remembered across visits (defaults to "All" the first time, so a new
+  // admin sees the platform's whole history rather than a 30-day slice
+  // they didn't ask for).
+  const [days, setDays] = useState<number>(() => {
+    const saved = Number(localStorage.getItem(DAYS_STORAGE_KEY));
+    return DAY_RANGES.some(r => r.value === saved) ? saved : ALL_DAYS;
+  });
+  const [autoRefresh, setAutoRefresh] = useState(() => localStorage.getItem(AUTO_REFRESH_STORAGE_KEY) === 'true');
   const [sortBy, setSortBy] = useState<'jobs' | 'team' | 'name'>('jobs');
+
+  useEffect(() => { localStorage.setItem(DAYS_STORAGE_KEY, String(days)); }, [days]);
+  useEffect(() => { localStorage.setItem(AUTO_REFRESH_STORAGE_KEY, String(autoRefresh)); }, [autoRefresh]);
 
   const activityChartRef = useRef<any>(null);
   const industryChartRef = useRef<any>(null);
@@ -308,13 +341,13 @@ const SystemAnalytics: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-            {DAY_RANGES.map(d => (
+            {DAY_RANGES.map(r => (
               <button
-                key={d}
-                onClick={() => setDays(d)}
-                className={`px-3 py-2 text-xs font-medium ${days === d ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                key={r.value}
+                onClick={() => setDays(r.value)}
+                className={`px-3 py-2 text-xs font-medium ${days === r.value ? 'bg-gray-800 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
               >
-                {d}d
+                {r.label}
               </button>
             ))}
           </div>
@@ -374,7 +407,7 @@ const SystemAnalytics: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2">
-          <ChartCard title="Platform activity" subtitle={`Last ${days} days - registrations, applications, jobs posted`} height={260} exportRef={activityChartRef}>
+          <ChartCard title="Platform activity" subtitle={`${days === ALL_DAYS ? 'All time' : `Last ${days} days`} - registrations, applications, jobs posted`} height={260} exportRef={activityChartRef}>
             <Line ref={activityChartRef} data={activityData} options={activityOptions} />
           </ChartCard>
         </div>
