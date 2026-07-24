@@ -65,6 +65,25 @@ export const getPlatformStats = async (): Promise<{ success: boolean; data: Plat
   return handleResponse(response);
 };
 
+export interface PlatformAnalytics {
+  days: number;
+  timeSeries: {
+    registrations: { date: string; count: string }[];
+    applications: { date: string; count: string }[];
+    jobsPosted: { date: string; count: string }[];
+  };
+  jobsByIndustry: { industry: string; count: string }[];
+  employmentType: { job_type: string; count: string }[];
+  applicationStatus: { status: string; count: string }[];
+  companyVerification: { verification_status: string; count: string }[];
+  topRecruiters: { id: string; name: string; company_name: string | null; jobs_posted: string }[];
+}
+
+export const getPlatformAnalytics = async (days: number = 30): Promise<{ success: boolean; data: PlatformAnalytics }> => {
+  const response = await fetch(`${API_BASE_URL}/admin/analytics?days=${days}`, { headers: getAuthHeaders() });
+  return handleResponse(response);
+};
+
 export const getAdminCompanies = async (params: { page?: number; limit?: number; q?: string } = {}) => {
   const qs = new URLSearchParams();
   if (params.page) qs.set('page', String(params.page));
@@ -140,6 +159,7 @@ export const deleteAdminUser = async (userId: string) => {
 
 export default {
   getPlatformStats,
+  getPlatformAnalytics,
   getAdminCompanies,
   createAdminCompany,
   updateAdminCompany,

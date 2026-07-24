@@ -73,6 +73,95 @@ router.get('/stats', async (_req: Request, res: Response) => {
 });
 
 // ============================================================
+// PLATFORM ANALYTICS (charts)
+// ============================================================
+// @route   GET /api/v1/admin/analytics
+// @desc    Aggregated breakdowns/time-series for the System Analytics charts.
+// All aggregation happens in SQL (GROUP BY / COUNT FILTER)- no N+1, no
+// per-row JS loops over raw records.
+router.get('/analytics', [
+  query('days').optional().isInt({ min: 7, max: 365 }).toInt(),
+  validateRequest,
+], async (req: Request, res: Response) => {
+  try {
+    const days = (req.query.days as unknown as number) || 30;
+
+    const [
+      registrations, applicationsOverTime, jobsOverTime,
+      jobsByIndustry, employmentType, applicationStatus,
+      companyVerification, topRecruiters,
+    ] = await Promise.all([
+      dbQuery(`
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS date, COUNT(*) AS count
+        FROM users
+        WHERE deleted_at IS NULL AND created_at >= NOW() - ($1 || ' days')::interval
+        GROUP BY 1 ORDER BY 1`, [days]),
+      dbQuery(`
+        SELECT to_char(date_trunc('day', applied_at), 'YYYY-MM-DD') AS date, COUNT(*) AS count
+        FROM applications
+        WHERE deleted_at IS NULL AND applied_at >= NOW() - ($1 || ' days')::interval
+        GROUP BY 1 ORDER BY 1`, [days]),
+      dbQuery(`
+        SELECT to_char(date_trunc('day', created_at), 'YYYY-MM-DD') AS date, COUNT(*) AS count
+        FROM jobs
+        WHERE deleted_at IS NULL AND created_at >= NOW() - ($1 || ' days')::interval
+        GROUP BY 1 ORDER BY 1`, [days]),
+      dbQuery(`
+        SELECT COALESCE(c.industry, 'Unspecified') AS industry, COUNT(*) AS count
+        FROM jobs j JOIN companies c ON c.id = j.company_id
+        WHERE j.deleted_at IS NULL AND j.status = 'active'
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 12`),
+      dbQuery(`
+        SELECT COALESCE(job_type, 'unspecified') AS job_type, COUNT(*) AS count
+        FROM jobs
+        WHERE deleted_at IS NULL AND status = 'active'
+        GROUP BY 1 ORDER BY 2 DESC`),
+      dbQuery(`
+        SELECT status, COUNT(*) AS count
+        FROM applications
+        WHERE deleted_at IS NULL
+        GROUP BY 1`),
+      dbQuery(`
+        SELECT verification_status, COUNT(*) AS count
+        FROM companies
+        WHERE deleted_at IS NULL
+        GROUP BY 1`),
+      dbQuery(`
+        SELECT u.id, COALESCE(ct.name, u.email) AS name,
+               c.name AS company_name, COUNT(j.id) AS jobs_posted
+        FROM jobs j
+        JOIN users u ON u.id = j.created_by
+        LEFT JOIN companies c ON c.id = j.company_id
+        LEFT JOIN company_team ct ON ct.user_id = u.id AND ct.company_id = j.company_id
+        WHERE j.deleted_at IS NULL
+        GROUP BY u.id, ct.name, u.email, c.name
+        ORDER BY jobs_posted DESC
+        LIMIT 10`),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        days,
+        timeSeries: {
+          registrations: registrations.rows,
+          applications: applicationsOverTime.rows,
+          jobsPosted: jobsOverTime.rows,
+        },
+        jobsByIndustry: jobsByIndustry.rows,
+        employmentType: employmentType.rows,
+        applicationStatus: applicationStatus.rows,
+        companyVerification: companyVerification.rows,
+        topRecruiters: topRecruiters.rows,
+      },
+    });
+  } catch (error) {
+    logger.error('Admin analytics error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load platform analytics'});
+  }
+});
+
+// ============================================================
 // COMPANIES
 // ============================================================
 // @route   GET /api/v1/admin/companies
